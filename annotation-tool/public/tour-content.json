@@ -1,0 +1,669 @@
+{
+  "$schema": "/tour-content.schema.json",
+  "firstAnnotation": {
+    "personaName": "Ballpark Guest Services Supervisor",
+    "personaRole": "Stadium operations analyst documenting spectator interactions for guest-experience review.",
+    "entityType": {
+      "name": "Spectator",
+      "gloss": "a fan attending the game in the stands"
+    },
+    "videoFilename": "Crossing Broad - The angle from the stands of the Phillies Karen incident has been fou... [1964175938037465088].mp4"
+  },
+  "ontologyAuthoring": {
+    "personaName": "Port Safety Incident Investigator",
+    "personaRole": "Maritime safety analyst documenting cargo-handling incidents at container terminals.",
+    "entityType": {
+      "name": "Shipping container",
+      "gloss": "an intermodal freight container used to move cargo by ship, rail, or truck",
+      "wikidataId": "Q987767"
+    },
+    "eventType": {
+      "name": "Container collapse",
+      "gloss": "a stack of stowed shipping containers losing structural integrity"
+    },
+    "roleType": {
+      "name": "collapsed-stack",
+      "gloss": "the stack of containers that toppled in the incident"
+    },
+    "relationType": {
+      "name": "stowed-on",
+      "gloss": "links a shipping container to the vessel it is loaded onto"
+    }
+  },
+  "wikidataAugmentation": {
+    "personaName": "Automated",
+    "personaRole": "Analyst",
+    "searchTerm": "foul ball",
+    "mockOntologyAugmentReasoning": "Suggestions drawn from the surrounding stadium-incident context, ranked by overlap with the existing persona ontology.",
+    "mockOntologyAugmentSuggestions": [
+      {
+        "name": "Ball grab",
+        "parent": "Stadium incident",
+        "description": "A spectator taking a souvenir baseball that was in another spectator's possession.",
+        "examples": [
+          "Karen took the ball from the boy fan"
+        ],
+        "confidence": 0.81
+      },
+      {
+        "name": "Stadium incident",
+        "parent": null,
+        "description": "An unplanned occurrence inside a sports venue affecting fans or play.",
+        "examples": [
+          "Phillies fan Karen ball-grab",
+          "Bat-shard injury"
+        ],
+        "confidence": 0.88
+      },
+      {
+        "name": "Souvenir transfer",
+        "parent": null,
+        "description": "Movement of a memorabilia object between fans, with or without consent.",
+        "examples": [
+          "Stadium employee gives a foul ball to a child"
+        ],
+        "confidence": 0.66
+      },
+      {
+        "name": "Fan-fan conflict",
+        "parent": null,
+        "description": "An interpersonal dispute between two attendees at a public event.",
+        "examples": [
+          "Argument over a seat",
+          "Souvenir dispute"
+        ],
+        "confidence": 0.61
+      },
+      {
+        "name": "Phillies fan",
+        "parent": null,
+        "description": "A spectator attending a Philadelphia Phillies baseball game.",
+        "examples": [
+          "Karen",
+          "The boy in row 12"
+        ],
+        "confidence": 0.53
+      }
+    ]
+  },
+  "eventsRolesClaims": {
+    "personaName": "Ballpark Guest Services Supervisor",
+    "personaRole": "Stadium operations analyst documenting spectator interactions for guest-experience review.",
+    "firstActor": {
+      "name": "Spectator",
+      "gloss": "a person observing an event as part of the audience",
+      "wikidataId": "Q63443976"
+    },
+    "secondActor": {
+      "name": "Spectator",
+      "gloss": "a person observing an event as part of the audience",
+      "wikidataId": "Q63443976"
+    },
+    "eventType": {
+      "name": "ball grab",
+      "gloss": "one spectator takes possession of a baseball from another"
+    },
+    "firstRole": {
+      "name": "grabber",
+      "gloss": "the spectator who took possession of the ball"
+    },
+    "secondRole": {
+      "name": "prior-holder",
+      "gloss": "the spectator who held the ball before the grab"
+    },
+    "derivedClaimText": "The adult fan grabbed the foul ball from the child fan",
+    "videoFilename": "Collin Rugg - NEW\uff1a \u2018Karen\u2019 Phillies fan goes viral for berating a man for grabbing ... [1964336942667223043].mp4"
+  },
+  "worldLayer": {
+    "personaName": "Ballpark Guest Services Supervisor",
+    "personaRole": "Stadium operations analyst documenting spectator interactions for guest-experience review.",
+    "entityName": "LoanDepot Park",
+    "entityType": {
+      "name": "Stadium",
+      "gloss": "a place or venue for outdoor sports, concerts, or other events",
+      "wikidataId": "Q483110"
+    },
+    "locationLatitude": 25.7781,
+    "locationLongitude": -80.2197,
+    "locationName": "LoanDepot Park, Miami",
+    "timeCollectionName": "Phillies-Marlins September 2025 home games",
+    "entityCollectionName": "the involved fans",
+    "videoFilename": "Amiri King - Here\u2019s footage of the baseball Karen getting heckled by her entire se... [1964355526243856384].mp4"
+  },
+  "modelInTheLoop": {
+    "personaName": "Port Safety Incident Investigator",
+    "personaRole": "Maritime safety analyst documenting cargo-handling incidents at container terminals.",
+    "videoFilename": "ABC7 Eyewitness News - New video shows the moment when nearly an entire column of shipping c... [1965554565933121536].mp4",
+    "mockDetectionQuery": "container",
+    "mockDetectionFrame": 192,
+    "mockDetectionProposals": [
+      {
+        "label": "container",
+        "confidence": 0.89,
+        "boundingBox": {
+          "x": 0.05,
+          "y": 0.62,
+          "width": 0.66,
+          "height": 0.2
+        },
+        "acceptAsLabel": "container",
+        "acceptAsWikidataId": "Q987767"
+      },
+      {
+        "label": "container",
+        "confidence": 0.72,
+        "boundingBox": {
+          "x": 0.3,
+          "y": 0.5,
+          "width": 0.3,
+          "height": 0.18
+        },
+        "acceptAsLabel": "container",
+        "acceptAsWikidataId": "Q987767"
+      },
+      {
+        "label": "container",
+        "confidence": 0.51,
+        "boundingBox": {
+          "x": 0.78,
+          "y": 0.66,
+          "width": 0.18,
+          "height": 0.1
+        },
+        "acceptAsLabel": null,
+        "acceptAsWikidataId": null
+      },
+      {
+        "label": "container",
+        "confidence": 0.38,
+        "boundingBox": {
+          "x": 0.34,
+          "y": 0.59,
+          "width": 0.06,
+          "height": 0.06
+        },
+        "acceptAsLabel": null,
+        "acceptAsWikidataId": null
+      }
+    ],
+    "mockTrackingKeyframes": [
+      {
+        "frameNumber": 192,
+        "timestamp": 8.008,
+        "boundingBox": {
+          "x": 0.044,
+          "y": 0.616,
+          "width": 0.66,
+          "height": 0.2
+        },
+        "confidence": 0.89,
+        "flagged": false
+      },
+      {
+        "frameNumber": 193,
+        "timestamp": 8.0497,
+        "boundingBox": {
+          "x": 0.051,
+          "y": 0.618,
+          "width": 0.66,
+          "height": 0.2
+        },
+        "confidence": 0.885,
+        "flagged": false
+      },
+      {
+        "frameNumber": 194,
+        "timestamp": 8.0914,
+        "boundingBox": {
+          "x": 0.045,
+          "y": 0.62,
+          "width": 0.66,
+          "height": 0.2
+        },
+        "confidence": 0.88,
+        "flagged": false
+      },
+      {
+        "frameNumber": 195,
+        "timestamp": 8.1331,
+        "boundingBox": {
+          "x": 0.052,
+          "y": 0.622,
+          "width": 0.66,
+          "height": 0.2
+        },
+        "confidence": 0.875,
+        "flagged": false
+      },
+      {
+        "frameNumber": 196,
+        "timestamp": 8.1748,
+        "boundingBox": {
+          "x": 0.046,
+          "y": 0.624,
+          "width": 0.66,
+          "height": 0.2
+        },
+        "confidence": 0.87,
+        "flagged": false
+      },
+      {
+        "frameNumber": 197,
+        "timestamp": 8.2165,
+        "boundingBox": {
+          "x": 0.053,
+          "y": 0.617,
+          "width": 0.66,
+          "height": 0.2
+        },
+        "confidence": 0.865,
+        "flagged": false
+      },
+      {
+        "frameNumber": 198,
+        "timestamp": 8.2583,
+        "boundingBox": {
+          "x": 0.047,
+          "y": 0.619,
+          "width": 0.66,
+          "height": 0.2
+        },
+        "confidence": 0.86,
+        "flagged": false
+      },
+      {
+        "frameNumber": 199,
+        "timestamp": 8.3,
+        "boundingBox": {
+          "x": 0.054,
+          "y": 0.621,
+          "width": 0.66,
+          "height": 0.2
+        },
+        "confidence": 0.855,
+        "flagged": false
+      },
+      {
+        "frameNumber": 200,
+        "timestamp": 8.3417,
+        "boundingBox": {
+          "x": 0.048,
+          "y": 0.623,
+          "width": 0.66,
+          "height": 0.2
+        },
+        "confidence": 0.85,
+        "flagged": false
+      },
+      {
+        "frameNumber": 201,
+        "timestamp": 8.3834,
+        "boundingBox": {
+          "x": 0.055,
+          "y": 0.616,
+          "width": 0.66,
+          "height": 0.2
+        },
+        "confidence": 0.845,
+        "flagged": false
+      },
+      {
+        "frameNumber": 202,
+        "timestamp": 8.4251,
+        "boundingBox": {
+          "x": 0.049,
+          "y": 0.618,
+          "width": 0.66,
+          "height": 0.2
+        },
+        "confidence": 0.84,
+        "flagged": false
+      },
+      {
+        "frameNumber": 203,
+        "timestamp": 8.4668,
+        "boundingBox": {
+          "x": 0.056,
+          "y": 0.62,
+          "width": 0.66,
+          "height": 0.2
+        },
+        "confidence": 0.835,
+        "flagged": false
+      },
+      {
+        "frameNumber": 204,
+        "timestamp": 8.5085,
+        "boundingBox": {
+          "x": 0.05,
+          "y": 0.622,
+          "width": 0.66,
+          "height": 0.2
+        },
+        "confidence": 0.83,
+        "flagged": false
+      },
+      {
+        "frameNumber": 205,
+        "timestamp": 8.5502,
+        "boundingBox": {
+          "x": 0.044,
+          "y": 0.624,
+          "width": 0.66,
+          "height": 0.2
+        },
+        "confidence": 0.825,
+        "flagged": false
+      },
+      {
+        "frameNumber": 206,
+        "timestamp": 8.5919,
+        "boundingBox": {
+          "x": 0.051,
+          "y": 0.617,
+          "width": 0.66,
+          "height": 0.2
+        },
+        "confidence": 0.82,
+        "flagged": false
+      },
+      {
+        "frameNumber": 207,
+        "timestamp": 8.6336,
+        "boundingBox": {
+          "x": 0.045,
+          "y": 0.619,
+          "width": 0.66,
+          "height": 0.2
+        },
+        "confidence": 0.815,
+        "flagged": false
+      },
+      {
+        "frameNumber": 208,
+        "timestamp": 8.6753,
+        "boundingBox": {
+          "x": 0.052,
+          "y": 0.621,
+          "width": 0.66,
+          "height": 0.2
+        },
+        "confidence": 0.81,
+        "flagged": false
+      },
+      {
+        "frameNumber": 209,
+        "timestamp": 8.7171,
+        "boundingBox": {
+          "x": 0.046,
+          "y": 0.623,
+          "width": 0.66,
+          "height": 0.2
+        },
+        "confidence": 0.805,
+        "flagged": false
+      },
+      {
+        "frameNumber": 210,
+        "timestamp": 8.7588,
+        "boundingBox": {
+          "x": 0.053,
+          "y": 0.616,
+          "width": 0.66,
+          "height": 0.2
+        },
+        "confidence": 0.8,
+        "flagged": false
+      },
+      {
+        "frameNumber": 211,
+        "timestamp": 8.8005,
+        "boundingBox": {
+          "x": 0.047,
+          "y": 0.618,
+          "width": 0.66,
+          "height": 0.2
+        },
+        "confidence": 0.795,
+        "flagged": false
+      },
+      {
+        "frameNumber": 212,
+        "timestamp": 8.8422,
+        "boundingBox": {
+          "x": 0.054,
+          "y": 0.62,
+          "width": 0.66,
+          "height": 0.2
+        },
+        "confidence": 0.79,
+        "flagged": false
+      },
+      {
+        "frameNumber": 213,
+        "timestamp": 8.8839,
+        "boundingBox": {
+          "x": 0.048,
+          "y": 0.622,
+          "width": 0.66,
+          "height": 0.2
+        },
+        "confidence": 0.785,
+        "flagged": false
+      },
+      {
+        "frameNumber": 214,
+        "timestamp": 8.9256,
+        "boundingBox": {
+          "x": 0.5,
+          "y": 0.66,
+          "width": 0.3,
+          "height": 0.15
+        },
+        "confidence": 0.46,
+        "flagged": true
+      },
+      {
+        "frameNumber": 215,
+        "timestamp": 8.9673,
+        "boundingBox": {
+          "x": 0.54,
+          "y": 0.665,
+          "width": 0.28,
+          "height": 0.15
+        },
+        "confidence": 0.42,
+        "flagged": true
+      },
+      {
+        "frameNumber": 216,
+        "timestamp": 9.009,
+        "boundingBox": {
+          "x": 0.58,
+          "y": 0.67,
+          "width": 0.26,
+          "height": 0.15
+        },
+        "confidence": 0.38,
+        "flagged": true
+      },
+      {
+        "frameNumber": 217,
+        "timestamp": 9.0507,
+        "boundingBox": {
+          "x": 0.62,
+          "y": 0.675,
+          "width": 0.24,
+          "height": 0.15
+        },
+        "confidence": 0.34,
+        "flagged": true
+      },
+      {
+        "frameNumber": 218,
+        "timestamp": 9.0924,
+        "boundingBox": {
+          "x": 0.66,
+          "y": 0.68,
+          "width": 0.22,
+          "height": 0.15
+        },
+        "confidence": 0.3,
+        "flagged": true
+      },
+      {
+        "frameNumber": 219,
+        "timestamp": 9.1341,
+        "boundingBox": {
+          "x": 0.7,
+          "y": 0.685,
+          "width": 0.2,
+          "height": 0.15
+        },
+        "confidence": 0.26,
+        "flagged": true
+      },
+      {
+        "frameNumber": 220,
+        "timestamp": 9.1758,
+        "boundingBox": {
+          "x": 0.74,
+          "y": 0.69,
+          "width": 0.18,
+          "height": 0.15
+        },
+        "confidence": 0.22,
+        "flagged": true
+      },
+      {
+        "frameNumber": 221,
+        "timestamp": 9.2176,
+        "boundingBox": {
+          "x": 0.78,
+          "y": 0.695,
+          "width": 0.16,
+          "height": 0.15
+        },
+        "confidence": 0.18,
+        "flagged": true
+      }
+    ]
+  },
+  "summariesAndClaims": {
+    "personaName": "Ballpark Guest Services Supervisor",
+    "personaRole": "Stadium operations analyst documenting spectator interactions for guest-experience review.",
+    "summaryText": "A woman seated behind home plate takes a foul ball that a man had caught and given to a young boy, then refuses to return it as the crowd reacts.",
+    "claimText": "A Phillies fan in the stands took a souvenir ball from a boy after his father caught it",
+    "videoFilename": "Collin Rugg - NEW\uff1a \u2018Karen\u2019 Phillies fan goes viral for berating a man for grabbing ... [1964336942667223043].mp4",
+    "mockTranscript": {
+      "language": "en",
+      "duration": 14.7,
+      "speakers": [
+        "SPEAKER_00",
+        "SPEAKER_01"
+      ],
+      "segments": [
+        {
+          "start": 0.0,
+          "end": 3.8,
+          "text": "Yeah, that's definitely the ball she grabbed.",
+          "confidence": 0.94,
+          "speaker": "SPEAKER_00",
+          "intendedSpeaker": null,
+          "intendedText": null
+        },
+        {
+          "start": 3.8,
+          "end": 6.9,
+          "text": "Look, look, she just snatched it right out of his hands.",
+          "confidence": 0.78,
+          "speaker": "SPEAKER_00",
+          "intendedSpeaker": "SPEAKER_01",
+          "intendedText": "Look, look, she just grabbed it right out of his hands."
+        },
+        {
+          "start": 6.9,
+          "end": 9.5,
+          "text": "The kid was bawling.",
+          "confidence": 0.97,
+          "speaker": "SPEAKER_01",
+          "intendedSpeaker": null,
+          "intendedText": null
+        },
+        {
+          "start": 9.5,
+          "end": 14.7,
+          "text": "They actually gave him another one later, which was nice.",
+          "confidence": 0.93,
+          "speaker": "SPEAKER_01",
+          "intendedSpeaker": null,
+          "intendedText": null
+        }
+      ]
+    },
+    "mockVlmSummaryText": "In a section of seats above the right-field line at LoanDepot Park, a woman in a Phillies jersey reaches across two seats and takes a baseball out of the hands of a young boy holding it. The boy reacts visibly, raising his hands. A stadium employee approaches and hands the boy a second baseball a few seconds later.",
+    "mockCompoundClaimText": "A woman took a baseball from a young boy who was visibly upset, before a stadium employee gave him a replacement.",
+    "mockClaimSplitAtoms": [
+      {
+        "text": "A Phillies fan in the stands took a souvenir ball from a young boy after his father caught it.",
+        "start": 4.5,
+        "end": 9.3
+      },
+      {
+        "text": "The young boy reacted visibly, raising his hands.",
+        "start": 9.3,
+        "end": 12.6
+      },
+      {
+        "text": "A stadium employee gave the boy a replacement baseball.",
+        "start": 12.6,
+        "end": 14.7
+      }
+    ]
+  },
+  "collaboration": {
+    "projectName": "Phillies-Marlins incident review",
+    "groupName": "Stadium operations team"
+  },
+  "importExport": {
+    "importBundlePath": "test/e2e/fixtures/microvent-seed.jsonl"
+  },
+  "world": {
+    "locations": [
+      {
+        "name": "LoanDepot Park",
+        "wikidataId": "Q1368138",
+        "description": "Baseball park in Miami, Florida, USA. Home of the Miami Marlins.",
+        "latitude": 25.7781,
+        "longitude": -80.2197
+      }
+    ],
+    "times": [
+      {
+        "timestamp": "2025-09-05T00:00:00Z",
+        "label": "2025-09-05"
+      }
+    ],
+    "entities": [
+      {
+        "name": "Adult fan",
+        "description": "The adult spectator who took the foul ball."
+      },
+      {
+        "name": "Child fan",
+        "description": "The child spectator who had been holding the foul ball."
+      },
+      {
+        "name": "the foul ball",
+        "wikidataId": "Q791187",
+        "description": "The baseball at the centre of the incident."
+      }
+    ],
+    "entityCollections": [
+      {
+        "name": "the involved fans",
+        "description": "The two spectators directly involved in the foul-ball grab."
+      }
+    ]
+  }
+}

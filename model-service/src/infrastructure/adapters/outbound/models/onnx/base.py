@@ -26,6 +26,11 @@ class ONNXConfig:
     ----------
     model_id : str
         HuggingFace model ID or local path.
+    onnx_filename : str
+        Repo-root filename of the ONNX weights to download. Different
+        Ultralytics-derived community exports publish under different
+        filenames; each loader sets the canonical value its repo uses
+        rather than scanning a fallback chain.
     num_threads : int
         Number of CPU threads for inference.
     cache_dir : Path | None
@@ -35,6 +40,7 @@ class ONNXConfig:
     """
 
     model_id: str
+    onnx_filename: str = "model.onnx"
     num_threads: int = 4
     cache_dir: Path | None = None
     graph_optimization_level: str = "ORT_ENABLE_ALL"

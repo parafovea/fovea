@@ -1,0 +1,120 @@
+name: E2E (mock model-service)
+
+# Tier 1 contract verification: runs the smoke, functional, regression,
+# and accessibility Playwright projects against the deterministic mock
+# model-service in test-utils/mock-model-service.js. This is the canonical
+# contract gate, distinct from the Tier 2 real-model integration signal
+# in .github/workflows/e2e-real-models.yml.
+#
+# Triggered by:
+#   - workflow_dispatch: on-demand manual run from the Actions tab
+#   - pull_request labeled `e2e-mock`: per-PR contract verification when
+#     a change is suspected to affect the four covered surfaces
+#   - schedule: nightly at 01:00 UTC against the default branch so
+#     contract regressions surface within one day even if no PR opts in
+#
+# The historical ci.yml `test-e2e` job is gated `if: false` because the
+# 90-minute runtime made it impractical to fire on every PR. This
+# workflow keeps that runtime under explicit opt-in while still
+# providing a CI-visible signal whenever it is requested. The visual
+# project is intentionally excluded here because its baselines are
+# platform-specific and the linux/amd64 baselines do not match the
+# darwin-arm64 baselines committed today; regenerate baselines and
+# re-add the project when the team decides which platform the baselines
+# should track.
+
+on:
+  workflow_dispatch:
+  pull_request:
+    types: [labeled, synchronize]
+  schedule:
+    - cron: '0 1 * * *'
+
+env:
+  NODE_VERSION: '22'
+
+jobs:
+  test-e2e-mock:
+    name: E2E mock model-service
+    runs-on: ubuntu-latest
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'schedule' ||
+      (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'e2e-mock'))
+    timeout-minutes: 90
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browsers
+        run: pnpm --filter @fovea/annotation-tool exec playwright install --with-deps chromium
+
+      - name: Start Docker Compose stack with mock model-service
+        run: |
+          docker compose -f docker-compose.e2e.yml up -d --build
+
+          echo "Waiting for services to be healthy..."
+          for i in $(seq 1 60); do
+            if docker compose -f docker-compose.e2e.yml ps backend | grep -q "(healthy)" \
+              && docker compose -f docker-compose.e2e.yml ps frontend | grep -q "(healthy)"; then
+              echo "All services healthy"
+              break
+            fi
+            if [ $i -eq 60 ]; then
+              echo "Timeout waiting for services"
+              docker compose -f docker-compose.e2e.yml ps
+              docker compose -f docker-compose.e2e.yml logs --tail=200 backend
+              docker compose -f docker-compose.e2e.yml logs --tail=100 frontend
+              exit 1
+            fi
+            sleep 5
+          done
+
+      - name: Run smoke, functional, regression, accessibility
+        env:
+          E2E_BASE_URL: http://localhost:3000
+          CI: 'true'
+        run: pnpm --filter @fovea/annotation-tool exec playwright test --project=smoke --project=functional --project=regression --project=accessibility --reporter=list,html,json,junit
+
+      - name: Dump service logs on failure
+        if: failure()
+        run: |
+          echo "=== Backend Logs ==="
+          docker compose -f docker-compose.e2e.yml logs --tail=300 backend
+          echo "=== Frontend Logs ==="
+          docker compose -f docker-compose.e2e.yml logs --tail=200 frontend
+          echo "=== Mock Model Service Logs ==="
+          docker compose -f docker-compose.e2e.yml logs --tail=100 mock-model-service
+
+      - name: Stop Docker Compose services
+        if: always()
+        run: docker compose -f docker-compose.e2e.yml down -v
+
+      - name: Upload Playwright report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report-mock
+          path: annotation-tool/playwright-report/
+          retention-days: 30
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e2e-mock-test-results
+          path: annotation-tool/test-results/
+          retention-days: 30

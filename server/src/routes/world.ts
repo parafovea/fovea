@@ -7,6 +7,7 @@ import { optionalAuth, requireAdmin, requireAuth } from '@middleware/auth.js'
 import { buildAbilities } from '../middleware/abilities.js'
 import type { AppAbility } from '../lib/abilities.js'
 import { NotFoundError, UnauthorizedError, InternalError, ForbiddenError } from '@lib/errors.js'
+import { isDemoModeEnabled } from '../lib/demo-flags.js'
 import { convertObjectRefsToText, countObjectRefsInGlosses } from '@lib/reference-cleanup.js'
 import {
   asEntityTypes,
@@ -123,12 +124,24 @@ const worldRoute: FastifyPluginAsync = async (fastify) => {
       where: { userId, projectId: null }
     })
 
+    const inDemoMode = isDemoModeEnabled()
+
     if (worldState) {
-      if (request.ability && !request.ability.can('read', subject('WorldState', worldState))) {
+      if (
+        request.ability &&
+        !request.ability.can('read', subject('WorldState', worldState)) &&
+        !inDemoMode
+      ) {
         throw new ForbiddenError('Cannot read this WorldState')
       }
     } else {
-      if (request.ability) {
+      if (request.ability && !inDemoMode) {
+        // FOVEA_DEMO_MODE override: anonymous demo sessions have no
+        // WorldState:create ability under their ephemeral role.
+        // Widening here lets each anonymous user lazily create
+        // their own personal world-state row. The row is always
+        // scoped to userId so anonymous users never see one
+        // another's state.
         const candidate = subject('WorldState', { userId, projectId: null })
         if (!request.ability.can('create', candidate)) {
           throw new ForbiddenError('Cannot create this WorldState')

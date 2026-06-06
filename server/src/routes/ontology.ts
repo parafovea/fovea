@@ -5,6 +5,13 @@ import { subject } from '@casl/ability'
 import { requireAuth } from '../middleware/auth.js'
 import { buildAbilities } from '../middleware/abilities.js'
 import { NotFoundError, UnauthorizedError, InternalError, ForbiddenError, AppError } from '../lib/errors.js'
+import {
+  fetchModelService,
+  MODEL_SERVICE_TIMEOUTS,
+  ModelServiceTimeoutError,
+  ModelServiceUnreachableError,
+} from '../lib/fetchModelService.js'
+import camelcaseKeys from 'camelcase-keys'
 
 /**
  * TypeBox schemas for ontology responses.
@@ -431,7 +438,9 @@ const ontologyRoute: FastifyPluginAsync = async (fastify) => {
           reasoning: Type.String()
         }),
         400: Type.Object({ error: Type.String() }),
-        500: Type.Object({ error: Type.String() })
+        500: Type.Object({ error: Type.String() }),
+        502: Type.Object({ error: Type.String(), message: Type.Optional(Type.String()) }),
+        504: Type.Object({ error: Type.String(), message: Type.Optional(Type.String()) })
       }
     }
   }, async (request, reply) => {
@@ -459,16 +468,16 @@ const ontologyRoute: FastifyPluginAsync = async (fastify) => {
 
       // Call model service
       const modelServiceUrl = process.env.MODEL_SERVICE_URL || 'http://localhost:8000'
-      const response = await fetch(`${modelServiceUrl}/api/ontology/augment`, {
+      const response = await fetchModelService(`${modelServiceUrl}/api/ontology/augment`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        timeoutMs: MODEL_SERVICE_TIMEOUTS.ontologyAugment,
+        body: {
           persona_id: personaId,
           domain,
           existing_types: existingTypes,
           target_category: targetCategory,
-          max_suggestions: maxSuggestions
-        })
+          max_suggestions: maxSuggestions,
+        },
       })
 
       if (!response.ok) {
@@ -480,7 +489,16 @@ const ontologyRoute: FastifyPluginAsync = async (fastify) => {
         })
       }
 
-      const result = await response.json()
+      // Model-service responses are snake_case (Pydantic default) but this
+      // route's response schema is camelCase (e.g. `personaId`, `targetCategory`).
+      // Without this transform, fast-json-stringify's response serialization
+      // throws "personaId is required" because the model-service body carries
+      // `persona_id` and the schema validator can't find the camelCase key.
+      // Surfaces as a 500 INTERNAL_ERROR to the frontend with no useful
+      // payload, which is exactly the regression model-service-coverage.spec.ts
+      // is now locked down to catch.
+      const rawResult = (await response.json()) as Record<string, unknown>
+      const result = camelcaseKeys(rawResult, { deep: true })
 
       return reply.send(result)
     } catch (error) {
@@ -488,6 +506,14 @@ const ontologyRoute: FastifyPluginAsync = async (fastify) => {
       // ForbiddenError from ability gates) surface as their proper status
       // rather than 500.
       if (error instanceof AppError) throw error
+      if (error instanceof ModelServiceTimeoutError) {
+        fastify.log.error({ endpoint: error.endpoint, timeoutMs: error.timeoutMs }, 'Model service ontology augment timed out')
+        return reply.code(504).send({ error: 'MODEL_SERVICE_TIMEOUT', message: error.message })
+      }
+      if (error instanceof ModelServiceUnreachableError) {
+        fastify.log.error({ endpoint: error.endpoint, cause: error.cause.message }, 'Model service ontology augment unreachable')
+        return reply.code(502).send({ error: 'MODEL_SERVICE_UNREACHABLE', message: error.message })
+      }
       fastify.log.error(error, 'Error generating ontology suggestions')
       return reply.code(500).send({
         error: error instanceof Error ? error.message : 'Failed to generate suggestions'

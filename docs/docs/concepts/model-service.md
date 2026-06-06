@@ -7,8 +7,8 @@ database. The backend invokes it via BullMQ jobs (for the
 long-running summarization, extraction, and synthesis flows) and
 direct HTTP (for detection, tracking, and thumbnail generation).
 
-Since v0.3.0 the model service is laid out as a Clean
-Architecture stack (domain / application / infrastructure). This
+The model service is laid out as a Clean Architecture stack
+(domain / application / infrastructure). This
 page covers the task-slot configuration, the loader hierarchy,
 and the external-API path; the layered structure is documented
 in [Clean Architecture](clean-architecture.md).
@@ -32,7 +32,7 @@ ontology_augmentation
 claim_extraction
 claim_synthesis
 object_detection
-object_tracking
+video_tracking
 audio_transcription
 speaker_diarization
 voice_activity_detection
@@ -45,17 +45,19 @@ The schema is documented in
 
 Loaders live under
 `model-service/src/infrastructure/adapters/outbound/models/`. One
-subdirectory per modality, each with a `loader.py` factory and a
-`base.py` shared interface so the adapter never imports the
-factory directly:
+subdirectory per modality. The exact layout varies; some
+modalities split into `loader.py` plus `base.py`, others bundle
+the loader with per-model files. The adapter resolves loaders
+through the registry so it never imports them directly:
 
 ```text
 models/llm/                 SGLang, vLLM, Transformers LLMs
 models/vlm/                 SGLang, vLLM, Transformers VLMs
 models/detection/           OWLv2, Grounding DINO, YOLO-World
-models/tracking/            CoTracker, SAMURAI, SAM2
+models/tracking/            SAMURAI, SAM2, SAM2Long, YOLO11Seg
 models/audio/               Whisper, faster-whisper, pyannote, Silero VAD,
                             Canary, Parakeet, WhisperX
+models/ctranslate2/         faster-whisper CPU adapter (int8 quantization)
 models/onnx/                ONNX Runtime YOLO-World, Florence-2,
                             Grounding DINO (CPU mode)
 models/llama_cpp/           llama.cpp LLM and VLM (GGUF, CPU mode)
@@ -91,9 +93,11 @@ The seven audio vendor adapters live under
 `model-service/src/infrastructure/adapters/outbound/external_apis/audio/`
 and share a common `base.py`. They normalize transcripts to a
 common shape: paragraph text, per-word offsets, speaker labels
-(where supported), and language code. The
-`AudioProcessingService` consumes that normalized shape and
-hands it to the summarization use case for fusion.
+(where supported), and language code. The module-level helpers
+in `application/services/audio_processing.py` (`has_audio_stream`,
+`get_audio_info`, `extract_audio_segment`, ...) consume that
+normalized shape and hand it to the summarization use case for
+fusion.
 
 ```text
 assemblyai_client.py
@@ -118,7 +122,11 @@ Use cases that call thinking-capable models return a
 ## Observability
 
 Every use case wraps its `execute` in an OpenTelemetry span.
-Every outbound adapter emits a `model_inference` metric on
-every call, tagged with `model_id`, `task`, and `framework`.
+Every outbound adapter records two OpenTelemetry instruments
+on every call; a counter `model.inference.count` and a
+histogram `model.inference.duration` (seconds), tagged with
+`task` and `model` (plus any extra attributes such as
+`framework` supplied by the adapter). The counter also carries
+a `result` attribute (`success` or `error`).
 Spans and metrics ship to `OTEL_EXPORTER_OTLP_ENDPOINT`; see
 [Guide > Observability](../guide/observability.md).

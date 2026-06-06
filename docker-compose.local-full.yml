@@ -1,0 +1,25 @@
+# Local full-stack override: brings up the multi-user-mode backend
+# AND a CPU model-service compiled with ENABLE_AUDIO=1 so transcription
+# (faster-whisper) and diarization (pyannote.audio) work on the local
+# install. The production demo at demo.fovea.video runs WITHOUT a
+# model-service (DEMO_MODE=false drops it from the compose target);
+# this override is the inverse for local development.
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.local-full.yml up -d --build
+name: fovea-local-full
+
+services:
+  model-service:
+    build:
+      context: ./model-service
+      dockerfile: Dockerfile
+      args:
+        BUILD_MODE: minimal
+        DEVICE: cpu
+        ENABLE_AUDIO: 1
+        PRELOAD_MODELS: false
+    environment:
+      - DEVICE=cpu
+      - MODEL_CONFIG_PATH=/config/models-cpu.yaml
+      - ENABLE_AUDIO=1

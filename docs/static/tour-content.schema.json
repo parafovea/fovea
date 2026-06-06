@@ -1,0 +1,189 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://fovea.video/schemas/tour.json",
+  "title": "Fovea tour bundle",
+  "description": "JSON shape for a tour script in $FOVEA_TOURS_DIR (custom-tour loader) and for the per-tour fixture bundles under annotation-tool/demo/fixtures/. See docs/tours.md and docs/tour-anchors.md.",
+  "type": "object",
+  "required": ["id", "title", "description", "durationMinutes"],
+  "additionalProperties": true,
+  "properties": {
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Stable identifier. Used by the menu, the runner, deep-links from the marketing site, and the seed handler. Match the bundle filename (tour-{id}.json) so each tour has one file in each layer."
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Display title for the tile + the step card header. Keep under ~50 chars."
+    },
+    "description": {
+      "type": "string",
+      "description": "One-sentence pitch for the tile. Plain text. Renders inside the CardDescription."
+    },
+    "durationMinutes": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Approximate run time in minutes. Surfaces as a badge on the tile."
+    },
+    "tags": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Feature-area chips that surface alongside the duration badge."
+    },
+    "fixtureBundle": {
+      "type": "string",
+      "description": "Optional. If set, the demo runner POSTs to /api/demo/seed with this id before painting step 1 (fixture mode)."
+    },
+    "recap": {
+      "type": "string",
+      "description": "Plain-text recap surfaced on /done/:id after the tour completes."
+    },
+    "followUpTourId": {
+      "type": "string",
+      "description": "Optional. Tour id to suggest on the recap page."
+    },
+    "steps": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 8,
+      "items": { "$ref": "#/$defs/step" },
+      "description": "Tour scripts. Built-in tours land in src/tours/scripts/; custom tours under $FOVEA_TOURS_DIR can also include this. Fixture bundles MUST NOT include steps (the bundle is workspace state, the script is what runs against it)."
+    },
+    "personas": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/persona" },
+      "description": "Fixture bundle field. Each persona is created against the anonymous demo user when /api/demo/seed runs."
+    },
+    "ontology": { "$ref": "#/$defs/ontology" },
+    "world": { "$ref": "#/$defs/world" },
+    "videos": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/videoRef" },
+      "description": "Fixture bundle field. References videos already in demo CDN storage by id; the seeder doesn't upload."
+    },
+    "annotations": {
+      "type": "array",
+      "description": "Fixture bundle field. Pre-existing annotations the tour starts from. Currently accepted as untyped pass-through; the loader lands incrementally."
+    },
+    "summaries": {
+      "type": "array",
+      "description": "Fixture bundle field. Pre-existing transcripts + summaries for Tour 7. Currently accepted as untyped pass-through."
+    }
+  },
+  "$defs": {
+    "step": {
+      "type": "object",
+      "required": ["anchor", "narration"],
+      "properties": {
+        "anchor": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Stable data-tour-id value (no [data-tour-id=\"...\"] wrapping). See docs/tour-anchors.md."
+        },
+        "narration": {
+          "type": "string",
+          "maxLength": 200,
+          "description": "≤ 15 words. The step card is a caption, not a manual."
+        },
+        "body": {
+          "type": "string",
+          "description": "Optional secondary text rendered under the narration."
+        },
+        "requiresFixture": {
+          "type": "boolean",
+          "description": "True if the step depends on demo-seeded state. Anchored mode shows a graceful 'demo content' note and lets the user skip."
+        },
+        "expectAction": {
+          "type": "string",
+          "enum": ["click", "draw", "type", "hover", "scrub", "none"],
+          "description": "Informational. Not enforced by the engine; used by telemetry + by self-hosters authoring tours."
+        },
+        "modal": {
+          "type": "boolean",
+          "description": "Force modal click-blocking on this step regardless of the tour-level default."
+        }
+      },
+      "additionalProperties": false
+    },
+    "persona": {
+      "type": "object",
+      "required": ["name", "role"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "role": { "type": "string", "minLength": 1 },
+        "informationNeed": {
+          "type": "string",
+          "description": "Free-form description. Defaults to 'Demo persona.' if omitted."
+        },
+        "isDefault": {
+          "type": "boolean",
+          "description": "Optional UI hint that this is the active persona."
+        }
+      },
+      "additionalProperties": false
+    },
+    "ontology": {
+      "type": "object",
+      "required": ["personaIndex"],
+      "properties": {
+        "personaIndex": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Index into personas[]; the ontology attaches to that persona."
+        },
+        "entityTypes": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/typeDecl" }
+        },
+        "eventTypes": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/typeDecl" }
+        },
+        "roles": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/typeDecl" }
+        },
+        "relationTypes": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/typeDecl" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "world": {
+      "type": "object",
+      "required": ["personaIndex"],
+      "properties": {
+        "personaIndex": { "type": "integer", "minimum": 0 },
+        "entities": { "type": "array" },
+        "events": { "type": "array" },
+        "times": { "type": "array" },
+        "locations": { "type": "array" }
+      },
+      "additionalProperties": false
+    },
+    "typeDecl": {
+      "type": "object",
+      "required": ["name", "gloss"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "gloss": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Plain-text definition. The seeder wraps it in a single-segment GlossItem array on write."
+        }
+      },
+      "additionalProperties": false
+    },
+    "videoRef": {
+      "type": "object",
+      "required": ["videoId"],
+      "properties": {
+        "videoId": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    }
+  }
+}

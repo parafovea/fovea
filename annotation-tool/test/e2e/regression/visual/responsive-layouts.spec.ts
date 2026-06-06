@@ -34,13 +34,27 @@ test.describe('Responsive Layout Visual Regression', () => {
     await page.setViewportSize({ width: 1280, height: 720 })
     await annotationWorkspace.navigateFromVideoBrowser()
 
-    // Wait for workspace to load
-    await page.waitForTimeout(1000)
+    // The default 1s timeout occasionally screenshots while the workspace
+    // header still reads "Loading…"; wait for network idle and the video
+    // element to mount before snapping.
+    await page.waitForLoadState('networkidle')
+    await page.locator('video').waitFor({ state: 'visible', timeout: 10000 })
+    await page.waitForTimeout(500)
 
     await expect(page).toHaveScreenshot('annotation-workspace-desktop.png', {
       fullPage: true,
-      threshold: 0.25,  // Video frame may vary
-      maxDiffPixels: 200
+      threshold: 0.25,
+      // The masked persona-select chip and user-menu button shift width by
+      // a few pixels between runs because the per-worker text inside them
+      // varies; tolerate that along the masked edges.
+      maxDiffPixels: 1500,
+      mask: [
+        page.locator('video'),
+        // Persona select chip and user-menu button render per-worker text
+        // that differs between baseline-capture and verification runs.
+        page.getByRole('combobox', { name: /select persona/i }),
+        page.getByRole('button', { name: /user menu/i }),
+      ],
     })
   })
 
@@ -48,13 +62,22 @@ test.describe('Responsive Layout Visual Regression', () => {
     await page.setViewportSize({ width: 1920, height: 1080 })
     await annotationWorkspace.navigateFromVideoBrowser()
 
-    // Wait for workspace to load
-    await page.waitForTimeout(1000)
+    await page.waitForLoadState('networkidle')
+    await page.locator('video').waitFor({ state: 'visible', timeout: 10000 })
+    await page.waitForTimeout(500)
 
     await expect(page).toHaveScreenshot('annotation-workspace-wide.png', {
       fullPage: true,
-      threshold: 0.25,  // Video frame may vary
-      maxDiffPixels: 250
+      threshold: 0.25,
+      // Mask boundaries (persona-select chip, user-menu) drift a few px
+      // between runs because per-worker text varies; tolerate that along
+      // the masked edges. 2000px out of 1920×1080 ≈ 0.1%.
+      maxDiffPixels: 2000,
+      mask: [
+        page.locator('video'),
+        page.getByRole('combobox', { name: /select persona/i }),
+        page.getByRole('button', { name: /user menu/i }),
+      ],
     })
   })
 

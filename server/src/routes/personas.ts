@@ -7,6 +7,7 @@ import { subject } from '@casl/ability'
 import { requireAuth, optionalAuth } from '@middleware/auth.js'
 import { buildAbilities } from '../middleware/abilities.js'
 import { NotFoundError, ForbiddenError } from '@lib/errors.js'
+import { isDemoModeEnabled } from '../lib/demo-flags.js'
 import { personaOperationCounter } from '../metrics.js'
 import {
   updateGlossesInTypes,
@@ -131,6 +132,42 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
       // Unauthenticated: return only non-hidden system personas
       const personas = await fastify.prisma.persona.findMany({
         where: { isSystemGenerated: true, hidden: false },
+        orderBy: { createdAt: 'desc' }
+      })
+      return reply.send(personas)
+    }
+
+    // FOVEA_DEMO_MODE override: the booth flow that ships on
+    // demo.fovea.video auto-issues demo-anonymous-* sessions
+    // (server/src/demo/anonymous-session.ts) so the visitor is
+    // technically authenticated and the unauthenticated branch above
+    // does not fire — but the auto-issued anon user has no CASL
+    // grants of their own, so the per-user accessibleBy filter below
+    // returns the empty set and the persona dropdown reads "No
+    // personas found". The Persona Builder workspace and every tour
+    // that drives a persona-rooted ontology (ontology-authoring,
+    // wikidata-augmentation, world-layer, etc.) then has no anchor
+    // to mount against because the workspace's tab list is gated on
+    // persona selection. Inside FOVEA_DEMO_MODE we explicitly widen
+    // the read scope to every non-hidden system-generated persona —
+    // the seeded "Automated" persona plus any future
+    // isSystemGenerated=true rows an admin promotes — so the tours
+    // run end-to-end against the same seeded ontology a self-hosted
+    // single-user deployment shows. This is gated on FOVEA_DEMO_MODE
+    // so production multi-user deployments keep their per-user RBAC
+    // intact.
+    if (process.env.FOVEA_DEMO_MODE === 'true') {
+      // The seeded Automated persona ships with hidden=true so it
+      // does not clutter a multi-user deployment's persona dropdown
+      // for end users who do not need it. The tour flow that walks
+      // visitors through the persona-rooted workspaces needs it
+      // visible, so the override drops the hidden filter — the
+      // visible result is every isSystemGenerated persona regardless
+      // of the hidden flag. Production deployments without
+      // FOVEA_DEMO_MODE keep their per-user RBAC + the hidden filter
+      // exactly as before.
+      const personas = await fastify.prisma.persona.findMany({
+        where: { isSystemGenerated: true },
         orderBy: { createdAt: 'desc' }
       })
       return reply.send(personas)
@@ -629,7 +666,16 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
         throw new NotFoundError('Persona or ontology', id)
       }
     } else if (!request.ability.can('read', subject('Persona', persona))) {
-      throw new ForbiddenError('Access denied')
+      // FOVEA_DEMO_MODE override: in demo mode every system-
+      // generated persona is part of the deployment's public
+      // tour catalogue and must be readable by any caller whose
+      // CASL ability is scoped to their own data (anonymous demo
+      // sessions, non-admin users opening a tour). Without this
+      // widening the VideoBrowser cannot fetch the seeded
+      // persona's ontology and every video card renders blank.
+      if (!isDemoModeEnabled() || !persona.isSystemGenerated) {
+        throw new ForbiddenError('Access denied')
+      }
     }
 
     // Map database field names to API field names

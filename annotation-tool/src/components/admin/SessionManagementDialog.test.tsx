@@ -6,7 +6,7 @@ import { describe, it, expect, vi } from 'vitest'
 import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { renderWithProviders } from '@test/utils/test-utils.js'
-import SessionManagementDialog from './SessionManagementDialog.js'
+import { SessionManagementDialog } from './SessionManagementDialog.js'
 import { http, HttpResponse } from 'msw'
 import { server } from '@test/setup.js'
 
@@ -71,7 +71,7 @@ describe('SessionManagementDialog', () => {
     renderWithProviders(<SessionManagementDialog open={true} onClose={mockOnClose} />)
 
     await screen.findByRole('dialog')
-    expect(screen.getByRole('progressbar')).toBeInTheDocument()
+    expect(screen.getByRole('status')).toBeInTheDocument()
   })
 
   it('displays sessions in table', async () => {
@@ -259,7 +259,10 @@ describe('SessionManagementDialog', () => {
       expect(screen.getByText('Session Management')).toBeInTheDocument()
     })
 
-    await user.click(screen.getByRole('button', { name: /close/i }))
+    // Click the footer Close button (not the dialog's X close button)
+    const closeButtons = screen.getAllByRole('button', { name: /close/i })
+    const footerClose = closeButtons.find(btn => btn.textContent === 'Close')!
+    await user.click(footerClose)
 
     expect(onClose).toHaveBeenCalled()
   })

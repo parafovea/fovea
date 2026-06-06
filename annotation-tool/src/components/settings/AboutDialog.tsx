@@ -3,20 +3,17 @@
  * Displays information about the FOVEA application.
  */
 
+import { X } from 'lucide-react'
 import {
   Dialog,
-  DialogTitle,
   DialogContent,
-  DialogActions,
-  Button,
-  Box,
-  Typography,
-  Divider,
-  IconButton,
-  Grid,
-  Chip,
-} from '@mui/material'
-import { Close as CloseIcon } from '@mui/icons-material'
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Separator } from '@/components/ui/separator'
 
 /**
  * Props for AboutDialog component.
@@ -36,36 +33,35 @@ interface AboutDialogProps {
  */
 export default function AboutDialog({ open, onClose }: AboutDialogProps) {
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
-      <DialogTitle>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Box>
-            About FOVEA
-            <Chip label="v0.1.0" size="small" sx={{ ml: 2 }} />
-          </Box>
-          <IconButton
-            aria-label="close"
-            onClick={onClose}
-            size="small"
-          >
-            <CloseIcon />
-          </IconButton>
-        </Box>
-      </DialogTitle>
+    <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) onClose() }}>
+      <DialogContent className="sm:max-w-2xl" showCloseButton={false}>
+        <DialogHeader>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <DialogTitle>About FOVEA</DialogTitle>
+              <Badge variant="secondary">v0.1.0</Badge>
+            </div>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label="close"
+              onClick={onClose}
+            >
+              <X />
+            </Button>
+          </div>
+        </DialogHeader>
 
-      <DialogContent>
-        <Typography variant="body2" sx={{ mb: 2 }}>
+        <p className="text-sm text-muted-foreground">
           FOVEA (Flexible Ontology Visual Event Analyzer) is a web-based video annotation tool for tactically-oriented analysts. It uses a persona-based approach where multiple analysts can assign different semantic types to the same real-world objects, enabling collaborative ontology development with multiple perspectives.
-        </Typography>
+        </p>
 
-        <Divider sx={{ my: 2 }} />
+        <Separator />
 
-        <Grid container spacing={3}>
-          <Grid item xs={6}>
-            <Typography variant="subtitle2" gutterBottom>
-              Core Features
-            </Typography>
-            <Box component="ul" sx={{ pl: 2, m: 0, fontSize: '0.875rem' }}>
+        <div className="grid grid-cols-2 gap-6">
+          <div>
+            <h4 className="text-sm font-medium mb-2">Core Features</h4>
+            <ul className="list-disc pl-4 text-sm space-y-0.5">
               <li>Persona-based ontologies</li>
               <li>Shared world model (entities, events, locations)</li>
               <li>Rich temporal modeling</li>
@@ -73,55 +69,49 @@ export default function AboutDialog({ open, onClose }: AboutDialogProps) {
               <li>Wikidata integration</li>
               <li>Interactive map-based location selection</li>
               <li>Import/export with conflict resolution</li>
-            </Box>
-          </Grid>
+            </ul>
+          </div>
 
-          <Grid item xs={6}>
-            <Typography variant="subtitle2" gutterBottom>
-              AI-Powered Analysis
-            </Typography>
-            <Box component="ul" sx={{ pl: 2, m: 0, fontSize: '0.875rem' }}>
+          <div>
+            <h4 className="text-sm font-medium mb-2">AI-Powered Analysis</h4>
+            <ul className="list-disc pl-4 text-sm space-y-0.5">
               <li>Video summarization with audio transcription</li>
               <li>Speaker diarization</li>
               <li>Object detection (YOLO, GroundingDINO)</li>
               <li>Multi-object tracking (ByteTrack, BoT-SORT)</li>
               <li>Ontology augmentation</li>
               <li>GPU-accelerated inference</li>
-            </Box>
-          </Grid>
+            </ul>
+          </div>
 
-          <Grid item xs={6}>
-            <Typography variant="subtitle2" gutterBottom>
-              Annotation Tools
-            </Typography>
-            <Box component="ul" sx={{ pl: 2, m: 0, fontSize: '0.875rem' }}>
+          <div>
+            <h4 className="text-sm font-medium mb-2">Annotation Tools</h4>
+            <ul className="list-disc pl-4 text-sm space-y-0.5">
               <li>Keyframe-based bounding boxes</li>
               <li>Multiple interpolation modes</li>
               <li>Visibility toggling</li>
               <li>Ghost box visualization</li>
               <li>Timeline-based editing</li>
               <li>Keyboard shortcuts</li>
-            </Box>
-          </Grid>
+            </ul>
+          </div>
 
-          <Grid item xs={6}>
-            <Typography variant="subtitle2" gutterBottom>
-              Technology Stack
-            </Typography>
-            <Box component="ul" sx={{ pl: 2, m: 0, fontSize: '0.875rem' }}>
+          <div>
+            <h4 className="text-sm font-medium mb-2">Technology Stack</h4>
+            <ul className="list-disc pl-4 text-sm space-y-0.5">
               <li>React 18 + TypeScript + Vite</li>
               <li>Material-UI v5 + Redux Toolkit</li>
               <li>Node.js + Fastify + PostgreSQL</li>
               <li>Python + FastAPI + PyTorch</li>
               <li>video.js v8 + Leaflet</li>
-            </Box>
-          </Grid>
-        </Grid>
-      </DialogContent>
+            </ul>
+          </div>
+        </div>
 
-      <DialogActions>
-        <Button onClick={onClose}>Close</Button>
-      </DialogActions>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Close</Button>
+        </DialogFooter>
+      </DialogContent>
     </Dialog>
   )
 }

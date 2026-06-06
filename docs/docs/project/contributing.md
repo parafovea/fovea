@@ -1,10 +1,11 @@
 # Contributing
 
-The repository accepts pull requests against `main` for new work,
-against `release/0.2.x` for the active line, and against
-`release/0.1.x` for maintenance fixes to the 0.1.0 export-format
-line. All three branches require the test suite to pass before
-merge; CI runs on PRs to `main`, `develop`, and `release/**`.
+The repository accepts pull requests against `main` for new
+work, against the active release branch for the current line,
+and against the maintenance branches for fixes that need to land
+on older lines. All branches require the test suite to pass
+before merge; CI runs on PRs to `main`, `develop`, and
+`release/**`.
 
 ## Development setup
 
@@ -51,13 +52,17 @@ npm test       # vitest unit tests
 npm run lint   # eslint
 ```
 
-End-to-end tests live under `annotation-tool/e2e/` and run via
-Playwright against the e2e compose stack:
+End-to-end tests live under `annotation-tool/test/e2e/` and run
+via Playwright against the e2e compose stack:
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.e2e.yml up -d
-npx playwright test
+cd annotation-tool && npm run test:e2e
 ```
+
+The Playwright projects have dedicated npm scripts:
+`npm run test:e2e:smoke`, `npm run test:e2e:regression`,
+`npm run test:e2e:a11y`, and `npm run test:e2e:visual`.
 
 ## Model service
 
@@ -95,8 +100,11 @@ are part of the API contract.
 Integration tests that exercise multi-user isolation
 (`test/integration/multi-user-isolation.test.ts`,
 `import-export-cross-user.test.ts`,
-`issue-121-real-fixture.test.ts`) call the shared helper
-`test/integration/_rbac-baseline.ts` from their `beforeEach`. The
+`cross-user-import-real-fixture.test.ts`,
+`cross-user-import-rich-fixture.test.ts`,
+`cross-user-import-foreign-fixture.test.ts`) call the shared
+helper `reseedOwnershipBaseline` from
+`test/integration/_rbac-baseline.ts` in their `beforeEach`. The
 helper deletes the test-helper's blanket-grant `RolePermission`
 rows under the system scope and re-seeds an ownership-aware
 production-like baseline: every action on every content type
@@ -107,8 +115,8 @@ the gate the test exercises rather than an unconditional grant.
 
 Without `_rbac-baseline.ts`, the test-helper's blanket grants
 hide ownership leaks: the matrix would falsely pass even when
-v0.2.0's permission state would have allowed cross-user access in
-production. New isolation tests should pull in the helper.
+the production permission state would have allowed cross-user
+access. New isolation tests should pull in the helper.
 
 ## Filing issues
 

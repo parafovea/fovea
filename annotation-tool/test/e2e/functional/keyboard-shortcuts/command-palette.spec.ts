@@ -40,7 +40,7 @@ test.describe('Command Palette', () => {
 
     // Should show at least global navigation commands
     await expect(page.getByText(/go to video browser/i)).toBeVisible()
-    await expect(page.getByText(/go to ontology builder/i)).toBeVisible()
+    await expect(page.getByText(/go to persona builder/i)).toBeVisible()
     await expect(page.getByText(/go to object builder/i)).toBeVisible()
   })
 
@@ -58,10 +58,11 @@ test.describe('Command Palette', () => {
     await searchInput.fill('ontology')
 
     // Should show only ontology-related commands
-    await expect(page.getByText(/go to ontology builder/i)).toBeVisible()
+    await expect(page.getByText(/go to persona builder/i)).toBeVisible()
 
     // Should NOT show non-matching commands
-    const commandItems = dialog.locator('[role="button"]')
+    // cmdk renders items with role="option" / [cmdk-item], not buttons.
+    const commandItems = dialog.locator('[role="option"], [cmdk-item]')
     const commandCount = await commandItems.count()
 
     // Verify filtered results (should be less than total)
@@ -80,10 +81,10 @@ test.describe('Command Palette', () => {
 
     // Search for ontology command
     const searchInput = dialog.locator('input[placeholder*="command"]')
-    await searchInput.fill('ontology builder')
+    await searchInput.fill('persona builder')
 
-    // Click the "Go to Ontology Builder" command
-    await page.getByText(/go to ontology builder/i).click()
+    // Click the "Go to Persona Builder" command
+    await page.getByText(/go to persona builder/i).click()
 
     // Verify navigation occurred
     await page.waitForURL(/\/ontology/, { timeout: 5000 })
@@ -179,14 +180,14 @@ test.describe('Command Palette', () => {
     // Should show "Save" command
     await expect(page.getByText(/save/i).first()).toBeVisible()
 
-    // Keybindings are displayed in Paper components with outlined variant
-    // Verify that keybinding display elements exist (MUI Paper with backgroundColor grey.100)
-    const listItems = dialog.locator('[role="button"]')
+    // Keybindings are displayed via shadcn CommandShortcut ([data-slot="command-shortcut"]).
+    // Command items render as [role="option"] in cmdk (the underlying primitive shadcn Command wraps).
+    const listItems = dialog.locator('[role="option"], [cmdk-item]')
     const firstItem = listItems.first()
     await expect(firstItem).toBeVisible()
 
-    // Keybinding should be in a Paper element within the list item
-    const keybindingPaper = firstItem.locator('.MuiPaper-root')
+    // Keybinding shortcut element should be present somewhere in the visible list when shortcuts exist.
+    const keybindingPaper = dialog.locator('[data-slot="command-shortcut"]')
     if (await keybindingPaper.count() > 0) {
       await expect(keybindingPaper.first()).toBeVisible()
     }
@@ -234,8 +235,11 @@ test.describe('Command Palette', () => {
     const searchInput = dialog.locator('input[placeholder*="command"]')
     await searchInput.fill('navigation')
 
-    // Should show navigation category commands
-    const navCommands = page.locator('[role="button"]:has-text("navigation")')
+    // The cmdk command palette renders matched commands as
+    // [cmdk-item]/role="option" inside the dialog. Filtering by typing
+    // "navigation" matches the category heading and the items in that
+    // group; assert that at least one item remains visible.
+    const navCommands = dialog.locator('[role="option"], [cmdk-item]')
     const count = await navCommands.count()
     expect(count).toBeGreaterThan(0)
   })

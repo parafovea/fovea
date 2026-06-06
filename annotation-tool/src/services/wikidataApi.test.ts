@@ -167,7 +167,8 @@ describe('wikidataApi', () => {
       await searchWikidata('test')
 
       expect(global.fetch).toHaveBeenCalledWith(
-        expect.stringContaining('limit=10')
+        expect.stringContaining('limit=10'),
+        expect.anything()
       )
     })
 
@@ -180,7 +181,8 @@ describe('wikidataApi', () => {
       await searchWikidata('test', 5)
 
       expect(global.fetch).toHaveBeenCalledWith(
-        expect.stringContaining('limit=5')
+        expect.stringContaining('limit=5'),
+        expect.anything()
       )
     })
 
@@ -261,7 +263,8 @@ describe('wikidataApi', () => {
       await getWikidataEntity('Q42')
 
       expect(global.fetch).toHaveBeenCalledWith(
-        expect.stringContaining('props=labels%7Cdescriptions%7Cclaims%7Csitelinks')
+        expect.stringContaining('props=labels%7Cdescriptions%7Cclaims%7Csitelinks'),
+        expect.anything()
       )
     })
   })

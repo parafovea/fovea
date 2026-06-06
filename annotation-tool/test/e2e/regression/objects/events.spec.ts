@@ -37,8 +37,9 @@ test.describe('Event Management', () => {
     const dialog = page.locator('[role="dialog"]')
     await dialog.waitFor({ state: 'visible', timeout: 5000 })
 
-    // The "Done" button should be disabled when name is empty (validation via disabled state)
-    const doneButton = dialog.getByRole('button', { name: /done/i })
+    // The save button should be disabled when name is empty (validation via disabled state).
+    // The shadcn EventEditor uses "Create Event" / "Update Event"; the legacy "Done" label is gone.
+    const doneButton = dialog.getByRole('button', { name: /create event|update event/i })
     await expect(doneButton).toBeDisabled()
 
     // Dialog should still be visible (cannot submit without name)

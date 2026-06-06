@@ -1,24 +1,20 @@
 import { useState } from 'react'
+
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import {
   Dialog,
-  DialogTitle,
   DialogContent,
-  DialogActions,
-  Button,
-  FormControl,
-  FormControlLabel,
-  FormLabel,
-  RadioGroup,
-  Radio,
-  Checkbox,
-  TextField,
-  Typography,
-  Box,
-  Stack,
-  LinearProgress,
-  Alert,
-  Divider,
-} from '@mui/material'
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Progress } from '@/components/ui/progress'
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
+import { Separator } from '@/components/ui/separator'
 import { ClaimExtractionConfig, ExtractionStrategy } from '@models/types'
 
 interface ClaimsExtractionDialogProps {
@@ -30,7 +26,7 @@ interface ClaimsExtractionDialogProps {
   error?: string | null
 }
 
-export default function ClaimsExtractionDialog({
+export function ClaimsExtractionDialog({
   open,
   onClose,
   onExtract,
@@ -73,194 +69,175 @@ export default function ClaimsExtractionDialog({
   }
 
   return (
-    <Dialog
-      open={open}
-      onClose={handleCancel}
-      maxWidth="sm"
-      fullWidth
-      PaperProps={{
-        sx: { minHeight: '500px' },
-      }}
-    >
-      <DialogTitle>Extract Claims from Summary</DialogTitle>
-      <DialogContent>
-        <Stack spacing={3} sx={{ mt: 1 }}>
-          {/* Input Sources Section */}
-          <Box>
-            <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 600 }}>
-              Input Sources
-            </Typography>
-            <Stack spacing={1}>
-              <FormControlLabel
-                control={<Checkbox checked={true} disabled />}
-                label="Summary Text (required)"
-              />
-              <FormControlLabel
-                control={
-                  <Checkbox
-                    checked={includeAnnotations}
-                    onChange={(e) => setIncludeAnnotations(e.target.checked)}
-                  />
-                }
-                label="Annotations (enable @references)"
-              />
-              <FormControlLabel
-                control={
-                  <Checkbox
-                    checked={includeOntology}
-                    onChange={(e) => setIncludeOntology(e.target.checked)}
-                  />
-                }
-                label="Ontology (enable #references)"
-              />
-              {includeOntology && (
-                <Box sx={{ ml: 4 }}>
-                  <FormControl component="fieldset">
-                    <RadioGroup
-                      value={ontologyDepth}
-                      onChange={(e) => setOntologyDepth(e.target.value as any)}
-                    >
-                      <FormControlLabel
-                        value="names-only"
-                        control={<Radio size="small" />}
-                        label="Names only"
-                      />
-                      <FormControlLabel
-                        value="names-and-glosses"
-                        control={<Radio size="small" />}
-                        label="Names + Glosses (default)"
-                      />
-                      <FormControlLabel
-                        value="full-definitions"
-                        control={<Radio size="small" />}
-                        label="Full definitions"
-                      />
-                    </RadioGroup>
-                  </FormControl>
-                </Box>
-              )}
-            </Stack>
-          </Box>
+    <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) handleCancel() }}>
+      <DialogContent data-tour-id="claims-extraction-dialog" className="sm:max-w-md min-h-[500px]">
+        <DialogHeader>
+          <DialogTitle>Extract Claims from Summary</DialogTitle>
+        </DialogHeader>
 
-          <Divider />
+        <div className="flex flex-col gap-6 pt-2">
+          {/* Input Sources Section */}
+          <div>
+            <p className="mb-2 text-sm font-semibold">
+              Input Sources
+            </p>
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center gap-2">
+                <Checkbox checked={true} disabled id="summary-text" />
+                <Label htmlFor="summary-text" className="text-sm text-muted-foreground">Summary Text (required)</Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  checked={includeAnnotations}
+                  onCheckedChange={(checked) => setIncludeAnnotations(checked === true)}
+                  id="include-annotations"
+                />
+                <Label htmlFor="include-annotations" className="text-sm">Annotations (enable @references)</Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  checked={includeOntology}
+                  onCheckedChange={(checked) => setIncludeOntology(checked === true)}
+                  id="include-ontology"
+                />
+                <Label htmlFor="include-ontology" className="text-sm">Ontology (enable #references)</Label>
+              </div>
+              {includeOntology && (
+                <div className="ml-8">
+                  <RadioGroup
+                    value={ontologyDepth}
+                    onValueChange={(value) => setOntologyDepth(value as typeof ontologyDepth)}
+                  >
+                    <div className="flex items-center gap-2">
+                      <RadioGroupItem value="names-only" id="names-only" />
+                      <Label htmlFor="names-only" className="text-sm">Names only</Label>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <RadioGroupItem value="names-and-glosses" id="names-and-glosses" />
+                      <Label htmlFor="names-and-glosses" className="text-sm">Names + Glosses (default)</Label>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <RadioGroupItem value="full-definitions" id="full-definitions" />
+                      <Label htmlFor="full-definitions" className="text-sm">Full definitions</Label>
+                    </div>
+                  </RadioGroup>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <Separator />
 
           {/* Extraction Strategy Section */}
-          <Box>
-            <FormControl component="fieldset" fullWidth>
-              <FormLabel component="legend" sx={{ fontWeight: 600, mb: 1 }}>
-                Extraction Strategy
-              </FormLabel>
-              <RadioGroup
-                value={extractionStrategy}
-                onChange={(e) => setExtractionStrategy(e.target.value as ExtractionStrategy)}
-              >
-                <FormControlLabel
-                  value="sentence-based"
-                  control={<Radio />}
-                  label={
-                    <Box>
-                      <Typography variant="body2">Sentence-based (default)</Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        One claim per sentence, with subclaims
-                      </Typography>
-                    </Box>
-                  }
-                />
-                <FormControlLabel
-                  value="semantic-units"
-                  control={<Radio />}
-                  label={
-                    <Box>
-                      <Typography variant="body2">Semantic units</Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        Extract from logical chunks
-                      </Typography>
-                    </Box>
-                  }
-                />
-                <FormControlLabel
-                  value="hierarchical"
-                  control={<Radio />}
-                  label={
-                    <Box>
-                      <Typography variant="body2">Hierarchical</Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        Top-down decomposition
-                      </Typography>
-                    </Box>
-                  }
-                />
-              </RadioGroup>
-            </FormControl>
-          </Box>
+          <div>
+            <p className="mb-2 text-sm font-semibold">
+              Extraction Strategy
+            </p>
+            <RadioGroup
+              value={extractionStrategy}
+              onValueChange={(value) => setExtractionStrategy(value as ExtractionStrategy)}
+            >
+              <div className="flex items-start gap-2">
+                <RadioGroupItem value="sentence-based" id="sentence-based" className="mt-1" />
+                <Label htmlFor="sentence-based" className="flex flex-col gap-0.5">
+                  <span className="text-sm">Sentence-based (default)</span>
+                  <span className="text-xs text-muted-foreground">
+                    One claim per sentence, with subclaims
+                  </span>
+                </Label>
+              </div>
+              <div className="flex items-start gap-2">
+                <RadioGroupItem value="semantic-units" id="semantic-units" className="mt-1" />
+                <Label htmlFor="semantic-units" className="flex flex-col gap-0.5">
+                  <span className="text-sm">Semantic units</span>
+                  <span className="text-xs text-muted-foreground">
+                    Extract from logical chunks
+                  </span>
+                </Label>
+              </div>
+              <div className="flex items-start gap-2">
+                <RadioGroupItem value="hierarchical" id="hierarchical" className="mt-1" />
+                <Label htmlFor="hierarchical" className="flex flex-col gap-0.5">
+                  <span className="text-sm">Hierarchical</span>
+                  <span className="text-xs text-muted-foreground">
+                    Top-down decomposition
+                  </span>
+                </Label>
+              </div>
+            </RadioGroup>
+          </div>
 
-          <Divider />
+          <Separator />
 
           {/* Parameters Section */}
-          <Box>
-            <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 600 }}>
+          <div>
+            <p className="mb-2 text-sm font-semibold">
               Parameters
-            </Typography>
-            <Stack spacing={2}>
-              <TextField
-                label="Max Claims"
-                type="number"
-                value={maxClaims}
-                onChange={(e) => setMaxClaims(Math.max(1, Math.min(200, parseInt(e.target.value) || 50)))}
-                inputProps={{ min: 1, max: 200 }}
-                helperText="Maximum number of claims to extract (1-200)"
-                fullWidth
-              />
-              <TextField
-                label="Min Confidence"
-                type="number"
-                value={minConfidence}
-                onChange={(e) => setMinConfidence(Math.max(0, Math.min(1, parseFloat(e.target.value) || 0.5)))}
-                inputProps={{ min: 0, max: 1, step: 0.1 }}
-                helperText="Minimum confidence threshold (0-1)"
-                fullWidth
-              />
-            </Stack>
-          </Box>
+            </p>
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="max-claims">Max Claims</Label>
+                <Input
+                  id="max-claims"
+                  type="number"
+                  value={maxClaims}
+                  onChange={(e) => setMaxClaims(Math.max(1, Math.min(200, parseInt(e.target.value) || 50)))}
+                  min={1}
+                  max={200}
+                />
+                <p className="text-xs text-muted-foreground">Maximum number of claims to extract (1-200)</p>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="min-confidence">Min Confidence</Label>
+                <Input
+                  id="min-confidence"
+                  type="number"
+                  value={minConfidence}
+                  onChange={(e) => setMinConfidence(Math.max(0, Math.min(1, parseFloat(e.target.value) || 0.5)))}
+                  min={0}
+                  max={1}
+                  step={0.1}
+                />
+                <p className="text-xs text-muted-foreground">Minimum confidence threshold (0-1)</p>
+              </div>
+            </div>
+          </div>
 
           {/* Progress Indicator */}
           {extracting && (
-            <Box>
-              <Typography variant="body2" color="text.secondary" gutterBottom>
+            <div>
+              <p className="mb-2 text-sm text-muted-foreground">
                 Extracting claims...
-              </Typography>
-              <LinearProgress
-                variant={progress !== null && progress !== undefined ? 'determinate' : 'indeterminate'}
-                value={progress || 0}
-              />
+              </p>
+              <Progress value={progress !== null && progress !== undefined ? progress : null} />
               {progress !== null && progress !== undefined && (
-                <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5 }}>
+                <p className="mt-1 text-xs text-muted-foreground">
                   {Math.round(progress)}% complete
-                </Typography>
+                </p>
               )}
-            </Box>
+            </div>
           )}
 
           {/* Error Alert */}
           {error && (
-            <Alert severity="error" onClose={() => {}}>
-              {error}
+            <Alert variant="destructive">
+              <AlertDescription>{error}</AlertDescription>
             </Alert>
           )}
-        </Stack>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={handleCancel} disabled={extracting}>
+            Cancel
+          </Button>
+          <Button
+            onClick={handleExtract}
+            disabled={extracting}
+          >
+            {extracting ? 'Extracting...' : 'Extract Claims'}
+          </Button>
+        </DialogFooter>
       </DialogContent>
-      <DialogActions>
-        <Button onClick={handleCancel} disabled={extracting}>
-          Cancel
-        </Button>
-        <Button
-          onClick={handleExtract}
-          variant="contained"
-          disabled={extracting}
-        >
-          {extracting ? 'Extracting...' : 'Extract Claims'}
-        </Button>
-      </DialogActions>
     </Dialog>
   )
 }

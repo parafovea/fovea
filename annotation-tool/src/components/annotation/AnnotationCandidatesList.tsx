@@ -4,27 +4,15 @@
  */
 
 import { useState, useMemo } from 'react'
-import {
-  Box,
-  Card,
-  CardContent,
-  CardActions,
-  Typography,
-  Button,
-  Chip,
-  IconButton,
-  Alert,
-  Grid,
-  TextField,
-  Stack,
-  Divider,
-  Collapse,
-} from '@mui/material'
-import {
-  CheckCircle as AcceptIcon,
-  Cancel as RejectIcon,
-  FilterList as FilterIcon,
-} from '@mui/icons-material'
+import { CheckCircle, XCircle, SlidersHorizontal } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Card, CardContent, CardFooter } from '@/components/ui/card'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Separator } from '@/components/ui/separator'
+import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
 import { useAddAnnotation } from '@store/queries'
 import type { Detection, FrameDetections } from '@api/client'
 import { v4 as uuidv4 } from 'uuid'
@@ -96,18 +84,18 @@ function getConfidenceLevel(confidence: number): 'high' | 'medium' | 'low' {
 }
 
 /**
- * Get chip color for confidence level.
+ * Get badge variant for confidence level.
  */
-function getConfidenceColor(
+function getConfidenceVariant(
   level: 'high' | 'medium' | 'low'
-): 'success' | 'warning' | 'error' {
+): 'default' | 'secondary' | 'destructive' {
   switch (level) {
     case 'high':
-      return 'success'
+      return 'default'
     case 'medium':
-      return 'warning'
+      return 'secondary'
     case 'low':
-      return 'error'
+      return 'destructive'
   }
 }
 
@@ -302,175 +290,184 @@ export function AnnotationCandidatesList({
 
   if (candidates.length === 0) {
     return (
-      <Alert severity="info">
-        No detections found. Try adjusting the query or confidence threshold.
+      <Alert>
+        <AlertDescription>
+          No detections found. Try adjusting the query or confidence threshold.
+        </AlertDescription>
       </Alert>
     )
   }
 
   return (
-    <Box>
+    <div data-tour-id="annotation-candidates-list">
       {/* Statistics Bar */}
-      <Box sx={{ mb: 2, p: 2, bgcolor: 'background.paper', borderRadius: 1 }}>
-        <Stack direction="row" spacing={2} alignItems="center">
-          <Typography variant="h6">Detection Candidates</Typography>
-          <Chip label={`Total: ${stats.total}`} size="small" />
-          <Chip label={`Pending: ${stats.pending}`} size="small" color="default" />
-          <Chip
-            label={`Accepted: ${stats.accepted}`}
-            size="small"
-            color="success"
-          />
-          <Chip label={`Rejected: ${stats.rejected}`} size="small" color="error" />
-          <Box sx={{ flexGrow: 1 }} />
-          <IconButton
-            size="small"
+      <div className="mb-4 p-4 bg-card rounded-lg ring-1 ring-foreground/10">
+        <div className="flex flex-row gap-4 items-center">
+          <h3 className="text-base font-semibold">Detection Candidates</h3>
+          <Badge variant="outline">Total: {stats.total}</Badge>
+          <Badge variant="outline">Pending: {stats.pending}</Badge>
+          <Badge variant="default">Accepted: {stats.accepted}</Badge>
+          <Badge variant="destructive">Rejected: {stats.rejected}</Badge>
+          <div className="flex-grow" />
+          <Button
+            variant="ghost"
+            size="icon"
             onClick={() => setShowFilters(!showFilters)}
             aria-label="toggle filters"
           >
-            <FilterIcon />
-          </IconButton>
-        </Stack>
-      </Box>
+            <SlidersHorizontal className="size-4" />
+          </Button>
+        </div>
+      </div>
 
       {/* Filters */}
-      <Collapse in={showFilters}>
-        <Box sx={{ mb: 2, p: 2, bgcolor: 'background.paper', borderRadius: 1 }}>
-          <Typography variant="subtitle2" gutterBottom>
-            Filters
-          </Typography>
-          <Stack direction="row" spacing={2} alignItems="center">
-            <TextField
-              label="Confidence Threshold"
-              type="number"
-              value={confidenceThreshold}
-              onChange={(e) =>
-                setConfidenceThreshold(parseFloat(e.target.value) || 0)
-              }
-              inputProps={{ min: 0, max: 1, step: 0.1 }}
-              size="small"
-              sx={{ width: 200 }}
-            />
-            <Typography variant="body2" color="text.secondary">
-              Showing {filteredCandidates.length} candidates
-            </Typography>
-          </Stack>
-        </Box>
-      </Collapse>
+      <Collapsible open={showFilters}>
+        <CollapsibleContent>
+          <div className="mb-4 p-4 bg-card rounded-lg ring-1 ring-foreground/10">
+            <p className="text-sm font-medium text-muted-foreground mb-2">
+              Filters
+            </p>
+            <div className="flex flex-row gap-4 items-center">
+              <div className="w-[200px]">
+                <Label htmlFor="confidence-threshold">Confidence Threshold</Label>
+                <Input
+                  id="confidence-threshold"
+                  type="number"
+                  value={confidenceThreshold}
+                  onChange={(e) =>
+                    setConfidenceThreshold(parseFloat(e.target.value) || 0)
+                  }
+                  min={0}
+                  max={1}
+                  step={0.1}
+                />
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Showing {filteredCandidates.length} candidates
+              </p>
+            </div>
+          </div>
+        </CollapsibleContent>
+      </Collapsible>
 
       {/* Batch Actions */}
       {filteredCandidates.length > 0 && (
-        <Box sx={{ mb: 2 }}>
-          <Stack direction="row" spacing={1}>
-            <Button
-              variant="outlined"
-              color="success"
-              size="small"
-              startIcon={<AcceptIcon />}
-              onClick={handleAcceptAll}
-            >
-              Accept All ({filteredCandidates.length})
-            </Button>
-            <Button
-              variant="outlined"
-              color="error"
-              size="small"
-              startIcon={<RejectIcon />}
-              onClick={handleRejectAll}
-            >
-              Reject All ({filteredCandidates.length})
-            </Button>
-          </Stack>
-        </Box>
+        <div className="mb-4 flex flex-row gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleAcceptAll}
+          >
+            <CheckCircle className="size-4 mr-1" />
+            Accept All ({filteredCandidates.length})
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleRejectAll}
+          >
+            <XCircle className="size-4 mr-1" />
+            Reject All ({filteredCandidates.length})
+          </Button>
+        </div>
       )}
 
       {/* Candidates List */}
       {filteredCandidates.length === 0 ? (
-        <Alert severity="info">
-          No pending candidates match the current filters. Try lowering the
-          confidence threshold.
+        <Alert>
+          <AlertDescription>
+            No pending candidates match the current filters. Try lowering the
+            confidence threshold.
+          </AlertDescription>
         </Alert>
       ) : (
-        <Grid container spacing={2}>
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
           {filteredCandidates.map((candidate, index) => {
             const confidenceLevel = getConfidenceLevel(
               candidate.detection.confidence
             )
-            const confidenceColor = getConfidenceColor(confidenceLevel)
+            const confidenceVariant = getConfidenceVariant(confidenceLevel)
 
             return (
-              <Grid item xs={12} sm={6} md={4} key={index}>
-                <Card>
-                  <CardContent>
-                    <Stack spacing={1}>
-                      {/* Label and Confidence */}
-                      <Box
-                        sx={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                        }}
-                      >
-                        <Typography variant="h6" component="div">
-                          {candidate.detection.label}
-                        </Typography>
-                        <Chip
-                          label={`${Math.round(candidate.detection.confidence * 100)}%`}
-                          color={confidenceColor}
-                          size="small"
-                        />
-                      </Box>
+              <Card key={index}>
+                <CardContent>
+                  <div className="flex flex-col gap-2">
+                    {/* Label and Confidence */}
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-base font-semibold">
+                        {candidate.detection.label}
+                      </h4>
+                      <Badge variant={confidenceVariant}>
+                        {Math.round(candidate.detection.confidence * 100)}%
+                      </Badge>
+                    </div>
 
-                      <Divider />
+                    <Separator />
 
-                      {/* Frame Information */}
-                      <Typography variant="body2" color="text.secondary">
-                        Frame: {candidate.frameNumber} ({candidate.timestamp.toFixed(2)}s)
-                      </Typography>
+                    {/* Frame Information */}
+                    <p className="text-sm text-muted-foreground">
+                      Frame: {candidate.frameNumber} ({candidate.timestamp.toFixed(2)}s)
+                    </p>
 
-                      {/* Bounding Box Info */}
-                      <Typography variant="caption" color="text.secondary">
-                        Box: ({candidate.detection.boundingBox.x.toFixed(3)}, {candidate.detection.boundingBox.y.toFixed(3)})
-                        {' '}W: {candidate.detection.boundingBox.width.toFixed(3)},
-                        H: {candidate.detection.boundingBox.height.toFixed(3)}
-                      </Typography>
+                    {/* Bounding Box Info */}
+                    <p className="text-xs text-muted-foreground">
+                      Box: ({candidate.detection.boundingBox.x.toFixed(3)}, {candidate.detection.boundingBox.y.toFixed(3)})
+                      {' '}W: {candidate.detection.boundingBox.width.toFixed(3)},
+                      H: {candidate.detection.boundingBox.height.toFixed(3)}
+                    </p>
 
-                      {/* Track ID if available */}
-                      {candidate.detection.trackId && (
-                        <Chip
-                          label={`Track ID: ${candidate.detection.trackId}`}
-                          size="small"
-                          variant="outlined"
-                        />
-                      )}
-                    </Stack>
-                  </CardContent>
+                    {/* Track ID if available */}
+                    {candidate.detection.trackId && (
+                      <Badge variant="outline">
+                        Track ID: {candidate.detection.trackId}
+                      </Badge>
+                    )}
 
-                  <CardActions sx={{ justifyContent: 'flex-end', gap: 1 }}>
-                    <Button
-                      size="small"
-                      color="error"
-                      startIcon={<RejectIcon />}
-                      onClick={() => handleReject(index)}
-                    >
-                      Reject
-                    </Button>
-                    <Button
-                      size="small"
-                      color="success"
-                      variant="contained"
-                      startIcon={<AcceptIcon />}
-                      onClick={() => handleAccept(index)}
-                    >
-                      Accept
-                    </Button>
-                  </CardActions>
-                </Card>
-              </Grid>
+                    {/* Tour-demo suggested type. Surfaced when the
+                        detection carries an acceptAsLabel hint (mock
+                        layer only). Wikidata QID renders as a sublink
+                        so the booth visitor sees the type is already
+                        grounded. */}
+                    {candidate.detection.acceptAsLabel && (
+                      <div className="flex items-center gap-2 pt-1">
+                        <span className="text-xs text-muted-foreground">
+                          Snap to type:
+                        </span>
+                        <Badge variant="secondary" data-testid="suggested-type-chip">
+                          {candidate.detection.acceptAsLabel}
+                          {candidate.detection.acceptAsWikidataId && (
+                            <span className="ml-1.5 text-xs opacity-70">
+                              {candidate.detection.acceptAsWikidataId}
+                            </span>
+                          )}
+                        </Badge>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+
+                <CardFooter className="justify-end gap-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleReject(index)}
+                  >
+                    <XCircle className="size-4 mr-1" />
+                    Reject
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={() => handleAccept(index)}
+                  >
+                    <CheckCircle className="size-4 mr-1" />
+                    Accept
+                  </Button>
+                </CardFooter>
+              </Card>
             )
           })}
-        </Grid>
+        </div>
       )}
-    </Box>
+    </div>
   )
 }

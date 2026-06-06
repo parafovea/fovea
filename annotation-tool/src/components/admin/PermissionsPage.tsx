@@ -5,21 +5,18 @@
  * @module
  */
 
+import { useQuery } from '@tanstack/react-query'
+import { Badge } from '@/components/ui/badge'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Spinner } from '@/components/ui/spinner'
 import {
-  Box,
   Table,
   TableBody,
   TableCell,
-  TableContainer,
   TableHead,
+  TableHeader,
   TableRow,
-  Chip,
-  Alert,
-  CircularProgress,
-  Typography,
-  Paper,
-} from '@mui/material'
-import { useQuery } from '@tanstack/react-query'
+} from '@/components/ui/table'
 
 interface RolePermission {
   role: string
@@ -66,33 +63,33 @@ function getActions(permissions: RolePermission[], role: string, resource: strin
 }
 
 /**
- * Returns a MUI color for a given action name.
+ * Returns a Badge variant for a given action name.
  *
  * @param action - Action name (e.g. "create", "read", "delete")
- * @returns Chip color corresponding to the action
+ * @returns Badge variant corresponding to the action
  */
-function actionColor(action: string): 'success' | 'info' | 'warning' | 'error' | 'default' {
+function actionVariant(action: string): 'default' | 'secondary' | 'destructive' | 'outline' {
   switch (action) {
     case 'create':
-      return 'success'
+      return 'secondary'
     case 'read':
-      return 'info'
+      return 'outline'
     case 'update':
-      return 'warning'
+      return 'outline'
     case 'delete':
-      return 'error'
+      return 'destructive'
     default:
-      return 'default'
+      return 'outline'
   }
 }
 
 /**
  * Admin permissions page.
  * Displays a matrix of roles (rows) and resource types (columns),
- * with each cell showing the permitted actions as colored chips.
+ * with each cell showing the permitted actions as colored badges.
  * Currently read-only; editing support can be added later.
  */
-export default function PermissionsPage() {
+export function PermissionsPage(): JSX.Element {
   const { data, isLoading, error } = useQuery({
     queryKey: permissionKeys.matrix(),
     queryFn: fetchPermissions,
@@ -101,100 +98,103 @@ export default function PermissionsPage() {
 
   if (isLoading) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
-        <CircularProgress />
-      </Box>
+      <div className="flex justify-center p-8" data-tour-id="permissions-page">
+        <Spinner />
+      </div>
     )
   }
 
   if (error) {
     return (
-      <Box sx={{ p: 3 }}>
-        <Alert severity="error">
-          Failed to load permissions: {error instanceof Error ? error.message : 'Unknown error'}
+      <div className="p-6" data-tour-id="permissions-page">
+        <Alert variant="destructive">
+          <AlertDescription>
+            Failed to load permissions: {error instanceof Error ? error.message : 'Unknown error'}
+          </AlertDescription>
         </Alert>
-      </Box>
+      </div>
     )
   }
 
   if (!data || data.roles.length === 0) {
     return (
-      <Box sx={{ p: 3 }}>
-        <Alert severity="info">No permission data available.</Alert>
-      </Box>
+      <div className="p-6" data-tour-id="permissions-page">
+        <Alert>
+          <AlertDescription>No permission data available.</AlertDescription>
+        </Alert>
+      </div>
     )
   }
 
   return (
-    <Box sx={{ p: 3 }}>
-      <Box sx={{ mb: 3 }}>
-        <Typography variant="body2" color="text.secondary">
+    <div className="p-6" data-tour-id="permissions-page">
+      <div className="mb-6">
+        <p className="text-sm text-muted-foreground">
           Read-only view of the role-permission matrix. Each cell shows the actions a role can perform on a resource type.
-        </Typography>
-      </Box>
+        </p>
+      </div>
 
-      <Paper variant="outlined">
-        <TableContainer>
-          <Table size="small">
-            <TableHead>
-              <TableRow>
-                <TableCell sx={{ fontWeight: 'bold', minWidth: 120 }}>Role</TableCell>
-                {data.resources.map((resource) => (
-                  <TableCell key={resource} sx={{ fontWeight: 'bold', minWidth: 140 }}>
-                    {resource}
-                  </TableCell>
-                ))}
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {data.roles.map((role) => (
-                <TableRow key={role} hover>
-                  <TableCell>
-                    <Chip
-                      label={role}
-                      size="small"
-                      color={role === 'admin' ? 'primary' : role === 'owner' ? 'secondary' : 'default'}
-                    />
-                  </TableCell>
-                  {data.resources.map((resource) => {
-                    const actions = getActions(data.permissions, role, resource)
-                    return (
-                      <TableCell key={`${role}-${resource}`}>
-                        {actions.length === 0 ? (
-                          <Typography variant="caption" color="text.disabled">
-                            none
-                          </Typography>
-                        ) : (
-                          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                            {actions.map((action) => (
-                              <Chip
-                                key={action}
-                                label={action}
-                                size="small"
-                                color={actionColor(action)}
-                                variant="outlined"
-                              />
-                            ))}
-                          </Box>
-                        )}
-                      </TableCell>
-                    )
-                  })}
-                </TableRow>
+      <div className="rounded-lg border">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="font-bold min-w-[120px]">Role</TableHead>
+              {data.resources.map((resource) => (
+                <TableHead key={resource} className="font-bold min-w-[140px]">
+                  {resource}
+                </TableHead>
               ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
-      </Paper>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {data.roles.map((role) => (
+              <TableRow key={role}>
+                <TableCell>
+                  <Badge
+                    variant={role === 'admin' ? 'default' : role === 'owner' ? 'secondary' : 'outline'}
+                  >
+                    {role}
+                  </Badge>
+                </TableCell>
+                {data.resources.map((resource) => {
+                  const actions = getActions(data.permissions, role, resource)
+                  return (
+                    <TableCell key={`${role}-${resource}`}>
+                      {actions.length === 0 ? (
+                        <span className="text-xs text-muted-foreground">
+                          none
+                        </span>
+                      ) : (
+                        <div className="flex flex-wrap gap-1">
+                          {actions.map((action) => (
+                            <Badge
+                              key={action}
+                              variant={actionVariant(action)}
+                            >
+                              {action}
+                            </Badge>
+                          ))}
+                        </div>
+                      )}
+                    </TableCell>
+                  )
+                })}
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
 
-      <Box sx={{ mt: 2, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-        <Typography variant="caption" color="text.secondary" sx={{ mr: 1 }}>
+      <div className="mt-4 flex gap-2 flex-wrap items-center">
+        <span className="text-xs text-muted-foreground mr-2">
           Legend:
-        </Typography>
+        </span>
         {['create', 'read', 'update', 'delete', 'share'].map((action) => (
-          <Chip key={action} label={action} size="small" color={actionColor(action)} variant="outlined" />
+          <Badge key={action} variant={actionVariant(action)}>
+            {action}
+          </Badge>
         ))}
-      </Box>
-    </Box>
+      </div>
+    </div>
   )
 }

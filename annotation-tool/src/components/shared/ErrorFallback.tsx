@@ -3,9 +3,14 @@
  * when an error boundary catches an error.
  */
 
-import { Box, Button, Typography, Paper, Collapse, IconButton } from '@mui/material'
-import { ExpandMore, BugReport, Refresh } from '@mui/icons-material'
 import { useState } from 'react'
+
+import { Bug, ChevronDown, RefreshCw } from 'lucide-react'
+
+import { Button } from '@/components/ui/button'
+import { Card, CardContent } from '@/components/ui/card'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
+import { cn } from '@/lib/utils'
 
 interface ErrorFallbackProps {
   /**
@@ -25,10 +30,10 @@ interface ErrorFallbackProps {
  * @param props - Component props
  * @returns Error fallback UI
  */
-export function ErrorFallback({ error, resetError }: ErrorFallbackProps) {
+export function ErrorFallback({ error, resetError }: ErrorFallbackProps): JSX.Element {
   const [showDetails, setShowDetails] = useState(false)
 
-  const handleReportIssue = () => {
+  const handleReportIssue = (): void => {
     const title = encodeURIComponent(`Error: ${error.message}`)
     const body = encodeURIComponent(
       `## Error Description\n\n` +
@@ -48,111 +53,60 @@ export function ErrorFallback({ error, resetError }: ErrorFallbackProps) {
   }
 
   return (
-    <Box
-      sx={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        minHeight: '400px',
-        padding: 4,
-      }}
-    >
-      <Paper
-        elevation={3}
-        sx={{
-          maxWidth: 600,
-          width: '100%',
-          padding: 4,
-          textAlign: 'center',
-        }}
-      >
-        <BugReport
-          sx={{
-            fontSize: 64,
-            color: 'error.main',
-            marginBottom: 2,
-          }}
-        />
+    <div className="flex min-h-[400px] flex-col items-center justify-center p-8">
+      <Card className="w-full max-w-[600px] text-center">
+        <CardContent className="space-y-4">
+          <Bug className="mx-auto size-16 text-destructive" />
 
-        <Typography variant="h4" gutterBottom color="error">
-          Something went wrong
-        </Typography>
+          <h2 className="text-2xl font-bold text-destructive">
+            Something went wrong
+          </h2>
 
-        <Typography variant="body1" color="text.secondary" paragraph>
-          We apologize for the inconvenience. The application encountered an unexpected error and
-          could not continue.
-        </Typography>
+          <p className="text-muted-foreground">
+            We apologize for the inconvenience. The application encountered an unexpected error and
+            could not continue.
+          </p>
 
-        <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center', marginTop: 3 }}>
-          <Button
-            variant="contained"
-            color="primary"
-            startIcon={<Refresh />}
-            onClick={resetError}
-          >
-            Try Again
-          </Button>
+          <div className="flex justify-center gap-2 pt-3">
+            <Button onClick={resetError}>
+              <RefreshCw className="size-4" />
+              Try Again
+            </Button>
 
-          <Button variant="outlined" color="secondary" onClick={handleReportIssue}>
-            Report Issue
-          </Button>
-        </Box>
+            <Button variant="outline" onClick={handleReportIssue}>
+              Report Issue
+            </Button>
+          </div>
 
-        <Box sx={{ marginTop: 3 }}>
-          <Box
-            sx={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-            }}
-            onClick={() => setShowDetails(!showDetails)}
-          >
-            <Typography variant="body2" color="text.secondary">
+          <Collapsible open={showDetails} onOpenChange={setShowDetails}>
+            <CollapsibleTrigger
+              render={
+                <button
+                  type="button"
+                  className="mx-auto flex cursor-pointer items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+                />
+              }
+            >
               Error details
-            </Typography>
-            <IconButton
-              size="small"
-              sx={{
-                transform: showDetails ? 'rotate(180deg)' : 'rotate(0deg)',
-                transition: 'transform 0.3s',
-              }}
-            >
-              <ExpandMore />
-            </IconButton>
-          </Box>
+              <ChevronDown
+                className={cn(
+                  'size-4 transition-transform duration-300',
+                  showDetails && 'rotate-180'
+                )}
+              />
+            </CollapsibleTrigger>
 
-          <Collapse in={showDetails}>
-            <Paper
-              variant="outlined"
-              sx={{
-                marginTop: 2,
-                padding: 2,
-                textAlign: 'left',
-                backgroundColor: 'grey.50',
-                maxHeight: 200,
-                overflow: 'auto',
-              }}
-            >
-              <Typography
-                variant="body2"
-                component="pre"
-                sx={{
-                  fontFamily: 'monospace',
-                  fontSize: '0.75rem',
-                  whiteSpace: 'pre-wrap',
-                  wordBreak: 'break-word',
-                  margin: 0,
-                }}
-              >
-                {error.message}
-                {error.stack && `\n\n${error.stack}`}
-              </Typography>
-            </Paper>
-          </Collapse>
-        </Box>
-      </Paper>
-    </Box>
+            <CollapsibleContent>
+              <div className="mt-2 max-h-[200px] overflow-auto rounded-md border bg-muted/50 p-4 text-left">
+                <pre className="m-0 break-words whitespace-pre-wrap font-mono text-xs">
+                  {error.message}
+                  {error.stack && `\n\n${error.stack}`}
+                </pre>
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
+        </CardContent>
+      </Card>
+    </div>
   )
 }

@@ -1,14 +1,12 @@
 # Clean Architecture
 
-v0.3.0 restructured the model service from a flat
-`model-service/src/<module>.py` layout into three concentric
-layers: domain, application, and infrastructure. The motivation
-is the same as the canonical Clean Architecture argument:
-business rules should not depend on the framework, the
-framework should not import the business rules transitively,
-and every external dependency should sit behind an interface
-the inner layer owns. This page describes how that lands in
-the v0.3.x model service.
+The model service is laid out as three concentric layers:
+domain, application, and infrastructure. The motivation is the
+canonical Clean Architecture argument: business rules should
+not depend on the framework, the framework should not import
+the business rules transitively, and every external dependency
+should sit behind an interface the inner layer owns. This page
+describes how that lands in the model service.
 
 ## Layers
 
@@ -20,8 +18,8 @@ src/
     value_objects/         BoundingBox, ConfidenceScore, Timestamp
     exceptions.py          ModelError, InferenceError, ConfigError, ...
   application/             use cases and ports, no torch, no FastAPI
-    dto/                   ReasonedText, ThinkingTrace, GenerationConfig,
-                           DetectionRequest, SummarizationRequest, ...
+    dto/                   ReasonedText, ThinkingTrace, GenerationConfigDTO,
+                           DetectObjectsRequestDTO, SummarizeRequestDTO, ...
     ports/
       inbound/             interfaces called by adapters/inbound
       outbound/            interfaces called by use cases (ILanguageModel,
@@ -165,9 +163,9 @@ class Container:
         framework: str = "whisper", language: str | None = None,
     ) -> IAudioTranscriber: ...
 
-    def detect_objects_use_case(self) -> DetectObjectsUseCase: ...
-    def summarize_video_use_case(self) -> SummarizeVideoUseCase: ...
-    def extract_claims_use_case(self) -> ExtractClaimsUseCase: ...
+    def build_detect_objects_use_case(self) -> DetectObjectsUseCase: ...
+    def build_summarize_video_use_case(self) -> SummarizeVideoUseCase: ...
+    def build_extract_claims_use_case(self) -> ExtractClaimsUseCase: ...
 ```
 
 `ContainerConfig` is the single seam for the model config path;
@@ -178,25 +176,28 @@ or `models-cpu.yaml` depending on the `DEVICE` build arg) so
 the same path works on both CPU and GPU images. See
 [Reference > Model config](../reference/model-config.md).
 
-`ModelManager.__init__` requires `capability_probe` since
-v0.3.0; the lazy default that v0.2.x carried was removed
-because it hid configuration mistakes until first inference.
+`ModelManager.__init__` requires `capability_probe`; the
+constructor does not accept a lazy default because that would
+hide configuration mistakes until first inference.
 
 ## Observability
 
 Every use case wraps its execute method in an OpenTelemetry
-span. Every outbound adapter emits a `model_inference`
-metric on every call, tagged with `model_id`, `task`, and
-`framework`. The metrics flow through the OTel collector to
-Prometheus; the spans flow to the trace pipeline. See
+span. Every outbound adapter records two metrics on every
+call: `model.inference.count` (counter) and
+`model.inference.duration` (histogram, seconds). The base
+attribute set is `task` and `model`; the counter also carries
+a `result` of `success` or `error`, and adapters may attach
+additional attributes via an `extra` mapping. The metrics
+flow through the OTel collector to Prometheus; the spans flow
+to the trace pipeline. See
 [Guide > Observability](../guide/observability.md).
 
 ## Why this shape
 
-- Use cases are unit-testable with typed fakes: 234 unit
-  tests at the application boundary use only fakes against
-  the port interfaces. The model-service test suite adds 158
-  more covering the adapters.
+- Use cases are unit-testable with typed fakes against the
+  port interfaces; the model-service test suite covers the
+  adapters separately.
 - The frontend / backend / model-service contract is the only
   place infrastructure leaks out, and it is gated by FastAPI
   schemas in `infrastructure/adapters/inbound/fastapi/schemas/`.

@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest'
 import {
-  convertTypeRefsToText,
   convertTypeRefsToTextWithName,
   convertObjectRefsToText,
   updateGlossesInTypes,
@@ -18,60 +17,6 @@ import {
  * Tests graceful deletion of types and world objects by converting references to text.
  */
 describe('Reference Cleanup Utilities', () => {
-  describe('convertTypeRefsToText', () => {
-    it('converts matching typeRef to plain text', () => {
-      const gloss = [
-        { type: 'text' as const, content: 'A ' },
-        { type: 'typeRef' as const, content: 'entity-1', refType: 'entity', refPersonaId: 'persona-1' },
-        { type: 'text' as const, content: ' is here' },
-      ]
-
-      const result = convertTypeRefsToText(gloss, 'entity-1', 'persona-1', 'entity')
-
-      expect(result).toHaveLength(3)
-      expect(result[0]).toEqual({ type: 'text', content: 'A ' })
-      expect(result[1]).toEqual({ type: 'text', content: 'entity-1' })
-      expect(result[2]).toEqual({ type: 'text', content: ' is here' })
-    })
-
-    it('preserves non-matching typeRefs', () => {
-      const gloss = [
-        { type: 'typeRef' as const, content: 'entity-1', refType: 'entity', refPersonaId: 'persona-1' },
-        { type: 'typeRef' as const, content: 'entity-2', refType: 'entity', refPersonaId: 'persona-1' },
-      ]
-
-      const result = convertTypeRefsToText(gloss, 'entity-1', 'persona-1', 'entity')
-
-      expect(result[0]).toEqual({ type: 'text', content: 'entity-1' })
-      expect(result[1]).toEqual({ type: 'typeRef', content: 'entity-2', refType: 'entity', refPersonaId: 'persona-1' })
-    })
-
-    it('does not convert typeRef from different persona', () => {
-      const gloss = [
-        { type: 'typeRef' as const, content: 'entity-1', refType: 'entity', refPersonaId: 'persona-2' },
-      ]
-
-      const result = convertTypeRefsToText(gloss, 'entity-1', 'persona-1', 'entity')
-
-      expect(result[0]).toEqual(gloss[0])
-    })
-
-    it('does not convert typeRef of different refType', () => {
-      const gloss = [
-        { type: 'typeRef' as const, content: 'entity-1', refType: 'role', refPersonaId: 'persona-1' },
-      ]
-
-      const result = convertTypeRefsToText(gloss, 'entity-1', 'persona-1', 'entity')
-
-      expect(result[0]).toEqual(gloss[0])
-    })
-
-    it('handles empty gloss array', () => {
-      const result = convertTypeRefsToText([], 'entity-1', 'persona-1', 'entity')
-      expect(result).toEqual([])
-    })
-  })
-
   describe('convertTypeRefsToTextWithName', () => {
     it('uses provided type name for converted text', () => {
       const gloss = [

@@ -1,19 +1,26 @@
 """Vision Language Model loader with support for multiple VLM architectures.
 
 This module provides a unified interface for loading and running inference with
-various Vision Language Models including Llama 4 Maverick, Gemma 3, InternVL3,
-Pixtral Large, and Qwen2.5-VL. Models can be loaded with different quantization
-strategies and inference frameworks (SGLang or vLLM).
+various Vision Language Models. Concrete loader classes register against the
+Pydantic architecture subclass they implement via :data:`vlm_registry`, and the
+:func:`create_vlm_loader` factory dispatches purely through that registry.
+
+The factory has no knowledge of specific model identifiers, weights checkpoint
+filenames, or YAML strings. The only legitimate dispatch keys are
+:class:`InferenceFramework` (for the framework-level pre-dispatch into the
+llama.cpp GGUF backend) and the architecture Pydantic class itself.
 """
+
+from __future__ import annotations
 
 import logging
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Any
+from typing import TYPE_CHECKING, Any, cast
 
 import torch
-from PIL import Image
 from transformers import (
     AutoModel,
     AutoModelForImageTextToText,
@@ -23,7 +30,23 @@ from transformers import (
     Qwen2VLForConditionalGeneration,
 )
 
+from src.domain.entities.architectures import (
+    Gemma3VL,
+    InternVL3,
+    Llama4Maverick,
+    Moondream,
+    Pixtral,
+    Qwen3VL,
+    QwenVL,
+    SmolVLM,
+    Tarsier2,
+    VLMArchitecture,
+)
+from src.infrastructure.adapters.outbound.models.registry import LoaderRegistry
 from src.infrastructure.observability.telemetry import instrument_method
+
+if TYPE_CHECKING:
+    from PIL import Image
 
 logger = logging.getLogger(__name__)
 
@@ -75,20 +98,36 @@ class VLMConfig:
     trust_remote_code: bool = True
 
 
+vlm_registry: LoaderRegistry[VLMArchitecture, VLMLoader] = LoaderRegistry(family="vlm")
+"""Architecture-keyed registry of VLM loader classes.
+
+Loader classes register themselves below with
+``@vlm_registry.register(ArchitectureClass)``. :func:`create_vlm_loader`
+looks up the loader by ``type(architecture)`` and instantiates it with
+the architecture model and the framework-level :class:`VLMConfig`.
+"""
+
+
 class VLMLoader(ABC):
     """Abstract base class for Vision Language Model loaders.
 
     All VLM loaders must implement the load and generate methods.
     """
 
-    def __init__(self, config: VLMConfig) -> None:
-        """Initialize the VLM loader with configuration.
+    def __init__(self, arch: VLMArchitecture, config: VLMConfig) -> None:
+        """Initialize the VLM loader with its architecture and configuration.
 
         Parameters
         ----------
+        arch : VLMArchitecture
+            Parsed architecture entry the loader was registered for. Subclasses
+            may introspect their own architecture subclass for per-family
+            hyperparameters; the base class keeps it as a typed reference so
+            the registry contract holds end-to-end.
         config : VLMConfig
-            Configuration for model loading and inference.
+            Framework-level configuration (model id, quantization, framework).
         """
+        self.arch = arch
         self.config = config
         self.model = None
         self.processor = None
@@ -176,6 +215,7 @@ class VLMLoader(ABC):
         return None
 
 
+@vlm_registry.register(Llama4Maverick)
 class Llama4MaverickLoader(VLMLoader):
     """Loader for Llama 4 Maverick Vision Language Model.
 
@@ -307,7 +347,9 @@ class Llama4MaverickLoader(VLMLoader):
         """Generate using SGLang runtime."""
         import sglang as sgl
 
-        @sgl.function  # type: ignore[misc]
+        sgl_function = cast(Callable[[Callable[..., None]], Any], sgl.function)
+
+        @sgl_function
         def image_qa(s: Any, images: Any, prompt: Any) -> None:
             for img in images:
                 s += sgl.image(img)
@@ -361,6 +403,7 @@ class Llama4MaverickLoader(VLMLoader):
         return self.tokenizer.decode(outputs[0], skip_special_tokens=True)
 
 
+@vlm_registry.register(Gemma3VL)
 class Gemma3Loader(VLMLoader):
     """Loader for Gemma 3 27B Vision Language Model.
 
@@ -482,7 +525,9 @@ class Gemma3Loader(VLMLoader):
         """Generate using SGLang runtime."""
         import sglang as sgl
 
-        @sgl.function  # type: ignore[misc]
+        sgl_function = cast(Callable[[Callable[..., None]], Any], sgl.function)
+
+        @sgl_function
         def image_qa(s: Any, images: Any, prompt: Any) -> None:
             for img in images:
                 s += sgl.image(img)
@@ -535,6 +580,7 @@ class Gemma3Loader(VLMLoader):
         return self.tokenizer.decode(outputs[0], skip_special_tokens=True)
 
 
+@vlm_registry.register(InternVL3)
 class InternVL3Loader(VLMLoader):
     """Loader for InternVL3-78B Vision Language Model.
 
@@ -610,6 +656,7 @@ class InternVL3Loader(VLMLoader):
             raise RuntimeError(f"Text generation failed: {e}") from e
 
 
+@vlm_registry.register(Pixtral)
 class PixtralLargeLoader(VLMLoader):
     """Loader for Pixtral Large Vision Language Model.
 
@@ -740,11 +787,16 @@ class PixtralLargeLoader(VLMLoader):
         return self.tokenizer.decode(outputs[0], skip_special_tokens=True)
 
 
+@vlm_registry.register(QwenVL)
+@vlm_registry.register(Qwen3VL)
+@vlm_registry.register(Tarsier2)
 class Qwen25VLLoader(VLMLoader):
-    """Loader for Qwen2.5-VL 72B Vision Language Model.
+    """Loader for the Qwen-VL family and Qwen2-VL derivatives.
 
-    Qwen2.5-VL 72B is a proven stable model with strong performance
-    across vision-language tasks.
+    Drives Qwen2.5-VL and Qwen3-VL via the sglang and vllm framework paths
+    (both backends resolve the model class from ``model_id`` at runtime), and
+    Tarsier2 via the HuggingFace Transformers path (Tarsier2 is built on the
+    Qwen2-VL backbone and loads through :class:`Qwen2VLForConditionalGeneration`).
     """
 
     def load(self) -> None:
@@ -866,7 +918,9 @@ class Qwen25VLLoader(VLMLoader):
         """Generate using SGLang runtime."""
         import sglang as sgl
 
-        @sgl.function  # type: ignore[misc]
+        sgl_function = cast(Callable[[Callable[..., None]], Any], sgl.function)
+
+        @sgl_function
         def image_qa(s: Any, images: Any, prompt: Any) -> None:
             for img in images:
                 s += sgl.image(img)
@@ -939,6 +993,8 @@ class Qwen25VLLoader(VLMLoader):
         return self.tokenizer.decode(outputs[0], skip_special_tokens=True)
 
 
+@vlm_registry.register(SmolVLM)
+@vlm_registry.register(Moondream)
 class SmallVLMLoader(VLMLoader):
     """Loader for small VLMs (SmolVLM, Moondream) via Transformers on CPU.
 
@@ -947,12 +1003,15 @@ class SmallVLMLoader(VLMLoader):
 
     Parameters
     ----------
+    arch : SmolVLM | Moondream
+        Parsed architecture entry; the same loader class handles both small
+        VLM families because their HuggingFace load path is identical.
     config : VLMConfig
         VLM configuration.
     """
 
-    def __init__(self, config: VLMConfig) -> None:
-        super().__init__(config)
+    def __init__(self, arch: SmolVLM | Moondream, config: VLMConfig) -> None:
+        super().__init__(arch, config)
         self._model: Any = None
         self._processor: Any = None
 
@@ -1004,11 +1063,39 @@ class SmallVLMLoader(VLMLoader):
             msg = "Model not loaded. Call load() first."
             raise RuntimeError(msg)
 
-        inputs = self._processor(
-            images=images[0] if images else None,
-            text=prompt,
-            return_tensors="pt",
-        )
+        # SmolVLM and Moondream both require the prompt to embed image
+        # placeholder tokens matching the number of supplied images.
+        # SmolVLM's processor uses `<image>` per image; the older
+        # AutoProcessor flow raises "number of images in the text [0]
+        # and images [1] should be the same" when the prompt is plain
+        # text. Use the chat template path so the processor inserts the
+        # correct token(s) for the model family, then fall back to
+        # plain text if the model doesn't ship a chat template.
+        image = images[0] if images else None
+        if image is not None and hasattr(self._processor, "apply_chat_template"):
+            messages = [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "image"},
+                        {"type": "text", "text": prompt},
+                    ],
+                },
+            ]
+            templated_prompt = self._processor.apply_chat_template(
+                messages, add_generation_prompt=True
+            )
+            inputs = self._processor(
+                images=image,
+                text=templated_prompt,
+                return_tensors="pt",
+            )
+        else:
+            inputs = self._processor(
+                images=image,
+                text=prompt,
+                return_tensors="pt",
+            )
 
         output = self._model.generate(
             **inputs,
@@ -1028,38 +1115,36 @@ class SmallVLMLoader(VLMLoader):
         logger.info("Unloaded small VLM: %s", self.config.model_id)
 
 
-def create_vlm_loader(model_name: str, config: VLMConfig) -> VLMLoader:
-    """Factory function to create appropriate VLM loader based on model name.
+def create_vlm_loader(architecture: VLMArchitecture, config: VLMConfig) -> VLMLoader:
+    """Create the VLM loader registered for one architecture.
 
-    When ``config.framework`` is ``LLAMA_CPP``, a ``LlamaCppVLMLoader`` is
-    returned regardless of model name. For small CPU models (SmolVLM,
-    Moondream), a ``SmallVLMLoader`` is returned.
+    Dispatch is pure: the architecture's concrete Pydantic class is the only
+    key consulted in the registry path. The single framework-level branch
+    below is intentional: GGUF inference goes through llama-cpp-python no
+    matter which architecture the GGUF was originally trained as, so the
+    framework discriminator on :class:`VLMConfig` selects the backend before
+    architecture-keyed dispatch even applies.
 
     Parameters
     ----------
-    model_name : str
-        Name of the model to load. Supported values:
-        - "llama-4-maverick" or "llama4-maverick"
-        - "gemma-3-27b" or "gemma3"
-        - "internvl3-78b" or "internvl3"
-        - "pixtral-large" or "pixtral"
-        - "qwen2.5-vl-72b" or "qwen25vl"
-        - "smolvlm" (SmolVLM variants)
-        - "moondream" (Moondream variants)
+    architecture : VLMArchitecture
+        Parsed architecture entry from the model config. The discriminated
+        union guarantees the concrete subclass at compile time; the registry
+        guarantees a loader is registered for it at runtime.
     config : VLMConfig
-        Configuration for model loading and inference.
+        Framework-level configuration for model loading and inference.
 
     Returns
     -------
     VLMLoader
-        Appropriate loader instance for the specified model.
+        Loader instance registered for ``type(architecture)`` (or the
+        llama-cpp loader when ``config.framework`` is ``LLAMA_CPP``).
 
     Raises
     ------
-    ValueError
-        If model_name is not recognized.
+    src.infrastructure.adapters.outbound.models.registry.UnknownArchitectureError
+        When no loader is registered for the architecture's concrete class.
     """
-    # llama.cpp GGUF dispatch
     if config.framework == InferenceFramework.LLAMA_CPP:
         from src.infrastructure.adapters.outbound.models.llama_cpp.base import LlamaCppConfig
         from src.infrastructure.adapters.outbound.models.llama_cpp.vlm import LlamaCppVLMLoader
@@ -1068,30 +1153,6 @@ def create_vlm_loader(model_name: str, config: VLMConfig) -> VLMLoader:
             model_id=config.model_id,
             n_ctx=4096,
         )
-        return LlamaCppVLMLoader(llama_config)  # type: ignore[return-value]
+        return LlamaCppVLMLoader(architecture, llama_config)  # type: ignore[return-value]
 
-    model_name_lower = model_name.lower().replace("_", "-")
-
-    # Small CPU VLMs (Transformers)
-    if "smolvlm" in model_name_lower or "moondream" in model_name_lower:
-        return SmallVLMLoader(config)
-
-    if "llama-4-maverick" in model_name_lower or "llama4-maverick" in model_name_lower:
-        return Llama4MaverickLoader(config)
-    if "gemma-3" in model_name_lower or "gemma3" in model_name_lower:
-        return Gemma3Loader(config)
-    if "internvl3" in model_name_lower:
-        return InternVL3Loader(config)
-    if "pixtral" in model_name_lower:
-        return PixtralLargeLoader(config)
-    if (
-        "qwen2.5-vl" in model_name_lower
-        or "qwen25vl" in model_name_lower
-        or "qwen-2-5-vl" in model_name_lower
-    ):
-        return Qwen25VLLoader(config)
-    raise ValueError(
-        f"Unknown model name: {model_name}. Supported models: "
-        "llama-4-maverick, gemma-3-27b, internvl3-78b, pixtral-large, qwen2.5-vl-72b, "
-        "smolvlm, moondream"
-    )
+    return vlm_registry.create(architecture, config)

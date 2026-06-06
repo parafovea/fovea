@@ -1,25 +1,55 @@
-"""Audio transcription and speaker diarization model loaders.
+"""Audio transcription, voice-activity, and speaker-diarization loaders.
 
-This module provides loaders for audio transcription models (Whisper variants)
-and speaker diarization models (Pyannote, Silero VAD). Supports multiple
-inference backends for CPU and GPU deployment.
+This module hosts the in-process audio loaders the model-service can run
+without leaving the box: OpenAI Whisper, faster-whisper, Silero VAD, and
+Pyannote diarization. The NeMo (Canary, Parakeet) and WhisperX loaders
+live in their own submodules so their heavy optional dependencies
+(``nemo_toolkit``, ``whisperx``) are not imported at module-load time.
+
+The transcription loaders register against their concrete
+:class:`AudioArchitecture` subclass on :data:`audio_registry`. The
+:func:`create_audio_loader` factory dispatches purely through that
+registry: a parsed architecture instance is the only key consulted. No
+code along the dispatch path matches on ``model_id`` substrings,
+checkpoint filenames, or other free-text labels.
+
+External-API audio providers (AssemblyAI, Deepgram, and so on) carry an
+architecture in the discriminated union for typing-completeness but are
+NOT registered here; they are routed through the external API router at
+the application layer before any loader factory is consulted. Asking
+this registry to resolve one of them surfaces an
+:class:`UnknownArchitectureError` with the legitimate audio loader list
+so the misconfiguration fails loudly.
 """
+
+from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import torch
-from numpy.typing import NDArray
 
+from src.domain.entities.architectures import (
+    AudioArchitecture,
+    FasterWhisper,
+    NemoCanary,
+    NemoParakeet,
+    Whisper,
+    WhisperX,
+)
 from src.infrastructure.adapters.outbound.models.audio.base import (
     AudioFramework,
     AudioTranscriptionLoader,
     TranscriptionConfig,
     TranscriptionResult,
     TranscriptionSegment,
+    audio_registry,
 )
 from src.infrastructure.observability.telemetry import instrument_method
+
+if TYPE_CHECKING:
+    from numpy.typing import NDArray
 
 __all__ = [
     "AudioFramework",
@@ -37,7 +67,8 @@ __all__ = [
     "VADResult",
     "VADSegment",
     "WhisperLoader",
-    "create_transcription_loader",
+    "audio_registry",
+    "create_audio_loader",
 ]
 
 logger = logging.getLogger(__name__)
@@ -106,6 +137,7 @@ class DiarizationResult:
     speakers: list[str]
 
 
+@audio_registry.register(Whisper)
 class WhisperLoader(AudioTranscriptionLoader):
     """Loader for OpenAI Whisper transcription models.
 
@@ -167,6 +199,7 @@ class WhisperLoader(AudioTranscriptionLoader):
             raise RuntimeError(f"Whisper transcription failed: {e}") from e
 
 
+@audio_registry.register(FasterWhisper)
 class FasterWhisperLoader(AudioTranscriptionLoader):
     """Loader for faster-whisper transcription models.
 
@@ -184,11 +217,21 @@ class FasterWhisperLoader(AudioTranscriptionLoader):
                 f"with {self.config.compute_type} precision"
             )
 
-            model_name = self.config.model_id.split("/")[-1]
+            # WhisperModel accepts both bare size tokens (``small``,
+            # ``large-v3``) and full HuggingFace repo paths
+            # (``Systran/faster-whisper-small``). The previous splitting
+            # of ``model_id.split("/")[-1]`` turned ``Systran/
+            # faster-whisper-small`` into ``faster-whisper-small`` which
+            # is neither a valid size token nor a repo path, and faster-
+            # whisper raised "Invalid model size 'faster-whisper-small'".
+            # Passing the full model_id through delegates the dispatch
+            # to faster-whisper itself: bare ``small`` works, the
+            # Systran-converted GitHub repos work, and a fine-tuned
+            # checkpoint user-provided at a local path works.
             device = self.config.device if self.config.device != "cuda" else "auto"
 
             self.model = WhisperModel(
-                model_name,
+                self.config.model_id,
                 device=device,
                 compute_type=self.config.compute_type,
                 download_root=None,
@@ -329,6 +372,19 @@ class SileroVADLoader:
         RuntimeError
             If model loading fails.
         """
+        # Prefer the ONNX backend when CUDA isn't available. The
+        # PyTorch backend's `silero_vad` model in the snakers4/
+        # silero-vad hub repo eagerly imports CUDA runtime even
+        # when the host has no CUDA libs, which fails on CPU-only
+        # deployments with "libcudart.so.13: cannot open shared
+        # object file". ONNX runtime handles the same model with
+        # no PyTorch dependency. Initialize the flag unconditionally
+        # before the try block AND with the conditional default in
+        # the same statement so static analysis (CodeQL) sees the
+        # variable as definitely assigned at every later use.
+        use_onnx: bool = True
+        if torch.cuda.is_available() and self.config.device == "cuda":
+            use_onnx = False
         try:
             logger.info("Loading Silero VAD model")
 
@@ -336,10 +392,11 @@ class SileroVADLoader:
                 repo_or_dir="snakers4/silero-vad",
                 model="silero_vad",
                 force_reload=False,
-                onnx=False,
+                onnx=use_onnx,
+                trust_repo=True,
             )
 
-            if torch.cuda.is_available() and self.config.device == "cuda":
+            if not use_onnx and torch.cuda.is_available() and self.config.device == "cuda":
                 self.model = self.model.to(torch.device("cuda"))
 
             logger.info("Silero VAD model loaded successfully")
@@ -457,10 +514,43 @@ class PyannoteLoader:
 
             logger.info(f"Loading Pyannote pipeline {self.config.model_id}")
 
-            self.pipeline = Pipeline.from_pretrained(self.config.model_id, use_auth_token=None)
+            # Pyannote 3.x diarization models on the HuggingFace Hub
+            # require accepting the user agreement and authenticating
+            # with a Hub access token. Read HUGGING_FACE_HUB_TOKEN /
+            # HF_TOKEN from the environment so deployments that ship
+            # a token (production / pre-warmed images) can complete
+            # download without code changes; deployments without a
+            # token surface a useful error instead of pyannote's
+            # generic "could not download model" message.
+            import os
 
-            if torch.cuda.is_available() and self.config.device == "cuda":
-                self.pipeline = self.pipeline.to(torch.device("cuda"))
+            hf_token = os.environ.get("HUGGING_FACE_HUB_TOKEN") or os.environ.get("HF_TOKEN")
+            # huggingface_hub 1.x renamed `use_auth_token` → `token`.
+            # pyannote.audio 3.4 forwards the kwarg verbatim, so passing
+            # the legacy name now raises "got an unexpected keyword
+            # argument 'use_auth_token'". `token` works on both pyannote
+            # 3.3 and 3.4 against current Hub clients.
+            self.pipeline = Pipeline.from_pretrained(
+                self.config.model_id,
+                token=hf_token,
+            )
+            if self.pipeline is None:
+                raise RuntimeError(
+                    f"Pyannote returned None for {self.config.model_id!r}. The "
+                    "model is gated on HuggingFace; set HUGGING_FACE_HUB_TOKEN to "
+                    "a Hub access token that has accepted the model's user "
+                    "agreement at https://huggingface.co/" + self.config.model_id
+                )
+
+            # Pin to CPU when CUDA isn't available so the pipeline's
+            # internal torch operations don't try to dlopen libcudart
+            # on a CPU-only host.
+            target_device = (
+                torch.device("cuda")
+                if torch.cuda.is_available() and self.config.device == "cuda"
+                else torch.device("cpu")
+            )
+            self.pipeline = self.pipeline.to(target_device)
 
             logger.info("Pyannote pipeline loaded successfully")
         except Exception as e:
@@ -528,74 +618,91 @@ class PyannoteLoader:
         logger.info("Pipeline unloaded and memory cleared")
 
 
-def create_transcription_loader(
-    model_name: str, config: TranscriptionConfig
+# Side-effect imports.
+#
+# These submodules carry ``@audio_registry.register(...)`` decorators on
+# their loader classes. Importing them at module-load time of this file
+# wires NemoCanary, NemoParakeet, and WhisperX into the registry so the
+# factory below can resolve them without the caller having to know which
+# submodule each loader lives in. The imports are intentionally placed
+# AFTER the registry definition because the decorators read it at import
+# time; they are also placed at module bottom so the cycle between
+# loader.py and the submodules (which import shared types from base.py)
+# resolves cleanly. ``noqa: E402, F401`` documents intent: the imports
+# are not used by name in this module, only for their decorator side
+# effects.
+from src.infrastructure.adapters.outbound.models.audio.canary import (  # noqa: E402, F401
+    CanaryQwenLoader,
+)
+from src.infrastructure.adapters.outbound.models.audio.parakeet import (  # noqa: E402, F401
+    ParakeetTDTLoader,
+)
+from src.infrastructure.adapters.outbound.models.audio.whisperx import (  # noqa: E402, F401
+    WhisperXLoader,
+)
+
+# Sanity-assert the side-effect imports actually wired the expected
+# architectures. The check runs once at module load and surfaces a
+# breakage immediately (e.g. a forgotten decorator) instead of at first
+# transcription attempt. Each NEMO_CANARY / NEMO_PARAKEET / WHISPERX
+# architecture is referenced here ONLY to keep their imports live; the
+# loader classes themselves are looked up by ``type(architecture)``
+# through the registry.
+_REQUIRED_REGISTRATIONS: tuple[type, ...] = (
+    Whisper,
+    FasterWhisper,
+    WhisperX,
+    NemoCanary,
+    NemoParakeet,
+)
+_MISSING = [
+    cls.__name__
+    for cls in _REQUIRED_REGISTRATIONS
+    if cls not in audio_registry.registered_architectures
+]
+if _MISSING:
+    raise RuntimeError(
+        f"audio_registry is missing loader registrations for: {_MISSING}. "
+        f"Each AudioArchitecture subclass must be decorated with "
+        f"@audio_registry.register(...) on its loader class."
+    )
+
+
+def create_audio_loader(
+    architecture: AudioArchitecture, config: TranscriptionConfig
 ) -> AudioTranscriptionLoader:
-    """Factory function to create transcription loader based on model name.
+    """Create the audio transcription loader registered for one architecture.
+
+    Dispatch is pure: the architecture's concrete Pydantic class is the
+    only key consulted. There is no framework-level pre-dispatch because
+    audio has no clean "framework" axis: openai-whisper, faster-whisper,
+    WhisperX (which wraps faster-whisper plus pyannote alignment), and
+    NeMo (Canary / Parakeet) are each their own runtime and each owns
+    its own loader. The architecture IS the framework here, and that
+    one-to-one mapping is what the registry encodes.
 
     Parameters
     ----------
-    model_name : str
-        Name of the model to load. Supported values:
-        - "whisper-*" (e.g., "whisper-large-v3", "whisper-v3-turbo")
-        - "faster-whisper-*" (e.g., "faster-whisper-large-v3")
+    architecture : AudioArchitecture
+        Parsed architecture entry from the model config. The
+        discriminated union guarantees the concrete subclass at compile
+        time; the registry guarantees a loader is registered for it at
+        runtime (for the in-process families).
     config : TranscriptionConfig
-        Configuration for model loading and transcription.
+        Framework-level configuration for model loading and inference.
 
     Returns
     -------
     AudioTranscriptionLoader
-        Appropriate loader instance for the specified model.
+        Loader instance registered for ``type(architecture)``.
 
     Raises
     ------
-    ValueError
-        If model_name is not recognized.
+    src.infrastructure.adapters.outbound.models.registry.UnknownArchitectureError
+        When no loader is registered for the architecture's concrete
+        class. External-API architectures (AssemblyAI, Deepgram, RevAI,
+        Gladia, AWSTranscribe, GoogleSpeech, AzureSpeech) deliberately
+        raise here: they are dispatched through the external API router
+        upstream and never reach this factory in well-configured calls.
     """
-    if config.framework == AudioFramework.NEMO_CANARY:
-        from src.infrastructure.adapters.outbound.models.audio.canary import (
-            CanaryQwenLoader,
-        )
-
-        return CanaryQwenLoader(config)
-    if config.framework == AudioFramework.NEMO_PARAKEET:
-        from src.infrastructure.adapters.outbound.models.audio.parakeet import (
-            ParakeetTDTLoader,
-        )
-
-        return ParakeetTDTLoader(config)
-    if config.framework == AudioFramework.WHISPERX:
-        from src.infrastructure.adapters.outbound.models.audio.whisperx import (
-            WhisperXLoader,
-        )
-
-        return WhisperXLoader(config)
-
-    model_name_lower = model_name.lower()
-
-    if "canary" in model_name_lower:
-        from src.infrastructure.adapters.outbound.models.audio.canary import (
-            CanaryQwenLoader,
-        )
-
-        return CanaryQwenLoader(config)
-    if "parakeet" in model_name_lower:
-        from src.infrastructure.adapters.outbound.models.audio.parakeet import (
-            ParakeetTDTLoader,
-        )
-
-        return ParakeetTDTLoader(config)
-    if "whisperx" in model_name_lower:
-        from src.infrastructure.adapters.outbound.models.audio.whisperx import (
-            WhisperXLoader,
-        )
-
-        return WhisperXLoader(config)
-    if "faster-whisper" in model_name_lower:
-        return FasterWhisperLoader(config)
-    if "whisper" in model_name_lower:
-        return WhisperLoader(config)
-    raise ValueError(
-        f"Unknown model name: {model_name}. Supported models: "
-        "whisper-*, faster-whisper-*, canary-*, parakeet-*, whisperx-*"
-    )
+    return audio_registry.create(architecture, config)

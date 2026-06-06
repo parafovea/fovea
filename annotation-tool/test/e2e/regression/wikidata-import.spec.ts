@@ -1,10 +1,22 @@
 import { test, expect } from '../fixtures/test-context.js'
+import { mockWikidata } from '../fixtures/mock-wikidata.js'
 
 /**
  * E2E tests for Wikidata import functionality with one-click import and undo.
  * Tests the new WikidataImportFlow component across different entity types.
+ *
+ * Every test routes through `mockWikidata(page)` so the suite is
+ * deterministic and not at the mercy of www.wikidata.org's HTTP 429
+ * rate limiter — under parallel worker execution the live endpoint
+ * starts dropping requests after a handful of hits, which made every
+ * `getByRole('option').first()` assertion flake.
  */
 test.describe('Wikidata Import Flow', () => {
+  test.beforeEach(async ({ page }) => {
+    await mockWikidata(page)
+  })
+
+
   test.describe('Entity Type Import', () => {
     test('imports entity type from Wikidata with one-click', async ({ ontologyWorkspace, testPersona, page }) => {
       await ontologyWorkspace.navigateTo(testPersona.id)
@@ -239,10 +251,10 @@ test.describe('Wikidata Import Flow', () => {
       await wikidataButton.click()
       await page.waitForTimeout(500)
 
-      // Check all stepper steps are visible (use more specific selectors)
-      await expect(dialog.locator('.MuiStepLabel-label').filter({ hasText: 'Search Wikidata' }).first()).toBeVisible()
-      await expect(dialog.locator('.MuiStepLabel-label').filter({ hasText: 'Preview & Confirm' }).first()).toBeVisible()
-      await expect(dialog.locator('.MuiStepLabel-label').filter({ hasText: 'Success' }).first()).toBeVisible()
+      // Check all stepper steps are visible (shadcn step indicator renders plain spans)
+      await expect(dialog.getByText('Search Wikidata', { exact: true }).first()).toBeVisible()
+      await expect(dialog.getByText('Preview & Confirm', { exact: true }).first()).toBeVisible()
+      await expect(dialog.getByText('Success', { exact: true }).first()).toBeVisible()
     })
 
     test('highlights active step', async ({ ontologyWorkspace, testPersona, page }) => {
@@ -271,9 +283,8 @@ test.describe('Wikidata Import Flow', () => {
       const importAsTypeButton = dialog.getByRole('button', { name: /import as entity type/i })
       await expect(importAsTypeButton).toBeVisible({ timeout: 3000 })
 
-      // Stepper should be visible
-      const stepper = dialog.locator('[class*="MuiStepper"]')
-      await expect(stepper).toBeVisible()
+      // Step indicator labels should still be visible after advancing
+      await expect(dialog.getByText('Preview & Confirm', { exact: true }).first()).toBeVisible()
     })
   })
 })

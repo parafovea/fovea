@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 
+from src.domain.entities.architectures import ClaudeAPI, YOLOWorld
 from src.domain.entities.model_config import (
     DeviceInfo,
     InferenceConfig,
@@ -11,27 +12,35 @@ from src.domain.entities.model_config import (
     TaskConfig,
 )
 
+# Default test architecture for the legacy ModelConfig tests; every
+# ModelConfig instance is now required to carry an architecture.
+_ARCH = YOLOWorld()
+
 
 class TestModelConfig:
     def test_defaults(self) -> None:
-        cfg = ModelConfig(model_id="m", framework="pytorch")
+        cfg = ModelConfig(model_id="m", framework="pytorch", architecture=_ARCH)
         assert cfg.vram_gb == 0.0
         assert cfg.speed == "medium"
         assert cfg.is_local is True
         assert cfg.is_external_api is False
 
     def test_is_external_api(self) -> None:
-        cfg = ModelConfig(model_id="m", framework="external_api")
+        cfg = ModelConfig(model_id="m", framework="external_api", architecture=ClaudeAPI())
         assert cfg.is_external_api
         assert not cfg.is_local
 
     def test_memory_bytes(self) -> None:
-        cfg = ModelConfig(model_id="m", framework="pytorch", vram_gb=2.0, cpu_memory_gb=4.0)
+        cfg = ModelConfig(
+            model_id="m", framework="pytorch", architecture=_ARCH, vram_gb=2.0, cpu_memory_gb=4.0
+        )
         assert cfg.vram_bytes == int(2.0 * 1024 * 1024 * 1024)
         assert cfg.cpu_memory_bytes == int(4.0 * 1024 * 1024 * 1024)
 
     def test_memory_for_device(self) -> None:
-        cfg = ModelConfig(model_id="m", framework="pytorch", vram_gb=8.0, cpu_memory_gb=16.0)
+        cfg = ModelConfig(
+            model_id="m", framework="pytorch", architecture=_ARCH, vram_gb=8.0, cpu_memory_gb=16.0
+        )
         assert cfg.memory_for_device("cpu") == 16.0
         assert cfg.memory_for_device("cuda") == 8.0
         assert cfg.memory_for_device("mps") == 8.0
@@ -40,6 +49,7 @@ class TestModelConfig:
         cfg = ModelConfig(
             model_id="m-id",
             framework="pytorch",
+            architecture=_ARCH,
             vram_gb=2.5,
             cpu_compatible=True,
             quantization="4bit",
@@ -49,39 +59,46 @@ class TestModelConfig:
         assert restored == cfg
 
     def test_from_dict_with_minimal_input(self) -> None:
-        cfg = ModelConfig.from_dict({"model_id": "m", "framework": "pytorch"})
+        cfg = ModelConfig.from_dict(
+            {"model_id": "m", "framework": "pytorch", "architecture": {"kind": "yolo-world"}}
+        )
         assert cfg.model_id == "m"
         assert cfg.speed == "medium"
+
+    def test_from_dict_missing_architecture_raises(self) -> None:
+        """Architecture is required; missing block fails loudly at config load."""
+        with pytest.raises(ValueError, match="missing the required `architecture` block"):
+            ModelConfig.from_dict({"model_id": "m", "framework": "pytorch"})
 
 
 class TestTaskConfig:
     def test_selected_config(self) -> None:
-        a = ModelConfig(model_id="a", framework="pytorch")
-        b = ModelConfig(model_id="b", framework="pytorch")
+        a = ModelConfig(model_id="a", framework="pytorch", architecture=_ARCH)
+        b = ModelConfig(model_id="b", framework="pytorch", architecture=_ARCH)
         task = TaskConfig(task_name="t", selected="a", options={"a": a, "b": b})
         assert task.selected_config is a
 
     def test_available_models(self) -> None:
-        a = ModelConfig(model_id="a", framework="pytorch")
-        b = ModelConfig(model_id="b", framework="pytorch")
+        a = ModelConfig(model_id="a", framework="pytorch", architecture=_ARCH)
+        b = ModelConfig(model_id="b", framework="pytorch", architecture=_ARCH)
         task = TaskConfig(task_name="t", selected="a", options={"a": a, "b": b})
         assert set(task.available_models) == {"a", "b"}
 
     def test_is_valid_selection(self) -> None:
-        a = ModelConfig(model_id="a", framework="pytorch")
+        a = ModelConfig(model_id="a", framework="pytorch", architecture=_ARCH)
         task = TaskConfig(task_name="t", selected="a", options={"a": a})
         assert task.is_valid_selection("a")
         assert not task.is_valid_selection("missing")
 
     def test_cpu_compatible_options(self) -> None:
-        a = ModelConfig(model_id="a", framework="pytorch", cpu_compatible=True)
-        b = ModelConfig(model_id="b", framework="pytorch", cpu_compatible=False)
+        a = ModelConfig(model_id="a", framework="pytorch", architecture=_ARCH, cpu_compatible=True)
+        b = ModelConfig(model_id="b", framework="pytorch", architecture=_ARCH, cpu_compatible=False)
         task = TaskConfig(task_name="t", selected="a", options={"a": a, "b": b})
         compatible = task.get_cpu_compatible_options()
         assert set(compatible.keys()) == {"a"}
 
     def test_to_dict(self) -> None:
-        a = ModelConfig(model_id="a", framework="pytorch")
+        a = ModelConfig(model_id="a", framework="pytorch", architecture=_ARCH)
         task = TaskConfig(task_name="t", selected="a", options={"a": a})
         d = task.to_dict()
         assert d["selected"] == "a"

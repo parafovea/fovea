@@ -10,7 +10,7 @@ cp server/.env.example server/.env
 docker compose up
 ```
 
-The default profile starts six services. Wait until each reports
+The default profile starts eight services. Wait until each reports
 healthy:
 
 ```text
@@ -20,11 +20,13 @@ fovea-otel-collector-1  running
 fovea-backend-1         healthy
 fovea-model-service-1   healthy
 fovea-frontend-1        running
+fovea-prometheus-1      running
+fovea-grafana-1         running
 ```
 
 The backend runs `npx prisma migrate deploy` and the seed script
 on startup. The seed creates the `admin` user (password from
-`ADMIN_PASSWORD`, defaulting to `admin`) and a `test` user
+`ADMIN_PASSWORD`, defaulting to `admin`) and a `testuser` user
 (password from `TEST_USER_PASSWORD`, defaulting to `test123`).
 
 ## Confirm the stack
@@ -40,7 +42,7 @@ The backend health endpoint serves on port 3001:
 
 ```bash
 curl -s http://localhost:3001/api/health
-# {"status":"ok"}
+# {"status":"healthy","timestamp":"..."}
 ```
 
 The model service serves on port 8000:

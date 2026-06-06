@@ -17,7 +17,28 @@
   ],
   "rules": {
     "@typescript-eslint/no-explicit-any": "warn",
-    "@typescript-eslint/no-unused-vars": ["error", { "argsIgnorePattern": "^_" }]
+    "@typescript-eslint/no-unused-vars": ["error", { "argsIgnorePattern": "^_" }],
+    "no-restricted-imports": [
+      "error",
+      {
+        "patterns": [
+          {
+            "group": ["**/demo/**"],
+            "message": "Product code may not import from server/src/demo/. The demo layer is FOVEA_DEMO_MODE-gated and reaches into product code, not the other way around. See CVPR_2026_DEMO_PLAN.md §6.2."
+          }
+        ]
+      }
+    ]
   },
+  "overrides": [
+    {
+      "files": ["src/demo/**/*"],
+      "rules": { "no-restricted-imports": "off" }
+    },
+    {
+      "files": ["test/**/*"],
+      "rules": { "no-restricted-imports": "off" }
+    }
+  ],
   "ignorePatterns": ["dist", "node_modules", "coverage"]
 }

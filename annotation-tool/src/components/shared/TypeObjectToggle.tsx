@@ -1,16 +1,13 @@
-import React from 'react'
-import {
-  ToggleButton,
-  ToggleButtonGroup,
-  Box,
-  Typography,
-  Chip,
-  Tooltip,
-} from '@mui/material'
-import {
-  Category as CategoryIcon,
-  Inventory2 as ObjectIcon,
-} from '@mui/icons-material'
+/**
+ * Toggle components for switching between Type and Object creation modes.
+ */
+
+import { Package, Tag } from 'lucide-react'
+
+import { Badge } from '@/components/ui/badge'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { cn } from '@/lib/utils'
 
 export type CreationMode = 'type' | 'object'
 
@@ -18,110 +15,107 @@ interface TypeObjectToggleProps {
   mode: CreationMode
   onChange: (mode: CreationMode) => void
   disabled?: boolean
-  size?: 'small' | 'medium' | 'large'
+  size?: 'sm' | 'default' | 'lg'
 }
 
-export function TypeObjectToggle({ 
-  mode, 
-  onChange, 
+export function TypeObjectToggle({
+  mode,
+  onChange,
   disabled = false,
-  size = 'medium' 
-}: TypeObjectToggleProps) {
-  const handleChange = (_: React.MouseEvent<HTMLElement>, newMode: CreationMode | null) => {
-    if (newMode !== null) {
-      onChange(newMode)
-    }
-  }
-
+  size = 'default'
+}: TypeObjectToggleProps): JSX.Element {
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-      <ToggleButtonGroup
-        value={mode}
-        exclusive
-        onChange={handleChange}
+    <div className="flex flex-col gap-2">
+      <ToggleGroup
+        value={[mode]}
+        onValueChange={(newValue) => {
+          if (newValue.length > 0) {
+            onChange(newValue[newValue.length - 1] as CreationMode)
+          }
+        }}
         disabled={disabled}
         size={size}
-        sx={{ width: '100%' }}
+        className="w-full"
       >
-        <ToggleButton value="type" sx={{ flex: 1 }}>
-          <Tooltip title="Define categories and concepts">
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <CategoryIcon />
-              <Typography variant="body2">Types</Typography>
-            </Box>
+        <ToggleGroupItem value="type" className="flex-1">
+          <Tooltip>
+            <TooltipTrigger render={
+              <span className="flex items-center gap-2">
+                <Tag className="size-4" />
+                <span className="text-sm">Types</span>
+              </span>
+            } />
+            <TooltipContent>Define categories and concepts</TooltipContent>
           </Tooltip>
-        </ToggleButton>
-        <ToggleButton value="object" sx={{ flex: 1 }}>
-          <Tooltip title="Create actual instances">
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <ObjectIcon />
-              <Typography variant="body2">Objects</Typography>
-            </Box>
+        </ToggleGroupItem>
+        <ToggleGroupItem value="object" className="flex-1">
+          <Tooltip>
+            <TooltipTrigger render={
+              <span className="flex items-center gap-2">
+                <Package className="size-4" />
+                <span className="text-sm">Objects</span>
+              </span>
+            } />
+            <TooltipContent>Create actual instances</TooltipContent>
           </Tooltip>
-        </ToggleButton>
-      </ToggleButtonGroup>
-      
+        </ToggleGroupItem>
+      </ToggleGroup>
+
       <ModeIndicator mode={mode} />
-    </Box>
+    </div>
   )
 }
 
 interface ModeIndicatorProps {
   mode: CreationMode
-  variant?: 'chip' | 'text'
+  variant?: 'badge' | 'text'
 }
 
-export function ModeIndicator({ mode, variant = 'chip' }: ModeIndicatorProps) {
+export function ModeIndicator({ mode, variant = 'badge' }: ModeIndicatorProps): JSX.Element {
   const isType = mode === 'type'
-  
-  if (variant === 'chip') {
+
+  if (variant === 'badge') {
     return (
-      <Chip
-        size="small"
-        label={isType ? 'Creating Type (Category)' : 'Creating Object (Instance)'}
-        color={isType ? 'primary' : 'secondary'}
-        icon={isType ? <CategoryIcon /> : <ObjectIcon />}
-        sx={{
-          borderStyle: isType ? 'dashed' : 'solid',
-          fontStyle: isType ? 'italic' : 'normal',
-        }}
-      />
+      <Badge
+        variant={isType ? 'default' : 'secondary'}
+        className={cn(
+          isType && 'border-dashed italic',
+        )}
+      >
+        {isType ? <Tag className="size-3" /> : <Package className="size-3" />}
+        {isType ? 'Creating Type (Category)' : 'Creating Object (Instance)'}
+      </Badge>
     )
   }
-  
+
   return (
-    <Typography
-      variant="caption"
-      sx={{
-        color: isType ? 'primary.main' : 'secondary.main',
-        fontStyle: isType ? 'italic' : 'normal',
-      }}
-    >
-      {isType 
+    <p className={cn(
+      'text-xs',
+      isType ? 'italic text-primary' : 'text-secondary-foreground',
+    )}>
+      {isType
         ? 'Types define categories that personas use to classify things'
         : 'Objects are actual entities, events, and times that exist in the world'}
-    </Typography>
+    </p>
   )
 }
 
 interface TypeObjectBadgeProps {
   isType: boolean
-  size?: 'small' | 'medium'
+  size?: 'sm' | 'default'
 }
 
-export function TypeObjectBadge({ isType, size = 'small' }: TypeObjectBadgeProps) {
+export function TypeObjectBadge({ isType, size = 'sm' }: TypeObjectBadgeProps): JSX.Element {
   return (
-    <Chip
-      size={size}
-      label={isType ? 'TYPE' : 'OBJECT'}
-      color={isType ? 'primary' : 'secondary'}
-      variant={isType ? 'outlined' : 'filled'}
-      sx={{
-        borderStyle: isType ? 'dashed' : 'solid',
-        fontWeight: isType ? 'normal' : 'bold',
-        fontStyle: isType ? 'italic' : 'normal',
-        height: size === 'small' ? 20 : 24,
-      }}
-    />
+    <Badge
+      variant={isType ? 'outline' : 'default'}
+      className={cn(
+        isType && 'border-dashed italic',
+        !isType && 'font-bold',
+        size === 'sm' ? 'h-5 text-[10px]' : 'h-6',
+      )}
+    >
+      {isType ? 'TYPE' : 'OBJECT'}
+    </Badge>
   )
 }

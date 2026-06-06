@@ -1,17 +1,14 @@
 import { useState, FormEvent } from 'react'
 import { useNavigate, useLocation, Link as RouterLink } from 'react-router-dom'
-import {
-  Box,
-  Paper,
-  TextField,
-  Button,
-  Typography,
-  Alert,
-  FormControlLabel,
-  Checkbox,
-  Link,
-} from '@mui/material'
-import { Login as LoginIcon } from '@mui/icons-material'
+
+import foveaLogo from '@/assets/fovea-logo.svg'
+
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader } from '@/components/ui/card'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { useAuth } from '@hooks/auth'
 import { useAuthStore } from '@store/zustand/authStore'
 
@@ -20,7 +17,7 @@ import { useAuthStore } from '@store/zustand/authStore'
  * Displays username and password fields with validation and error handling.
  * Supports "remember me" option to extend session duration.
  */
-export default function LoginPage() {
+export function LoginPage(): JSX.Element {
   const navigate = useNavigate()
   const location = useLocation()
   const { login } = useAuth()
@@ -51,7 +48,8 @@ export default function LoginPage() {
     try {
       await login(username, password, rememberMe)
       const params = new URLSearchParams(location.search)
-      const from = params.get('redirect') || '/'
+      const defaultDest = import.meta.env.VITE_DEMO_PUBLIC === '1' ? '/app' : '/'
+      const from = params.get('redirect') || defaultDest
       navigate(from, { replace: true })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Login failed')
@@ -70,103 +68,102 @@ export default function LoginPage() {
   }
 
   return (
-    <Box
-      sx={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        minHeight: '100vh',
-        bgcolor: 'background.default',
-      }}
-    >
-      <Paper
-        sx={{
-          p: 4,
-          maxWidth: 400,
-          width: '100%',
-          mx: 2,
-        }}
-      >
-        <Box sx={{ textAlign: 'center', mb: 3 }}>
-          <LoginIcon sx={{ fontSize: 48, color: 'primary.main', mb: 1 }} />
-          <Typography variant="h4" component="h1" gutterBottom>
-            fovea
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Video Annotation Tool
-          </Typography>
-        </Box>
-
-        {error && (
-          <Alert severity="error" sx={{ mb: 2 }}>
-            {error}
-          </Alert>
-        )}
-
-        <form onSubmit={handleSubmit}>
-          <TextField
-            label="Username"
-            value={username}
-            onChange={(e) => {
-              setUsername(e.target.value)
-              handleFieldChange()
-            }}
-            fullWidth
-            required
-            margin="normal"
-            autoFocus
-            disabled={loading}
+    <div className="flex items-center justify-center min-h-screen bg-background">
+      <Card className="max-w-[400px] w-full mx-2">
+        <CardHeader className="text-center">
+          <img
+            src={foveaLogo}
+            alt="FOVEA logo"
+            className="mx-auto size-12 mb-2"
           />
+          <h1 className="text-3xl font-bold tracking-wide">FOVEA</h1>
+          <p className="text-sm text-muted-foreground">
+            Flexible Ontology Visual Event Analyzer
+          </p>
+        </CardHeader>
 
-          <TextField
-            label="Password"
-            type="password"
-            value={password}
-            onChange={(e) => {
-              setPassword(e.target.value)
-              handleFieldChange()
-            }}
-            fullWidth
-            required
-            margin="normal"
-            disabled={loading}
-          />
+        <CardContent>
+          {error && (
+            <Alert variant="destructive" className="mb-4" data-testid="login-error-alert">
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
 
-          <FormControlLabel
-            control={
-              <Checkbox
-                checked={rememberMe}
-                onChange={(e) => setRememberMe(e.target.checked)}
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="username">Username</Label>
+              <Input
+                id="username"
+                value={username}
+                onChange={(e) => {
+                  setUsername(e.target.value)
+                  handleFieldChange()
+                }}
+                required
+                autoFocus
                 disabled={loading}
               />
-            }
-            label="Remember me (30 days)"
-            sx={{ mt: 1 }}
-          />
+            </div>
 
-          <Button
-            type="submit"
-            variant="contained"
-            fullWidth
-            size="large"
-            disabled={loading || !username || !password}
-            sx={{ mt: 2 }}
-          >
-            {loading ? 'Logging in...' : 'Login'}
-          </Button>
+            <div className="space-y-2">
+              <Label htmlFor="password">Password</Label>
+              <Input
+                id="password"
+                type="password"
+                value={password}
+                onChange={(e) => {
+                  setPassword(e.target.value)
+                  handleFieldChange()
+                }}
+                required
+                disabled={loading}
+              />
+            </div>
 
-          {allowRegistration && (
-            <Box sx={{ mt: 2, textAlign: 'center' }}>
-              <Typography variant="body2" color="text.secondary">
-                Don't have an account?{' '}
-                <Link component={RouterLink} to="/register">
+            <div className="flex items-center gap-2 mt-1">
+              <Checkbox
+                id="remember-me"
+                checked={rememberMe}
+                onCheckedChange={(checked) => setRememberMe(checked as boolean)}
+                disabled={loading}
+              />
+              <Label htmlFor="remember-me">Remember me (30 days)</Label>
+            </div>
+
+            <Button
+              type="submit"
+              className="w-full"
+              size="lg"
+              disabled={loading || !username || !password}
+            >
+              {loading ? 'Logging in...' : 'Login'}
+            </Button>
+
+            {allowRegistration ? (
+              <p className="text-center text-sm text-muted-foreground">
+                Don&apos;t have an account?{' '}
+                <RouterLink to="/register" className="text-primary underline underline-offset-4 hover:text-primary/80">
                   Register
-                </Link>
-              </Typography>
-            </Box>
-          )}
-        </form>
-      </Paper>
-    </Box>
+                </RouterLink>
+              </p>
+            ) : (
+              <Alert data-testid="registration-disabled-notice">
+                <AlertDescription>
+                  Self-registration is disabled on this deployment. To
+                  request an account, email{' '}
+                  <a
+                    href="mailto:admin@fovea.video"
+                    className="text-primary underline underline-offset-4 hover:text-primary/80"
+                  >
+                    admin@fovea.video
+                  </a>
+                  .
+                </AlertDescription>
+              </Alert>
+            )}
+          </form>
+        </CardContent>
+      </Card>
+    </div>
   )
 }

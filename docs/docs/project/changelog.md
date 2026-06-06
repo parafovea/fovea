@@ -1,10 +1,8 @@
 # Changelog
 
-The v0.3.x line is the active development line; v0.2.x is
-the maintenance line for the 0.2.0 RBAC framework; v0.1.x is
-the maintenance line for the 0.1.0 export format. The full
-content of the workspace `CHANGELOG.md` follows.
+This is a live copy of the workspace `CHANGELOG.md`. Releases are tracked in the format documented at [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+---
 
 # Changelog
 
@@ -12,6 +10,208 @@ All notable changes to the Fovea project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [0.4.0] - 2026-06-04
+
+### Added
+
+#### Audio Transcription and Speaker Diarization
+
+- New end-to-end audio path: a Transcribe Audio button on the AnnotationWorkspace toolbar (`data-testid="transcribe-audio-button"`) calls the new backend route `POST /api/videos/:videoId/transcribe` which forwards to the model-service's new `/api/transcribe` (faster-whisper) endpoint and, when `enableDiarization: true`, also to `/api/diarize` (pyannote). The backend merges per-second overlap so every transcript segment carries the speaker who talked the longest within its interval; the resulting payload renders in a new `TranscriptPanel` component with colour-coded speaker chips (8-colour palette + an Unknown fallback), MM:SS click-to-seek timestamps, an active-segment highlight that follows the video playhead, and auto-scroll-into-view so the booth visitor can leave the dialog open while the clip plays. Diarization failure degrades gracefully to the plain transcript so the visitor always sees text.
+- New model-service routes:
+  - `POST /api/transcribe` (body: `{audio_path, language?}`) returns `{text, segments, language, duration, processing_time, model_used}`; the loader is typed as `AudioTranscriptionLoader` and the result as `TranscriptionResult` (no `Any`). Empty-string `language` is normalised to `None` so the visitor's auto-detect path is not rejected by the faster-whisper hard-lookup table.
+  - `POST /api/diarize` (body: `{audio_path, num_speakers?, min_speakers?, max_speakers?}`) returns `{segments, speakers (first-appearance ordered, deduped), processing_time, model_used}`; the loader is typed via a local `_DiarizationModel` Protocol so the route does not couple to PyannoteLoader as a concrete class. Per-request speaker-count hints are logged as a warning since the current loader binds them at config-load time.
+- New backend route `POST /api/videos/:videoId/transcribe` in `server/src/routes/videos/transcribe.ts`: resolves the video via `videoRepository.findByIdWithSelect`, translates `/data/` to `/videos/` on the path, and forwards through the typed `fetchModelService` helper with a new `MODEL_SERVICE_TIMEOUT_TRANSCRIBE_MS` env var (default 300_000 ms). Diarization failure returns a plain transcript with a `log.warn` and a 200; transcription failure preserves the upstream status with a typed `{error: 'MODEL_SERVICE_ERROR', message}` body that survives the fast-json-stringify response schema.
+- New frontend types: `TranscribeRequest`, `TranscribeResponse`, `TranscriptSegment` in `@api/client`; new `useTranscribeVideo` mutation hook in `@store/queries/useTranscribe`; new `Mic` icon import on AnnotationWorkspace; new dialog state machinery (`transcriptDialogOpen`, `transcriptResult`, `transcriptError`, `diarizationRequested`).
+- HuggingFace token (`HF_TOKEN` + `HUGGING_FACE_HUB_TOKEN`) plumbed through `docker-compose.e2e.real-models.yml` so the model-service can authenticate against the gated pyannote model and avoid the unauthenticated rate-limit that stalled first-call faster-whisper downloads.
+- New `MODEL_SERVICE_TIMEOUT_<KIND>_MS` env var family on `server/src/lib/fetchModelService.ts` makes every per-endpoint ceiling overridable; `docker-compose.e2e.real-models.yml` bumps the six values to CPU-friendly ranges (600000 ms detection/thumbnails/ontology-augment, 1800000 ms summarize/extractClaims/synthesize). Production defaults are unchanged.
+- Model-service `[cpu]` optional-dependencies extra in `model-service/pyproject.toml` ships `llama-cpp-python>=0.3.0` + `onnxruntime>=1.20.0` so the CPU image actually carries the runtimes its bundled `models-cpu.yaml` config selects (the prior CPU image had no llama_cpp module and every GGUF or ONNX load died at import).
+- New `model-service/test/infrastructure/adapters/inbound/fastapi/routes/test_diarize.py` covers the route end-to-end against a fake PyannoteLoader-shaped diarizer (happy path, 404 missing audio, 500 missing task, 500 load failure, 500 diarize failure, warning when hints supplied, no warning when hints omitted): 7/7 passing.
+- New `server/test/routes/videos/transcribe.test.ts` covers the backend forwarder: 404 missing video, plain transcription forwards to /transcribe only, enableDiarization forwards to both and assigns max-overlap speaker per segment, diarization 500 falls back to plain transcript with a warn, transcription 500 returns `MODEL_SERVICE_ERROR` with the upstream text, timeout returns 504 with `MODEL_SERVICE_TIMEOUT`, unreachable returns 502 with `MODEL_SERVICE_UNREACHABLE`, the typed error classes are distinguishable: 8/8 passing.
+- New `annotation-tool/src/components/video/TranscriptPanel.test.tsx` covers the new UI component (header summary surfaces language / duration / ASR / processing time, speaker legend friendly-name mapping `SPEAKER_00` to `Speaker 1`, MM:SS timestamp formatting, onSeek wiring, active-segment data attribute moves on rerender, per-segment speaker chip uses friendly name, empty-speakers omits chips entirely, whitespace renders italic `(silence)` placeholder, diarization metadata surfaces): 9/9 passing.
+- Tier 2 integration spec `annotation-tool/test/e2e/integration/model-service/real-model-inference.spec.ts` gains a Transcribe Audio user journey that drives the toolbar button against the real CPU model-service stack.
+
+#### Tour-Demo Mode (MSW Model-Service Interception)
+
+- New build flag `VITE_TOUR_DEMO=1` ships an MSW browser worker that intercepts every model-service-bound route the tours touch (`/api/ontology/augment`, `/api/videos/:videoId/detect`, `/api/videos/:videoId/track`, `/api/videos/:videoId/transcribe`, `/api/videos/:videoId/summarize`, `/api/claims/extract`), so the CVPR booth machine no longer needs a live model service to demonstrate detection / tracking / ontology augmentation / transcription / diarization / VLM summarization / claim extraction. The dynamic import sits behind a statically-analysable env-var guard, so the entire `src/mocks/tourDemo` subtree tree-shakes out of production builds where the flag is off.
+- Every fixture is sourced from the deployment's `TourContentBundle` (the same `/tour-content.json` an admin already edits to retheme tours), so swapping the domain re-themes the mocked model outputs in the same edit pass. Three new sub-slot interfaces extend `TourContentBundle`: `TourMockOntologySuggestion` for Tour 3's AI augmenter, `TourMockDetectionProposal` + `TourMockTrackingKeyframe` for Tour 6's detection + tracker, `TourMockTranscriptSegment` + `TourMockClaimAtom` for Tour 7's transcribe + summarize + claim-split flow.
+- Every fixture is intentionally "almost-there": the analyst polishes the model output to its final microvent form, not the other way around. Five ontology suggestions where the visitor accepts one and rejects four; four detection proposals (two genuine high-confidence containers, two spurious low-confidence boxes the analyst rejects) hand-grounded against an extracted frame at t=8s of the ABC7 Port of Long Beach cargo-fall clip; a 30-frame tracker trajectory with a clean first-22 prefix and a flagged last-8 drift the analyst re-anchors; a four-segment two-speaker transcript with one low-confidence segment carrying a deliberate single-word recognition error AND a wrong speaker assignment; a VLM summary synthesised from the eventual atomic claims with one believable factual error ("above the right-field line" vs the final "behind home plate"); a non-atomic compound claim with a `needsSplit` flag + three `splitTargets` the analyst splits into atomic rows via the claim editor.
+- `TourMockDetectionProposal` carries `acceptAsLabel` + `acceptAsWikidataId` so each suggested type is grounded in Wikidata (e.g. `container` Q987767, water Q283, crane Q178692). The `Detection` interface in `api/client.ts` gains two optional tour-demo-only fields; the candidates list renders a "Snap to type" chip (`data-testid="suggested-type-chip"`) gated on `acceptAsLabel` being truthy.
+- Simulated latency 800-1800 ms in `handlers.ts` matches a warm CPU-mode model-service so the visitor sees a real-feeling "computing" beat without the booth needing a GPU stack.
+- New `docker-compose.tour-demo.yml` override flips `VITE_TOUR_DEMO=1` at frontend build time so the booth operator engages tour-demo mocking via `docker compose -f docker-compose.yml -f docker-compose.tour-demo.yml up -d --build` without touching the base compose file or the Dockerfile.
+- New smoke specs:
+  - `test/e2e/smoke/tour-demo-msw.spec.ts` (2 tests, 17.6s) asserts every one of the six routes is intercepted, validates each fixture against the bundle defaults, and checks simulated latency lands in the 600-2400 ms window
+  - `test/e2e/smoke/tour-demo-launch-all.spec.ts` (12 tests including 10 tour launches) walks every built-in tour through `window.__foveaTour.launch()` and asserts each one resolves true + becomes the active tour + abandons cleanly
+  - `test/e2e/smoke/tour-demo-spotlight-pause-resume.spec.ts` (4 tests, 5.4s) re-asserts the engine wiring against the MSW-mocked demo build: spotlight overlay paints (4 backdrop + 1 outline + 4 corner = 9 rects), Pause unmounts and surfaces the resume pill, Resume re-mounts at the same step, paused state survives a hard reload
+
+#### Public Tour Catalogue and New Tours for demo.fovea.video
+
+- New `src/pages/TourCataloguePage.tsx` is a public 4-column tour catalogue that mounts as the `/` route when the bundle is built with `VITE_DEMO_PUBLIC=1`. The page surfaces the FOVEA wordmark + the "Flexible Ontology Visual Event Analyzer" tagline + a Sign in link top-right, and renders 12 tour cards in a responsive grid (sm: 2, lg: 4 columns) so the catalogue lays out as a 4×3 grid on a landscape booth screen and stacks cleanly down on mobile QR scans. `App.tsx` wires the flag so the authenticated app moves under `/app/*` and the public catalogue claims `/`.
+- Two new tours land in the catalogue:
+  - **Tour 0 (welcome.ts)** "Welcome to FOVEA": three-step orientation that opens the catalogue (FOVEA backronym reading + the four-layer model + the analyst-polishes-model-output editing-loop framing all in two minutes). Content-neutral; no bundle slot.
+  - **Tour 11 (keyframes-interpolation.ts)** "Working with longer videos: keyframes and interpolation": five-step temporal-modeling deep-dive that closes the grid (sparse keyframes, linear/Bezier interpolation curve, motion-path overlay, same data structure model and human edit).
+- `scripts/index.ts` orders Welcome first followed by the four-layer arc, the model-assisted flows, the collaboration / admin / import-export operator surfaces, and keyframes-interpolation last.
+
+#### Auth-Pages Branding and Admin-Only Account Policy
+
+- LoginPage and RegisterPage gain the official `fovea-logo.svg` (size-12 above the wordmark), the uppercase `FOVEA` h1 with `tracking-wide` matching the sidebar wordmark, and the "Flexible Ontology Visual Event Analyzer" tagline. The generic Lucide `LogIn` / `UserPlus` icons are dropped.
+- LoginPage surfaces a clear Alert with a mailto when `authStore.allowRegistration` is false: "Self-registration is disabled on this deployment. To request an account, email admin@fovea.video." Replaces the silent dead-end where the Register link just vanished. The admin console's `CreateUserDialog` is independent of the registration toggle, so the operator can still mint accounts trivially after the demo deploy.
+- LoginPage post-login redirect respects `VITE_DEMO_PUBLIC=1` and lands on `/app` instead of looping back to the catalogue at `/`.
+
+#### Demo Deployment Plumbing (deploy.yml demo_mode + nginx.demo.conf)
+
+- New `workflow_dispatch` input `demo_mode` (default false) on `.github/workflows/deploy.yml`. When set true the on-server env patch flips `ALLOW_REGISTRATION=false`, sets `VITE_TOUR_DEMO=1` + `VITE_DEMO_PUBLIC=1`, copies `annotation-tool/nginx.demo.conf` over `annotation-tool/nginx.conf`, skips `docker compose up model-service` entirely (the frontend MSW worker intercepts the six model-service routes so there is nothing to start), and explicitly limits the recreate to `backend` + `frontend` so the missing model-service does not block.
+- New `annotation-tool/nginx.demo.conf` ships two `limit_req_zone` scopes (login_zone 30r/m burst 10, register_zone 5r/m burst 3 as defence-in-depth even though registration is disabled), `Cache-Control: no-store` on `/tour-content.json` so admin edits land immediately, `Cache-Control: public, immutable` on `/assets/*`, and 60 s cache on `/mockServiceWorker.js` so a worker-version bump propagates fast without re-downloading on every scan.
+- `docker-compose.yml` frontend service threads `VITE_TOUR_DEMO` + `VITE_DEMO_PUBLIC` build args with empty defaults so production builds without the demo flag tree-shake the entire `src/mocks/tourDemo` subtree out of the bundle.
+- New runbook at `docs/development/demo-fovea-deployment.md` documents the workflow input, the env-var deltas, the post-deploy curl smoke (including a login rate-limit burst check), the admin-console account-mint flow, and how the booth-laptop `docker-compose.tour-demo.yml` stack relates to the production demo deploy.
+
+#### Tour Content (Twelve Tours, All New in 0.4.0)
+
+- Tour 3 "Grow your ontology from Wikidata" covers BOTH manual type creation AND Wikidata import in a single walkthrough so the visitor sees the contrast directly: steps 1-2 take the manual-entry path (`type-editor-mode-manual` then `type-editor-mode-wikidata`); steps 3-8 continue the Wikidata flow. New `data-tour-id` anchors on `shared/ModeSelector.tsx` (manual / copy / wikidata) make the modes addressable.
+- Tour 5 "The world layer" walks all four world-object editors (entity / location / event / time) with narration that calls out what is distinctive about each (entity binds a TYPE to a thing, location adds coordinates and a map pin, event has start/end + role bindings the entity editor does not, time has the start/end/fuzzy controls), including an event-instance step.
+- Tour 2 "Building a persona's ontology" relation-type-editor narration contrasts the source-types and target-types pickers against the entity / event / role type editors.
+- Tours 3, 6, 7 narrate the accept-some / reject-some / inline-edit / split-compound-claim editing loop the demo is built around. Tour 3 augmenter-results includes accept-and-rename steps (accept the close-but-not-quite "Ball grab" suggestion and rename it to lowercase `ball-grab`, reject the four distractors). Tour 6 candidates-list + tracking-results-panel includes accept-two / reject-two / snap-to-general-type-with-Wikidata-Q987767 / re-anchor-tracker-at-frame-214 steps. Tour 7 transcript-viewer + video-summary-editor + claims-extraction-dialog includes inline-edit `snatched` to `grabbed`, flip the speaker chip, correct `above the right-field line` to `behind home plate`, split the non-atomic compound claim into three atomic rows.
+- Tour 7 carries a two-step prelude visiting the on-demand Transcribe Audio button + TranscriptPanel dialog before the saved-summary `audio-config-panel` + `transcript-viewer` flow.
+
+#### Type Strictness on the New Model-Service Inbound Routes
+
+- `model-service/src/infrastructure/adapters/inbound/fastapi/routes/transcribe.py` (new in 0.4.0 for the audio-transcription path): `result: TranscriptionResult` (no `Any`); model is typed `AudioTranscriptionLoader` via `cast`. Empty-string language is normalised to `None` so the auto-detect path is not rejected by faster-whisper.
+- `model-service/src/infrastructure/adapters/inbound/fastapi/routes/diarize.py` (new in 0.4.0 for the speaker-diarization path): model is typed via a local `Protocol` (`_DiarizationModel`) with the single `diarize(audio_path) -> DiarizationResult` contract, so the route does not couple to `PyannoteLoader` as a concrete class. `result: DiarizationResult` (typed dataclass with `SpeakerSegment` members).
+
+#### Operations Section Expanded From One Runbook to Six Pages
+
+- `docs/docs/operations/` grows from the single `demo-fovea-deployment.md` runbook to six pages: `production-deployment.md` (six-container docker-compose stack first-time setup, port/data-volume topology, what-to-expose checklist), `monitoring.md` (OTel trace export, the Prometheus counters and histograms `server/src/metrics.ts` emits, `/api/health` readiness probe, model-service `/health`, a minimal alert set, what is intentionally not instrumented), `backup-restore.md` (`pg_dump` cadence + storage-volume rsync, quarterly DR drill), `upgrades.md` (patch / minor / major paths, Prisma migrate deploy, permission-catalogue re-seed), `troubleshooting.md` (failure modes organized by user-visible symptom), plus the existing `demo-fovea-deployment.md`. Each page is rooted in what the live code actually carries (env vars from `fetchModelService.ts`, metrics from `metrics.ts`, etc.).
+
+#### Annotation Timeline Rewrite
+
+- Rewrote the annotation timeline as a composition of small DOM primitives under `src/components/annotation/timeline`
+- `TimelineRoot` orchestrates a fixed-width track-header column and a flexible right column containing `TimelineRuler`, `TimelinePlayhead`, and stacked `TimelineTrack` lanes
+- `TimelineTrack` lanes render `InterpolationSegment` gradients and `KeyframeMarker` diamonds with selection, current, and locked states
+- `TransportBar` carries the SMPTE timecode readout, keyframe-edit cluster, and zoom controls
+- `useTimelineViewport` manages `ResizeObserver`-backed container width plus zoom clamped between fit-to-view and `MAX_ZOOM`
+- `useKeyframeDrag` installs window-level pointer listeners to reposition keyframes with obstruction nudging
+- `useTimelineKeyboard` wires J/K/L playback shortcuts and the `ShortcutPalette` surfaces the binding table via `?`
+- `TimelineComponent.tsx` remains as a drop-in shim that threads `useMoveKeyframe` through
+
+#### Bounding-Box Editing Polish
+
+- `BoundingBoxHUD` renders a float W×H and x,y readout with monospace tabular-nums in a `foreignObject` anchored below the box during drag/resize
+- `useBoundingBoxKeyboard` hook nudges the active box by 1 px (10 px with shift) on arrow keys and calls `onUpdate` + `onEditComplete` through the existing persistence pipeline
+- Shift-hold aspect-ratio lock for corner resize handles honours whichever axis drifted farther and anchors the opposite edge so the box grows from its corner
+
+#### Backend Reliability
+
+- `services/system-config-propagator.ts` factors model-service propagation out of the admin-config route
+- Server startup now auto-replays every persisted `SystemConfig` row so a fresh model-service picks up admin settings without operator intervention
+
+#### Cross-User Import Regression Coverage
+
+- Regression suite in `server/test/integration/cross-user-import-rich-fixture.test.ts` against `server/test/fixtures/cross-user-import-rich-export.jsonl` (the richest of the seven annotator exports uploaded to #121, carrying 20 personas / 20 ontologies / 79 entities / 136 summaries across ~96 distinct videos / 621 claims / 9 object annotations). The test imports the fixture into a fresh user via `reseedOwnershipBaseline` and walks four assertions sourced directly from the screenshot on the reopened #100: (a) every imported summary's `personaId` dereferences via `GET /api/personas/:id` with a 200 (a 404 here is the user-visible 'Persona &lt;uuid&gt; not found' banner in the Edit Video Summary dialog), (b) every dereferenced persona is owned by the importer (cross-checked against `GET /api/personas`), (c) no `summary.personaId` equals one of the original exporter-side persona ids (i.e. the remap actually rewrote it, not just preserved it), (d) every imported claim's `summaryId` resolves to a summary owned by the importer, with round-trip claim and annotation counts matching the fixture exactly. The suite carries a 90_000ms per-test timeout to accommodate the Clean Architecture indirection on top of CASL's per-call overhead.
+- `server/test/integration/cross-user-import-real-fixture.test.ts` now also walks `GET /api/personas/:id` with the summary's `personaId` after import and intersects the returned id against the requester's `GET /api/personas` list. The previous test only asserted the summary row carried *a* personaId without verifying the dereference, leaving the post-import Edit Video Summary path (the exact API the bug screenshot in #100 surfaces) untested.
+- Unit suite `test/services/import-handler-remap-ids.test.ts` (13 tests, no database) exercises every surface of the new id-shape substitution against a synthetic `idMap`: whole-string ids in arbitrary field names, inline mentions in `claim.text` / `claim.comment`, every free-text surface (persona `informationNeed` / `details`, ontology type descriptions, world object name / description, summary text, claim-relation description), nested structures through arrays and gloss `items`, `*Ids` arrays, collection `members` arrays, multiple ids in one string, ids embedded inside larger tokens (`claim_<id>_v2`, `entity-<id>.png`, `url=…/<id>?q=1`), uppercase / mixed-case ids, JSON-encoded blobs that carry ids, ids not in `idMap` left untouched, non-id strings unchanged, empty-resolutions no-op, and primitives (number / boolean / null) untouched. The integration comparator in `test/integration/import-export-fidelity.test.ts` now treats `members` as id-like so the round-trip diff stops asserting that reference arrays survive byte-for-byte; the round-trip behaviour itself is unchanged.
+
+### Changed
+
+#### UI Framework Migration (MUI to shadcn-ui)
+
+- Migrated the entire annotation-tool frontend from Material UI to shadcn-ui
+- Replaced MUI `Box`, `Typography`, `Button`, `Alert`, `Accordion`, `Dialog`, `Menu`, and form primitives with shadcn equivalents
+- Switched from Emotion-based theming to Tailwind CSS v4 with a Fovea-specific design-token layer
+- Replaced MUI icons with Lucide React icons via a barrel export
+- Rebuilt the Layout around the shadcn sidebar composition pattern with fixed dialog overflow handling
+- Fixed sidebar toggle, narrowed the dropdown menu, resolved tab overflow, and reduced the sidebar width
+- Renamed **Ontology Builder** to **Persona Builder** with updated icons and keyboard shortcut
+- Updated all component tests for the new shadcn DOM structure, ARIA roles, and named exports
+
+#### Docusaurus Reorganization
+
+- Comprehensive Docusaurus reorganization at `docs/docs/`: industry-standard split into Tutorial / Guide / Concepts / Reference / Operations / Project; orphan markdown at the doc root deleted or moved into the published tree. The Docusaurus site continues to serve at `fovea.video` (landing renders at `/`, docs tree at `/docs/*`).
+- Version-neutral docs sweep: every `v0.X.Y` / `since v0.X.Z` / `carried from v0.X` reference in the published docs is scrubbed (the workspace `CHANGELOG.md` is the only place version numbers appear). Stability and contributing pages describe the maintenance-line policy without enumerating which version is which.
+- House style sweep: em-dashes (`—` / `–`) removed from every doc and replaced with semicolons / commas / hyphens; all docs use American spelling (`organize`, `behavior`, `color`, `catalog`, `license`, `flavor`, `whilst -> while`, ...). The `guide/tour-catalogue.md` file is renamed to `guide/tour-catalog.md` (with the sidebar and cross-page links updated).
+
+#### Tooling and Build
+
+- Monorepo switched to a pnpm workspace with ergonomic dev commands
+- All Dockerfiles updated for the pnpm workspace layout
+- `jsdom` pinned to `^26.1.0` for Node 18 ESM compatibility
+
+#### Cross-User Import Remap Made Structure-Agnostic
+
+- Replace the field-name allowlist inside `remapObjectIds` with a structure-agnostic substitution built from the cross-user `idMap` itself. The prior fix on this branch (cherry-picked from v0.3.2) added an inline-UUID regex pass as a fallback after the existing `id` / `*Id` / `*Ids` / gloss-`content` branches, but the allowlist still hid two correctness gaps: (1) `entityCollection.members` / `eventCollection.members` / `timeCollection.members` are id-reference arrays that the allowlist never matched (they do not end in `Ids`), so after a cross-user import every collection silently held pre-import ids pointing at entities that no longer existed in the importer's world; (2) any future id-bearing field whose name did not match the allowlist patterns would have the same problem. `remapIds` now lowercases `idMap` keys on insert, builds a single case-insensitive matcher from those keys sorted longest-first and RegExp-escaped, and applies it to every string value in the payload tree. Whole-string id values, ids embedded in surrounding prose, ids in arbitrary array positions (`members`, `entityIds`, ordinary string arrays), GlossItem `content`, and ids inside JSON-encoded substrings are all rewritten by the same pass; substrings whose lowercased form is not in `idMap` pass through unchanged, so the substitution is a strict no-op outside the cross-user path. Reported as a continuation of #121.
+
+### Removed
+
+- `@mui/material`, `@mui/icons-material`, `@mui/x-*`, `@emotion/react`, and `@emotion/styled` dependencies
+- Unused `DropdownPaper` helper left over from the MUI migration
+
+### Fixed
+
+#### LlamaCpp VLM Sync-Path Fix
+
+- `LlamaCppVLMLoader.load` / `.generate` / `.unload` are no longer declared `async def`. The underlying llama_cpp.Llama API is blocking, the only caller chain (VLMLoaderAdapter to use_case.summarize to route) is sync top-to-bottom, and the prior async signatures silently discarded their bodies: `VLMLoaderAdapter.load` flipped `_loaded` to True without actually loading, `.generate` returned `str(coroutine)` which produced "&lt;coroutine object LlamaCppVLMLoader.generate at 0x…&gt;" as the summary text the user observed, and `.unload` never released memory. Dropping the async keyword from all three methods is the minimal fix.
+
+#### House Style on User-Facing Strings
+
+- Em-dashes scrubbed out of every user-facing `narration` / `recap` / `description` / `title` string across the twelve tour scripts; replaced with semicolons or hyphens contextually. Same sweep over `src/tours/content/types.ts` + `src/tours/content/microvent.ts` + `src/mocks/tourDemo/handlers.ts` + `src/mocks/tourDemo/browser.ts` comments and console.info.
+
+#### Documentation Drift Audit (155 Confirmed Findings Against the Live Codebase)
+
+- Two-round audit/fix workflow grounds the docs against the live codebase: 67 Opus auditors checked every doc claim against `server/src/`, `model-service/src/`, `annotation-tool/src/`, `docker-compose*.yml`, and `model-service/config/models*.yaml`; an adversarial Opus verifier defaulted to rejection per finding and confirmed 155 of 162 candidate findings; 50+ Opus fixers + per-file verifiers applied the fixes across two rounds + a surgical manual pass for the residual five files. The 13 cross-cutting patterns landed: Grafana host port corrected (3010 -> 3002 across 4 files), fabricated `assertX-Owned` ownership-helper names replaced with the actual CASL `request.ability.can()` pattern (4 files), fusion-strategy enum corrected from invented `parallel/audio-first` to the real `sequential/timestamp_aligned/native_multimodal/hybrid` (3 files), fabricated export-type discriminators (`worldEntity`, `worldEvent`, `videoSummary`) replaced with the real `persona/ontology/entity/event/time/*_collection/relation/summary/claim/claim_relation/annotation/metadata` set (2 files), `PUT /api/ontology` body shape corrected to the bulk envelope plus per-persona `PUT /api/personas/:id/ontology` (3 files), OTel metric names corrected from the invented `*_ms` suffix to the real dotted form (4 files), nonexistent env vars and CLI scripts in the operations docs replaced with the real ones (`JWT_SECRET` -> `SESSION_SECRET`, `MODEL_CACHE_DIR` -> `HF_HOME`, `npm run seed:permissions` + `npm run admin:create` -> `npm run seed` + `ADMIN_PASSWORD`; the OIDC/JWT story dropped entirely since auth is cookie-session), "Ontology Builder" UI references renamed to the now-shipped "Persona Builder" and the documented keyboard shortcut rebound from `o` to `p` (2 files), `MODEL_SERVICE_TIMEOUT_*` env var keys aligned with `fetchModelService.ts` (`THUMBNAILS_MS`, `EXTRACT_CLAIMS_MS`; nonexistent `TRACKING_MS` removed), `annotation linkType` migration timestamp corrected (3 files), WorldState described as `@@unique([userId, projectId])` rather than `@unique(userId)`, model-service API reference prefixed with `/api/` on every endpoint to match `routes/__init__.py`, and the `reference/model-loaders.md` framework column rebuilt from `models.yaml` so the ~25 mislabeled `transformers` rows now show their real `ultralytics/pytorch/sam3/whisper/whisperx/nemo_canary/nemo_parakeet/pyannote` labels. Florence-2 added to `object_detection`, the nonexistent `Fallback chain` section deleted, and the stale "Anchors not yet landed" block in `reference/tour-anchors.md` replaced with the 15 already-shipped anchors. Final docs build is clean (0 errors, 0 broken links).
+
+#### Real Model-Service Stack Bugs from Tier 2 Verification
+
+- `docker-compose.e2e.yml` model-service service gains the `./test-videos:/test-videos:ro` mount that the base compose file was missing. Without it the path sanitiser in `model-service/src/infrastructure/adapters/outbound/video/processor.py` defaulted `VIDEO_DATA_ROOT` to `/videos` and rejected every `/test-videos/*` path the backend forwarded with "Video file not found" even when the file existed on every other container.
+- `docker-compose.e2e.real-models.yml` now pins `MODEL_CONFIG_PATH=/config/models-cpu.yaml` because the base `docker-compose.e2e.yml` hardcodes `/config/models.yaml` (the GPU defaults) regardless of the `DEVICE` arg. The CPU stack was being pointed at a GPU-required selection (qwen-3-vl-8b at 9GB VRAM via sglang) and crashed on first model load.
+- `docker-compose.e2e.real-models.yml` adds `CUDA_VISIBLE_DEVICES=""` to keep CPU-only hosts off `libcudart.so.13`. Without it pyannote.audio and the Silero VAD weights transitively pull torch with CUDA runtime bindings, and the warmup of `speaker_diarization` + `voice_activity_detection` failed with "libcudart.so.13: cannot open shared object file" on CPU-only runners.
+
+#### Models Catalogue Tightening
+
+- `model-service/config/models-cpu.yaml` selects `faster-whisper-tiny` (Systran/faster-whisper-tiny, 39 MB) as the default audio-transcription model so the CPU image carries a model that actually loads on a developer laptop without HuggingFace rate-limiting.
+- The same file sets `warmup_on_startup: true` and bumps `max_video_frames` to 3 for the CPU profile so the booth visitor's first inference is responsive.
+- Architecture catalogue gains the missing markers (`ClaudeVisionAPI`, `OpenAIVisionAPI`, `GeminiVisionAPI`, `GrokVisionAPI`, `SAM3Detection`, `PyannoteDiarization`, `SileroVAD`) the five per-family registry-migration subagents legitimately did not cover; every YAML option that referenced them now declares its architecture block, and the registry exhaustiveness tests are tightened to recognise the new unregistered-by-design markers.
+- `ModelConfig.architecture` is tightened from `Architecture | None` to required `Architecture` across both ModelConfig surfaces, with the field declared between `framework` and `vram_gb` so the discriminated-union TypeAdapter raises at config load on a missing or malformed architecture block.
+
+#### Claim Text No Longer Carries UUIDs From Reference-Kind Gloss Items
+
+- `ClaimEditor.handleSave` (`annotation-tool/src/components/claims/ClaimEditor.tsx`) now resolves gloss items to human-readable labels when synthesizing `claim.text`, via the existing `glossToText` helper from `annotation-tool/src/utils/glossUtils.ts`. The previous handler did `const text = gloss.map(item => item.content).join('')` which works for `text`-kind items (where `content` is the user-typed string) but writes the raw UUID into `text` for every `typeRef` / `objectRef` / `annotationRef` / `claimRef` item, because `GlossItem.content` stores the referenced thing's id. The symptom showed up in the JSONL export, where `claim.text` read like "The &lt;player-uuid&gt; hit the &lt;ball-uuid&gt;" instead of "The Player 9 hit the ball". `glossToText` resolves `typeRef` ids against the active persona ontology (entities / events / roles / relationTypes) and `objectRef` ids against world state (entities / events / times), with a fall-back to the raw id only when a lookup misses. The same naive concatenation is replaced with `glossToText` in three preview surfaces that had the same bug at display time: `ClaimRelationsViewer.getClaimText` (source / target claim previews in the relations panel), `ClaimRelationEditor` (relation-type-dropdown preview plus source / target previews; gains an optional `personaId` prop threaded from `ClaimsViewer`), and `ImportDialog` (entity-row preview during persona import; resolves `typeRef` ids against the source persona's ontology).
+- The unused name-less `convertTypeRefsToText` helper in `server/src/lib/reference-cleanup.ts` is deleted along with its five test cases. The production type-deletion path (`server/src/routes/personas.ts` `DELETE /api/personas/:personaId/ontology/{entities,events,roles,relation-types}/:typeId`) routes through `updateGlossesInTypes` -> `convertTypeRefsToTextWithName`, which uses the type name. The name-less variant had zero production callers; its replacement-text content of `item.content` (the raw UUID) would have reintroduced the same UUID-in-text bug if anyone had reached for it next.
+
+#### Cross-User Import Transaction Timeout
+
+- `ImportHandler.executeImport` now configures the Prisma atomic-mode transaction with `{ maxWait: 10_000, timeout: 300_000 }`. The default 5_000ms interactive-transaction timeout is exceeded by realistic cross-user imports; a payload with ~20 personas / ~100+ summaries / hundreds of claims times out with `Transaction already closed` partway through because every nested write goes through the CASL ability check and the Clean Architecture indirection. Without the bump the whole import rolls back and the user sees a 500 from `POST /api/import`; with it, the import completes against realistic payload sizes. Surfaced by the forward-port of the rich regression fixture.
+
+#### Schema Hardening
+
+- Replaced vitest-broken `Type.Union` nullable response schemas on `/api/me/preferences` with the `fast-json-stringify`-safe `Type.Unsafe` array-type pattern so null values serialize correctly.
+- Resolved `SystemConfig` audit `updatedByUserId` through the users table so phantom test-bypass ids and real deleted-user races no longer violate the FK.
+
+#### Shadcn Migration Followups
+
+- `ClaimEditor` Claiming Event / Time / Location dropdowns now populate from world state instead of showing the None-only placeholder menus the shadcn migration left behind (events from `useEvents()`, times from `useTimes()`, locations from `useEntities()` filtered to entities tagged with a `locationType` field).
+- `ObjectWorkspace`'s `object.duplicate` command now actually duplicates the selected world object (entity / event / location / time / collection) instead of `alert('Duplicate object not yet implemented')`, via a pure `buildDuplicatePayload` helper that strips server-managed and Wikidata-provenance fields and appends a `(copy)` suffix.
+- `OntologyWorkspace`'s `ontology.duplicateType` command now actually duplicates the selected ontology type (entity / role / event / relation) instead of `alert('Duplicate type not yet implemented')`, via a pure `buildDuplicateOntologyType` helper following the same shape as the world-object duplicator.
+- `AnnotationWorkspace`'s command-context `drawingMode` flag now reflects the actual `annotationUiStore.drawingMode` value instead of being hardcoded `false`, so when-clauses that gate on `drawingMode` fire correctly while a draw-mode button is active.
+- `ImportResultDialog`'s orphan-skipped banner now carries the `data-testid="import-orphan-skipped-banner"` attribute that the corresponding E2E spec (`test/e2e/regression/export-import/orphan-skipped-banner.spec.ts`) was already probing for, and the banner prose now matches the E2E spec's `/missing referenced data/i` assertion. The unit-level rendered-output test stays skipped pending the workspace-wide pnpm + jsdom React-dedup fix.
+- `videoStorage.getVideoUrl` now fails fast with an actionable error message when `CDN_ENABLED=true` and `CDN_SIGNED_URLS=true` instead of silently returning an unsigned URL (the placeholder behaviour produced 403 cascades through signed CloudFront distributions); operators must either set `CDN_SIGNED_URLS=false` (public-CDN-in-front-of-public-bucket) or wire up `@aws-sdk/cloudfront-signer`.
+- Shimmed `PointerEvent` + `Element` pointer-capture in `test/setup.ts` so Base UI's checkbox/dialog handlers no longer throw `PointerEvent is not defined` under jsdom.
+- Updated `TimelineComponent` tests to pass the full `TimelineComponentProps` via a `makeProps` helper and query buttons by `aria-label` instead of the canvas-era emoji placeholders.
+- Swapped the workspace integration test's `querySelector('canvas')` probe for `getByLabelText('Video annotation timeline')`.
+- Annotation-drawing duplication during keyframe edits.
+- Full `annotation-tool` vitest suite now reports 102 files / 1698 tests pass (5 canvas-era tombstones skipped with a pointer to the shadcn rewrite, 0 failed).
+
+## [0.3.3] - 2026-05-13
+
+Forward-ports the v0.1.10 / v0.2.3 generalisation of the cross-user id remap to the v0.3.x line. The bug taxonomy and user-visible behaviour is the same; the integration is unchanged from v0.2.3 since `remapObjectIds` lives outside both the CASL surface introduced in v0.2.0 and the Clean Architecture refactor introduced in v0.3.0.
+
+### Changed
+
+- Replace the field-name allowlist inside `remapObjectIds` with a structure-agnostic substitution built from the cross-user `idMap` itself. The v0.3.2 fix added an inline-UUID regex pass as a fallback after the existing `id` / `*Id` / `*Ids` / gloss-`content` branches, but the allowlist still hid two correctness gaps: (1) `entityCollection.members` / `eventCollection.members` / `timeCollection.members` are id-reference arrays that the allowlist never matched (they do not end in `Ids`), so after a cross-user import every collection silently held pre-import ids pointing at entities that no longer existed in the importer's world; (2) any future id-bearing field whose name did not match the allowlist patterns would have the same problem. `remapIds` now lowercases `idMap` keys on insert, builds a single case-insensitive matcher from those keys sorted longest-first and RegExp-escaped, and applies it to every string value in the payload tree. Whole-string id values, ids embedded in surrounding prose, ids in arbitrary array positions (`members`, `entityIds`, ordinary string arrays), GlossItem `content`, and ids inside JSON-encoded substrings are all rewritten by the same pass; substrings whose lowercased form is not in `idMap` pass through unchanged, so the substitution is a strict no-op outside the cross-user path. Reported as a continuation of #121.
+
+### Added
+
+- Unit suite `test/services/import-handler-remap-ids.test.ts` (13 tests, no database) exercises every surface of the new id-shape substitution against a synthetic `idMap`: whole-string ids in arbitrary field names, inline mentions in `claim.text` / `claim.comment`, every free-text surface (persona `informationNeed` / `details`, ontology type descriptions, world object name / description, summary text, claim-relation description), nested structures through arrays and gloss `items`, `*Ids` arrays, collection `members` arrays, multiple ids in one string, ids embedded inside larger tokens (`claim_<id>_v2`, `entity-<id>.png`, `url=…/<id>?q=1`), uppercase / mixed-case ids, JSON-encoded blobs that carry ids, ids not in `idMap` left untouched, non-id strings unchanged, empty-resolutions no-op, and primitives (number / boolean / null) untouched. The integration comparator in `test/integration/import-export-fidelity.test.ts` now treats `members` as id-like so the round-trip diff stops asserting that reference arrays survive byte-for-byte; the round-trip behaviour itself is unchanged.
+
+## [0.3.2] - 2026-05-11
 
 ## [0.3.1] - 2026-05-04
 
@@ -222,7 +422,6 @@ The fixes below are conceptually the same as v0.1.8 but are wired through CASL r
 - All data-mutating routes now populate `createdByUserId` (annotations) and `createdBy` (summaries, claims, claim relations) from the authenticated session, never from the request body
 - All Prisma JSON field handling uses runtime `toJson()` conversion and `Prisma.JsonObject` type guards instead of type assertion casts
 
-
 ## [0.1.7] - 2026-04-15
 
 ### Fixed
@@ -391,6 +590,7 @@ Initial release of Fovea, the Flexible Ontology Visual Event Analyzer.
 - VideoRepository pattern for database access
 - Standardized storage configuration with STORAGE_PATH
 
+[0.4.0]: https://github.com/parafovea/fovea/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/parafovea/fovea/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/parafovea/fovea/compare/v0.1.7...v0.2.0
 [0.1.7]: https://github.com/parafovea/fovea/releases/tag/v0.1.7

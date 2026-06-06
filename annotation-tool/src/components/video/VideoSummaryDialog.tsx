@@ -1,18 +1,25 @@
+/**
+ * Dialog for editing video summaries with persona selection.
+ */
+
 import { useState, useEffect, useRef } from 'react'
+
 import {
   Dialog,
-  DialogTitle,
   DialogContent,
-  DialogActions,
-  Button,
-  FormControl,
-  InputLabel,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
+import { Label } from '@/components/ui/label'
+import {
   Select,
-  MenuItem,
-  Box,
-  Typography,
-} from '@mui/material'
-import { Close as CloseIcon } from '@mui/icons-material'
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import VideoSummaryEditor, { VideoSummaryEditorRef } from './VideoSummaryEditor'
 import { usePersonas } from '@store/queries'
 
@@ -49,58 +56,57 @@ export default function VideoSummaryDialog({
   }, [open, initialPersonaId])
 
   return (
-    <Dialog
-      open={open}
-      onClose={onClose}
-      maxWidth="md"
-      fullWidth
-      PaperProps={{
-        sx: {
-          minHeight: '60vh',
-          maxHeight: '80vh',
-        }
-      }}
-    >
-      <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Typography variant="h6">Edit Video Summary</Typography>
-        <Button
-          onClick={onClose}
-          startIcon={<CloseIcon />}
-          size="small"
-          color="inherit"
-        >
-          Close
-        </Button>
-      </DialogTitle>
-      
-      <DialogContent sx={{ overflow: 'visible' }}>
-        <Box sx={{ mb: 3, mt: 3 }}>
-          <FormControl fullWidth size="small">
-            <InputLabel id="summary-persona-select-label">Select Persona</InputLabel>
-            <Select
-              labelId="summary-persona-select-label"
-              id="summary-persona-select"
-              value={selectedPersonaId || ''}
-              label="Select Persona"
-              onChange={(e) => setSelectedPersonaId(e.target.value || null)}
-            >
-              <MenuItem value="" disabled>
-                <em>Select a persona to create a summary</em>
-              </MenuItem>
+    <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) onClose() }}>
+      <DialogContent className="sm:max-w-2xl min-h-[60vh] max-h-[80vh]">
+        <DialogHeader>
+          <DialogTitle>Edit Video Summary</DialogTitle>
+        </DialogHeader>
+
+        <div className="mb-6 mt-6">
+          <Label htmlFor="summary-persona-select" className="mb-2 block">Select Persona</Label>
+          <Select
+            value={selectedPersonaId || ''}
+            onValueChange={(value) => setSelectedPersonaId(value || null)}
+          >
+            <SelectTrigger className="w-full" id="summary-persona-select">
+              {/* Explicit child override: the base-ui Select reads its
+                  trigger label from a matching SelectItem ref AFTER the
+                  Content portal mounts. On first paint the dialog opens
+                  with `selectedPersonaId` already set but
+                  `<SelectContent>` is closed, so no SelectItem has
+                  reported its label yet — base-ui falls back to rendering
+                  the raw `value` (a UUID) until the menu is opened once.
+                  Resolving the label here from the personas list and
+                  passing it as the SelectValue child overrides that fall-
+                  back so the dropdown shows the persona's name on first
+                  paint, not its UUID. */}
+              <SelectValue placeholder="Select a persona to create a summary">
+                {(() => {
+                  const p = personas.find((x) => x.id === selectedPersonaId)
+                  return p ? `${p.name} (${p.role})` : null
+                })()}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              {personas.length === 0 && (
+                <SelectItem value="__disabled__" disabled>
+                  No personas available
+                </SelectItem>
+              )}
               {personas.map((persona) => (
-                <MenuItem key={persona.id} value={persona.id}>
-                  {persona.name} - {persona.role}
-                </MenuItem>
+                <SelectItem key={persona.id} value={persona.id}>
+                  {persona.name} ({persona.role})
+                </SelectItem>
               ))}
-            </Select>
-          </FormControl>
-          
+            </SelectContent>
+          </Select>
+
           {selectedPersonaId && (
-            <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+            <p className="text-xs text-muted-foreground mt-2">
               Creating summary from {personas.find(p => p.id === selectedPersonaId)?.name}'s perspective
-            </Typography>
+            </p>
           )}
-        </Box>
+        </div>
 
         {selectedPersonaId && videoId && (
           <VideoSummaryEditor
@@ -110,28 +116,21 @@ export default function VideoSummaryDialog({
             disabled={!selectedPersonaId}
           />
         )}
-        
+
         {!selectedPersonaId && (
-          <Box sx={{ 
-            p: 4, 
-            textAlign: 'center', 
-            bgcolor: 'grey.50',
-            borderRadius: 1,
-            border: '1px dashed',
-            borderColor: 'grey.300'
-          }}>
-            <Typography variant="body1" color="text.secondary">
+          <div className="p-8 text-center bg-muted/50 rounded-md border border-dashed border-border">
+            <p className="text-sm text-muted-foreground">
               Please select a persona above to create or edit a video summary
-            </Typography>
-          </Box>
+            </p>
+          </div>
         )}
+
+        <DialogFooter>
+          <Button onClick={handleDone}>
+            Done
+          </Button>
+        </DialogFooter>
       </DialogContent>
-      
-      <DialogActions>
-        <Button onClick={handleDone}>
-          Done
-        </Button>
-      </DialogActions>
     </Dialog>
   )
 }

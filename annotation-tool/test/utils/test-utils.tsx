@@ -12,20 +12,7 @@
 import { ReactElement } from 'react'
 import { render, RenderOptions } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { ThemeProvider, createTheme } from '@mui/material/styles'
 import { MemoryRouter } from 'react-router-dom'
-
-const theme = createTheme({
-  palette: {
-    mode: 'light',
-    primary: {
-      main: '#1976d2',
-    },
-    secondary: {
-      main: '#dc004e',
-    },
-  },
-})
 
 /**
  * Extended render options for test utilities.
@@ -85,9 +72,7 @@ export function createWrapper(queryClient?: QueryClient) {
   const client = queryClient || createTestQueryClient()
   return ({ children }: { children: React.ReactNode }) => (
     <QueryClientProvider client={client}>
-      <ThemeProvider theme={theme}>
-        {children}
-      </ThemeProvider>
+      {children}
     </QueryClientProvider>
   )
 }
@@ -133,9 +118,7 @@ export function renderWithProviders(
   function Wrapper({ children }: { children: React.ReactNode }) {
     const content = (
       <QueryClientProvider client={client}>
-        <ThemeProvider theme={theme}>
-          {children}
-        </ThemeProvider>
+        {children}
       </QueryClientProvider>
     )
 

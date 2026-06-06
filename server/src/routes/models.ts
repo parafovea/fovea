@@ -1,7 +1,31 @@
 import { FastifyPluginAsync } from 'fastify'
 import axios, { AxiosError } from 'axios'
 import camelcaseKeys from 'camelcase-keys'
-import { InternalError } from '../lib/errors.js'
+import { InternalError, ValidationError } from '../lib/errors.js'
+
+/**
+ * Map a user-supplied taskType to one of the nine canonical
+ * task-type literals from `model-service/src/domain/types.py`.
+ *
+ * Each branch returns a hard-coded string literal so the value
+ * downstream consumers (URL templates, query params) build with
+ * is data-flow-independent from `taskType`. Throws on miss.
+ */
+function normalizeAndAssertTaskType(taskType: string): string {
+  const normalized = taskType.replace(/([A-Z])/g, '_$1').toLowerCase()
+  switch (normalized) {
+    case 'video_summarization': return 'video_summarization'
+    case 'ontology_augmentation': return 'ontology_augmentation'
+    case 'object_detection': return 'object_detection'
+    case 'video_tracking': return 'video_tracking'
+    case 'audio_transcription': return 'audio_transcription'
+    case 'speaker_diarization': return 'speaker_diarization'
+    case 'voice_activity_detection': return 'voice_activity_detection'
+    case 'claim_extraction': return 'claim_extraction'
+    case 'claim_synthesis': return 'claim_synthesis'
+    default: throw new ValidationError(`Invalid task type: ${taskType}`)
+  }
+}
 
 /**
  * Model service API routes.
@@ -30,9 +54,6 @@ import { InternalError } from '../lib/errors.js'
  * Note: snakecaseKeys only converts object KEYS, not string values,
  * so this helper is needed for URL path segments and query param values.
  */
-function toSnakeCase(str: string): string {
-  return str.replace(/([A-Z])/g, '_$1').toLowerCase()
-}
 
 const modelsRoute: FastifyPluginAsync = async (fastify) => {
   const MODEL_SERVICE_URL = process.env.MODEL_SERVICE_URL || 'http://model-service:8000'
@@ -80,6 +101,12 @@ const modelsRoute: FastifyPluginAsync = async (fastify) => {
       })
       return camelcaseKeys(response.data, { deep: true })
     } catch (err) {
+      // Return the validation message under the same {error} shape the
+      // route uses for axios failures so the caller does not have to
+      // branch on which field carries the error text.
+      if (err instanceof ValidationError) {
+        return reply.code(400).send({ error: err.message })
+      }
       const error = err as AxiosError
       if (axios.isAxiosError(error)) {
         const statusCode = error.response?.status || 503
@@ -141,6 +168,12 @@ const modelsRoute: FastifyPluginAsync = async (fastify) => {
       })
       return camelcaseKeys(response.data, { deep: true })
     } catch (err) {
+      // Return the validation message under the same {error} shape the
+      // route uses for axios failures so the caller does not have to
+      // branch on which field carries the error text.
+      if (err instanceof ValidationError) {
+        return reply.code(400).send({ error: err.message })
+      }
       const error = err as AxiosError
       if (axios.isAxiosError(error)) {
         const statusCode = error.response?.status || 503
@@ -205,12 +238,13 @@ const modelsRoute: FastifyPluginAsync = async (fastify) => {
   }, async (request, reply) => {
     try {
       const { taskType, modelName } = request.query
+      const normalizedTaskType = normalizeAndAssertTaskType(taskType)
       const response = await axios.post(
         `${MODEL_SERVICE_URL}/api/models/select`,
         null,
         {
           params: {
-            task_type: toSnakeCase(taskType),
+            task_type: normalizedTaskType,
             model_name: modelName,
           },
           timeout: 30000
@@ -218,6 +252,12 @@ const modelsRoute: FastifyPluginAsync = async (fastify) => {
       )
       return camelcaseKeys(response.data, { deep: true })
     } catch (err) {
+      // Return the validation message under the same {error} shape the
+      // route uses for axios failures so the caller does not have to
+      // branch on which field carries the error text.
+      if (err instanceof ValidationError) {
+        return reply.code(400).send({ error: err.message })
+      }
       const error = err as AxiosError
       if (axios.isAxiosError(error)) {
         const statusCode = error.response?.status || 503
@@ -273,6 +313,12 @@ const modelsRoute: FastifyPluginAsync = async (fastify) => {
       })
       return camelcaseKeys(response.data, { deep: true })
     } catch (err) {
+      // Return the validation message under the same {error} shape the
+      // route uses for axios failures so the caller does not have to
+      // branch on which field carries the error text.
+      if (err instanceof ValidationError) {
+        return reply.code(400).send({ error: err.message })
+      }
       const error = err as AxiosError
       if (axios.isAxiosError(error)) {
         const statusCode = error.response?.status || 503
@@ -305,13 +351,19 @@ const modelsRoute: FastifyPluginAsync = async (fastify) => {
     }
   }, async (request, reply) => {
     try {
-      const { taskType } = request.params
+      const normalizedTaskType = normalizeAndAssertTaskType(request.params.taskType)
       const response = await axios.get(
-        `${MODEL_SERVICE_URL}/api/models/task-ready/${toSnakeCase(taskType)}`,
+        `${MODEL_SERVICE_URL}/api/models/task-ready/${normalizedTaskType}`,
         { timeout: 10000 }
       )
       return camelcaseKeys(response.data, { deep: true })
     } catch (err) {
+      // Return the validation message under the same {error} shape the
+      // route uses for axios failures so the caller does not have to
+      // branch on which field carries the error text.
+      if (err instanceof ValidationError) {
+        return reply.code(400).send({ error: err.message })
+      }
       const error = err as AxiosError
       if (axios.isAxiosError(error)) {
         const statusCode = error.response?.status || 503
@@ -344,14 +396,20 @@ const modelsRoute: FastifyPluginAsync = async (fastify) => {
     }
   }, async (request, reply) => {
     try {
-      const { taskType } = request.params
+      const normalizedTaskType = normalizeAndAssertTaskType(request.params.taskType)
       const response = await axios.post(
-        `${MODEL_SERVICE_URL}/api/models/load/${toSnakeCase(taskType)}`,
+        `${MODEL_SERVICE_URL}/api/models/load/${normalizedTaskType}`,
         null,
         { timeout: 300000 } // 5 min timeout for model download + load
       )
       return camelcaseKeys(response.data, { deep: true })
     } catch (err) {
+      // Return the validation message under the same {error} shape the
+      // route uses for axios failures so the caller does not have to
+      // branch on which field carries the error text.
+      if (err instanceof ValidationError) {
+        return reply.code(400).send({ error: err.message })
+      }
       const error = err as AxiosError
       if (axios.isAxiosError(error)) {
         const statusCode = error.response?.status || 503
@@ -384,14 +442,109 @@ const modelsRoute: FastifyPluginAsync = async (fastify) => {
     }
   }, async (request, reply) => {
     try {
-      const { taskType } = request.params
+      const normalizedTaskType = normalizeAndAssertTaskType(request.params.taskType)
       const response = await axios.post(
-        `${MODEL_SERVICE_URL}/api/models/unload/${toSnakeCase(taskType)}`,
+        `${MODEL_SERVICE_URL}/api/models/unload/${normalizedTaskType}`,
         null,
         { timeout: 30000 }
       )
       return camelcaseKeys(response.data, { deep: true })
     } catch (err) {
+      // Return the validation message under the same {error} shape the
+      // route uses for axios failures so the caller does not have to
+      // branch on which field carries the error text.
+      if (err instanceof ValidationError) {
+        return reply.code(400).send({ error: err.message })
+      }
+      const error = err as AxiosError
+      if (axios.isAxiosError(error)) {
+        const statusCode = error.response?.status || 503
+        const data = error.response?.data as { detail?: string } | undefined
+        const message = data?.detail || (error.response ? error.message : 'Model service is unavailable')
+        return reply.code(statusCode).send({ error: message })
+      }
+      throw new InternalError('Internal server error')
+    }
+  })
+
+  /**
+   * Get default inference config values.
+   *
+   * Returns the dataclass defaults the model-service uses to construct each
+   * inference config (generation, transcription, diarization, VAD, detection,
+   * tracking). The settings UI binds form controls to these so what the user
+   * sees matches what the backend will use when a field is left unset.
+   *
+   * @route GET /api/models/defaults
+   *
+   * @returns Object keyed by config group. Each group is a flat object of
+   *   scalar defaults. See ModelDefaultsResponse in the model-service's
+   *   `routes/models.py` for the exact field list.
+   *
+   * @throws {503} Service unavailable if model service cannot be reached
+   */
+  fastify.get('/api/models/defaults', {
+    schema: {
+      description: 'Get default inference config values per task group',
+      tags: ['models']
+    }
+  }, async (_request, reply) => {
+    try {
+      const response = await axios.get(`${MODEL_SERVICE_URL}/api/models/defaults`, {
+        timeout: 10000
+      })
+      return camelcaseKeys(response.data, { deep: true })
+    } catch (err) {
+      // Return the validation message under the same {error} shape the
+      // route uses for axios failures so the caller does not have to
+      // branch on which field carries the error text.
+      if (err instanceof ValidationError) {
+        return reply.code(400).send({ error: err.message })
+      }
+      const error = err as AxiosError
+      if (axios.isAxiosError(error)) {
+        const statusCode = error.response?.status || 503
+        const data = error.response?.data as { detail?: string } | undefined
+        const message = data?.detail || (error.response ? error.message : 'Model service is unavailable')
+        return reply.code(statusCode).send({ error: message })
+      }
+      throw new InternalError('Internal server error')
+    }
+  })
+
+  /**
+   * Get framework enum values per task group.
+   *
+   * Enumerates the string values of LLMFramework, AudioFramework,
+   * DetectionFramework, TrackingFramework, VLM InferenceFramework, and
+   * QuantizationType so the UI can render selectors without duplicating the
+   * lists.
+   *
+   * @route GET /api/models/frameworks
+   *
+   * @returns `{ llm, audio, detection, tracking, vlmInference, quantization }`,
+   *   each a string[] of enum values.
+   *
+   * @throws {503} Service unavailable if model service cannot be reached
+   */
+  fastify.get('/api/models/frameworks', {
+    schema: {
+      description: 'Get framework enum values per task group',
+      tags: ['models']
+    }
+  }, async (_request, reply) => {
+    try {
+      const response = await axios.get(`${MODEL_SERVICE_URL}/api/models/frameworks`, {
+        timeout: 10000
+      })
+      return camelcaseKeys(response.data, { deep: true })
+    } catch (err) {
+      // Return the validation message under the same {error} shape the
+      // route uses for axios failures so the caller does not have to
+      // branch on which field carries the error text.
+      if (err instanceof ValidationError) {
+        return reply.code(400).send({ error: err.message })
+      }
       const error = err as AxiosError
       if (axios.isAxiosError(error)) {
         const statusCode = error.response?.status || 503

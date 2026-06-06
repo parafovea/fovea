@@ -1,16 +1,14 @@
 import { useState, FormEvent } from 'react'
 import { useNavigate, Link as RouterLink } from 'react-router-dom'
-import {
-  Box,
-  Paper,
-  TextField,
-  Button,
-  Typography,
-  Alert,
-  Link,
-  LinearProgress,
-} from '@mui/material'
-import { PersonAdd as RegisterIcon } from '@mui/icons-material'
+
+import foveaLogo from '@/assets/fovea-logo.svg'
+
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Progress } from '@/components/ui/progress'
 import { useAuth } from '@hooks/auth'
 
 /**
@@ -18,7 +16,7 @@ import { useAuth } from '@hooks/auth'
  * Displays form for creating new user accounts with validation.
  * Only shown when registration is enabled in application configuration.
  */
-export default function RegisterPage() {
+export function RegisterPage(): JSX.Element {
   const navigate = useNavigate()
   const { register } = useAuth()
 
@@ -49,14 +47,14 @@ export default function RegisterPage() {
   const passwordStrength = getPasswordStrength(password)
 
   /**
-   * Returns color for password strength indicator.
+   * Returns Tailwind color class for password strength indicator.
    *
-   * @returns MUI color name
+   * @returns Tailwind color class for the progress indicator
    */
-  const getStrengthColor = (): 'error' | 'warning' | 'success' => {
-    if (passwordStrength < 40) return 'error'
-    if (passwordStrength < 70) return 'warning'
-    return 'success'
+  const getStrengthColorClass = (): string => {
+    if (passwordStrength < 40) return '[&_[data-slot=progress-indicator]]:bg-destructive'
+    if (passwordStrength < 70) return '[&_[data-slot=progress-indicator]]:bg-yellow-500'
+    return '[&_[data-slot=progress-indicator]]:bg-green-500'
   }
 
   /**
@@ -120,153 +118,138 @@ export default function RegisterPage() {
   }
 
   return (
-    <Box
-      sx={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        minHeight: '100vh',
-        bgcolor: 'background.default',
-      }}
-    >
-      <Paper
-        sx={{
-          p: 4,
-          maxWidth: 500,
-          width: '100%',
-          mx: 2,
-        }}
-      >
-        <Box sx={{ textAlign: 'center', mb: 3 }}>
-          <RegisterIcon sx={{ fontSize: 48, color: 'primary.main', mb: 1 }} />
-          <Typography variant="h4" component="h1" gutterBottom>
-            Create Account
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Register for fovea
-          </Typography>
-        </Box>
-
-        {error && (
-          <Alert severity="error" sx={{ mb: 2 }}>
-            {error}
-          </Alert>
-        )}
-
-        <form onSubmit={handleSubmit}>
-          <TextField
-            label="Username"
-            value={username}
-            onChange={(e) => {
-              setUsername(e.target.value)
-              handleFieldChange()
-            }}
-            fullWidth
-            required
-            margin="normal"
-            autoFocus
-            disabled={loading}
-            helperText="At least 3 characters, unique across all users"
+    <div className="flex items-center justify-center min-h-screen bg-background">
+      <Card className="max-w-[500px] w-full mx-2">
+        <CardHeader className="text-center">
+          <img
+            src={foveaLogo}
+            alt="FOVEA logo"
+            className="mx-auto size-12 mb-2"
           />
+          <h1 className="text-3xl font-bold tracking-wide">FOVEA</h1>
+          <p className="text-sm text-muted-foreground">
+            Flexible Ontology Visual Event Analyzer
+          </p>
+          <p className="text-sm font-medium mt-3">Create an account.</p>
+        </CardHeader>
 
-          <TextField
-            label="Display Name"
-            value={displayName}
-            onChange={(e) => {
-              setDisplayName(e.target.value)
-              handleFieldChange()
-            }}
-            fullWidth
-            required
-            margin="normal"
-            disabled={loading}
-            helperText="Your full name or preferred display name"
-          />
-
-          <TextField
-            label="Email"
-            type="email"
-            value={email}
-            onChange={(e) => {
-              setEmail(e.target.value)
-              handleFieldChange()
-            }}
-            fullWidth
-            margin="normal"
-            disabled={loading}
-            helperText="Optional, used for account recovery"
-          />
-
-          <TextField
-            label="Password"
-            type="password"
-            value={password}
-            onChange={(e) => {
-              setPassword(e.target.value)
-              handleFieldChange()
-            }}
-            fullWidth
-            required
-            margin="normal"
-            disabled={loading}
-            helperText="At least 8 characters"
-          />
-
-          {password && (
-            <Box sx={{ mt: 1, mb: 1 }}>
-              <Typography variant="caption" color="text.secondary">
-                Password strength
-              </Typography>
-              <LinearProgress
-                variant="determinate"
-                value={passwordStrength}
-                color={getStrengthColor()}
-                sx={{ height: 6, borderRadius: 3 }}
-              />
-            </Box>
+        <CardContent>
+          {error && (
+            <Alert variant="destructive" className="mb-4">
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
           )}
 
-          <TextField
-            label="Confirm Password"
-            type="password"
-            value={confirmPassword}
-            onChange={(e) => {
-              setConfirmPassword(e.target.value)
-              handleFieldChange()
-            }}
-            fullWidth
-            required
-            margin="normal"
-            disabled={loading}
-            error={confirmPassword.length > 0 && password !== confirmPassword}
-            helperText={
-              confirmPassword.length > 0 && password !== confirmPassword
-                ? 'Passwords do not match'
-                : ''
-            }
-          />
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="username">Username</Label>
+              <Input
+                id="username"
+                value={username}
+                onChange={(e) => {
+                  setUsername(e.target.value)
+                  handleFieldChange()
+                }}
+                required
+                autoFocus
+                disabled={loading}
+              />
+              <p className="text-xs text-muted-foreground">At least 3 characters, unique across all users</p>
+            </div>
 
-          <Button
-            type="submit"
-            variant="contained"
-            fullWidth
-            size="large"
-            disabled={loading || !username || !displayName || !password || !confirmPassword}
-            sx={{ mt: 2 }}
-          >
-            {loading ? 'Creating account...' : 'Register'}
-          </Button>
+            <div className="space-y-2">
+              <Label htmlFor="displayName">Display Name</Label>
+              <Input
+                id="displayName"
+                value={displayName}
+                onChange={(e) => {
+                  setDisplayName(e.target.value)
+                  handleFieldChange()
+                }}
+                required
+                disabled={loading}
+              />
+              <p className="text-xs text-muted-foreground">Your full name or preferred display name</p>
+            </div>
 
-          <Box sx={{ mt: 2, textAlign: 'center' }}>
-            <Typography variant="body2" color="text.secondary">
+            <div className="space-y-2">
+              <Label htmlFor="email">Email</Label>
+              <Input
+                id="email"
+                type="email"
+                value={email}
+                onChange={(e) => {
+                  setEmail(e.target.value)
+                  handleFieldChange()
+                }}
+                disabled={loading}
+              />
+              <p className="text-xs text-muted-foreground">Optional, used for account recovery</p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="password">Password</Label>
+              <Input
+                id="password"
+                type="password"
+                value={password}
+                onChange={(e) => {
+                  setPassword(e.target.value)
+                  handleFieldChange()
+                }}
+                required
+                disabled={loading}
+              />
+              <p className="text-xs text-muted-foreground">At least 8 characters</p>
+            </div>
+
+            {password && (
+              <div className="space-y-1">
+                <p className="text-xs text-muted-foreground">Password strength</p>
+                <Progress
+                  value={passwordStrength}
+                  className={getStrengthColorClass()}
+                />
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <Label htmlFor="confirmPassword">Confirm Password</Label>
+              <Input
+                id="confirmPassword"
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => {
+                  setConfirmPassword(e.target.value)
+                  handleFieldChange()
+                }}
+                required
+                disabled={loading}
+                aria-invalid={confirmPassword.length > 0 && password !== confirmPassword}
+              />
+              {confirmPassword.length > 0 && password !== confirmPassword && (
+                <p className="text-xs text-destructive">Passwords do not match</p>
+              )}
+            </div>
+
+            <Button
+              type="submit"
+              className="w-full"
+              size="lg"
+              disabled={loading || !username || !displayName || !password || !confirmPassword}
+            >
+              {loading ? 'Creating account...' : 'Register'}
+            </Button>
+
+            <p className="text-center text-sm text-muted-foreground">
               Already have an account?{' '}
-              <Link component={RouterLink} to="/login">
+              <RouterLink to="/login" className="text-primary underline underline-offset-4 hover:text-primary/80">
                 Login
-              </Link>
-            </Typography>
-          </Box>
-        </form>
-      </Paper>
-    </Box>
+              </RouterLink>
+            </p>
+          </form>
+        </CardContent>
+      </Card>
+    </div>
   )
 }

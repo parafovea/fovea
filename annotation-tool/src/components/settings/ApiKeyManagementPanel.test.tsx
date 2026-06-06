@@ -111,7 +111,7 @@ describe('ApiKeyManagementPanel', () => {
 
     render(<ApiKeyManagementPanel />, { wrapper: createWrapper() })
 
-    expect(screen.getByRole('progressbar')).toBeInTheDocument()
+    expect(screen.getByRole('status')).toBeInTheDocument()
   })
 
   it('renders error state', async () => {

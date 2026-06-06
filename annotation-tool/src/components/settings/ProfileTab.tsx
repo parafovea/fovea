@@ -4,20 +4,19 @@
  */
 
 import { useState, FormEvent, useEffect } from 'react'
-import {
-  Box,
-  TextField,
-  Button,
-  Alert,
-  CircularProgress,
-  Divider,
-  Typography,
-  Accordion,
-  AccordionSummary,
-  AccordionDetails,
-} from '@mui/material'
-import { ExpandMore as ExpandMoreIcon } from '@mui/icons-material'
 import { useAuthStore } from '@store/zustand/authStore'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Spinner } from '@/components/ui/spinner'
+import { Separator } from '@/components/ui/separator'
+import {
+  Accordion,
+  AccordionItem,
+  AccordionTrigger,
+  AccordionContent,
+} from '@/components/ui/accordion'
 
 /**
  * Props for ProfileTab component.
@@ -220,129 +219,149 @@ export default function ProfileTab({ showPasswordChange }: ProfileTabProps) {
 
   if (!currentUser) {
     return (
-      <Box sx={{ p: 2, textAlign: 'center' }}>
-        <CircularProgress />
-      </Box>
+      <div className="flex justify-center p-4">
+        <Spinner className="size-6" />
+      </div>
     )
   }
 
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+    <div className="flex flex-col gap-6">
       {success && (
-        <Alert severity="success">Profile updated successfully</Alert>
+        <Alert>
+          <AlertDescription>Profile updated successfully</AlertDescription>
+        </Alert>
       )}
 
       {error && (
-        <Alert severity="error">{error}</Alert>
+        <Alert variant="destructive">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
       )}
 
       {/* Profile Information */}
       <form onSubmit={handleProfileSubmit}>
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-          <Typography variant="h6">Profile Information</Typography>
+        <div className="flex flex-col gap-4">
+          <h3 className="text-lg font-semibold">Profile Information</h3>
 
-          <TextField
-            label="Username"
-            value={currentUser.username}
-            disabled
-            fullWidth
-            helperText="Username cannot be changed"
-          />
+          <div className="space-y-2">
+            <Label htmlFor="profile-username">Username</Label>
+            <Input
+              id="profile-username"
+              value={currentUser.username}
+              disabled
+            />
+            <p className="text-xs text-muted-foreground">Username cannot be changed</p>
+          </div>
 
-          <TextField
-            label="Display Name"
-            value={formData.displayName}
-            onChange={(e) => updateField('displayName', e.target.value)}
-            error={!!errors.displayName}
-            helperText={errors.displayName}
-            required
-            fullWidth
-          />
+          <div className="space-y-2">
+            <Label htmlFor="profile-display-name">Display Name</Label>
+            <Input
+              id="profile-display-name"
+              value={formData.displayName}
+              onChange={(e) => updateField('displayName', e.target.value)}
+              aria-invalid={!!errors.displayName}
+              required
+            />
+            {errors.displayName && (
+              <p className="text-xs text-destructive">{errors.displayName}</p>
+            )}
+          </div>
 
-          <TextField
-            label="Email"
-            type="email"
-            value={formData.email}
-            onChange={(e) => updateField('email', e.target.value)}
-            error={!!errors.email}
-            helperText={errors.email}
-            fullWidth
-          />
+          <div className="space-y-2">
+            <Label htmlFor="profile-email">Email</Label>
+            <Input
+              id="profile-email"
+              type="email"
+              value={formData.email}
+              onChange={(e) => updateField('email', e.target.value)}
+              aria-invalid={!!errors.email}
+            />
+            {errors.email && (
+              <p className="text-xs text-destructive">{errors.email}</p>
+            )}
+          </div>
 
-          <Box>
-            <Button
-              type="submit"
-              variant="contained"
-              disabled={loading}
-              startIcon={loading ? <CircularProgress size={16} /> : undefined}
-            >
+          <div>
+            <Button type="submit" disabled={loading}>
+              {loading && <Spinner className="size-4" />}
               Save Profile
             </Button>
-          </Box>
-        </Box>
+          </div>
+        </div>
       </form>
 
       {/* Password Change Section */}
       {showPasswordChange && (
         <>
-          <Divider />
+          <Separator />
 
           <Accordion>
-            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-              <Typography variant="h6">Change Password</Typography>
-            </AccordionSummary>
-            <AccordionDetails>
-              <form onSubmit={handlePasswordSubmit}>
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                  <TextField
-                    label="Current Password"
-                    type="password"
-                    value={passwordData.oldPassword}
-                    onChange={(e) => updateField('oldPassword', e.target.value)}
-                    error={!!errors.oldPassword}
-                    helperText={errors.oldPassword}
-                    required
-                    fullWidth
-                  />
+            <AccordionItem value="password-change">
+              <AccordionTrigger>
+                <span className="text-lg font-semibold">Change Password</span>
+              </AccordionTrigger>
+              <AccordionContent>
+                <form onSubmit={handlePasswordSubmit}>
+                  <div className="flex flex-col gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="profile-current-password">Current Password</Label>
+                      <Input
+                        id="profile-current-password"
+                        type="password"
+                        value={passwordData.oldPassword}
+                        onChange={(e) => updateField('oldPassword', e.target.value)}
+                        aria-invalid={!!errors.oldPassword}
+                        required
+                      />
+                      {errors.oldPassword && (
+                        <p className="text-xs text-destructive">{errors.oldPassword}</p>
+                      )}
+                    </div>
 
-                  <TextField
-                    label="New Password"
-                    type="password"
-                    value={passwordData.newPassword}
-                    onChange={(e) => updateField('newPassword', e.target.value)}
-                    error={!!errors.newPassword}
-                    helperText={errors.newPassword || 'Minimum 8 characters'}
-                    required
-                    fullWidth
-                  />
+                    <div className="space-y-2">
+                      <Label htmlFor="profile-new-password">New Password</Label>
+                      <Input
+                        id="profile-new-password"
+                        type="password"
+                        value={passwordData.newPassword}
+                        onChange={(e) => updateField('newPassword', e.target.value)}
+                        aria-invalid={!!errors.newPassword}
+                        required
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        {errors.newPassword || 'Minimum 8 characters'}
+                      </p>
+                    </div>
 
-                  <TextField
-                    label="Confirm New Password"
-                    type="password"
-                    value={passwordData.confirmPassword}
-                    onChange={(e) => updateField('confirmPassword', e.target.value)}
-                    error={!!errors.confirmPassword}
-                    helperText={errors.confirmPassword}
-                    required
-                    fullWidth
-                  />
+                    <div className="space-y-2">
+                      <Label htmlFor="profile-confirm-password">Confirm New Password</Label>
+                      <Input
+                        id="profile-confirm-password"
+                        type="password"
+                        value={passwordData.confirmPassword}
+                        onChange={(e) => updateField('confirmPassword', e.target.value)}
+                        aria-invalid={!!errors.confirmPassword}
+                        required
+                      />
+                      {errors.confirmPassword && (
+                        <p className="text-xs text-destructive">{errors.confirmPassword}</p>
+                      )}
+                    </div>
 
-                  <Box>
-                    <Button
-                      type="submit"
-                      variant="contained"
-                      disabled={loading}
-                      startIcon={loading ? <CircularProgress size={16} /> : undefined}
-                    >
-                      Change Password
-                    </Button>
-                  </Box>
-                </Box>
-              </form>
-            </AccordionDetails>
+                    <div>
+                      <Button type="submit" disabled={loading}>
+                        {loading && <Spinner className="size-4" />}
+                        Change Password
+                      </Button>
+                    </div>
+                  </div>
+                </form>
+              </AccordionContent>
+            </AccordionItem>
           </Accordion>
         </>
       )}
-    </Box>
+    </div>
   )
 }

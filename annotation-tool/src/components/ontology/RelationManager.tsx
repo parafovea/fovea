@@ -1,32 +1,25 @@
 import React, { useState } from 'react'
+import { Trash2, Plus, ArrowRight } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Label } from '@/components/ui/label'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Separator } from '@/components/ui/separator'
 import {
   Dialog,
-  DialogTitle,
   DialogContent,
-  DialogActions,
-  Button,
-  Box,
-  Typography,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  List,
-  ListItem,
-  ListItemText,
-  ListItemSecondaryAction,
-  IconButton,
-  Divider,
-  Alert,
-  Chip,
-  Grid,
-} from '@mui/material'
-import { generateId } from '@utils/uuid'
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import {
-  Delete as DeleteIcon,
-  Add as AddIcon,
-  ArrowForward as ArrowIcon,
-} from '@mui/icons-material'
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from '@/components/ui/select'
+import { generateId } from '@utils/uuid'
 import { usePersonaOntology, useAddRelationToPersona, useDeleteRelationFromPersona } from '@store/queries'
 import { OntologyRelation } from '@models/types'
 
@@ -134,220 +127,241 @@ export default function RelationManager({ open, onClose, personaId }: RelationMa
     }
   }
 
-  const filteredRelations = relationTypeId 
+  const filteredRelations = relationTypeId
     ? ontology.relations.filter(r => r.relationTypeId === relationTypeId)
     : ontology.relations
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="lg" fullWidth>
-      <DialogTitle>Manage Relations</DialogTitle>
-      <DialogContent>
+    <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
+      <DialogContent className="sm:max-w-4xl">
+        <DialogHeader>
+          <DialogTitle>Manage Relations</DialogTitle>
+        </DialogHeader>
+
         {ontology.relationTypes.length === 0 ? (
-          <Alert severity="info">
-            No relation types defined yet. Create relation types first to establish relationships between ontology elements.
+          <Alert>
+            <AlertDescription>
+              No relation types defined yet. Create relation types first to establish relationships between ontology elements.
+            </AlertDescription>
           </Alert>
         ) : (
-          <Grid container spacing={3}>
-            <Grid item xs={12} md={5}>
-              <Typography variant="h6" gutterBottom>
+          <div className="grid grid-cols-1 md:grid-cols-[5fr_7fr] gap-6">
+            <div>
+              <h3 className="text-lg font-semibold mb-4">
                 Create New Relation
-              </Typography>
-              
-              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                <FormControl fullWidth>
-                  <InputLabel>Relation Type</InputLabel>
+              </h3>
+
+              <div className="flex flex-col gap-4">
+                <div>
+                  <Label className="mb-2">Relation Type</Label>
                   <Select
                     value={relationTypeId}
-                    onChange={(e) => {
-                      setRelationTypeId(e.target.value)
-                      const rt = ontology.relationTypes.find(r => r.id === e.target.value)
+                    onValueChange={(val) => {
+                      if (!val) return
+                      setRelationTypeId(val)
+                      const rt = ontology.relationTypes.find(r => r.id === val)
                       if (rt) {
                         setSourceType(rt.sourceTypes[0] || 'entity')
                         setTargetType(rt.targetTypes[0] || 'entity')
                       }
                     }}
-                    label="Relation Type"
                   >
-                    {ontology.relationTypes.map(rt => (
-                      <MenuItem key={rt.id} value={rt.id}>
-                        <Box>
-                          <Typography>{rt.name}</Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            {rt.sourceTypes.join('/')} → {rt.targetTypes.join('/')}
-                          </Typography>
-                        </Box>
-                      </MenuItem>
-                    ))}
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select relation type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {ontology.relationTypes.map(rt => (
+                        <SelectItem key={rt.id} value={rt.id}>
+                          <div>
+                            <span>{rt.name}</span>
+                            <span className="text-xs text-muted-foreground ml-2">
+                              {rt.sourceTypes.join('/')} -&gt; {rt.targetTypes.join('/')}
+                            </span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
                   </Select>
-                </FormControl>
+                </div>
 
                 {selectedRelationType && (
                   <>
-                    <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-                      <FormControl size="small">
-                        <InputLabel>Source Type</InputLabel>
-                        <Select
-                          value={sourceType}
-                          onChange={(e) => {
-                            setSourceType(e.target.value as 'entity' | 'role' | 'event')
-                            setSourceId('')
-                          }}
-                          label="Source Type"
-                          disabled={selectedRelationType.sourceTypes.length === 1}
-                        >
-                          {selectedRelationType.sourceTypes.map(type => (
-                            <MenuItem key={type} value={type}>
-                              {type.charAt(0).toUpperCase() + type.slice(1)}
-                            </MenuItem>
-                          ))}
-                        </Select>
-                      </FormControl>
+                    <div className="flex gap-2 items-center">
+                      {selectedRelationType.sourceTypes.length > 1 && (
+                        <div>
+                          <Label className="mb-2">Source Type</Label>
+                          <Select
+                            value={sourceType}
+                            onValueChange={(val) => {
+                              setSourceType(val as 'entity' | 'role' | 'event')
+                              setSourceId('')
+                            }}
+                          >
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {selectedRelationType.sourceTypes.map(type => (
+                                <SelectItem key={type} value={type}>
+                                  {type.charAt(0).toUpperCase() + type.slice(1)}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
 
-                      <FormControl fullWidth>
-                        <InputLabel>Source</InputLabel>
+                      <div className="flex-1">
+                        <Label className="mb-2">Source</Label>
                         <Select
                           value={sourceId}
-                          onChange={(e) => setSourceId(e.target.value)}
-                          label="Source"
+                          onValueChange={(val) => val && setSourceId(val)}
                         >
-                          {getSourceOptions().map(item => (
-                            <MenuItem key={item.id} value={item.id}>
-                              {item.name}
-                            </MenuItem>
-                          ))}
+                          <SelectTrigger className="w-full">
+                            <SelectValue placeholder="Select source" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {getSourceOptions().map(item => (
+                              <SelectItem key={item.id} value={item.id}>
+                                {item.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
                         </Select>
-                      </FormControl>
-                    </Box>
+                      </div>
+                    </div>
 
-                    <Box sx={{ display: 'flex', justifyContent: 'center' }}>
-                      <ArrowIcon color="action" />
-                    </Box>
+                    <div className="flex justify-center">
+                      <ArrowRight className="size-5 text-muted-foreground" />
+                    </div>
 
-                    <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-                      <FormControl size="small">
-                        <InputLabel>Target Type</InputLabel>
-                        <Select
-                          value={targetType}
-                          onChange={(e) => {
-                            setTargetType(e.target.value as 'entity' | 'role' | 'event')
-                            setTargetId('')
-                          }}
-                          label="Target Type"
-                          disabled={selectedRelationType.targetTypes.length === 1}
-                        >
-                          {selectedRelationType.targetTypes.map(type => (
-                            <MenuItem key={type} value={type}>
-                              {type.charAt(0).toUpperCase() + type.slice(1)}
-                            </MenuItem>
-                          ))}
-                        </Select>
-                      </FormControl>
+                    <div className="flex gap-2 items-center">
+                      {selectedRelationType.targetTypes.length > 1 && (
+                        <div>
+                          <Label className="mb-2">Target Type</Label>
+                          <Select
+                            value={targetType}
+                            onValueChange={(val) => {
+                              setTargetType(val as 'entity' | 'role' | 'event')
+                              setTargetId('')
+                            }}
+                          >
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {selectedRelationType.targetTypes.map(type => (
+                                <SelectItem key={type} value={type}>
+                                  {type.charAt(0).toUpperCase() + type.slice(1)}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
 
-                      <FormControl fullWidth>
-                        <InputLabel>Target</InputLabel>
+                      <div className="flex-1">
+                        <Label className="mb-2">Target</Label>
                         <Select
                           value={targetId}
-                          onChange={(e) => setTargetId(e.target.value)}
-                          label="Target"
+                          onValueChange={(val) => val && setTargetId(val)}
                         >
-                          {getTargetOptions().map(item => (
-                            <MenuItem key={item.id} value={item.id}>
-                              {item.name}
-                            </MenuItem>
-                          ))}
+                          <SelectTrigger className="w-full">
+                            <SelectValue placeholder="Select target" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {getTargetOptions().map(item => (
+                              <SelectItem key={item.id} value={item.id}>
+                                {item.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
                         </Select>
-                      </FormControl>
-                    </Box>
+                      </div>
+                    </div>
 
                     <Button
-                      variant="contained"
-                      startIcon={<AddIcon />}
                       onClick={handleAddRelation}
                       disabled={!sourceId || !targetId}
                     >
+                      <Plus className="size-4 mr-2" />
                       Add Relation
                     </Button>
 
                     {selectedRelationType.symmetric && (
-                      <Alert severity="info" sx={{ mt: 1 }}>
-                        This is a symmetric relation: if A relates to B, then B also relates to A
+                      <Alert className="mt-2">
+                        <AlertDescription>
+                          This is a symmetric relation: if A relates to B, then B also relates to A
+                        </AlertDescription>
                       </Alert>
                     )}
                     {selectedRelationType.transitive && (
-                      <Alert severity="info" sx={{ mt: 1 }}>
-                        This is a transitive relation: if A→B and B→C, then A→C is implied
+                      <Alert className="mt-2">
+                        <AlertDescription>
+                          This is a transitive relation: if A-&gt;B and B-&gt;C, then A-&gt;C is implied
+                        </AlertDescription>
                       </Alert>
                     )}
                   </>
                 )}
-              </Box>
-            </Grid>
+              </div>
+            </div>
 
-            <Grid item xs={12} md={7}>
-              <Typography variant="h6" gutterBottom>
+            <div>
+              <h3 className="text-lg font-semibold mb-4">
                 Existing Relations ({filteredRelations.length})
-              </Typography>
-              
-              <List sx={{ maxHeight: 400, overflow: 'auto' }}>
+              </h3>
+
+              <div className="max-h-96 overflow-auto">
                 {filteredRelations.length === 0 ? (
-                  <Typography variant="body2" color="text.secondary" sx={{ p: 2 }}>
+                  <p className="text-sm text-muted-foreground p-4">
                     No relations defined yet
-                  </Typography>
+                  </p>
                 ) : (
-                  filteredRelations.map(relation => {
-                    const relationType = ontology.relationTypes.find(rt => rt.id === relation.relationTypeId)
-                    return (
-                      <React.Fragment key={relation.id}>
-                        <ListItem>
-                          <ListItemText
-                            primary={
-                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                <Chip
-                                  label={getItemName(relation.sourceType, relation.sourceId)}
-                                  size="small"
-                                  color="primary"
-                                />
-                                <Typography variant="body2" color="text.secondary">
+                  <ul>
+                    {filteredRelations.map(relation => {
+                      const relationType = ontology.relationTypes.find(rt => rt.id === relation.relationTypeId)
+                      return (
+                        <React.Fragment key={relation.id}>
+                          <li className="flex items-center justify-between py-3 px-2">
+                            <div>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <Badge>{getItemName(relation.sourceType, relation.sourceId)}</Badge>
+                                <span className="text-sm text-muted-foreground">
                                   {relationType?.name || 'unknown'}
-                                </Typography>
-                                <ArrowIcon fontSize="small" color="action" />
-                                <Chip
-                                  label={getItemName(relation.targetType, relation.targetId)}
-                                  size="small"
-                                  color="secondary"
-                                />
-                              </Box>
-                            }
-                            secondary={
-                              <Box sx={{ display: 'flex', gap: 1, mt: 0.5 }}>
-                                <Chip label={relation.sourceType} size="small" variant="outlined" />
-                                <Chip label={relation.targetType} size="small" variant="outlined" />
-                              </Box>
-                            }
-                          />
-                          <ListItemSecondaryAction>
-                            <IconButton
-                              edge="end"
+                                </span>
+                                <ArrowRight className="size-4 text-muted-foreground" />
+                                <Badge variant="secondary">{getItemName(relation.targetType, relation.targetId)}</Badge>
+                              </div>
+                              <div className="flex gap-1 mt-1">
+                                <Badge variant="outline">{relation.sourceType}</Badge>
+                                <Badge variant="outline">{relation.targetType}</Badge>
+                              </div>
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
                               onClick={() => handleDeleteRelation(relation.id)}
                               aria-label={`Delete relation from ${getItemName(relation.sourceType, relation.sourceId)} to ${getItemName(relation.targetType, relation.targetId)}`}
                             >
-                              <DeleteIcon />
-                            </IconButton>
-                          </ListItemSecondaryAction>
-                        </ListItem>
-                        <Divider />
-                      </React.Fragment>
-                    )
-                  })
+                              <Trash2 className="size-4" />
+                            </Button>
+                          </li>
+                          <Separator />
+                        </React.Fragment>
+                      )
+                    })}
+                  </ul>
                 )}
-              </List>
-            </Grid>
-          </Grid>
+              </div>
+            </div>
+          </div>
         )}
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Close</Button>
+        </DialogFooter>
       </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose}>Close</Button>
-      </DialogActions>
     </Dialog>
   )
 }

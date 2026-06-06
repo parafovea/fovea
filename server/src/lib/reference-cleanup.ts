@@ -30,39 +30,8 @@ export interface TypeWithGloss {
 export type OntologyTypeWithGloss = EntityType | RoleType | EventType | RelationType
 
 /**
- * Converts typeRef items in a gloss array to plain text when the referenced type is deleted.
- *
- * @param gloss - Array of gloss items
- * @param deletedTypeId - ID of the type being deleted
- * @param deletedPersonaId - ID of the persona whose type is being deleted
- * @param deletedRefType - The refType category ('entity', 'role', 'event', 'relation')
- * @returns Updated gloss array with matching typeRefs converted to text
- */
-export function convertTypeRefsToText(
-  gloss: GlossItem[],
-  deletedTypeId: string,
-  deletedPersonaId: string,
-  deletedRefType: 'entity' | 'role' | 'event' | 'relation'
-): GlossItem[] {
-  return gloss.map(item => {
-    if (
-      item.type === 'typeRef' &&
-      item.content === deletedTypeId &&
-      item.refType === deletedRefType &&
-      item.refPersonaId === deletedPersonaId
-    ) {
-      return {
-        type: 'text' as const,
-        content: item.content
-      }
-    }
-    return item
-  })
-}
-
-/**
  * Converts typeRef items in a gloss array to plain text, using the type name.
- * This version takes the deleted type's name to use as the replacement text.
+ * This is the only production path; callers go through `updateGlossesInTypes`.
  *
  * @param gloss - Array of gloss items
  * @param deletedTypeId - ID of the type being deleted

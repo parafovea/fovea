@@ -162,7 +162,7 @@ export async function searchWikidata(query: string, limit: number = 10): Promise
   })
 
   try {
-    const response = await fetch(`${wikidataApi}?${params}`)
+    const response = await fetch(`${wikidataApi}?${params}`, { credentials: 'omit' })
     const data = await response.json()
 
     // In offline mode, map local IDs back to original Wikidata IDs
@@ -199,7 +199,7 @@ export async function getWikidataEntity(id: string): Promise<WikidataEntity | nu
   })
 
   try {
-    const response = await fetch(`${wikidataApi}?${params}`)
+    const response = await fetch(`${wikidataApi}?${params}`, { credentials: 'omit' })
     const data = await response.json()
 
     if (data.entities && data.entities[id]) {

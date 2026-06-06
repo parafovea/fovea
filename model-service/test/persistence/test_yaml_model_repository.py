@@ -35,6 +35,8 @@ models:
       llama-scout:
         model_id: meta-llama/Llama-4-Scout
         framework: transformers
+        architecture:
+          kind: llama-4-maverick
         vram_gb: 24
         cpu_compatible: false
         speed: medium
@@ -45,6 +47,8 @@ models:
       yolo-world:
         model_id: ultralytics/yoloworld
         framework: ultralytics
+        architecture:
+          kind: yolo-world
         vram_gb: 4
         cpu_compatible: true
         speed: fast
@@ -170,6 +174,8 @@ models:
       llama-scout:
         model_id: meta-llama/Llama-4-Scout
         framework: transformers
+        architecture:
+          kind: llama-4-maverick
         vram_gb: 24
         cpu_compatible: false
         speed: medium
@@ -177,6 +183,8 @@ models:
       deepseek:
         model_id: deepseek/deepseek-v3
         framework: sglang
+        architecture:
+          kind: deepseek-v3
         vram_gb: 48
         cpu_compatible: false
         speed: slow
@@ -230,6 +238,8 @@ models:
       llama-scout:
         model_id: meta-llama/Llama-4-Scout
         framework: transformers
+        architecture:
+          kind: llama-4-maverick
         vram_gb: 24
         cpu_compatible: false
         speed: medium
@@ -240,6 +250,8 @@ models:
       sam2:
         model_id: facebook/sam2-small
         framework: pytorch
+        architecture:
+          kind: sam2
         vram_gb: 4
         cpu_compatible: false
         speed: fast
@@ -263,6 +275,8 @@ models:
       llama-scout:
         model_id: meta-llama/Llama-4-Scout
         framework: transformers
+        architecture:
+          kind: llama-4-maverick
         vram_gb: 24
         cpu_compatible: false
         speed: medium
@@ -270,6 +284,8 @@ models:
       deepseek:
         model_id: deepseek/deepseek-v3
         framework: sglang
+        architecture:
+          kind: deepseek-v3
         vram_gb: 48
         cpu_compatible: false
         speed: slow

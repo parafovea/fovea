@@ -6,25 +6,22 @@
 
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { Plus, Users } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { Spinner } from '@/components/ui/spinner'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
+import { Label } from '@/components/ui/label'
 import {
-  Box,
-  Button,
-  Card,
-  CardActionArea,
-  CardContent,
-  Chip,
-  CircularProgress,
-  Container,
   Dialog,
-  DialogActions,
   DialogContent,
+  DialogFooter,
+  DialogHeader,
   DialogTitle,
-  Alert,
-  Grid,
-  TextField,
-  Typography,
-} from '@mui/material'
-import { Add as AddIcon, Group as GroupIcon } from '@mui/icons-material'
+} from '@/components/ui/dialog'
 import { useMyGroups, useCreateGroup } from '@store/queries/useGroups'
 
 function slugify(value: string): string {
@@ -68,126 +65,119 @@ export default function GroupsPage(): JSX.Element {
 
   if (isLoading) {
     return (
-      <Container maxWidth="lg">
-        <Box sx={{ py: 6, display: 'flex', justifyContent: 'center' }}>
-          <CircularProgress />
-        </Box>
-      </Container>
+      <div className="mx-auto max-w-screen-lg px-4">
+        <div className="flex justify-center py-12">
+          <Spinner className="size-8" />
+        </div>
+      </div>
     )
   }
 
   return (
-    <Container maxWidth="lg">
-      <Box sx={{ py: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Typography variant="h4" component="h1">
-          My Groups
-        </Typography>
-        <Button variant="contained" startIcon={<AddIcon />} onClick={() => setDialogOpen(true)}>
+    <div className="mx-auto max-w-screen-lg px-4" data-tour-id="groups-page">
+      <div className="flex items-center justify-between py-6">
+        <h1 className="text-2xl font-bold">My Groups</h1>
+        <Button data-tour-id="groups-create-button" onClick={() => setDialogOpen(true)}>
+          <Plus className="size-4" />
           Create Group
         </Button>
-      </Box>
+      </div>
 
       {error && (
-        <Alert severity="error" sx={{ mb: 2 }}>
-          Failed to load groups.
+        <Alert variant="destructive" className="mb-4">
+          <AlertDescription>Failed to load groups.</AlertDescription>
         </Alert>
       )}
 
       {groups && groups.length === 0 && (
-        <Box sx={{ py: 6, textAlign: 'center' }}>
-          <GroupIcon sx={{ fontSize: 64, color: 'text.disabled', mb: 2 }} />
-          <Typography variant="h6" color="text.secondary">
+        <div className="py-12 text-center">
+          <Users className="mx-auto mb-4 size-16 text-muted-foreground" />
+          <h2 className="text-lg font-medium text-muted-foreground">
             You are not a member of any groups yet.
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+          </h2>
+          <p className="mt-2 text-sm text-muted-foreground">
             Create a group to collaborate with other annotators.
-          </Typography>
-        </Box>
+          </p>
+        </div>
       )}
 
-      <Grid container spacing={2}>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3">
         {(groups ?? []).map((group) => (
-          <Grid item xs={12} sm={6} md={4} key={group.id}>
-            <Card variant="outlined">
-              <CardActionArea onClick={() => navigate(`/groups/${group.id}`)}>
-                <CardContent>
-                  <Typography variant="h6" noWrap>
-                    {group.name}
-                  </Typography>
-                  <Typography
-                    variant="body2"
-                    color="text.secondary"
-                    sx={{
-                      mt: 0.5,
-                      mb: 1.5,
-                      display: '-webkit-box',
-                      WebkitLineClamp: 2,
-                      WebkitBoxOrient: 'vertical',
-                      overflow: 'hidden',
-                      minHeight: 40,
-                    }}
-                  >
-                    {group.description || 'No description'}
-                  </Typography>
-                  <Box sx={{ display: 'flex', gap: 1 }}>
-                    <Chip label={`${group.memberCount} members`} size="small" variant="outlined" />
-                    <Chip label={group.userRole.replace('group_', '')} size="small" color="primary" />
-                  </Box>
-                </CardContent>
-              </CardActionArea>
-            </Card>
-          </Grid>
-        ))}
-      </Grid>
-
-      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Create Group</DialogTitle>
-        <DialogContent>
-          <TextField
-            label="Name"
-            fullWidth
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            sx={{ mt: 1 }}
-            autoFocus
-          />
-          <TextField
-            label="Slug"
-            fullWidth
-            value={slug}
-            onChange={(e) => {
-              setSlug(e.target.value)
-              setSlugTouched(true)
-            }}
-            helperText="URL-friendly identifier (lowercase, hyphens only)"
-            sx={{ mt: 2 }}
-          />
-          <TextField
-            label="Description"
-            fullWidth
-            multiline
-            rows={3}
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            sx={{ mt: 2 }}
-          />
-          {createGroup.isError && (
-            <Alert severity="error" sx={{ mt: 2 }}>
-              {(createGroup.error as Error).message}
-            </Alert>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDialogOpen(false)}>Cancel</Button>
-          <Button
-            variant="contained"
-            onClick={handleCreate}
-            disabled={!name.trim() || !slug.trim() || createGroup.isPending}
+          <Card
+            key={group.id}
+            className="cursor-pointer transition-colors hover:bg-muted/50"
+            onClick={() => navigate(`/groups/${group.id}`)}
           >
-            {createGroup.isPending ? 'Creating...' : 'Create'}
-          </Button>
-        </DialogActions>
+            <CardContent>
+              <h3 className="truncate text-base font-semibold">{group.name}</h3>
+              <p className="mt-1 mb-3 line-clamp-2 min-h-[40px] text-sm text-muted-foreground">
+                {group.description || 'No description'}
+              </p>
+              <div className="flex gap-2">
+                <Badge variant="outline">{group.memberCount} members</Badge>
+                <Badge>{group.userRole.replace('group_', '')}</Badge>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      <Dialog open={dialogOpen} onOpenChange={(isOpen) => { if (!isOpen) setDialogOpen(false) }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Create Group</DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-col gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="group-name">Name</Label>
+              <Input
+                id="group-name"
+                data-tour-id="group-name-input"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                autoFocus
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="group-slug">Slug</Label>
+              <Input
+                id="group-slug"
+                value={slug}
+                onChange={(e) => {
+                  setSlug(e.target.value)
+                  setSlugTouched(true)
+                }}
+              />
+              <p className="text-xs text-muted-foreground">
+                URL-friendly identifier (lowercase, hyphens only)
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="group-description">Description</Label>
+              <Textarea
+                id="group-description"
+                rows={3}
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+              />
+            </div>
+            {createGroup.isError && (
+              <Alert variant="destructive">
+                <AlertDescription>{(createGroup.error as Error).message}</AlertDescription>
+              </Alert>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
+            <Button
+              onClick={handleCreate}
+              disabled={!name.trim() || !slug.trim() || createGroup.isPending}
+            >
+              {createGroup.isPending ? 'Creating...' : 'Create'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
       </Dialog>
-    </Container>
+    </div>
   )
 }

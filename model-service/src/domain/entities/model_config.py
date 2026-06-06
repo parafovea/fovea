@@ -4,10 +4,26 @@ This module defines entities for representing model configurations,
 task configurations, and inference settings.
 """
 
-from dataclasses import dataclass, field
-from typing import Any
+from __future__ import annotations
 
-from src.domain.types import DeviceType
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Any
+
+from pydantic import TypeAdapter
+
+from src.domain.entities.architectures import Architecture
+
+if TYPE_CHECKING:
+    from src.domain.types import DeviceType
+
+# Module-level Pydantic adapter that parses the discriminated
+# Architecture union from a plain dict (the shape every YAML config
+# emits) into the right subclass. Cached as a module-level constant
+# because TypeAdapter compilation is non-trivial and the parsed shape
+# is read on every model load. The annotation is lifted from the
+# Annotated[Union[...], Field(discriminator)] alias on Architecture;
+# Pyright's variance check on Annotated forces a `type: ignore`.
+_ARCHITECTURE_ADAPTER = TypeAdapter[Architecture](Architecture)  # type: ignore[misc]
 
 
 @dataclass
@@ -44,6 +60,14 @@ class ModelConfig:
 
     model_id: str
     framework: str
+    # Required. Every YAML entry in both models.yaml and models-cpu.yaml
+    # carries an `architecture: {kind: ...}` block; the discriminated
+    # Pydantic union in src/domain/entities/architectures.py parses it
+    # into the right subclass, and every loader factory dispatches
+    # purely on the architecture's type via the LoaderRegistry. A
+    # ModelConfig without an architecture is a programming bug; the
+    # factories raise loud, actionable errors if one is ever reached.
+    architecture: Architecture
     vram_gb: float = 0.0
     cpu_memory_gb: float = 0.0
     cpu_compatible: bool = False
@@ -103,6 +127,9 @@ class ModelConfig:
         return {
             "model_id": self.model_id,
             "framework": self.framework,
+            "architecture": (
+                self.architecture.model_dump() if self.architecture is not None else None
+            ),
             "vram_gb": self.vram_gb,
             "cpu_memory_gb": self.cpu_memory_gb,
             "cpu_compatible": self.cpu_compatible,
@@ -116,7 +143,7 @@ class ModelConfig:
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "ModelConfig":
+    def from_dict(cls, data: dict[str, Any]) -> ModelConfig:
         """Create from dictionary representation.
 
         Parameters
@@ -129,9 +156,26 @@ class ModelConfig:
         ModelConfig
             New model config instance.
         """
+        # Architecture is required. A YAML entry without an `architecture`
+        # block (or with an unknown `kind`, or with extra fields under the
+        # discriminator) fails loudly here at config load rather than
+        # silently selecting a default at dispatch time. The discriminated
+        # union in src.domain.entities.architectures parses the dict into
+        # the right Pydantic subclass.
+        try:
+            arch_payload = data["architecture"]
+        except KeyError as exc:
+            raise ValueError(
+                "ModelConfig is missing the required `architecture` block; "
+                "every model option in models.yaml / models-cpu.yaml must "
+                f"declare its architecture kind. Got payload keys: {sorted(data.keys())!r}"
+            ) from exc
+        architecture = _ARCHITECTURE_ADAPTER.validate_python(arch_payload)
+
         return cls(
             model_id=data["model_id"],
             framework=data["framework"],
+            architecture=architecture,
             vram_gb=data.get("vram_gb", 0.0),
             cpu_memory_gb=data.get("cpu_memory_gb", 0.0),
             cpu_compatible=data.get("cpu_compatible", False),
@@ -253,7 +297,7 @@ class InferenceConfig:
             )
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "InferenceConfig":
+    def from_dict(cls, data: dict[str, Any]) -> InferenceConfig:
         """Create from dictionary representation.
 
         Parameters

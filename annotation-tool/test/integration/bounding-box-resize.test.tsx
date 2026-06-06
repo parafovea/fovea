@@ -7,7 +7,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { ThemeProvider, createTheme } from '@mui/material/styles'
 import InteractiveBoundingBox from '@components/annotation/InteractiveBoundingBox'
 import DrawingCanvas from '@components/annotation/DrawingCanvas'
 import type { Annotation, BoundingBox, BoundingBoxSequence } from '@models/types'
@@ -30,8 +29,6 @@ vi.mock('@hooks/annotation/useAnnotationDrawing', () => ({
   }),
 }))
 
-const theme = createTheme()
-
 function createTestQueryClient() {
   return new QueryClient({
     defaultOptions: {
@@ -45,7 +42,7 @@ function renderWithProviders(ui: React.ReactElement) {
   const queryClient = createTestQueryClient()
   return render(
     <QueryClientProvider client={queryClient}>
-      <ThemeProvider theme={theme}>{ui}</ThemeProvider>
+      {ui}
     </QueryClientProvider>
   )
 }
@@ -149,19 +146,17 @@ describe('Bounding Box Resize Behavior', () => {
       // The SVG viewBox handles the scaling
       rerender(
         <QueryClientProvider client={createTestQueryClient()}>
-          <ThemeProvider theme={theme}>
-            <svg viewBox="0 0 1920 1080" data-testid="test-svg">
-              <InteractiveBoundingBox
-                annotation={annotation}
-                currentFrame={0}
-                videoWidth={1920}
-                videoHeight={1080}
-                isActive={false}
-                onSelect={vi.fn()}
-                mode="keyframe"
-              />
-            </svg>
-          </ThemeProvider>
+          <svg viewBox="0 0 1920 1080" data-testid="test-svg">
+            <InteractiveBoundingBox
+              annotation={annotation}
+              currentFrame={0}
+              videoWidth={1920}
+              videoHeight={1080}
+              isActive={false}
+              onSelect={vi.fn()}
+              mode="keyframe"
+            />
+          </svg>
         </QueryClientProvider>
       )
 
@@ -348,17 +343,15 @@ describe('Bounding Box Resize Behavior', () => {
       // Rerender with different dimensions
       rerender(
         <QueryClientProvider client={createTestQueryClient()}>
-          <ThemeProvider theme={theme}>
-            <DrawingCanvas
-              videoId="test-video"
-              currentTime={0}
-              videoWidth={1280}
-              videoHeight={720}
-              annotations={annotations}
-              selectedAnnotation={null}
-              onAnnotationSelect={vi.fn()}
-            />
-          </ThemeProvider>
+          <DrawingCanvas
+            videoId="test-video"
+            currentTime={0}
+            videoWidth={1280}
+            videoHeight={720}
+            annotations={annotations}
+            selectedAnnotation={null}
+            onAnnotationSelect={vi.fn()}
+          />
         </QueryClientProvider>
       )
 

@@ -7,35 +7,36 @@
 
 import { useState } from 'react'
 import {
-  Box,
-  Button,
-  TextField,
+  Plus,
+  Pencil,
+  Trash2,
+  Archive,
+  ArchiveRestore,
+} from 'lucide-react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Badge } from '@/components/ui/badge'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Spinner } from '@/components/ui/spinner'
+import { Switch } from '@/components/ui/switch'
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import {
   Table,
   TableBody,
   TableCell,
-  TableContainer,
   TableHead,
+  TableHeader,
   TableRow,
-  IconButton,
-  Chip,
-  Alert,
-  CircularProgress,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  FormControlLabel,
-  Switch,
-} from '@mui/material'
-import {
-  Add as AddIcon,
-  Edit as EditIcon,
-  Delete as DeleteIcon,
-  Archive as ArchiveIcon,
-  Unarchive as UnarchiveIcon,
-} from '@mui/icons-material'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import ConfirmDialog from '../shared/ConfirmDialog'
+} from '@/components/ui/table'
+import { ConfirmDialog } from '../shared/ConfirmDialog'
 
 interface ProjectMember {
   userId: string
@@ -86,7 +87,7 @@ async function fetchProjects(): Promise<Project[]> {
  * Admin project management page.
  * Provides interface for viewing, creating, editing, archiving, and deleting projects.
  */
-export default function ProjectManagementPage() {
+export function ProjectManagementPage(): JSX.Element {
   const queryClient = useQueryClient()
   const { data: projects = [], isLoading, error } = useQuery({
     queryKey: projectKeys.list(),
@@ -227,145 +228,156 @@ export default function ProjectManagementPage() {
 
   if (isLoading) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
-        <CircularProgress />
-      </Box>
+      <div className="flex justify-center p-8">
+        <Spinner />
+      </div>
     )
   }
 
   if (error) {
     return (
-      <Box sx={{ p: 3 }}>
-        <Alert severity="error">
-          Failed to load projects: {error instanceof Error ? error.message : 'Unknown error'}
+      <div className="p-6">
+        <Alert variant="destructive">
+          <AlertDescription>
+            Failed to load projects: {error instanceof Error ? error.message : 'Unknown error'}
+          </AlertDescription>
         </Alert>
-      </Box>
+      </div>
     )
   }
 
   return (
-    <Box sx={{ p: 3 }}>
-      <Box sx={{ display: 'flex', gap: 2, mb: 3, alignItems: 'center', justifyContent: 'space-between' }}>
-        <FormControlLabel
-          control={<Switch checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} />}
-          label="Show archived"
-        />
-        <Button variant="contained" startIcon={<AddIcon />} onClick={handleOpenCreate}>
+    <div className="p-6">
+      <div className="flex gap-4 mb-6 items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Switch
+            id="show-archived"
+            checked={showArchived}
+            onCheckedChange={setShowArchived}
+          />
+          <Label htmlFor="show-archived">Show archived</Label>
+        </div>
+        <Button onClick={handleOpenCreate}>
+          <Plus className="mr-2 h-4 w-4" />
           Create Project
         </Button>
-      </Box>
+      </div>
 
-      <TableContainer>
-        <Table>
-          <TableHead>
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Name</TableHead>
+            <TableHead>Slug</TableHead>
+            <TableHead>Owner</TableHead>
+            <TableHead className="text-right">Members</TableHead>
+            <TableHead className="text-right">Videos</TableHead>
+            <TableHead>Status</TableHead>
+            <TableHead>Created At</TableHead>
+            <TableHead className="text-right">Actions</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {visibleProjects.length === 0 ? (
             <TableRow>
-              <TableCell>Name</TableCell>
-              <TableCell>Slug</TableCell>
-              <TableCell>Owner</TableCell>
-              <TableCell align="right">Members</TableCell>
-              <TableCell align="right">Videos</TableCell>
-              <TableCell>Status</TableCell>
-              <TableCell>Created At</TableCell>
-              <TableCell align="right">Actions</TableCell>
+              <TableCell colSpan={8} className="text-center py-8">
+                No projects found
+              </TableCell>
             </TableRow>
-          </TableHead>
-          <TableBody>
-            {visibleProjects.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={8} align="center" sx={{ py: 4 }}>
-                  No projects found
+          ) : (
+            visibleProjects.map((project) => (
+              <TableRow key={project.id} className={project.archived ? 'opacity-60' : ''}>
+                <TableCell>{project.name}</TableCell>
+                <TableCell>
+                  <Badge variant="outline">{project.slug}</Badge>
+                </TableCell>
+                <TableCell>
+                  <Badge variant={project.ownerType === 'group' ? 'secondary' : 'default'}>
+                    {project.ownerName}
+                  </Badge>
+                </TableCell>
+                <TableCell className="text-right">{project.members.length}</TableCell>
+                <TableCell className="text-right">{project.videoCount}</TableCell>
+                <TableCell>
+                  {project.archived ? (
+                    <Badge variant="outline">Archived</Badge>
+                  ) : (
+                    <Badge variant="secondary">Active</Badge>
+                  )}
+                </TableCell>
+                <TableCell>{formatDate(project.createdAt)}</TableCell>
+                <TableCell className="text-right">
+                  <Button variant="ghost" size="icon" onClick={() => handleOpenEdit(project)} aria-label="edit project">
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => toggleArchive.mutate({ id: project.id, archived: !project.archived })}
+                    aria-label={project.archived ? 'unarchive project' : 'archive project'}
+                  >
+                    {project.archived ? <ArchiveRestore className="h-4 w-4" /> : <Archive className="h-4 w-4" />}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => { setDeletingProject(project); setDeleteConfirmOpen(true) }}
+                    aria-label="delete project"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
                 </TableCell>
               </TableRow>
-            ) : (
-              visibleProjects.map((project) => (
-                <TableRow key={project.id} hover sx={{ opacity: project.archived ? 0.6 : 1 }}>
-                  <TableCell>{project.name}</TableCell>
-                  <TableCell>
-                    <Chip label={project.slug} size="small" variant="outlined" />
-                  </TableCell>
-                  <TableCell>
-                    <Chip
-                      label={project.ownerName}
-                      size="small"
-                      color={project.ownerType === 'group' ? 'secondary' : 'default'}
-                    />
-                  </TableCell>
-                  <TableCell align="right">{project.members.length}</TableCell>
-                  <TableCell align="right">{project.videoCount}</TableCell>
-                  <TableCell>
-                    {project.archived ? (
-                      <Chip label="Archived" size="small" color="warning" />
-                    ) : (
-                      <Chip label="Active" size="small" color="success" />
-                    )}
-                  </TableCell>
-                  <TableCell>{formatDate(project.createdAt)}</TableCell>
-                  <TableCell align="right">
-                    <IconButton size="small" onClick={() => handleOpenEdit(project)} aria-label="edit project">
-                      <EditIcon fontSize="small" />
-                    </IconButton>
-                    <IconButton
-                      size="small"
-                      onClick={() => toggleArchive.mutate({ id: project.id, archived: !project.archived })}
-                      aria-label={project.archived ? 'unarchive project' : 'archive project'}
-                    >
-                      {project.archived ? <UnarchiveIcon fontSize="small" /> : <ArchiveIcon fontSize="small" />}
-                    </IconButton>
-                    <IconButton
-                      size="small"
-                      onClick={() => { setDeletingProject(project); setDeleteConfirmOpen(true) }}
-                      aria-label="delete project"
-                    >
-                      <DeleteIcon fontSize="small" />
-                    </IconButton>
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </TableContainer>
+            ))
+          )}
+        </TableBody>
+      </Table>
 
       {/* Create/Edit Dialog */}
-      <Dialog open={dialogOpen} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
-        <DialogTitle>{editingProject ? 'Edit Project' : 'Create Project'}</DialogTitle>
-        <DialogContent>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
-            <TextField
-              label="Name"
-              value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              fullWidth
-              required
-            />
-            <TextField
-              label="Slug"
-              value={formData.slug}
-              onChange={(e) => setFormData({ ...formData, slug: e.target.value })}
-              fullWidth
-              required
-              helperText="URL-friendly identifier (e.g. my-project)"
-            />
-            <TextField
-              label="Owner ID"
-              value={formData.ownerId}
-              onChange={(e) => setFormData({ ...formData, ownerId: e.target.value })}
-              fullWidth
-              required
-              helperText={`UUID of the ${formData.ownerType} that owns this project`}
-            />
-          </Box>
+      <Dialog open={dialogOpen} onOpenChange={(isOpen) => !isOpen && handleCloseDialog()}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{editingProject ? 'Edit Project' : 'Create Project'}</DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-col gap-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="project-name">Name *</Label>
+              <Input
+                id="project-name"
+                value={formData.name}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="project-slug">Slug *</Label>
+              <Input
+                id="project-slug"
+                value={formData.slug}
+                onChange={(e) => setFormData({ ...formData, slug: e.target.value })}
+              />
+              <p className="text-sm text-muted-foreground">URL-friendly identifier (e.g. my-project)</p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="project-ownerId">Owner ID *</Label>
+              <Input
+                id="project-ownerId"
+                value={formData.ownerId}
+                onChange={(e) => setFormData({ ...formData, ownerId: e.target.value })}
+              />
+              <p className="text-sm text-muted-foreground">
+                UUID of the {formData.ownerType} that owns this project
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={handleCloseDialog}>Cancel</Button>
+            <Button
+              onClick={handleSubmit}
+              disabled={!formData.name || !formData.slug || !formData.ownerId || createProject.isPending || updateProject.isPending}
+            >
+              {editingProject ? 'Save' : 'Create'}
+            </Button>
+          </DialogFooter>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={handleCloseDialog}>Cancel</Button>
-          <Button
-            onClick={handleSubmit}
-            variant="contained"
-            disabled={!formData.name || !formData.slug || !formData.ownerId || createProject.isPending || updateProject.isPending}
-          >
-            {editingProject ? 'Save' : 'Create'}
-          </Button>
-        </DialogActions>
       </Dialog>
 
       {/* Delete Confirmation */}
@@ -374,11 +386,11 @@ export default function ProjectManagementPage() {
         title="Delete Project"
         message={`Are you sure you want to delete project "${deletingProject?.name}"? This action cannot be undone.`}
         confirmText="Delete"
-        confirmColor="error"
+        confirmVariant="destructive"
         onConfirm={() => { if (deletingProject) deleteProject.mutate(deletingProject.id) }}
         onCancel={() => { setDeleteConfirmOpen(false); setDeletingProject(null) }}
         loading={deleteProject.isPending}
       />
-    </Box>
+    </div>
   )
 }

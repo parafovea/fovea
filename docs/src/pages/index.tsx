@@ -14,7 +14,7 @@ export default function Home(): JSX.Element {
 
           <h1 className={styles.title}>Fovea</h1>
           <p className={styles.subtitle}>
-            Video annotation for teams that need more than bounding boxes.
+            Structured, multi-perspective event annotation for video.
           </p>
           <p className={styles.description}>
             Build structured ontologies, annotate with multiple analyst perspectives,

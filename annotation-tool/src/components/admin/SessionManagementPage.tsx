@@ -3,25 +3,22 @@
  * Displays active sessions with ability to revoke them.
  */
 
+import { useState } from 'react'
+import { Trash2, RefreshCw } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Spinner } from '@/components/ui/spinner'
 import {
-  Box,
-  Button,
   Table,
   TableBody,
   TableCell,
-  TableContainer,
   TableHead,
+  TableHeader,
   TableRow,
-  IconButton,
-  Alert,
-  CircularProgress,
-  Typography,
-  Chip,
-} from '@mui/material'
-import { Delete as DeleteIcon, Refresh as RefreshIcon } from '@mui/icons-material'
+} from '@/components/ui/table'
 import { useSessions, useRevokeSession } from '@store/queries/admin/useSessions'
-import ConfirmDialog from '../shared/ConfirmDialog'
-import { useState } from 'react'
+import { ConfirmDialog } from '../shared/ConfirmDialog'
 
 /**
  * Session management page.
@@ -30,7 +27,7 @@ import { useState } from 'react'
  *
  * @returns Session management page
  */
-export default function SessionManagementPage() {
+export function SessionManagementPage(): JSX.Element {
   const { data: sessions = [], isLoading, error, refetch } = useSessions()
   const revokeSession = useRevokeSession()
 
@@ -95,7 +92,7 @@ export default function SessionManagementPage() {
    * @returns Truncated user agent
    */
   const truncateUserAgent = (userAgent: string | undefined) => {
-    if (!userAgent) return '—'
+    if (!userAgent) return '-'
     if (userAgent.length <= 50) return userAgent
     return userAgent.substring(0, 47) + '...'
   }
@@ -104,103 +101,98 @@ export default function SessionManagementPage() {
 
   if (isLoading) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
-        <CircularProgress />
-      </Box>
+      <div className="flex justify-center p-8" data-tour-id="session-management-page">
+        <Spinner />
+      </div>
     )
   }
 
   if (error) {
     return (
-      <Box sx={{ p: 3 }}>
-        <Alert severity="error">
-          Failed to load sessions: {error.message}
+      <div className="p-6" data-tour-id="session-management-page">
+        <Alert variant="destructive">
+          <AlertDescription>Failed to load sessions: {error.message}</AlertDescription>
         </Alert>
-      </Box>
+      </div>
     )
   }
 
   return (
-    <Box sx={{ p: 3 }}>
+    <div className="p-6" data-tour-id="session-management-page">
       {/* Toolbar */}
-      <Box sx={{ display: 'flex', gap: 2, mb: 3, alignItems: 'center', justifyContent: 'space-between' }}>
-        <Typography variant="body2" color="text.secondary">
+      <div className="flex gap-4 mb-6 items-center justify-between">
+        <p className="text-sm text-muted-foreground">
           {sessions.length > 0
             ? `Showing ${sessions.length} active session${sessions.length !== 1 ? 's' : ''}. Auto-refreshes every 30 seconds.`
             : 'No active sessions'}
-        </Typography>
-        <Button
-          variant="outlined"
-          startIcon={<RefreshIcon />}
-          onClick={() => refetch()}
-          size="small"
-        >
+        </p>
+        <Button variant="outline" size="sm" onClick={() => refetch()}>
+          <RefreshCw className="mr-2 h-4 w-4" />
           Refresh
         </Button>
-      </Box>
+      </div>
 
       {/* Sessions Table */}
-      <TableContainer>
-        <Table>
-          <TableHead>
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>User</TableHead>
+            <TableHead>IP Address</TableHead>
+            <TableHead>User Agent</TableHead>
+            <TableHead>Created</TableHead>
+            <TableHead>Expires</TableHead>
+            <TableHead className="text-right">Actions</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {sessions.length === 0 ? (
             <TableRow>
-              <TableCell>User</TableCell>
-              <TableCell>IP Address</TableCell>
-              <TableCell>User Agent</TableCell>
-              <TableCell>Created</TableCell>
-              <TableCell>Expires</TableCell>
-              <TableCell align="right">Actions</TableCell>
+              <TableCell colSpan={6} className="text-center py-8">
+                No active sessions
+              </TableCell>
             </TableRow>
-          </TableHead>
-          <TableBody>
-            {sessions.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={6} align="center" sx={{ py: 4 }}>
-                  No active sessions
+          ) : (
+            sessions.map((session) => (
+              <TableRow key={session.id}>
+                <TableCell>
+                  <div>
+                    <p className="text-sm">
+                      {session.displayName}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      @{session.username}
+                    </p>
+                  </div>
+                </TableCell>
+                <TableCell>{session.ipAddress || '-'}</TableCell>
+                <TableCell>
+                  <span className="font-mono text-xs">
+                    {truncateUserAgent(session.userAgent)}
+                  </span>
+                </TableCell>
+                <TableCell>{formatDate(session.createdAt)}</TableCell>
+                <TableCell>
+                  {isExpired(session.expiresAt) ? (
+                    <Badge variant="destructive">Expired</Badge>
+                  ) : (
+                    formatDate(session.expiresAt)
+                  )}
+                </TableCell>
+                <TableCell className="text-right">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => handleRevokeClick(session.id)}
+                    aria-label="revoke session"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
                 </TableCell>
               </TableRow>
-            ) : (
-              sessions.map((session) => (
-                <TableRow key={session.id} hover>
-                  <TableCell>
-                    <Box>
-                      <Typography variant="body2">
-                        {session.displayName}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        @{session.username}
-                      </Typography>
-                    </Box>
-                  </TableCell>
-                  <TableCell>{session.ipAddress || '—'}</TableCell>
-                  <TableCell>
-                    <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>
-                      {truncateUserAgent(session.userAgent)}
-                    </Typography>
-                  </TableCell>
-                  <TableCell>{formatDate(session.createdAt)}</TableCell>
-                  <TableCell>
-                    {isExpired(session.expiresAt) ? (
-                      <Chip label="Expired" size="small" color="error" />
-                    ) : (
-                      formatDate(session.expiresAt)
-                    )}
-                  </TableCell>
-                  <TableCell align="right">
-                    <IconButton
-                      size="small"
-                      onClick={() => handleRevokeClick(session.id)}
-                      aria-label="revoke session"
-                    >
-                      <DeleteIcon fontSize="small" />
-                    </IconButton>
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </TableContainer>
+            ))
+          )}
+        </TableBody>
+      </Table>
 
       {/* Revoke Confirmation Dialog */}
       <ConfirmDialog
@@ -208,7 +200,7 @@ export default function SessionManagementPage() {
         title="Revoke Session"
         message={`Are you sure you want to revoke the session for ${revokingSession?.displayName} (@${revokingSession?.username})? They will be logged out immediately.`}
         confirmText="Revoke"
-        confirmColor="error"
+        confirmVariant="destructive"
         onConfirm={handleRevokeConfirm}
         onCancel={() => {
           setRevokeConfirmOpen(false)
@@ -216,6 +208,6 @@ export default function SessionManagementPage() {
         }}
         loading={revokeSession.isPending}
       />
-    </Box>
+    </div>
   )
 }

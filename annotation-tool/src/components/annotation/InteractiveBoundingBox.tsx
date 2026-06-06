@@ -1,7 +1,10 @@
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react'
-import { Chip, Tooltip } from '@mui/material'
+import { Badge } from '@/components/ui/badge'
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { useAddKeyframe, useUpdateKeyframe, useUpdateAnnotation } from '@store/queries'
 import { BoundingBox, Annotation, TypeAnnotation, ObjectAnnotation } from '@models/types'
+import { BoundingBoxHUD } from './BoundingBoxHUD'
+import { useBoundingBoxKeyboard } from './useBoundingBoxKeyboard'
 
 /**
  * Type guard to check if annotation is a TypeAnnotation.
@@ -50,13 +53,12 @@ type ResizeHandle = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w' | null
 type InteractionMode = 'none' | 'dragging' | 'resizing'
 
 /**
- * @component InteractiveBoundingBox
- * @description Interactive bounding box component with drag, resize, and keyframe management.
+ * Interactive bounding box component with drag, resize, and keyframe management.
  * Supports keyframe-based animation with interpolation between frames. Provides resize handles
  * for corner and edge manipulation, and displays quick actions panel when active.
  *
- * @param {InteractiveBoundingBoxProps} props - Component properties
- * @returns {JSX.Element} SVG group containing bounding box and interaction handles
+ * @param props - Component properties
+ * @returns SVG group containing bounding box and interaction handles
  *
  * @example
  * ```tsx
@@ -70,8 +72,6 @@ type InteractionMode = 'none' | 'dragging' | 'resizing'
  *   mode="keyframe"
  * />
  * ```
- *
- * @public
  */
 export default function InteractiveBoundingBox({
   annotation,
@@ -360,6 +360,31 @@ export default function InteractiveBoundingBox({
           newBox.width = originalBox.width - (newBox.x - originalBox.x)
           break
       }
+
+      // Shift-lock aspect ratio when resizing from a corner — the smaller
+      // of the two dimension deltas wins so the ratio of the original box
+      // is preserved. The anchored edge of the corner handle determines
+      // which direction the constraint grows.
+      if (e.shiftKey && (activeHandle === 'nw' || activeHandle === 'ne' ||
+          activeHandle === 'se' || activeHandle === 'sw')) {
+        const aspect = originalBox.width / originalBox.height
+        const wFromH = newBox.height * aspect
+        const hFromW = newBox.width / aspect
+        // Honour whichever axis drifted farther.
+        if (Math.abs(newBox.width - originalBox.width) > Math.abs(newBox.height - originalBox.height)) {
+          const nextHeight = hFromW
+          if (activeHandle === 'nw' || activeHandle === 'ne') {
+            newBox.y = originalBox.y + originalBox.height - nextHeight
+          }
+          newBox.height = nextHeight
+        } else {
+          const nextWidth = wFromH
+          if (activeHandle === 'nw' || activeHandle === 'sw') {
+            newBox.x = originalBox.x + originalBox.width - nextWidth
+          }
+          newBox.width = nextWidth
+        }
+      }
     }
 
     // Update the annotation with the new bounding box
@@ -412,10 +437,96 @@ export default function InteractiveBoundingBox({
     }
   }, [interactionMode, handleMouseMove, handleMouseUp])
 
+  // Arrow-key nudging. Enabled only for the currently selected box in an
+  // editable mode; shift multiplies the step to 10 pixels per press. Uses
+  // onUpdate so the caller's persistence pipeline runs on every nudge.
+  useBoundingBoxKeyboard({
+    enabled: isActive && isEditable,
+    box: currentBox,
+    videoWidth,
+    videoHeight,
+    onNudge: (patch) => {
+      if (onUpdate) {
+        onUpdate(patch)
+      } else if (mode === 'keyframe' && currentBox) {
+        updateKeyframe({
+          videoId: annotation.videoId,
+          annotationId: annotation.id,
+          frameNumber: currentFrame,
+          box: { ...currentBox, ...patch },
+        })
+      }
+    },
+    onCommit: () => {
+      onEditComplete?.()
+    },
+  })
+
 
   // Safety check: return null if no box available (after all hooks have been called)
   if (!currentBox) {
     return null
+  }
+
+  // Get badge label. For type annotations show the resolved type name
+  // (falling back to a category-prefixed id snippet so the visitor sees
+  // "entity • d20a07" instead of the literal category word "entity"
+  // which reads as if it were the actual type name). For object
+  // annotations, show the linked world object's name; only fall back
+  // to the kind-word literal ("Entity", "Event", …) when no linked
+  // object resolved at all, in which case the visitor at least sees
+  // what KIND of link the annotation declared.
+  const badgeLabel =
+    isTypeAnnotation(annotation)
+      ? (typeName || `${annotation.typeCategory} • ${annotation.typeId.slice(0, 6)}`)
+      : linkedObject?.name ||
+        (isObjectAnnotation(annotation) && annotation.linkedEntityId
+          ? `Entity • ${annotation.linkedEntityId.slice(0, 6)}`
+          : isObjectAnnotation(annotation) && annotation.linkedEventId
+          ? `Event • ${annotation.linkedEventId.slice(0, 6)}`
+          : isObjectAnnotation(annotation) && annotation.linkedLocationId
+          ? `Location • ${annotation.linkedLocationId.slice(0, 6)}`
+          : isObjectAnnotation(annotation) && annotation.linkedCollectionId
+          ? `Collection • ${annotation.linkedCollectionId.slice(0, 6)}`
+          : 'Annotation')
+
+  // Get badge variant based on annotation type
+  const getBadgeVariant = (): 'default' | 'secondary' | 'destructive' | 'outline' => {
+    if (isObjectAnnotation(annotation) && annotation.linkedEntityId) return 'default'
+    if (isObjectAnnotation(annotation) && annotation.linkedEventId) return 'secondary'
+    if (isTypeAnnotation(annotation) && annotation.typeCategory === 'entity') return 'default'
+    if (isTypeAnnotation(annotation) && annotation.typeCategory === 'event') return 'secondary'
+    return 'outline'
+  }
+
+  // Render resize handle with optional tooltip
+  const renderResizeHandle = (
+    x: number, y: number, cursor: string, handle: ResizeHandle, tooltipText?: string
+  ) => {
+    const rect = (
+      <rect
+        x={x}
+        y={y}
+        width={handleSize}
+        height={handleSize}
+        fill="white"
+        stroke={strokeColor}
+        strokeWidth="1"
+        style={{ cursor, pointerEvents: 'auto' }}
+        onMouseDown={(e) => handleResizeMouseDown(e, handle)}
+      />
+    )
+
+    if (tooltipText) {
+      return (
+        <Tooltip>
+          <TooltipTrigger render={rect} />
+          <TooltipContent side="top">{tooltipText}</TooltipContent>
+        </Tooltip>
+      )
+    }
+
+    return rect
   }
 
   return (
@@ -446,58 +557,26 @@ export default function InteractiveBoundingBox({
       {isEditable && (isActive || hovering) && (
         <>
           {/* Corner handles (always shown for keyframe and interpolated) */}
-          <Tooltip title={mode === 'interpolated' ? 'Convert to Keyframe' : ''} arrow placement="top">
-            <rect
-              x={currentBox.x - handleSize / 2}
-              y={currentBox.y - handleSize / 2}
-              width={handleSize}
-              height={handleSize}
-              fill="white"
-              stroke={strokeColor}
-              strokeWidth="1"
-              style={{ cursor: 'nw-resize', pointerEvents: 'auto' }}
-              onMouseDown={(e) => handleResizeMouseDown(e, 'nw')}
-            />
-          </Tooltip>
-          <Tooltip title={mode === 'interpolated' ? 'Convert to Keyframe' : ''} arrow placement="top">
-            <rect
-              x={currentBox.x + currentBox.width - handleSize / 2}
-              y={currentBox.y - handleSize / 2}
-              width={handleSize}
-              height={handleSize}
-              fill="white"
-              stroke={strokeColor}
-              strokeWidth="1"
-              style={{ cursor: 'ne-resize', pointerEvents: 'auto' }}
-              onMouseDown={(e) => handleResizeMouseDown(e, 'ne')}
-            />
-          </Tooltip>
-          <Tooltip title={mode === 'interpolated' ? 'Convert to Keyframe' : ''} arrow placement="bottom">
-            <rect
-              x={currentBox.x + currentBox.width - handleSize / 2}
-              y={currentBox.y + currentBox.height - handleSize / 2}
-              width={handleSize}
-              height={handleSize}
-              fill="white"
-              stroke={strokeColor}
-              strokeWidth="1"
-              style={{ cursor: 'se-resize', pointerEvents: 'auto' }}
-              onMouseDown={(e) => handleResizeMouseDown(e, 'se')}
-            />
-          </Tooltip>
-          <Tooltip title={mode === 'interpolated' ? 'Convert to Keyframe' : ''} arrow placement="bottom">
-            <rect
-              x={currentBox.x - handleSize / 2}
-              y={currentBox.y + currentBox.height - handleSize / 2}
-              width={handleSize}
-              height={handleSize}
-              fill="white"
-              stroke={strokeColor}
-              strokeWidth="1"
-              style={{ cursor: 'sw-resize', pointerEvents: 'auto' }}
-              onMouseDown={(e) => handleResizeMouseDown(e, 'sw')}
-            />
-          </Tooltip>
+          {renderResizeHandle(
+            currentBox.x - handleSize / 2, currentBox.y - handleSize / 2,
+            'nw-resize', 'nw',
+            mode === 'interpolated' ? 'Convert to Keyframe' : undefined
+          )}
+          {renderResizeHandle(
+            currentBox.x + currentBox.width - handleSize / 2, currentBox.y - handleSize / 2,
+            'ne-resize', 'ne',
+            mode === 'interpolated' ? 'Convert to Keyframe' : undefined
+          )}
+          {renderResizeHandle(
+            currentBox.x + currentBox.width - handleSize / 2, currentBox.y + currentBox.height - handleSize / 2,
+            'se-resize', 'se',
+            mode === 'interpolated' ? 'Convert to Keyframe' : undefined
+          )}
+          {renderResizeHandle(
+            currentBox.x - handleSize / 2, currentBox.y + currentBox.height - handleSize / 2,
+            'sw-resize', 'sw',
+            mode === 'interpolated' ? 'Convert to Keyframe' : undefined
+          )}
 
           {/* Edge handles (only for keyframe mode) */}
           {showAllHandles && (
@@ -561,42 +640,33 @@ export default function InteractiveBoundingBox({
           style={{ pointerEvents: 'none', overflow: 'visible' }}
         >
           <div style={{ width: 'fit-content', display: 'flex', justifyContent: 'flex-start' }}>
-            <Chip
-              label={
-                // For type annotations: show actual type name, fallback to category
-                isTypeAnnotation(annotation) ? (typeName || annotation.typeCategory) :
-                // For object annotations: show object name, fallback to generic
-                linkedObject?.name ||
-                (isObjectAnnotation(annotation) && annotation.linkedEntityId ? 'Entity' :
-                 isObjectAnnotation(annotation) && annotation.linkedEventId ? 'Event' :
-                 isObjectAnnotation(annotation) && annotation.linkedLocationId ? 'Location' :
-                 isObjectAnnotation(annotation) && annotation.linkedCollectionId ? 'Collection' :
-                 'Annotation')
-              }
-              size="small"
-              color={
-                isObjectAnnotation(annotation) && annotation.linkedEntityId ? 'success' :
-                isObjectAnnotation(annotation) && annotation.linkedEventId ? 'warning' :
-                isObjectAnnotation(annotation) && annotation.linkedLocationId ? 'secondary' :
-                isTypeAnnotation(annotation) && annotation.typeCategory === 'entity' ? 'success' :
-                isTypeAnnotation(annotation) && annotation.typeCategory === 'event' ? 'warning' :
-                'info'
-              }
-              sx={{
-                fontSize: 'clamp(10px, 0.75rem, 14px)',
-                height: 24,
-                minWidth: 60,
-                maxWidth: 180,
-                '& .MuiChip-label': {
-                  whiteSpace: 'nowrap',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  paddingLeft: '8px',
-                  paddingRight: '8px',
-                }
-              }}
-            />
+            <Badge
+              variant={getBadgeVariant()}
+              className="h-6 min-w-[60px] max-w-[180px] text-[clamp(10px,0.75rem,14px)] truncate"
+            >
+              {badgeLabel}
+            </Badge>
           </div>
+        </foreignObject>
+      )}
+
+      {/* Dimension HUD — only while interacting, anchored below the box. */}
+      {interactionMode !== 'none' && (
+        <foreignObject
+          x={currentBox.x}
+          y={currentBox.y + currentBox.height}
+          width={240}
+          height={36}
+          style={{ pointerEvents: 'none', overflow: 'visible' }}
+        >
+          <BoundingBoxHUD
+            width={currentBox.width}
+            height={currentBox.height}
+            x={currentBox.x}
+            y={currentBox.y}
+            anchor="bottom"
+            accent={strokeColor}
+          />
         </foreignObject>
       )}
 

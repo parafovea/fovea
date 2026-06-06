@@ -9,6 +9,10 @@ import {
   modelServiceDuration,
 } from "../metrics.js";
 import { buildPersonaPrompts } from "../utils/queryBuilder.js";
+import {
+  fetchModelService,
+  MODEL_SERVICE_TIMEOUTS,
+} from "../lib/fetchModelService.js";
 
 /**
  * Response type from model service /api/summarize endpoint.
@@ -33,6 +37,21 @@ interface ModelSummarizeResponse {
 /**
  * Request type for model service /api/summarize endpoint.
  */
+interface ModelGenerationOverrides {
+  temperature?: number;
+  top_p?: number;
+  max_tokens?: number;
+}
+
+interface ModelAudioOverrides {
+  beam_size?: number;
+  compute_type?: 'float16' | 'float32' | 'int8' | 'int8_float16';
+  num_speakers?: number;
+  min_speakers?: number;
+  max_speakers?: number;
+  vad_threshold?: number;
+}
+
 interface ModelSummarizeRequest {
   video_id: string;
   video_path?: string;
@@ -45,6 +64,8 @@ interface ModelSummarizeRequest {
   enable_speaker_diarization?: boolean;
   fusion_strategy?: string;
   audio_language?: string;
+  generation_overrides?: ModelGenerationOverrides;
+  audio_overrides?: ModelAudioOverrides;
 }
 
 /**
@@ -125,6 +146,21 @@ const prisma = new PrismaClient();
 /**
  * Job data structure for video summarization tasks.
  */
+export interface GenerationOverridesJobData {
+  temperature?: number;
+  topP?: number;
+  maxTokens?: number;
+}
+
+export interface AudioOverridesJobData {
+  beamSize?: number;
+  computeType?: 'float16' | 'float32' | 'int8' | 'int8_float16';
+  numSpeakers?: number;
+  minSpeakers?: number;
+  maxSpeakers?: number;
+  vadThreshold?: number;
+}
+
 export interface VideoSummarizationJobData {
   videoId: string;
   personaId: string;
@@ -134,6 +170,8 @@ export interface VideoSummarizationJobData {
   enableSpeakerDiarization?: boolean;
   fusionStrategy?: string;
   audioLanguage?: string;
+  generationOverrides?: GenerationOverridesJobData;
+  audioOverrides?: AudioOverridesJobData;
 }
 
 /**
@@ -173,6 +211,8 @@ export const videoWorker = new Worker<
       enableSpeakerDiarization,
       fusionStrategy,
       audioLanguage,
+      generationOverrides,
+      audioOverrides,
     } = job.data;
 
     await job.updateProgress(10);
@@ -227,14 +267,16 @@ export const videoWorker = new Worker<
       ...(enableSpeakerDiarization !== undefined && { enableSpeakerDiarization }),
       ...(fusionStrategy !== undefined && { fusionStrategy }),
       ...(audioLanguage !== undefined && { audioLanguage }),
+      ...(generationOverrides !== undefined && { generationOverrides }),
+      ...(audioOverrides !== undefined && { audioOverrides }),
     };
 
     const requestBody = snakecaseKeys(camelCaseRequest) as ModelSummarizeRequest;
 
-    const response = await fetch(`${modelServiceUrl}/api/summarize`, {
+    const response = await fetchModelService(`${modelServiceUrl}/api/summarize`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(requestBody),
+      timeoutMs: MODEL_SERVICE_TIMEOUTS.summarize,
+      body: requestBody,
     });
 
     const modelDuration = Date.now() - modelStartTime;
@@ -482,10 +524,29 @@ export const claimWorker = new Worker<
 
     await job.updateProgress(20);
 
-    // Build extraction request
+    // Build extraction request. The persisted `summary.summary` is a
+    // gloss array (`[{type:"text", content:"..."}, ...]`); the
+    // model-service's /api/extract-claims expects a single plain
+    // string, so flatten the gloss segments before sending.
+    const flattenSummaryGloss = (value: unknown): string => {
+      if (typeof value === "string") return value;
+      if (Array.isArray(value)) {
+        return value
+          .map((seg) => {
+            if (typeof seg === "string") return seg;
+            if (seg && typeof seg === "object" && "content" in seg) {
+              return String((seg as { content: unknown }).content ?? "");
+            }
+            return "";
+          })
+          .join(" ")
+          .trim();
+      }
+      return "";
+    };
     const requestBody: Record<string, unknown> = {
       summary_id: summaryId,
-      summary_text: summary.summary,
+      summary_text: flattenSummaryGloss(summary.summary),
       extraction_strategy: config.extractionStrategy,
       max_claims: config.maxClaimsPerSummary || 50,
       min_confidence: config.minConfidence || 0.5,
@@ -527,10 +588,10 @@ export const claimWorker = new Worker<
 
     await job.updateProgress(30);
 
-    const response = await fetch(`${modelServiceUrl}/api/extract-claims`, {
+    const response = await fetchModelService(`${modelServiceUrl}/api/extract-claims`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(requestBody),
+      timeoutMs: MODEL_SERVICE_TIMEOUTS.extractClaims,
+      body: requestBody,
     });
 
     const modelDuration = Date.now() - modelStartTime;
@@ -881,10 +942,10 @@ export const synthesisWorker = new Worker<
 
     await job.updateProgress(30);
 
-    const response = await fetch(`${modelServiceUrl}/api/synthesize-summary`, {
+    const response = await fetchModelService(`${modelServiceUrl}/api/synthesize-summary`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(requestBody),
+      timeoutMs: MODEL_SERVICE_TIMEOUTS.synthesize,
+      body: requestBody,
     });
 
     const modelDuration = Date.now() - modelStartTime;

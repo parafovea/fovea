@@ -6,7 +6,7 @@ import { describe, it, expect, vi } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import React from 'react'
-import ClaimsExtractionDialog from './ClaimsExtractionDialog'
+import { ClaimsExtractionDialog } from './ClaimsExtractionDialog'
 
 describe('ClaimsExtractionDialog', () => {
   const defaultProps = {
@@ -92,29 +92,38 @@ describe('ClaimsExtractionDialog', () => {
     it('defaults to sentence-based', () => {
       render(<ClaimsExtractionDialog {...defaultProps} />)
 
-      const sentenceBasedRadio = screen.getByRole('radio', { name: /sentence-based/i })
-      expect(sentenceBasedRadio).toBeChecked()
+      // The hidden input gets the id; the visual span[role="radio"] gets data-checked.
+      // Find the visual radio indicator that is a sibling of the hidden input.
+      const hiddenInput = document.querySelector('input#sentence-based')
+      expect(hiddenInput).toBeInTheDocument()
+      const visualRadio = hiddenInput?.parentElement?.querySelector('[role="radio"]')
+      expect(visualRadio).toHaveAttribute('aria-checked', 'true')
     })
 
     it('changes strategy on selection', async () => {
       const user = userEvent.setup()
       render(<ClaimsExtractionDialog {...defaultProps} />)
 
-      const semanticRadio = screen.getByRole('radio', { name: /semantic units/i })
-      await user.click(semanticRadio)
+      // Click the semantic-units label to select it
+      const semanticLabel = screen.getByText('Semantic units')
+      await user.click(semanticLabel)
 
-      expect(semanticRadio).toBeChecked()
+      // The hidden input gets the id; the visual span[role="radio"] gets aria-checked.
+      const semanticInput = document.querySelector('input#semantic-units')
+      const semanticRadio = semanticInput?.parentElement?.querySelector('[role="radio"]')
+      expect(semanticRadio).toHaveAttribute('aria-checked', 'true')
 
-      const sentenceBasedRadio = screen.getByRole('radio', { name: /sentence-based/i })
-      expect(sentenceBasedRadio).not.toBeChecked()
+      const sentenceInput = document.querySelector('input#sentence-based')
+      const sentenceRadio = sentenceInput?.parentElement?.querySelector('[role="radio"]')
+      expect(sentenceRadio).toHaveAttribute('aria-checked', 'false')
     })
 
     it('shows all three strategies', () => {
       render(<ClaimsExtractionDialog {...defaultProps} />)
 
-      expect(screen.getByRole('radio', { name: /sentence-based/i })).toBeInTheDocument()
-      expect(screen.getByRole('radio', { name: /semantic units/i })).toBeInTheDocument()
-      expect(screen.getByRole('radio', { name: /hierarchical/i })).toBeInTheDocument()
+      expect(screen.getByText(/Sentence-based \(default\)/)).toBeInTheDocument()
+      expect(screen.getByText('Semantic units')).toBeInTheDocument()
+      expect(screen.getByText('Hierarchical')).toBeInTheDocument()
     })
   })
 
@@ -205,8 +214,8 @@ describe('ClaimsExtractionDialog', () => {
       await user.click(annotationCheckbox)
 
       // Select semantic-units strategy
-      const semanticRadio = screen.getByRole('radio', { name: /semantic units/i })
-      await user.click(semanticRadio)
+      const semanticLabel = screen.getByText('Semantic units')
+      await user.click(semanticLabel)
 
       const extractButton = screen.getByRole('button', { name: /extract claims/i })
       await user.click(extractButton)

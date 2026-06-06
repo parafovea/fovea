@@ -5,9 +5,15 @@ name: fovea-e2e
 services:
   frontend:
     build:
-      context: ./annotation-tool
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: annotation-tool/Dockerfile
       target: production
+      args:
+        # Install the test-only window.__foveaTour handle so the tour
+        # engine E2E suite can drive launch/abandon/telemetry directly.
+        # Gated at Vite build time → dead-code-eliminated from any build
+        # that doesn't set this.
+        VITE_E2E: "1"
     ports:
       - "3000:3000"
     environment:
@@ -26,8 +32,8 @@ services:
 
   backend:
     build:
-      context: ./server
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: server/Dockerfile
     ports:
       - "3001:3001"
     environment:
@@ -55,7 +61,7 @@ services:
         condition: service_started
     networks:
       - e2e-network
-    command: sh -c "npx prisma migrate deploy && node dist/index.js"
+    command: sh -c "./node_modules/.bin/prisma migrate deploy && node prisma/seed.cjs && node dist/index.js"
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:3001/api/health"]
       interval: 10s
@@ -68,6 +74,14 @@ services:
     build:
       context: ./test-utils
       dockerfile: Dockerfile.mock-model-service
+    environment:
+      # Where the mock writes generated artefacts (thumbnails, etc.) so
+      # the backend can read them from the same shared volume. Must
+      # match the backend's STORAGE_PATH for the thumbnail flow to work
+      # end-to-end.
+      - STORAGE_PATH=/test-videos
+    volumes:
+      - ./test-videos:/test-videos:rw
     networks:
       - e2e-network
     healthcheck:
@@ -85,6 +99,11 @@ services:
       args:
         BUILD_MODE: minimal
         DEVICE: cpu
+        # Pull the [audio] extras so faster-whisper, pyannote.audio,
+        # and the supporting audio runtimes are available. Used by the
+        # transcription / diarization / VAD endpoints; off in the base
+        # minimal image to keep CI build time down.
+        ENABLE_AUDIO: "1"
     ports:
       - "8000:8000"
     environment:

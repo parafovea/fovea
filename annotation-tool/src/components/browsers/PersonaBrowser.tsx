@@ -1,30 +1,17 @@
 import { useState, useCallback } from 'react'
+import { Pencil, User, Search, Plus, Trash2 } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Card, CardContent, CardFooter } from '@/components/ui/card'
 import {
-  Grid,
-  Card,
-  CardContent,
-  CardActions,
-  Typography,
-  Box,
-  TextField,
-  InputAdornment,
-  Fab,
-  Avatar,
-  Button,
-  IconButton,
   Tooltip,
-} from '@mui/material'
-import {
-  Edit as EditIcon,
-  Person as PersonIcon,
-  Search as SearchIcon,
-  Add as AddIcon,
-  Delete as DeleteIcon,
-} from '@mui/icons-material'
+  TooltipTrigger,
+  TooltipContent,
+} from '@/components/ui/tooltip'
 import { usePersonas, useDeletePersona, usePersonaDeletionPreview } from '@store/queries'
 import { useAnnotationUiStore } from '@store/zustand'
 import { Persona } from '@models/types'
-import ConfirmDialog from '@components/shared/ConfirmDialog'
+import { ConfirmDialog } from '@components/shared/ConfirmDialog'
 
 interface PersonaBrowserProps {
   onSelectPersona: (personaId: string) => void
@@ -121,140 +108,113 @@ export default function PersonaBrowser({
   }
 
   return (
-    <Box>
-      <Box mb={3}>
-        <TextField
-          fullWidth
-          variant="outlined"
-          placeholder="Search personas by name, role, or information need..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          InputProps={{
-            startAdornment: (
-              <InputAdornment position="start">
-                <SearchIcon />
-              </InputAdornment>
-            ),
-          }}
-        />
-      </Box>
+    <div>
+      <div className="mb-6">
+        <div className="relative">
+          <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            className="pl-9"
+            placeholder="Search personas by name, role, or information need..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+        </div>
+      </div>
 
-      <Grid container spacing={3}>
+      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
           {filteredPersonas.map((persona) => {
             return (
-              <Grid item xs={12} sm={6} md={4} lg={3} key={persona.id}>
-                <Card
-                  data-persona-id={persona.id}
-                  sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}
-                >
-                  <CardContent sx={{ flexGrow: 1 }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                      <Avatar sx={{ bgcolor: 'primary.main', mr: 2 }}>
-                        <PersonIcon />
-                      </Avatar>
-                      <Box>
-                        <Typography variant="h3" sx={{ fontSize: '1.25rem' }} component="div" noWrap>
-                          {persona.name}
-                        </Typography>
-                        <Typography variant="body2" color="text.secondary">
-                          {persona.role}
-                        </Typography>
-                      </Box>
-                    </Box>
+              <Card
+                key={persona.id}
+                data-persona-id={persona.id}
+                className="flex h-full flex-col"
+              >
+                <CardContent className="flex-1">
+                  <div className="mb-4 flex items-center">
+                    <div className="mr-4 flex size-10 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                      <User className="size-5" />
+                    </div>
+                    <div className="min-w-0">
+                      <h3 className="truncate text-lg font-medium">{persona.name}</h3>
+                      <p className="text-sm text-muted-foreground">{persona.role}</p>
+                    </div>
+                  </div>
 
-                    <Typography variant="body2" sx={{ mb: 2, minHeight: '2.5em' }}>
-                      {persona.informationNeed.length > 100
-                        ? persona.informationNeed.substring(0, 100) + '...'
-                        : persona.informationNeed}
-                    </Typography>
+                  <p className="mb-4 min-h-[2.5em] text-sm">
+                    {persona.informationNeed.length > 100
+                      ? persona.informationNeed.substring(0, 100) + '...'
+                      : persona.informationNeed}
+                  </p>
 
-                    {persona.details && (
-                      <Typography
-                        variant="caption"
-                        color="text.secondary"
-                        sx={{
-                          display: 'block',
-                          mt: 1,
-                          fontStyle: 'italic',
-                        }}
-                      >
-                        {persona.details.length > 80
-                          ? persona.details.substring(0, 80) + '...'
-                          : persona.details}
-                      </Typography>
-                    )}
-                  </CardContent>
+                  {persona.details && (
+                    <p className="mt-2 text-xs italic text-muted-foreground">
+                      {persona.details.length > 80
+                        ? persona.details.substring(0, 80) + '...'
+                        : persona.details}
+                    </p>
+                  )}
+                </CardContent>
 
-                  <CardActions>
+                <CardFooter>
+                  <Button
+                    size="sm"
+                    onClick={() => handlePersonaClick(persona)}
+                  >
+                    <Pencil className="size-3" />
+                    Open
+                  </Button>
+                  {onEditPersona && (
                     <Button
-                      size="small"
-                      startIcon={<EditIcon />}
-                      onClick={() => handlePersonaClick(persona)}
+                      variant="ghost"
+                      size="sm"
+                      onClick={(e) => handleEditPersona(persona, e)}
                     >
-                      Open
+                      Settings
                     </Button>
-                    {onEditPersona && (
-                      <Button
-                        size="small"
-                        onClick={(e) => handleEditPersona(persona, e)}
-                      >
-                        Settings
-                      </Button>
-                    )}
-                    <Tooltip title="Delete persona">
-                      <IconButton
-                        size="small"
-                        color="error"
-                        onClick={(e) => handleDeleteClick(persona, e)}
-                        sx={{ ml: 'auto' }}
-                      >
-                        <DeleteIcon fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
-                  </CardActions>
-                </Card>
-              </Grid>
+                  )}
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          className="ml-auto text-destructive"
+                          aria-label="delete persona"
+                          onClick={(e) => handleDeleteClick(persona, e)}
+                        />
+                      }
+                    >
+                      <Trash2 className="size-4" />
+                    </TooltipTrigger>
+                    <TooltipContent>Delete persona</TooltipContent>
+                  </Tooltip>
+                </CardFooter>
+              </Card>
             )
           })}
-      </Grid>
+      </div>
 
       {filteredPersonas.length === 0 && (
-        <Box
-          display="flex"
-          flexDirection="column"
-          justifyContent="center"
-          alignItems="center"
-          height="300px"
-        >
-          <Typography variant="h3" sx={{ fontSize: '1.25rem' }} color="text.secondary">
-            No personas found
-          </Typography>
+        <div className="flex h-[300px] flex-col items-center justify-center">
+          <h3 className="text-lg font-medium text-muted-foreground">No personas found</h3>
           {searchTerm && (
-            <Typography variant="body2" color="text.secondary">
-              Try adjusting your search query
-            </Typography>
+            <p className="text-sm text-muted-foreground">Try adjusting your search query</p>
           )}
           {!searchTerm && (
-            <Typography variant="body2" color="text.secondary">
-              Click the + button to create your first persona
-            </Typography>
+            <p className="text-sm text-muted-foreground">Click the + button to create your first persona</p>
           )}
-        </Box>
+        </div>
       )}
 
       {onAddPersona && (
-        <Fab
-          color="primary"
+        <Button
+          size="icon-lg"
+          className="fixed bottom-6 right-6 rounded-full shadow-lg"
           aria-label="add persona"
-          sx={{
-            position: 'fixed',
-            bottom: 24,
-            right: 24,
-          }}
           onClick={onAddPersona}
         >
-          <AddIcon />
-        </Fab>
+          <Plus className="size-5" />
+        </Button>
       )}
 
       <ConfirmDialog
@@ -262,11 +222,11 @@ export default function PersonaBrowser({
         title="Delete Persona"
         message={getDeleteMessage()}
         confirmText="Delete"
-        confirmColor="error"
+        confirmVariant="destructive"
         onConfirm={handleDeleteConfirm}
         onCancel={handleDeleteCancel}
         loading={deletePersonaMutation.isPending || isLoadingPreview}
       />
-    </Box>
+    </div>
   )
 }

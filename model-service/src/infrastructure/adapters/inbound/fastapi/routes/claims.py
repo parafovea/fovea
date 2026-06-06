@@ -9,7 +9,10 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import NotRequired, TypedDict, cast
+from typing import TYPE_CHECKING, NotRequired, TypedDict, cast
+
+if TYPE_CHECKING:
+    from src.domain.entities.architectures import LLMArchitecture
 
 from fastapi import APIRouter, HTTPException
 from opentelemetry import trace
@@ -69,7 +72,10 @@ async def extract_claims(
         span.set_attribute("summary_id", request.summary_id)
         span.set_attribute("strategy", request.extraction_strategy)
 
-        from src.application.use_cases.extract_claims import ExtractClaimsUseCase
+        from src.application.use_cases.extract_claims import (
+            ExtractClaimsRequest,
+            ExtractClaimsUseCase,
+        )
         from src.infrastructure.adapters.outbound.llm_adapter import LLMLoaderAdapter
         from src.infrastructure.adapters.outbound.models.llm.loader import (
             LLMConfig,
@@ -86,6 +92,14 @@ async def extract_claims(
                 )
 
             selected_config = task_config.get_selected_config()
+
+            if selected_config.architecture is None:
+                raise RuntimeError(
+                    f"Model config for {task_config.selected!r} is missing required "
+                    f"architecture field; add an architecture block to "
+                    f"models.yaml/models-cpu.yaml"
+                )
+
             llm_config = LLMConfig(
                 model_id=selected_config.model_id,
                 quantization=selected_config.quantization or "none",
@@ -94,7 +108,9 @@ async def extract_claims(
                 temperature=0.7,
             )
 
-            loader = create_llm_loader(llm_config)
+            loader = create_llm_loader(
+                cast("LLMArchitecture", selected_config.architecture), llm_config
+            )
             language_model = LLMLoaderAdapter(loader)
             await language_model.aload()
 
@@ -109,13 +125,16 @@ async def extract_claims(
                 start_time = time.time()
                 use_case = ExtractClaimsUseCase(language_model=language_model)
                 claim_dtos = await use_case.execute(
-                    summary_text=request.summary_text,
-                    sentences=request.sentences,
-                    strategy=request.extraction_strategy,
-                    max_claims=request.max_claims,
-                    min_confidence=request.min_confidence,
-                    ontology_context=ontology_context,
-                    annotation_context=request.annotations,
+                    ExtractClaimsRequest(
+                        summary_text=request.summary_text,
+                        sentences=request.sentences,
+                        strategy=request.extraction_strategy,
+                        max_claims=request.max_claims,
+                        min_confidence=request.min_confidence,
+                        ontology_context=ontology_context,
+                        annotation_context=request.annotations,
+                        max_output_tokens=manager.inference_config.llm_max_claims_tokens,
+                    )
                 )
                 processing_time = time.time() - start_time
 
@@ -178,6 +197,14 @@ async def synthesize_summary(
                 )
 
             selected_config = task_config.get_selected_config()
+
+            if selected_config.architecture is None:
+                raise RuntimeError(
+                    f"Model config for {task_config.selected!r} is missing required "
+                    f"architecture field; add an architecture block to "
+                    f"models.yaml/models-cpu.yaml"
+                )
+
             llm_config = LLMConfig(
                 model_id=selected_config.model_id,
                 quantization=selected_config.quantization or "none",
@@ -186,7 +213,9 @@ async def synthesize_summary(
                 temperature=0.8,
             )
 
-            loader = create_llm_loader(llm_config)
+            loader = create_llm_loader(
+                cast("LLMArchitecture", selected_config.architecture), llm_config
+            )
             language_model = LLMLoaderAdapter(loader)
             await language_model.aload()
 

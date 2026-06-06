@@ -7,29 +7,29 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { Plus, Folder } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { Spinner } from '@/components/ui/spinner'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
+import { Label } from '@/components/ui/label'
 import {
-  Alert,
-  Box,
-  Button,
-  Card,
-  CardActionArea,
-  CardContent,
-  Chip,
-  CircularProgress,
-  Container,
   Dialog,
-  DialogActions,
   DialogContent,
+  DialogFooter,
+  DialogHeader,
   DialogTitle,
-  Grid,
-  MenuItem,
-  TextField,
-  Typography,
-} from '@mui/material'
+} from '@/components/ui/dialog'
 import {
-  Add as AddIcon,
-  Folder as FolderIcon,
-} from '@mui/icons-material'
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from '@/components/ui/select'
 import { useMyProjects, useCreateProject, type ProjectSummary } from '@store/queries/useProjects'
 import { useMyGroups } from '@store/queries/useGroups'
 
@@ -90,139 +90,151 @@ export default function ProjectsPage(): JSX.Element {
 
   if (isLoading) {
     return (
-      <Container maxWidth="lg">
-        <Box sx={{ py: 6, display: 'flex', justifyContent: 'center' }}>
-          <CircularProgress />
-        </Box>
-      </Container>
+      <div className="mx-auto max-w-screen-lg px-4">
+        <div className="flex justify-center py-12">
+          <Spinner className="size-8" />
+        </div>
+      </div>
     )
   }
 
   return (
-    <Container maxWidth="lg">
-      <Box sx={{ py: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Typography variant="h4" component="h1">
-          My Projects
-        </Typography>
-        <Button variant="contained" startIcon={<AddIcon />} onClick={() => setDialogOpen(true)}>
+    <div className="mx-auto max-w-screen-lg px-4" data-tour-id="projects-page">
+      <div className="flex items-center justify-between py-6">
+        <h1 className="text-2xl font-bold">My Projects</h1>
+        <Button data-tour-id="projects-create-button" onClick={() => setDialogOpen(true)}>
+          <Plus className="size-4" />
           Create Project
         </Button>
-      </Box>
+      </div>
 
       {error && (
-        <Alert severity="error" sx={{ mb: 2 }}>
-          Failed to load projects.
+        <Alert variant="destructive" className="mb-4">
+          <AlertDescription>Failed to load projects.</AlertDescription>
         </Alert>
       )}
 
       {/* Personal Projects */}
-      <Typography variant="h6" sx={{ mt: 2, mb: 1 }}>
-        Personal Projects
-      </Typography>
+      <h2 className="mt-4 mb-2 text-lg font-semibold">Personal Projects</h2>
       {personal.length === 0 ? (
-        <Box sx={{ py: 4, textAlign: 'center' }}>
-          <FolderIcon sx={{ fontSize: 48, color: 'text.disabled', mb: 1 }} />
-          <Typography variant="body2" color="text.secondary">
-            No personal projects yet.
-          </Typography>
-        </Box>
+        <div className="py-8 text-center">
+          <Folder className="mx-auto mb-2 size-12 text-muted-foreground" />
+          <p className="text-sm text-muted-foreground">No personal projects yet.</p>
+        </div>
       ) : (
-        <Grid container spacing={2} sx={{ mb: 4 }}>
+        <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3">
           {personal.map((project) => (
-            <Grid item xs={12} sm={6} md={4} key={project.id}>
-              <ProjectCard project={project} onClick={() => navigate(`/projects/${project.id}`)} />
-            </Grid>
+            <ProjectCard key={project.id} project={project} onClick={() => navigate(`/projects/${project.id}`)} />
           ))}
-        </Grid>
+        </div>
       )}
 
       {/* Group Projects */}
-      <Typography variant="h6" sx={{ mt: 2, mb: 1 }}>
-        Group Projects
-      </Typography>
+      <h2 className="mt-4 mb-2 text-lg font-semibold">Group Projects</h2>
       {groupProjects.length === 0 ? (
-        <Box sx={{ py: 4, textAlign: 'center' }}>
-          <FolderIcon sx={{ fontSize: 48, color: 'text.disabled', mb: 1 }} />
-          <Typography variant="body2" color="text.secondary">
-            No group projects yet.
-          </Typography>
-        </Box>
+        <div className="py-8 text-center">
+          <Folder className="mx-auto mb-2 size-12 text-muted-foreground" />
+          <p className="text-sm text-muted-foreground">No group projects yet.</p>
+        </div>
       ) : (
-        <Grid container spacing={2}>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3">
           {groupProjects.map((project) => (
-            <Grid item xs={12} sm={6} md={4} key={project.id}>
-              <ProjectCard project={project} onClick={() => navigate(`/projects/${project.id}`)} />
-            </Grid>
+            <ProjectCard key={project.id} project={project} onClick={() => navigate(`/projects/${project.id}`)} />
           ))}
-        </Grid>
+        </div>
       )}
 
       {/* Create Project Dialog */}
-      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Create Project</DialogTitle>
-        <DialogContent>
-          <TextField
-            label="Name"
-            fullWidth
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            sx={{ mt: 1 }}
-            autoFocus
-          />
-          <TextField
-            label="Slug"
-            fullWidth
-            value={slug}
-            onChange={(e) => {
-              setSlug(e.target.value)
-              setSlugTouched(true)
-            }}
-            helperText="URL-friendly identifier (lowercase, hyphens only)"
-            sx={{ mt: 2 }}
-          />
-          <TextField
-            label="Description"
-            fullWidth
-            multiline
-            rows={3}
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            sx={{ mt: 2 }}
-          />
-          <TextField
-            label="Owner Group (optional)"
-            fullWidth
-            select
-            value={ownerGroupId}
-            onChange={(e) => setOwnerGroupId(e.target.value)}
-            sx={{ mt: 2 }}
-            helperText="Leave empty for a personal project"
-          >
-            <MenuItem value="">Personal (no group)</MenuItem>
-            {(groups ?? []).map((g) => (
-              <MenuItem key={g.id} value={g.id}>
-                {g.name}
-              </MenuItem>
-            ))}
-          </TextField>
-          {createProject.isError && (
-            <Alert severity="error" sx={{ mt: 2 }}>
-              {(createProject.error as Error).message}
-            </Alert>
-          )}
+      <Dialog open={dialogOpen} onOpenChange={(isOpen) => { if (!isOpen) setDialogOpen(false) }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Create Project</DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-col gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="project-name">Name</Label>
+              <Input
+                id="project-name"
+                data-tour-id="project-name-input"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                autoFocus
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="project-slug">Slug</Label>
+              <Input
+                id="project-slug"
+                value={slug}
+                onChange={(e) => {
+                  setSlug(e.target.value)
+                  setSlugTouched(true)
+                }}
+              />
+              <p className="text-xs text-muted-foreground">
+                URL-friendly identifier (lowercase, hyphens only)
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="project-description">Description</Label>
+              <Textarea
+                id="project-description"
+                rows={3}
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Owner Group (optional)</Label>
+              <Select value={ownerGroupId} onValueChange={(value) => setOwnerGroupId(value ?? '')}>
+                <SelectTrigger className="w-full">
+                  {/* Explicit child override: base-ui Select otherwise
+                      paints the raw value (UUID) before SelectContent
+                      first opens, because the trigger label is sourced
+                      from a SelectItem ref that only registers when the
+                      dropdown mounts. Resolve the group name from the
+                      groups list here so the trigger shows 'My Group'
+                      on first paint and only falls back to the
+                      placeholder when no group is selected. Same pattern
+                      as the persona-trigger fix in VideoSummaryDialog
+                      and AnnotationWorkspace. */}
+                  <SelectValue placeholder="Personal (no group)">
+                    {ownerGroupId
+                      ? (groups ?? []).find((g) => g.id === ownerGroupId)?.name ?? null
+                      : null}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">Personal (no group)</SelectItem>
+                  {(groups ?? []).map((g) => (
+                    <SelectItem key={g.id} value={g.id}>
+                      {g.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Leave empty for a personal project
+              </p>
+            </div>
+            {createProject.isError && (
+              <Alert variant="destructive">
+                <AlertDescription>{(createProject.error as Error).message}</AlertDescription>
+              </Alert>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
+            <Button
+              onClick={handleCreate}
+              disabled={!name.trim() || !slug.trim() || createProject.isPending}
+            >
+              {createProject.isPending ? 'Creating...' : 'Create'}
+            </Button>
+          </DialogFooter>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDialogOpen(false)}>Cancel</Button>
-          <Button
-            variant="contained"
-            onClick={handleCreate}
-            disabled={!name.trim() || !slug.trim() || createProject.isPending}
-          >
-            {createProject.isPending ? 'Creating...' : 'Create'}
-          </Button>
-        </DialogActions>
       </Dialog>
-    </Container>
+    </div>
   )
 }
 
@@ -234,36 +246,23 @@ function ProjectCard({
   onClick: () => void
 }): JSX.Element {
   return (
-    <Card variant="outlined">
-      <CardActionArea onClick={onClick}>
-        <CardContent>
-          <Typography variant="h6" noWrap>
-            {project.name}
-          </Typography>
-          <Typography
-            variant="body2"
-            color="text.secondary"
-            sx={{
-              mt: 0.5,
-              mb: 1.5,
-              display: '-webkit-box',
-              WebkitLineClamp: 2,
-              WebkitBoxOrient: 'vertical',
-              overflow: 'hidden',
-              minHeight: 40,
-            }}
-          >
-            {project.description || 'No description'}
-          </Typography>
-          <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-            <Chip label={`${project._count.members} members`} size="small" variant="outlined" />
-            {project.myRole && (
-              <Chip label={project.myRole.replace('project_', '')} size="small" color="primary" />
-            )}
-            {project.isArchived && <Chip label="Archived" size="small" color="warning" />}
-          </Box>
-        </CardContent>
-      </CardActionArea>
+    <Card
+      className="cursor-pointer transition-colors hover:bg-muted/50"
+      onClick={onClick}
+    >
+      <CardContent>
+        <h3 className="truncate text-base font-semibold">{project.name}</h3>
+        <p className="mt-1 mb-3 line-clamp-2 min-h-[40px] text-sm text-muted-foreground">
+          {project.description || 'No description'}
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <Badge variant="outline">{project._count.members} members</Badge>
+          {project.myRole && (
+            <Badge>{project.myRole.replace('project_', '')}</Badge>
+          )}
+          {project.isArchived && <Badge variant="secondary">Archived</Badge>}
+        </div>
+      </CardContent>
     </Card>
   )
 }

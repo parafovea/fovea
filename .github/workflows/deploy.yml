@@ -5,6 +5,53 @@ on:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      demo_mode:
+        description: >
+          Build for demo.fovea.video: frontend lands on the public tour
+          catalogue (VITE_DEMO_PUBLIC=1) with MSW model-service mocks
+          (VITE_TOUR_DEMO=1); backend has ALLOW_REGISTRATION=false; the
+          model-service container is skipped; nginx serves the
+          rate-limited demo profile. Defaults true because the only
+          DEPLOY_HOST configured for this workflow is demo.fovea.video;
+          uncheck this on a workflow_dispatch run if you ever wire up a
+          non-demo target.
+        type: boolean
+        default: true
+        required: false
+
+# demo.fovea.video is the demo deployment by design. Every push to main
+# rebuilds the frontend with the MSW tour-demo flags and skips the
+# model-service container so visitors land on the public tour catalog
+# (TourCataloguePage at /) with a small Sign-in CTA, ALLOW_REGISTRATION
+# off, and nginx.demo.conf swapped in for the rate-limited auth profile.
+# DEMO_MODE resolves to 'true' for push-to-main OR for a manual
+# workflow_dispatch run with the demo_mode checkbox left at its default;
+# only an explicit workflow_dispatch with demo_mode unchecked falls back
+# to 'false'. Every step below that previously read inputs.demo_mode now
+# reads env.DEMO_MODE so push triggers stop deploying the full stack.
+env:
+  # DEMO_MODE was originally 'true' for every push so demo.fovea.video
+  # served the tour catalogue + anonymous-session flow. Pivoted off
+  # that path before the CVPR demo because the catalogue's surface
+  # (tours, MSW, demo seeder, anonymous-session, role-relaxed admin)
+  # had too many interacting failure modes to ship in time. Flipped
+  # to 'false' for push triggers so the deploy reverts to the prior
+  # multi-user setup (registration on, real signed-in flow, no tour
+  # catalogue, no model service). Manual workflow_dispatch with
+  # demo_mode=true is still honoured for explicit demo-mode re-deploys
+  # but no longer automatic.
+  DEMO_MODE: ${{ inputs.demo_mode == true && 'true' || 'false' }}
+
+# Serialize deploys per branch so back-to-back pushes don't race the
+# server's docker cleanup (the failure mode was both runs trying to
+# `docker compose up -d redis` at the same time, with the second hitting
+# 'Conflict. The container name "/fovea-redis-1" is already in use').
+# cancel-in-progress is false because a half-deployed image is worse
+# than the queued one waiting an extra few minutes.
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   test:
@@ -14,38 +61,33 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: |
-            annotation-tool/package-lock.json
-            server/package-lock.json
+          node-version: '22'
+          cache: 'pnpm'
 
-      - name: Install frontend dependencies
-        working-directory: ./annotation-tool
-        run: npm ci
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm --filter @fovea/server exec prisma generate
 
       - name: Type check frontend
-        working-directory: ./annotation-tool
-        run: npm run type-check
+        run: pnpm --filter @fovea/annotation-tool type-check
 
       - name: Lint frontend
-        working-directory: ./annotation-tool
-        run: npm run lint
+        run: pnpm --filter @fovea/annotation-tool lint
 
-      - name: Install backend dependencies
-        working-directory: ./server
-        run: npm ci
-
-      - name: Type check backend
-        working-directory: ./server
-        run: npm run build
+      - name: Build backend (type-checks)
+        run: pnpm --filter @fovea/server build
 
       - name: Lint backend
-        working-directory: ./server
-        run: npm run lint
+        run: pnpm --filter @fovea/server lint
 
   deploy:
     name: Deploy Application
@@ -143,11 +185,64 @@ jobs:
               echo 'FOVEA_MODE=multi-user' >> .env
             fi
 
-            # Enable user registration for demo deployment
+            # Registration policy. The demo.fovea.video workflow run
+            # (workflow_dispatch with demo_mode=true) disables self-
+            # registration so the QR-code traffic profile is anonymous-
+            # only; the booth operator mints real accounts via the
+            # admin console's Create User dialog. Regular pushes to
+            # main keep registration enabled.
+            ALLOW_REGISTRATION_VALUE=true
+            if [ \"${{ env.DEMO_MODE }}\" = \"true\" ]; then
+              ALLOW_REGISTRATION_VALUE=false
+            fi
             if grep -q '^ALLOW_REGISTRATION=' .env; then
-              sed -i 's|^ALLOW_REGISTRATION=.*|ALLOW_REGISTRATION=true|' .env
+              sed -i \"s|^ALLOW_REGISTRATION=.*|ALLOW_REGISTRATION=\$ALLOW_REGISTRATION_VALUE|\" .env
             else
-              echo 'ALLOW_REGISTRATION=true' >> .env
+              echo \"ALLOW_REGISTRATION=\$ALLOW_REGISTRATION_VALUE\" >> .env
+            fi
+
+            # Frontend demo-mode build flags. These flip the SPA into
+            # the public tour catalogue landing + MSW model-service
+            # interception that demo.fovea.video ships. Regular
+            # pushes to main blank both so the demo subtree tree-
+            # shakes out of the production bundle.
+            if [ \"${{ env.DEMO_MODE }}\" = \"true\" ]; then
+              VITE_TOUR_DEMO_VALUE=1
+              VITE_DEMO_PUBLIC_VALUE=1
+            else
+              VITE_TOUR_DEMO_VALUE=
+              VITE_DEMO_PUBLIC_VALUE=
+            fi
+            if grep -q '^VITE_TOUR_DEMO=' .env; then
+              sed -i \"s|^VITE_TOUR_DEMO=.*|VITE_TOUR_DEMO=\$VITE_TOUR_DEMO_VALUE|\" .env
+            else
+              echo \"VITE_TOUR_DEMO=\$VITE_TOUR_DEMO_VALUE\" >> .env
+            fi
+            if grep -q '^VITE_DEMO_PUBLIC=' .env; then
+              sed -i \"s|^VITE_DEMO_PUBLIC=.*|VITE_DEMO_PUBLIC=\$VITE_DEMO_PUBLIC_VALUE|\" .env
+            else
+              echo \"VITE_DEMO_PUBLIC=\$VITE_DEMO_PUBLIC_VALUE\" >> .env
+            fi
+
+            # Swap nginx config when demo_mode is on so the auth-
+            # endpoint rate limits take effect. The Dockerfile COPYs
+            # annotation-tool/nginx.conf at image build time, so we
+            # overwrite the file on disk BEFORE the docker build runs
+            # below. The prior rsync step always ships the canonical
+            # nginx.conf from git, so a subsequent demo_mode=false
+            # deploy restores the standard config automatically; the
+            # demo overwrite is therefore safely scoped to a single
+            # deploy.
+            if [ \"${{ env.DEMO_MODE }}\" = \"true\" ]; then
+              cp annotation-tool/nginx.demo.conf annotation-tool/nginx.conf
+              echo 'Swapped nginx config to nginx.demo.conf for demo mode'
+            else
+              # Belt-and-suspenders: if a prior demo_mode=true deploy
+              # left a stale nginx.conf on disk and rsync somehow
+              # skipped it (e.g. timestamp tie), force the canonical
+              # file back by checking out from the synced tree's
+              # docker-image source of truth.
+              echo 'demo_mode=false: nginx.conf left at the rsynced canonical version'
             fi
 
             # Ensure online Wikidata mode (not local Wikibase) for demo
@@ -155,6 +250,42 @@ jobs:
               sed -i 's|^WIKIDATA_MODE=.*|WIKIDATA_MODE=online|' .env
             else
               echo 'WIKIDATA_MODE=online' >> .env
+            fi
+
+            # Backend demo-mode flags. FOVEA_DEMO_MODE gates the demo
+            # plugin tree in server/src/demo (anonymous-session route,
+            # idle-reset sweeper, demo seed route) AND the
+            # VideoAccessService override that returns the full video
+            # corpus to non-admin callers — without it, the auto-issued
+            # demo-anonymous-* booth visitors hit /api/videos with
+            # systemRole='user' and get an empty list (the per-user
+            # sharing / group / project chain has nothing to enumerate
+            # for a freshly-minted anon user), the VideoBrowser renders
+            # "No videos found", and every tour anchored to a video
+            # card or the annotation workspace shows the missing-anchor
+            # banner. FOVEA_DEMO_ALLOW_ANONYMOUS_AUTH is the secondary
+            # gate that actually registers the POST /api/demo/anonymous-
+            # session endpoint the frontend bootstrap calls on first
+            # paint (main.tsx::maybeBootstrapDemoSession). Both default
+            # to unset on non-demo deploys so a self-hosted production
+            # build cannot accidentally serve anonymous sessions or
+            # expose the full corpus to a non-admin caller.
+            if [ \"${{ env.DEMO_MODE }}\" = \"true\" ]; then
+              FOVEA_DEMO_MODE_VALUE=true
+              FOVEA_DEMO_ALLOW_ANONYMOUS_AUTH_VALUE=true
+            else
+              FOVEA_DEMO_MODE_VALUE=false
+              FOVEA_DEMO_ALLOW_ANONYMOUS_AUTH_VALUE=false
+            fi
+            if grep -q '^FOVEA_DEMO_MODE=' .env; then
+              sed -i \"s|^FOVEA_DEMO_MODE=.*|FOVEA_DEMO_MODE=\$FOVEA_DEMO_MODE_VALUE|\" .env
+            else
+              echo \"FOVEA_DEMO_MODE=\$FOVEA_DEMO_MODE_VALUE\" >> .env
+            fi
+            if grep -q '^FOVEA_DEMO_ALLOW_ANONYMOUS_AUTH=' .env; then
+              sed -i \"s|^FOVEA_DEMO_ALLOW_ANONYMOUS_AUTH=.*|FOVEA_DEMO_ALLOW_ANONYMOUS_AUTH=\$FOVEA_DEMO_ALLOW_ANONYMOUS_AUTH_VALUE|\" .env
+            else
+              echo \"FOVEA_DEMO_ALLOW_ANONYMOUS_AUTH=\$FOVEA_DEMO_ALLOW_ANONYMOUS_AUTH_VALUE\" >> .env
             fi
 
             # Ensure external links are enabled for demo
@@ -196,10 +327,61 @@ jobs:
             echo \"Available: \$((\$AVAIL / 1024))MB\"
 
             echo '🐳 Building containers...'
-            docker compose build --parallel
+            # Skip the model-service image on the demo host. The demo
+            # server cannot withstand CVPR-scale concurrent inference
+            # requests; the modelsDisabled gate in the frontend greys
+            # out every inference button when /api/models/config 503s,
+            # which is what happens when no model-service container
+            # exists. Skipping the build also avoids the ~5 GB CPU
+            # image rebuild on every deploy. The minimal-CPU image
+            # is still published from docker.yml for any downstream
+            # stack that wants it; the live demo backup the CVPR demo
+            # runs locally builds its full-CPU variant with docker
+            # compose directly.
+            docker compose build --parallel backend frontend
+
+            # Industry-standard pre-deploy cleanup. Must run BEFORE
+            # any 'docker compose up' so the name-conflict and
+            # phantom-id races (see big block below for explanation)
+            # do not bite the very first infra-up call. Covers every
+            # service compose owns — not just the application
+            # containers — because redis/postgres/otel-collector
+            # also keep their canonical names across deploys.
+            echo '🧹 Full pre-deploy cleanup (all services)...'
+            docker compose stop 2>/dev/null || true
+            docker compose down --remove-orphans 2>/dev/null || true
+            for c in fovea-backend-1 fovea-frontend-1 fovea-model-service-1 \
+                     fovea-redis-1 fovea-postgres-1 fovea-otel-collector-1 \
+                     fovea-prometheus-1 fovea-grafana-1; do
+              docker rm -f \"\$c\" 2>/dev/null || true
+            done
+            # When two deploys land within ~1 minute the GitHub-Actions
+            # job-concurrency guarantee does not extend to the SSH
+            # session that owns docker — overlapping cleanup + up calls
+            # leave Docker's in-memory container index out of sync with
+            # the daemon's actual state and the next 'docker compose up
+            # -d redis' fails with 'Conflict. The container name
+            # \"/fovea-redis-1\" is already in use by container ...'
+            # even though the cleanup said it removed it. Wait for the
+            # daemon to flush, then forcibly retry the conflict.
+            sleep 3
+            docker ps -aq --filter 'name=^/fovea-' | xargs -r docker rm -f 2>/dev/null || true
 
             echo '🔍 Verifying Redis health before full startup...'
-            docker compose up -d redis
+            # Two-attempt wrap: if the first up still hits a conflict
+            # because a concurrent deploy is mid-cleanup, sleep + retry
+            # once with a forced container prune in between.
+            if ! docker compose up -d redis 2>&1 | tee /tmp/redis-up.log; then
+              if grep -q 'is already in use' /tmp/redis-up.log; then
+                echo '⚠️  redis container conflict — pruning and retrying'
+                docker ps -aq --filter 'name=^/fovea-redis-1' | xargs -r docker rm -f
+                sleep 2
+                docker compose up -d redis
+              else
+                echo '✗ redis up failed for a non-conflict reason'
+                exit 1
+              fi
+            fi
             sleep 5
             if ! docker compose exec -T redis redis-cli ping 2>/dev/null | grep -q PONG; then
               echo '⚠️  Redis unhealthy - removing corrupted data volume and restarting...'
@@ -220,7 +402,11 @@ jobs:
 
             echo '🚀 Starting infrastructure containers...'
             docker compose up -d --no-deps postgres redis otel-collector
-            docker compose up -d --no-deps prometheus grafana model-service
+            # model-service is never started on demo.fovea.video.
+            # The frontend's modelsDisabled gate greys every
+            # inference button when /api/models/config 503s, which
+            # is the steady-state with no model-service container.
+            docker compose up -d --no-deps prometheus grafana
 
             echo '⏳ Waiting for postgres to be ready...'
             for i in {1..20}; do
@@ -249,7 +435,29 @@ jobs:
             fi
 
             echo '🚀 Starting application containers...'
-            if ! docker compose up -d --force-recreate; then
+            # demo_mode skips the model-service service entirely; the
+            # frontend bundle's MSW worker intercepts model-service
+            # routes so there is nothing to start. In non-demo mode we
+            # pass no service args at all so docker compose brings up
+            # every service in docker-compose.yml. A bare empty-string
+            # arg is treated by compose as a literal service name and
+            # errors with 'no such service: \"\"', so we must branch
+            # the whole command rather than interpolate an empty var.
+            # Pre-up cleanup ran earlier (Full pre-deploy cleanup,
+            # before 'docker compose build') so infrastructure is
+            # already in a clean state. We just need to up the app
+            # containers here. Compose 2.x's --force-recreate
+            # remains as belt-and-suspenders against the name-
+            # conflict (a) and phantom-id (b) races.
+            # Both DEMO_MODE branches restrict the app start to
+            # backend + frontend so the non-DEMO catch-all 'docker
+            # compose up -d --force-recreate' (which would otherwise
+            # bring up every service in docker-compose.yml,
+            # including model-service) is replaced by an explicit
+            # service list. Keeps the demo host's load profile flat
+            # for CVPR-scale traffic.
+            UP_CMD='docker compose up -d --force-recreate backend frontend'
+            if ! eval \$UP_CMD; then
               echo '❌ docker compose up failed — dumping logs from every service:'
               docker compose ps
               echo '--- backend logs ---'
@@ -288,7 +496,19 @@ jobs:
             fi
 
             echo '📹 Syncing videos from S3 to database...'
-            curl -X POST http://localhost:3001/api/videos/sync || echo '⚠️  Video sync failed, videos may need manual sync'
+            # POST /api/videos/sync is admin-only (onRequest: [requireAdmin]),
+            # so a bare curl returns 401. Log in as admin first with the
+            # seeded credentials, then POST sync carrying the session cookie.
+            COOKIE_JAR=\$(mktemp)
+            if curl -sf -c \"\$COOKIE_JAR\" -X POST http://localhost:3001/api/auth/login \\
+                 -H 'Content-Type: application/json' \\
+                 -d '{\"username\":\"admin\",\"password\":\"${{ secrets.ADMIN_PASSWORD }}\"}' > /dev/null; then
+              curl -sf -b \"\$COOKIE_JAR\" -X POST http://localhost:3001/api/videos/sync \\
+                || echo '⚠️  Video sync failed, videos may need manual sync'
+            else
+              echo '⚠️  Could not authenticate as admin for video sync; skipping (check secrets.ADMIN_PASSWORD)'
+            fi
+            rm -f \"\$COOKIE_JAR\"
 
             echo '🧹 Post-deploy cleanup...'
             docker image prune -f
@@ -366,22 +586,97 @@ jobs:
           ssh ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} "
             set -e
             export PATH=\$HOME/.nvm/versions/node/v20.19.5/bin:\$PATH
-            cd ${{ secrets.DEPLOY_PATH }}
-
-            echo '📥 Pulling latest code (already done in deploy job)...'
+            cd ${{ secrets.DEPLOY_PATH }}/docs
 
             echo '📦 Installing docs dependencies...'
-            cd docs
             npm ci
 
-            echo '🏗️ Building documentation...'
-            npm run build
+            # Atomic build: write the docusaurus output into a
+            # SEPARATE staging directory (build-staging) so the live
+            # build/ that nginx serves never gets touched until the
+            # new build is fully written. Docusaurus's --out-dir lets
+            # us redirect output without touching the live directory.
+            # If npm run build fails partway through (OOM, killed
+            # SSH session, network glitch hitting the docs sources),
+            # the live site keeps serving the previous good build
+            # instead of returning 500s from a half-empty directory
+            # — the failure mode that took fovea.video down on
+            # 2026-06-05.
+            echo '🏗️ Building documentation into build-staging/...'
+            rm -rf build-staging
+            npx docusaurus build --out-dir build-staging
 
-            echo '✅ Documentation built!'
+            # Pre-flight checks before swapping: the new build must
+            # contain at least index.html plus the assets and docs
+            # subdirectories. A docusaurus build that wrote only
+            # __server (the SSR bundle, written first) is the exact
+            # shape that took fovea.video down at 15:36 UTC — the
+            # process was killed between the server emit and the
+            # client emit, leaving a directory that looked populated
+            # to a casual ls but served no content. Refuse to
+            # promote a build that fails the shape check.
+            test -f build-staging/index.html
+            test -d build-staging/assets
+            test -d build-staging/docs
+            BUILD_SIZE=\$(du -sb build-staging | awk '{print \$1}')
+            if [ \$BUILD_SIZE -lt 1048576 ]; then
+              echo \"❌ build-staging size is \$BUILD_SIZE bytes — refusing to promote a sub-megabyte build\"
+              exit 1
+            fi
+            echo \"✓ build-staging shape and size (\$BUILD_SIZE bytes) check pass\"
+
+            # Promote: move the existing build aside to
+            # build-previous, then move build-staging into place.
+            # The two mv calls are NOT a single atomic operation —
+            # an SSH disconnect between them leaves the site
+            # serving the empty build/ that was renamed to
+            # build-previous — but the window is microseconds and
+            # the build-previous fallback below recovers in that
+            # case. Keep only the immediately-previous build so the
+            # disk does not accumulate stale builds forever.
+            echo '🔁 Promoting staged build to live...'
+            rm -rf build-previous-old
+            if [ -d build-previous ]; then
+              mv build-previous build-previous-old
+            fi
+            if [ -d build ]; then
+              mv build build-previous
+            fi
+            mv build-staging build
+            rm -rf build-previous-old
+
+            echo '✅ Documentation deployed atomically.'
+          "
+
+      - name: Roll back docs on verify failure
+        if: failure()
+        run: |
+          # If the verify-step below ever fails, recover the
+          # previous build automatically. The site goes back to
+          # serving last-known-good content within seconds instead
+          # of waiting for an operator to notice and re-run the
+          # deploy.
+          ssh ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} "
+            cd ${{ secrets.DEPLOY_PATH }}/docs
+            if [ -d build-previous ]; then
+              echo '⏪ Rolling back docs to build-previous...'
+              rm -rf build-bad
+              mv build build-bad || true
+              mv build-previous build
+              mv build-bad build-previous || true
+              echo '✅ Rollback complete.'
+            else
+              echo '⚠️  build-previous not available — cannot roll back.'
+              exit 1
+            fi
           "
 
       - name: Verify docs deployment
         run: |
           sleep 10
-          curl --fail -I https://fovea.video || exit 1
+          # Docs continue to serve under the apex GitHub Pages domain
+          # (fovea.video/docs/*) per the apex topology kept in 0.4.0;
+          # the docs/static/CNAME and docs/docusaurus.config.ts pair
+          # both point at fovea.video to match.
+          curl --fail -I https://fovea.video/docs/ || exit 1
           echo "✅ Documentation site healthy"

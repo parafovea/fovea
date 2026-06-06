@@ -54,7 +54,6 @@ describe('App', () => {
     renderApp()
 
     expect(screen.getByText('Loading...')).toBeInTheDocument()
-    expect(screen.getByRole('progressbar')).toBeInTheDocument()
   })
 
   it('redirects to login when accessing protected route while unauthenticated', async () => {

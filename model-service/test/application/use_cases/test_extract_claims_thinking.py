@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.application.use_cases.extract_claims import ExtractClaimsUseCase
+from src.application.use_cases.extract_claims import ExtractClaimsRequest, ExtractClaimsUseCase
 from test.application.fakes import FakeLanguageModel
 
 RESPONSE_WITH_THINKING = """<think>
@@ -32,11 +32,13 @@ async def test_thinking_trace_attached_to_claims() -> None:
     use_case = ExtractClaimsUseCase(language_model=llm)
 
     claims = await use_case.execute(
-        summary_text="Water boils at 100C.",
-        sentences=None,
-        strategy="sentence-based",
-        max_claims=10,
-        min_confidence=0.5,
+        ExtractClaimsRequest(
+            summary_text="Water boils at 100C.",
+            sentences=None,
+            strategy="sentence-based",
+            max_claims=10,
+            min_confidence=0.5,
+        )
     )
 
     assert len(claims) == 1
@@ -57,11 +59,13 @@ async def test_no_trace_when_model_emits_no_thinking() -> None:
     use_case = ExtractClaimsUseCase(language_model=llm)
 
     claims = await use_case.execute(
-        summary_text="Water boils at 100C.",
-        sentences=None,
-        strategy="sentence-based",
-        max_claims=10,
-        min_confidence=0.5,
+        ExtractClaimsRequest(
+            summary_text="Water boils at 100C.",
+            sentences=None,
+            strategy="sentence-based",
+            max_claims=10,
+            min_confidence=0.5,
+        )
     )
 
     assert len(claims) == 1

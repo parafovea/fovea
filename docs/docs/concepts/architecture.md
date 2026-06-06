@@ -8,7 +8,7 @@ persistence and queue layers.
 
 ## What the frontend adds
 
-- React 18 + TypeScript + Material UI v5 + Vite.
+- React 18 + TypeScript + shadcn/ui + Tailwind CSS v4 + Vite.
 - The annotation workspace (canvas, timeline, keyboard model,
   drawing state machine).
 - The persona, ontology, world, summary, and claims editors.
@@ -30,8 +30,9 @@ persistence and queue layers.
 - A CASL-based RBAC engine with per-user ability cache and
   per-row ownership conditions. See
   [Concepts > RBAC](rbac.md).
-- BullMQ queues for summarization, claim extraction, claim
-  synthesis, and detection.
+- BullMQ queues for summarization, claim extraction, and claim
+  synthesis. Detection is a synchronous HTTP proxy to the
+  model service via `fetchModelService`, not a queued job.
 - Multipart upload handling for video sync and JSONL import.
 - Encrypted API key storage.
 
@@ -40,8 +41,7 @@ persistence and queue layers.
 - FastAPI + Python 3.12 + PyTorch + Transformers, plus
   llama.cpp and ONNX Runtime for CPU inference.
 - A Clean Architecture layout (domain / application /
-  infrastructure) introduced in v0.3.0; see
-  [Clean Architecture](clean-architecture.md).
+  infrastructure); see [Clean Architecture](clean-architecture.md).
 - A model manager that loads VLM, LLM, detector, and tracker
   models per the task-slot config in
   `model-service/config/models.yaml` (or
@@ -51,44 +51,41 @@ persistence and queue layers.
   Parakeet, and WhisperX, all behind the `IAudioTranscriber`
   port.
 - An `external_api` framework dispatching to hosted providers
-  (Anthropic, OpenAI, Google) when the configured option
+  (Anthropic, OpenAI, Google, and xAI) when the configured option
   requires an API key.
 - A modality-fusion use case that combines audio transcription
   and visual summarization into the final summary.
 
-## What v0.3.x added
+## Model service layout
 
-v0.3.0 restructured the model service into Clean Architecture
-layers (domain, application, infrastructure) with one-way
-dependencies, every external dependency hidden behind an
-outbound port, OpenTelemetry spans on every use case, and a
-`model_inference` metric on every adapter. The same release
-shipped CPU inference paths (ONNX Runtime, llama.cpp,
-Transformers SmolVLM / Moondream), a 2026 model catalog with
-57 new GPU entries and 11 new CPU entries (Wave 1), and
-loaders for SAM 3 / 3.1, YOLOv12, YOLOE-26, RF-DETR,
-Canary-Qwen, Parakeet TDT, and WhisperX (Waves 2+3). It also
-introduced `ThinkingTrace` and `ReasonedText` DTOs for
-chain-of-thought capture, hardened the video downloader and
-processor against SSRF and path injection, and removed several
-backcompat shims as planned breaking changes (see
-[Project > Stability](../project/stability.md)). v0.3.1
-forward-ported the v0.1.8 / v0.2.1 fixes through CASL.
+The model service is structured as Clean Architecture layers
+(domain, application, infrastructure) with one-way dependencies,
+every external dependency hidden behind an outbound port,
+OpenTelemetry spans on every use case, and a `model_inference`
+metric on every adapter. It ships CPU inference paths (ONNX
+Runtime, llama.cpp, Transformers SmolVLM / Moondream), a 2026
+model catalog spanning detection (SAM 3 / 3.1, YOLOv12, YOLOE-26,
+RF-DETR), audio transcription (Canary-Qwen, Parakeet TDT,
+WhisperX), and vision-language summarization. `ThinkingTrace`
+and `ReasonedText` DTOs carry chain-of-thought traces, and the
+video downloader and processor are hardened against SSRF and
+path injection. See [Project > Stability](../project/stability.md)
+for the contract surface.
 
-## What v0.2.x added
+## RBAC layer
 
-v0.2.0 layered RBAC, projects, groups, video assignments, and
-sharing on top of the v0.1.x persona-scoped data model:
+CASL layers RBAC, projects, groups, video assignments, and
+sharing on top of the persona-scoped data model:
 
 - A CASL `Ability` is built per request from the user's roles plus
   the `RolePermission` table. Routes check the ability for both
   list filters (`accessibleBy`) and instance updates
   (`subject(...)`).
-- `Project` rows organise videos, personas, world states,
+- `Project` rows organize videos, personas, world states,
   summaries, claims, and annotations under a shared owner. A
   project belongs either to a `User` (via `ownerUserId`) or to a
   `UserGroup` (via `ownerGroupId`).
-- `UserGroup` rows organise users into teams. `GroupMembership`
+- `UserGroup` rows organize users into teams. `GroupMembership`
   carries the user's group role (`group_owner`, `group_admin`,
   `group_member`).
 - `ProjectVideoAssignment` links a video to a project and
@@ -103,11 +100,9 @@ sharing on top of the v0.1.x persona-scoped data model:
   per-user ability cache so changes take effect on the next
   request.
 
-v0.2.1 forward-ported the v0.1.8 data-fidelity, ownership, and DoS
-fixes through CASL rather than reintroducing
-`lib/ownership.ts`. The user-visible behaviour is the same; the
-gates have a different shape. See the v0.2.1 entry in the
-[changelog](../project/changelog.md) for the full list.
+Data-fidelity, ownership, and DoS guards are implemented through
+CASL rather than the legacy `lib/ownership.ts` helpers. See
+[Concepts > RBAC](rbac.md) for the gate shapes.
 
 ## How a summary travels
 

@@ -33,8 +33,9 @@ test.describe('Video Annotation - Back Button', () => {
     const backButton = page.getByLabel('Back to video browser')
     await expect(backButton).toBeVisible()
 
-    // Verify it's an IconButton (small size)
-    await expect(backButton).toHaveAttribute('class', /MuiIconButton-sizeSmall/)
+    // Verify it's a small icon button (shadcn Button with size="icon-sm" applies the size-7 class)
+    await expect(backButton).toHaveAttribute('data-slot', 'button')
+    await expect(backButton).toHaveAttribute('class', /size-7/)
 
     // Verify it has the back icon
     const backIcon = backButton.locator('svg')

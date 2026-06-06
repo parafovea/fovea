@@ -35,9 +35,11 @@ export class AnnotationWorkspacePage extends BasePage {
    * Get the video canvas overlay for drawing annotations.
    */
   get videoCanvas(): Locator {
-    return this.page.locator('[data-testid="video-canvas"]').or(
-      this.page.locator('video').locator('..')
-    )
+    // The DrawingCanvas SVG carries data-testid="video-canvas" once the video
+    // element mounts; the previous .or(video.parent) fallback was a relic
+    // from when AnnotationOverlay's ref-conditional sometimes failed to
+    // render and is no longer needed.
+    return this.page.locator('[data-testid="video-canvas"]')
   }
 
   /**
@@ -63,7 +65,7 @@ export class AnnotationWorkspacePage extends BasePage {
     await this.goto('/')
     await expect(this.page.getByPlaceholder(/search videos/i)).toBeVisible()
 
-    const firstVideo = this.page.locator('.MuiCard-root').first()
+    const firstVideo = this.page.locator('[data-slot="card"]').first()
     await expect(firstVideo).toBeVisible()
 
     // Click the "Annotate" button within the first video card
@@ -128,56 +130,61 @@ export class AnnotationWorkspacePage extends BasePage {
    * Draw a simple bounding box with default coordinates.
    * Useful for quick test setup.
    */
-  async drawSimpleBoundingBox(): Promise<void> {
-    // Wait for persona select to be visible and enabled
+  async selectPersona(personaName?: string): Promise<void> {
     const personaSelect = this.page.getByRole('combobox', { name: /select persona/i })
     await expect(personaSelect).toBeVisible({ timeout: 10000 })
     await expect(personaSelect).toBeEnabled({ timeout: 10000 })
-
-    // Click to open the persona dropdown
     await personaSelect.click()
-    await this.page.waitForTimeout(1000)
 
-    // Wait for the listbox to appear
-    const personaListbox = this.page.getByRole('listbox', { name: /select persona/i })
+    const personaListbox = this.page.getByRole('listbox')
     await expect(personaListbox).toBeVisible({ timeout: 10000 })
 
-    // Find the persona option that is NOT "None" and click it
-    const personaOption = personaListbox.getByRole('option').filter({ hasNotText: /^None$/i }).first()
+    // Under parallel workers an admin session sees every worker's persona,
+    // so `.first()` could pick another worker's. Caller passes its own name.
+    const personaOption = personaName
+      ? this.page
+          .getByRole('option')
+          .filter({ hasText: new RegExp('^' + personaName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ' -') })
+          .first()
+      : personaListbox.getByRole('option').filter({ hasNotText: /^None$/i }).first()
     await expect(personaOption).toBeVisible({ timeout: 5000 })
     await personaOption.click()
-
-    // Wait for dropdown to close
     await expect(personaListbox).toBeHidden({ timeout: 5000 }).catch(() => {})
 
-    await this.page.waitForTimeout(500)
-
-    // Wait for ontology to load after persona selection
-    await this.page.waitForLoadState('networkidle', { timeout: 20000 }).catch(() => {})
-
-    // Additional wait for React state updates
-    await this.page.waitForTimeout(4000)
-
-    // Verify persona was selected by checking if type select is now enabled
+    // The type-select becomes enabled once the ontology load lands. Polling
+    // for `enabled` is the precise event to wait on; the old code waited
+    // 24+ seconds on networkidle + an arbitrary buffer.
     const typeSelect = this.page.getByRole('combobox', { name: /select type/i })
-    await expect(typeSelect).toBeEnabled({ timeout: 30000 })
+    await expect(typeSelect).toBeEnabled({ timeout: 20000 })
+  }
 
-    // Use keyboard navigation for type selection as well
+  async selectFirstType(): Promise<void> {
+    const typeSelect = this.page.getByRole('combobox', { name: /select type/i })
     await typeSelect.click()
-    await this.page.waitForTimeout(500)
+    // PopoverContent is portalled to document.body with data-slot.
+    const typePopover = this.page.locator('[data-slot="popover-content"]')
+    await expect(typePopover).toBeVisible({ timeout: 5000 })
+    const typeOption = typePopover.locator('button').first()
+    await expect(typeOption).toBeVisible({ timeout: 5000 })
+    await typeOption.click()
+    await expect(typePopover).toBeHidden({ timeout: 5000 }).catch(() => {})
+  }
 
-    // Press ArrowDown to open dropdown and select first option
-    await typeSelect.press('ArrowDown')
-    await this.page.waitForTimeout(300)
-
-    // Press Enter to select the highlighted option
-    await typeSelect.press('Enter')
-    await this.page.waitForTimeout(1000)  // Wait for type selection to register
-
-    await this.drawBoundingBox({ x: 50, y: 50, width: 150, height: 150 })
-
-    // Wait for annotation to be created via API
-    await this.page.waitForTimeout(2000)
+  /**
+   * Draw a simple bounding box and return the save Response. Callers that
+   * need to await the save (e.g. persistence tests) MUST await the
+   * returned promise. Replaces the legacy createAnnotationSavePromise()
+   * pattern that timed out when persona+type selection took longer than
+   * the 15s save-budget started at the wrong point in the test.
+   */
+  async drawSimpleBoundingBox(
+    opts: { personaName?: string; box?: { x: number; y: number; width: number; height: number } } = {},
+  ): Promise<import('@playwright/test').Response> {
+    await this.selectPersona(opts.personaName)
+    await this.selectFirstType()
+    const savePromise = this.createAnnotationSavePromise(20000)
+    await this.drawBoundingBox(opts.box ?? { x: 50, y: 50, width: 150, height: 150 })
+    return savePromise
   }
 
   /**
@@ -388,8 +395,8 @@ export class AnnotationWorkspacePage extends BasePage {
    */
   async expectTimelineFocused(): Promise<void> {
     const focused = await this.page.evaluate(() => {
-      const timeline = document.querySelector('[data-testid="timeline-canvas"]')
-      return timeline === document.activeElement
+      const timeline = document.querySelector('[data-slot="timeline-root"]')
+      return timeline === document.activeElement || (timeline?.contains(document.activeElement) ?? false)
     })
     expect(focused).toBe(true)
   }
@@ -397,7 +404,7 @@ export class AnnotationWorkspacePage extends BasePage {
   /**
    * Assert that the currently focused element has a visible focus indicator.
    * Verifies outline or box-shadow is present, or that element is an interactive element with focus.
-   * In headless browsers, Material-UI focus indicators may not render, so we accept any focused interactive element.
+   * In headless browsers, focus indicators may not render, so we accept any focused interactive element.
    */
   async expectFocusVisible(): Promise<void> {
     const focusInfo = await this.page.evaluate(() => {
@@ -431,7 +438,7 @@ export class AnnotationWorkspacePage extends BasePage {
 
   /**
    * Assert that focus indicator meets WCAG minimum width (2px).
-   * In practice, we accept any focused interactive element as Material-UI handles this.
+   * In practice, we accept any focused interactive element.
    */
   async expectFocusIndicatorMeetsWCAG(): Promise<void> {
     const meetsWCAG = await this.page.evaluate(() => {

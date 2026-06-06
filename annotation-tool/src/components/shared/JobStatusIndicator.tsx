@@ -4,18 +4,13 @@
  */
 
 import React from 'react'
-import {
-  Box,
-  LinearProgress,
-  Typography,
-  Alert,
-  AlertTitle,
-  Collapse,
-  IconButton,
-} from '@mui/material'
-import CheckCircleIcon from '@mui/icons-material/CheckCircle'
-import ErrorIcon from '@mui/icons-material/Error'
-import CloseIcon from '@mui/icons-material/Close'
+
+import { CheckCircle, CircleAlert, X } from 'lucide-react'
+
+import { Alert, AlertAction, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { Button } from '@/components/ui/button'
+import { Progress } from '@/components/ui/progress'
+import { Spinner } from '@/components/ui/spinner'
 import { useJobStatus, getJobStatusMessage } from '@store/queries/useJobStatus'
 import type { JobStatus } from '@api/client'
 
@@ -82,7 +77,7 @@ export function JobStatusIndicator({
   onDismiss,
   title = 'Processing',
   dismissible = true,
-}: JobStatusIndicatorProps) {
+}: JobStatusIndicatorProps): JSX.Element | null {
   const [dismissed, setDismissed] = React.useState(false)
 
   const { data: status, isLoading, isError, error } = useJobStatus(jobId, {
@@ -90,7 +85,7 @@ export function JobStatusIndicator({
     onFail,
   })
 
-  const handleDismiss = () => {
+  const handleDismiss = (): void => {
     setDismissed(true)
     onDismiss?.()
   }
@@ -100,41 +95,43 @@ export function JobStatusIndicator({
     return null
   }
 
+  const dismissButton = dismissible ? (
+    <AlertAction>
+      <Button
+        variant="ghost"
+        size="icon-xs"
+        onClick={handleDismiss}
+        aria-label="dismiss"
+      >
+        <X className="size-3.5" />
+      </Button>
+    </AlertAction>
+  ) : null
+
   // Loading state
   if (isLoading) {
     return (
-      <Box sx={{ width: '100%', mb: 2 }}>
-        <Alert severity="info">
+      <div className="mb-2 w-full">
+        <Alert>
+          <Spinner className="size-4" />
           <AlertTitle>{title}</AlertTitle>
-          Loading job status...
+          <AlertDescription>Loading job status...</AlertDescription>
         </Alert>
-      </Box>
+      </div>
     )
   }
 
   // Error fetching job status
   if (isError) {
     return (
-      <Box sx={{ width: '100%', mb: 2 }}>
-        <Alert
-          severity="error"
-          action={
-            dismissible && (
-              <IconButton
-                aria-label="dismiss"
-                color="inherit"
-                size="small"
-                onClick={handleDismiss}
-              >
-                <CloseIcon fontSize="inherit" />
-              </IconButton>
-            )
-          }
-        >
+      <div className="mb-2 w-full">
+        <Alert variant="destructive">
+          <CircleAlert className="size-4" />
           <AlertTitle>Error</AlertTitle>
-          {error?.message || 'Failed to fetch job status'}
+          <AlertDescription>{error?.message || 'Failed to fetch job status'}</AlertDescription>
+          {dismissButton}
         </Alert>
-      </Box>
+      </div>
     )
   }
 
@@ -146,80 +143,47 @@ export function JobStatusIndicator({
   // Completed state
   if (status.state === 'completed') {
     return (
-      <Collapse in={!dismissed}>
-        <Box sx={{ width: '100%', mb: 2 }}>
-          <Alert
-            severity="success"
-            icon={<CheckCircleIcon />}
-            action={
-              dismissible && (
-                <IconButton
-                  aria-label="dismiss"
-                  color="inherit"
-                  size="small"
-                  onClick={handleDismiss}
-                >
-                  <CloseIcon fontSize="inherit" />
-                </IconButton>
-              )
-            }
-          >
-            <AlertTitle>{title}</AlertTitle>
-            {getJobStatusMessage(status)}
-          </Alert>
-        </Box>
-      </Collapse>
+      <div className="mb-2 w-full">
+        <Alert>
+          <CheckCircle className="size-4 text-green-600" />
+          <AlertTitle>{title}</AlertTitle>
+          <AlertDescription>{getJobStatusMessage(status)}</AlertDescription>
+          {dismissButton}
+        </Alert>
+      </div>
     )
   }
 
   // Failed state
   if (status.state === 'failed') {
     return (
-      <Collapse in={!dismissed}>
-        <Box sx={{ width: '100%', mb: 2 }}>
-          <Alert
-            severity="error"
-            icon={<ErrorIcon />}
-            action={
-              dismissible && (
-                <IconButton
-                  aria-label="dismiss"
-                  color="inherit"
-                  size="small"
-                  onClick={handleDismiss}
-                >
-                  <CloseIcon fontSize="inherit" />
-                </IconButton>
-              )
-            }
-          >
-            <AlertTitle>{title}</AlertTitle>
-            {getJobStatusMessage(status)}
-          </Alert>
-        </Box>
-      </Collapse>
+      <div className="mb-2 w-full">
+        <Alert variant="destructive">
+          <CircleAlert className="size-4" />
+          <AlertTitle>{title}</AlertTitle>
+          <AlertDescription>{getJobStatusMessage(status)}</AlertDescription>
+          {dismissButton}
+        </Alert>
+      </div>
     )
   }
 
   // Active, waiting, or delayed state
   return (
-    <Box sx={{ width: '100%', mb: 2 }}>
-      <Alert severity="info">
+    <div className="mb-2 w-full">
+      <Alert>
+        <Spinner className="size-4" />
         <AlertTitle>{title}</AlertTitle>
-        <Typography variant="body2" gutterBottom>
-          {getJobStatusMessage(status)}
-        </Typography>
-        <LinearProgress
-          variant={status.progress > 0 ? 'determinate' : 'indeterminate'}
-          value={status.progress}
-          sx={{ mt: 1 }}
-        />
-        {status.stage === 'downloading' && (
-          <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
-            Model downloads are cached and only happen once.
-          </Typography>
-        )}
+        <AlertDescription>
+          <p className="mb-2">{getJobStatusMessage(status)}</p>
+          <Progress value={status.progress > 0 ? status.progress : null} />
+          {status.stage === 'downloading' && (
+            <p className="mt-1 text-xs text-muted-foreground">
+              Model downloads are cached and only happen once.
+            </p>
+          )}
+        </AlertDescription>
       </Alert>
-    </Box>
+    </div>
   )
 }

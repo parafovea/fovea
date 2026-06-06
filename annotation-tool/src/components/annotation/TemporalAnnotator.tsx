@@ -1,30 +1,21 @@
 import { useState, useEffect } from 'react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
+import { Badge } from '@/components/ui/badge'
+import { Slider } from '@/components/ui/slider'
+import { Switch } from '@/components/ui/switch'
+import { Separator } from '@/components/ui/separator'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import {
-  Box,
-  Paper,
-  Typography,
-  TextField,
-  FormControl,
-  InputLabel,
   Select,
-  MenuItem,
-  Button,
-  Stack,
-  Slider,
-  Chip,
-  Alert,
-  IconButton,
-  FormControlLabel,
-  Switch,
-  Divider,
-} from '@mui/material'
-import {
-  AccessTime as TimeIcon,
-  Sync as SyncIcon,
-  Movie as VideoIcon,
-  Add as AddIcon,
-  Delete as DeleteIcon,
-} from '@mui/icons-material'
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from '@/components/ui/select'
+import { Clock, RefreshCw, Film, Plus, Trash2 } from 'lucide-react'
 import { Time, TimeInstant, TimeInterval } from '@models/types'
 import { generateId } from '@utils/uuid'
 import { useAddTime } from '@store/queries'
@@ -67,21 +58,21 @@ export default function TemporalAnnotator({
   const [timeType, setTimeType] = useState<'instant' | 'interval'>(
     existingTime?.type || 'instant'
   )
-  
+
   // Time range for intervals
   const [startTime, setStartTime] = useState(currentTime)
   const [endTime, setEndTime] = useState(Math.min(currentTime + 1, duration))
-  
+
   // Vagueness settings
   const [hasVagueness, setHasVagueness] = useState(false)
   const [vaguenessType, setVaguenessType] = useState<'approximate' | 'bounded' | 'fuzzy'>('approximate')
   const [vaguenessDescription, setVaguenessDescription] = useState('')
   const [granularity, setGranularity] = useState<GranularityType>('second')
-  
+
   // Deictic reference
   const [hasDeictic, setHasDeictic] = useState(false)
   const [deicticExpression, setDeicticExpression] = useState('')
-  
+
   // Multi-video references
   const [videoReferences, setVideoReferences] = useState<VideoReference[]>([
     {
@@ -98,13 +89,13 @@ export default function TemporalAnnotator({
       ] : undefined,
     }
   ])
-  
+
   // Certainty
   const [certainty, setCertainty] = useState(1.0)
-  
+
   // Metadata
   const [notes, setNotes] = useState('')
-  
+
   // Update video references when time changes
   useEffect(() => {
     const newRefs = [...videoReferences]
@@ -131,15 +122,15 @@ export default function TemporalAnnotator({
       setVideoReferences(newRefs)
     }
   }, [currentTime, startTime, endTime, timeType, fps, videoId, videoReferences])
-  
+
   // Initialize from existing time
   useEffect(() => {
     if (existingTime) {
       setTimeType(existingTime.type)
-      
+
       if (existingTime.videoReferences) {
         setVideoReferences(existingTime.videoReferences)
-        
+
         // Extract start/end times from primary video reference
         const primaryRef = existingTime.videoReferences.find(ref => ref.videoId === videoId)
         if (primaryRef) {
@@ -151,44 +142,44 @@ export default function TemporalAnnotator({
           }
         }
       }
-      
+
       if (existingTime.vagueness) {
         setHasVagueness(true)
         setVaguenessType(existingTime.vagueness.type)
         setVaguenessDescription(existingTime.vagueness.description || '')
         setGranularity(existingTime.vagueness.granularity || 'second')
       }
-      
+
       if (existingTime.deictic) {
         setHasDeictic(true)
         setDeicticExpression(existingTime.deictic.expression || '')
       }
-      
+
       setCertainty(existingTime.certainty || 1.0)
       const notesValue = existingTime.metadata?.notes
       setNotes(typeof notesValue === 'string' ? notesValue : '')
     }
   }, [existingTime, videoId])
-  
+
   const handleAddVideoReference = () => {
     const newRef: VideoReference = {
       videoId: '',
     }
     setVideoReferences([...videoReferences, newRef])
   }
-  
+
   const handleRemoveVideoReference = (index: number) => {
     if (videoReferences[index].videoId !== videoId) {
       setVideoReferences(videoReferences.filter((_, i) => i !== index))
     }
   }
-  
+
   const handleUpdateVideoReference = (index: number, field: VideoRefField, value: VideoReference[VideoRefField]) => {
     const newRefs = [...videoReferences]
     newRefs[index] = { ...newRefs[index], [field]: value }
     setVideoReferences(newRefs)
   }
-  
+
   const createTimeData = (): Omit<Time, 'id'> => {
     // Build vagueness if specified
     const vagueness = hasVagueness ? {
@@ -244,93 +235,92 @@ export default function TemporalAnnotator({
       onTimeCreated(timeWithId)
     }
   }
-  
+
   const formatTimeDisplay = (seconds: number) => {
     const mins = Math.floor(seconds / 60)
     const secs = Math.floor(seconds % 60)
     const ms = Math.floor((seconds % 1) * 1000)
     return `${mins}:${secs.toString().padStart(2, '0')}.${ms.toString().padStart(3, '0')}`
   }
-  
+
   const formatFrameDisplay = (seconds: number) => {
     return `Frame ${Math.floor(seconds * fps)}`
   }
-  
+
   return (
-    <Paper sx={{ p: 3 }}>
-      <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-        <TimeIcon />
+    <div data-tour-id="temporal-annotator" className="rounded-lg ring-1 ring-foreground/10 bg-card p-6 shadow-sm">
+      <h3 className="text-lg font-semibold flex items-center gap-2 mb-4">
+        <Clock className="size-5" />
         Temporal Annotation
-      </Typography>
-      
-      <Stack spacing={3}>
+      </h3>
+
+      <div className="flex flex-col gap-6">
         {/* Time Type Selection */}
-        <FormControl fullWidth>
-          <InputLabel>Time Type</InputLabel>
-          <Select
-            value={timeType}
-            onChange={(e) => setTimeType(e.target.value as 'instant' | 'interval')}
-            label="Time Type"
-          >
-            <MenuItem value="instant">Instant (single point in time)</MenuItem>
-            <MenuItem value="interval">Interval (time range)</MenuItem>
+        <div className="flex flex-col gap-2">
+          <Label>Time Type</Label>
+          <Select value={timeType} onValueChange={(val) => setTimeType(val as 'instant' | 'interval')}>
+            <SelectTrigger>
+              <SelectValue placeholder="Select time type" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="instant">Instant (single point in time)</SelectItem>
+              <SelectItem value="interval">Interval (time range)</SelectItem>
+            </SelectContent>
           </Select>
-        </FormControl>
-        
+        </div>
+
         {/* Time Selection */}
         {timeType === 'instant' ? (
-          <Box>
-            <Typography variant="subtitle2" gutterBottom>Time Point</Typography>
-            <Alert severity="info" sx={{ mb: 2 }}>
-              <Typography variant="body2">
-                {formatTimeDisplay(currentTime)} / {formatFrameDisplay(currentTime)}
-              </Typography>
+          <div>
+            <p className="text-sm font-medium mb-2">Time Point</p>
+            <Alert className="mb-4">
+              <AlertDescription>
+                <p className="text-sm">
+                  {formatTimeDisplay(currentTime)} / {formatFrameDisplay(currentTime)}
+                </p>
+              </AlertDescription>
             </Alert>
             <Button
-              variant="outlined"
-              startIcon={<SyncIcon />}
+              variant="outline"
               onClick={() => setStartTime(currentTime)}
-              fullWidth
+              className="w-full"
             >
+              <RefreshCw className="size-4 mr-2" />
               Use Current Video Time
             </Button>
-          </Box>
+          </div>
         ) : (
-          <Box>
-            <Typography variant="subtitle2" gutterBottom>Time Range</Typography>
-            <Stack spacing={2}>
-              <Box>
-                <Typography variant="caption" color="text.secondary">
+          <div>
+            <p className="text-sm font-medium mb-2">Time Range</p>
+            <div className="flex flex-col gap-4">
+              <div>
+                <p className="text-xs text-muted-foreground mb-1">
                   Start: {formatTimeDisplay(startTime)} / {formatFrameDisplay(startTime)}
-                </Typography>
+                </p>
                 <Slider
-                  value={startTime}
-                  onChange={(_, value) => setStartTime(value as number)}
+                  value={[startTime]}
+                  onValueChange={(v) => setStartTime(Array.isArray(v) ? v[0] : v)}
                   min={0}
                   max={duration}
                   step={1 / fps}
-                  valueLabelDisplay="auto"
-                  valueLabelFormat={formatTimeDisplay}
                 />
-              </Box>
-              <Box>
-                <Typography variant="caption" color="text.secondary">
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground mb-1">
                   End: {formatTimeDisplay(endTime)} / {formatFrameDisplay(endTime)}
-                </Typography>
+                </p>
                 <Slider
-                  value={endTime}
-                  onChange={(_, value) => setEndTime(value as number)}
+                  value={[endTime]}
+                  onValueChange={(v) => setEndTime(Array.isArray(v) ? v[0] : v)}
                   min={startTime}
                   max={duration}
                   step={1 / fps}
-                  valueLabelDisplay="auto"
-                  valueLabelFormat={formatTimeDisplay}
                 />
-              </Box>
-              <Stack direction="row" spacing={1}>
+              </div>
+              <div className="flex gap-2">
                 <Button
-                  variant="outlined"
-                  size="small"
+                  variant="outline"
+                  size="sm"
                   onClick={() => {
                     setStartTime(currentTime)
                     setEndTime(Math.min(currentTime + 1, duration))
@@ -339,8 +329,8 @@ export default function TemporalAnnotator({
                   Use Current Time
                 </Button>
                 <Button
-                  variant="outlined"
-                  size="small"
+                  variant="outline"
+                  size="sm"
                   onClick={() => {
                     setStartTime(0)
                     setEndTime(duration)
@@ -348,180 +338,175 @@ export default function TemporalAnnotator({
                 >
                   Full Video
                 </Button>
-              </Stack>
-            </Stack>
-          </Box>
+              </div>
+            </div>
+          </div>
         )}
-        
-        <Divider />
-        
+
+        <Separator />
+
         {/* Vagueness Settings */}
-        <Box>
-          <FormControlLabel
-            control={
-              <Switch
-                checked={hasVagueness}
-                onChange={(e) => setHasVagueness(e.target.checked)}
-              />
-            }
-            label="Add Vagueness/Uncertainty"
-          />
-          
-          {hasVagueness && (
-            <Stack spacing={2} sx={{ mt: 2 }}>
-              <FormControl fullWidth size="small">
-                <InputLabel>Vagueness Type</InputLabel>
-                <Select
-                  value={vaguenessType}
-                  onChange={(e) => setVaguenessType(e.target.value as VaguenessType)}
-                  label="Vagueness Type"
-                >
-                  <MenuItem value="approximate">Approximate (around this time)</MenuItem>
-                  <MenuItem value="bounded">Bounded (within a range)</MenuItem>
-                  <MenuItem value="fuzzy">Fuzzy (unclear boundaries)</MenuItem>
-                </Select>
-              </FormControl>
-              
-              <TextField
-                label="Description (optional)"
-                placeholder="e.g., 'around noon', 'early morning'"
-                value={vaguenessDescription}
-                onChange={(e) => setVaguenessDescription(e.target.value)}
-                size="small"
-                fullWidth
-              />
-              
-              <FormControl fullWidth size="small">
-                <InputLabel>Granularity</InputLabel>
-                <Select
-                  value={granularity}
-                  onChange={(e) => setGranularity(e.target.value as GranularityType)}
-                  label="Granularity"
-                >
-                  <MenuItem value="millisecond">Millisecond</MenuItem>
-                  <MenuItem value="second">Second</MenuItem>
-                  <MenuItem value="minute">Minute</MenuItem>
-                  <MenuItem value="hour">Hour</MenuItem>
-                </Select>
-              </FormControl>
-            </Stack>
-          )}
-        </Box>
-        
-        {/* Deictic Reference */}
-        <Box>
-          <FormControlLabel
-            control={
-              <Switch
-                checked={hasDeictic}
-                onChange={(e) => setHasDeictic(e.target.checked)}
-              />
-            }
-            label="Add Deictic Reference"
-          />
-          
-          {hasDeictic && (
-            <TextField
-              label="Deictic Expression"
-              placeholder="e.g., 'at this point', 'right now', 'just before'"
-              value={deicticExpression}
-              onChange={(e) => setDeicticExpression(e.target.value)}
-              size="small"
-              fullWidth
-              sx={{ mt: 2 }}
+        <div>
+          <div className="flex items-center gap-3">
+            <Switch
+              checked={hasVagueness}
+              onCheckedChange={setHasVagueness}
             />
+            <Label>Add Vagueness/Uncertainty</Label>
+          </div>
+
+          {hasVagueness && (
+            <div className="flex flex-col gap-4 mt-4">
+              <div className="flex flex-col gap-2">
+                <Label>Vagueness Type</Label>
+                <Select value={vaguenessType} onValueChange={(val) => setVaguenessType(val as VaguenessType)}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="approximate">Approximate (around this time)</SelectItem>
+                    <SelectItem value="bounded">Bounded (within a range)</SelectItem>
+                    <SelectItem value="fuzzy">Fuzzy (unclear boundaries)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <Label>Description (optional)</Label>
+                <Input
+                  placeholder="e.g., 'around noon', 'early morning'"
+                  value={vaguenessDescription}
+                  onChange={(e) => setVaguenessDescription(e.target.value)}
+                />
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <Label>Granularity</Label>
+                <Select value={granularity} onValueChange={(val) => setGranularity(val as GranularityType)}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="millisecond">Millisecond</SelectItem>
+                    <SelectItem value="second">Second</SelectItem>
+                    <SelectItem value="minute">Minute</SelectItem>
+                    <SelectItem value="hour">Hour</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
           )}
-        </Box>
-        
+        </div>
+
+        {/* Deictic Reference */}
+        <div>
+          <div className="flex items-center gap-3">
+            <Switch
+              checked={hasDeictic}
+              onCheckedChange={setHasDeictic}
+            />
+            <Label>Add Deictic Reference</Label>
+          </div>
+
+          {hasDeictic && (
+            <div className="flex flex-col gap-2 mt-4">
+              <Label>Deictic Expression</Label>
+              <Input
+                placeholder="e.g., 'at this point', 'right now', 'just before'"
+                value={deicticExpression}
+                onChange={(e) => setDeicticExpression(e.target.value)}
+              />
+            </div>
+          )}
+        </div>
+
         {/* Certainty */}
-        <Box>
-          <Typography variant="subtitle2" gutterBottom>
+        <div>
+          <p className="text-sm font-medium mb-2">
             Certainty: {(certainty * 100).toFixed(0)}%
-          </Typography>
+          </p>
           <Slider
-            value={certainty}
-            onChange={(_, value) => setCertainty(value as number)}
+            value={[certainty]}
+            onValueChange={(v) => setCertainty(Array.isArray(v) ? v[0] : v)}
             min={0}
             max={1}
             step={0.1}
-            valueLabelDisplay="auto"
-            valueLabelFormat={(value) => `${(value * 100).toFixed(0)}%`}
           />
-        </Box>
-        
+        </div>
+
         {/* Multi-Video References */}
-        <Box>
-          <Typography variant="subtitle2" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <VideoIcon />
+        <div>
+          <p className="text-sm font-medium flex items-center gap-2 mb-2">
+            <Film className="size-4" />
             Video References
-          </Typography>
-          
+          </p>
+
           {videoReferences.map((ref, index) => (
-            <Paper key={index} variant="outlined" sx={{ p: 2, mb: 1 }}>
-              <Stack direction="row" alignItems="center" spacing={1}>
+            <div key={index} className="rounded-md ring-1 ring-foreground/10 p-4 mb-2">
+              <div className="flex items-center gap-2">
                 {ref.videoId === videoId ? (
-                  <Chip label="Primary Video" color="primary" size="small" />
+                  <Badge>Primary Video</Badge>
                 ) : (
-                  <TextField
-                    label="Video ID"
+                  <Input
+                    placeholder="Video ID"
                     value={ref.videoId}
                     onChange={(e) => handleUpdateVideoReference(index, 'videoId', e.target.value)}
-                    size="small"
-                    sx={{ flexGrow: 1 }}
+                    className="flex-1"
                   />
                 )}
-                
+
                 {ref.videoId !== videoId && (
-                  <IconButton
-                    size="small"
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
                     onClick={() => handleRemoveVideoReference(index)}
                   >
-                    <DeleteIcon />
-                  </IconButton>
+                    <Trash2 className="size-4" />
+                  </Button>
                 )}
-              </Stack>
-              
+              </div>
+
               {ref.videoId === videoId && (
-                <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+                <p className="text-xs text-muted-foreground mt-2">
                   {timeType === 'instant'
                     ? `Frame ${ref.frameNumber}, ${ref.milliseconds}ms`
                     : `Frames ${ref.frameRange?.[0]}-${ref.frameRange?.[1]}, ${ref.millisecondRange?.[0]}-${ref.millisecondRange?.[1]}ms`
                   }
-                </Typography>
+                </p>
               )}
-            </Paper>
+            </div>
           ))}
-          
+
           <Button
-            variant="outlined"
-            size="small"
-            startIcon={<AddIcon />}
+            variant="outline"
+            size="sm"
             onClick={handleAddVideoReference}
           >
+            <Plus className="size-4 mr-1" />
             Add Video Reference
           </Button>
-        </Box>
-        
+        </div>
+
         {/* Notes */}
-        <TextField
-          label="Notes (optional)"
-          multiline
-          rows={2}
-          value={notes}
-          onChange={(e) => setNotes(e.target.value)}
-          fullWidth
-        />
-        
+        <div className="flex flex-col gap-2">
+          <Label>Notes (optional)</Label>
+          <Textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            rows={2}
+          />
+        </div>
+
         {/* Save Button */}
         <Button
-          variant="contained"
-          size="large"
+          size="lg"
           onClick={handleSaveTime}
-          startIcon={<TimeIcon />}
+          className="w-full"
         >
+          <Clock className="size-4 mr-2" />
           {existingTime ? 'Update' : 'Create'} Time Object
         </Button>
-      </Stack>
-    </Paper>
+      </div>
+    </div>
   )
 }

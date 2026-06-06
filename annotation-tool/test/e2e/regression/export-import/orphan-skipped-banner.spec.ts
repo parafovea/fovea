@@ -68,11 +68,18 @@ test.describe('Import result dialog — orphan-skipped banner', () => {
       const fileInput = page.locator('input[type="file"]').first()
       await fileInput.setInputFiles(tmpFile)
 
-      // Wait for the result dialog to appear — either as the import
-      // dialog updating with a result view, or as a separate result
-      // dialog. The banner has a stable test id, so we anchor on that.
+      // The ImportDataDialog has a preview step that surfaces "2 conflicts
+      // detected. Please select resolution strategies" — accept defaults
+      // and proceed by clicking the confirm/import button in the dialog
+      // footer. Without this the test sat on the preview screen and the
+      // result-dialog banner never rendered.
+      const confirmImport = page.locator('[role="dialog"]').getByRole('button', { name: /^import( now| data)?$/i }).first()
+      await expect(confirmImport).toBeVisible({ timeout: 5000 })
+      await expect(confirmImport).toBeEnabled({ timeout: 5000 })
+      await confirmImport.click()
+
       const banner = page.getByTestId('import-orphan-skipped-banner')
-      await expect(banner).toBeVisible({ timeout: 10000 })
+      await expect(banner).toBeVisible({ timeout: 15000 })
       await expect(banner).toContainText(/skipped/i)
       await expect(banner).toContainText(/missing referenced data/i)
       await expect(banner).toContainText(/re-export/i)

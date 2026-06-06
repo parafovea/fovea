@@ -16,6 +16,7 @@ import { videoSummarizationQueue } from '../queues/setup.js'
 import { NotFoundError, ForbiddenError } from '../lib/errors.js'
 import { requireAuth } from '../middleware/auth.js'
 import { buildAbilities } from '../middleware/abilities.js'
+import { isDemoModeEnabled } from '../lib/demo-flags.js'
 
 /**
  * Job data for video summarization queue.
@@ -27,6 +28,21 @@ function isSummarizeJobData(data: unknown): data is SummarizeJobData {
          'personaId' in data && typeof data.personaId === 'string'
 }
 
+interface GenerationOverridesJob {
+  temperature?: number;
+  topP?: number;
+  maxTokens?: number;
+}
+
+interface AudioOverridesJob {
+  beamSize?: number;
+  computeType?: 'float16' | 'float32' | 'int8' | 'int8_float16';
+  numSpeakers?: number;
+  minSpeakers?: number;
+  maxSpeakers?: number;
+  vadThreshold?: number;
+}
+
 interface SummarizeJobData {
   videoId: string;
   personaId: string;
@@ -36,6 +52,8 @@ interface SummarizeJobData {
   enableSpeakerDiarization?: boolean;
   fusionStrategy?: string;
   audioLanguage?: string;
+  generationOverrides?: GenerationOverridesJob;
+  audioOverrides?: AudioOverridesJob;
 }
 
 /**
@@ -99,6 +117,30 @@ const VideoSummarySchema = Type.Object({
   updatedAt: Type.String({ format: 'date-time' }),
 })
 
+const GenerationOverridesSchema = Type.Partial(
+  Type.Object({
+    temperature: Type.Number({ minimum: 0, maximum: 2 }),
+    topP: Type.Number({ minimum: 0, maximum: 1 }),
+    maxTokens: Type.Integer({ minimum: 1, maximum: 32768 }),
+  })
+)
+
+const AudioOverridesSchema = Type.Partial(
+  Type.Object({
+    beamSize: Type.Integer({ minimum: 1, maximum: 10 }),
+    computeType: Type.Union([
+      Type.Literal('float16'),
+      Type.Literal('float32'),
+      Type.Literal('int8'),
+      Type.Literal('int8_float16'),
+    ]),
+    numSpeakers: Type.Integer({ minimum: 1, maximum: 20 }),
+    minSpeakers: Type.Integer({ minimum: 1, maximum: 20 }),
+    maxSpeakers: Type.Integer({ minimum: 1, maximum: 20 }),
+    vadThreshold: Type.Number({ minimum: 0, maximum: 1 }),
+  })
+)
+
 const CreateSummaryRequestSchema = Type.Object({
   videoId: Type.String(),
   personaId: Type.String({ format: 'uuid' }),
@@ -108,6 +150,8 @@ const CreateSummaryRequestSchema = Type.Object({
   enableSpeakerDiarization: Type.Optional(Type.Boolean()),
   fusionStrategy: Type.Optional(Type.String()),
   audioLanguage: Type.Optional(Type.String()),
+  generationOverrides: Type.Optional(GenerationOverridesSchema),
+  audioOverrides: Type.Optional(AudioOverridesSchema),
 })
 
 const SummaryJobSchema = Type.Object({
@@ -185,7 +229,14 @@ const summariesRoute: FastifyPluginAsync = async (fastify) => {
       }
 
       if (!request.ability.can('read', subject('VideoSummary', summary))) {
-        throw new ForbiddenError('Cannot read this VideoSummary')
+        // FOVEA_DEMO_MODE override — callers whose CASL ability
+        // is scoped to their own data (anonymous demo sessions,
+        // non-admin users opening a tour) still need to read
+        // summaries that the seeded persona produced over the
+        // shared demo corpus.
+        if (!isDemoModeEnabled()) {
+          throw new ForbiddenError('Cannot read this VideoSummary')
+        }
       }
 
       return reply.send(summary)
@@ -221,6 +272,8 @@ const summariesRoute: FastifyPluginAsync = async (fastify) => {
         enableSpeakerDiarization,
         fusionStrategy,
         audioLanguage,
+        generationOverrides,
+        audioOverrides,
       } = request.body
       if (!request.ability) throw new ForbiddenError('No abilities defined')
       const userId = request.user!.id
@@ -260,7 +313,28 @@ const summariesRoute: FastifyPluginAsync = async (fastify) => {
         where: { videoId_personaId: { videoId, personaId } },
       })
       if (existing && !request.ability.can('update', subject('VideoSummary', existing))) {
-        throw new ForbiddenError('Cannot update this VideoSummary')
+        // FOVEA_DEMO_MODE override: VideoSummary rows in the demo
+        // deployment are routinely orphaned when the idle-reset
+        // sweeper deletes a stale demo-anonymous-* user but leaves
+        // the row behind with a now-dangling createdBy. Without
+        // this branch the next demo visitor hits "Cannot update this
+        // VideoSummary" on every video that any prior demo session
+        // touched. In demo mode we reclaim the row by overwriting
+        // createdBy to the current demo user before the update goes
+        // through (the row is still scoped to the same persona +
+        // video so no cross-user content leaks, and the existing
+        // row's content will be replaced by the new summarize job).
+        if (
+          isDemoModeEnabled() &&
+          request.user?.username?.startsWith('demo-anonymous-')
+        ) {
+          await fastify.prisma.videoSummary.update({
+            where: { videoId_personaId: { videoId, personaId } },
+            data: { createdBy: userId },
+          })
+        } else {
+          throw new ForbiddenError('Cannot update this VideoSummary')
+        }
       }
 
       const jobData: SummarizeJobData = {
@@ -281,6 +355,12 @@ const summariesRoute: FastifyPluginAsync = async (fastify) => {
       }
       if (audioLanguage !== undefined) {
         jobData.audioLanguage = audioLanguage
+      }
+      if (generationOverrides !== undefined) {
+        jobData.generationOverrides = generationOverrides
+      }
+      if (audioOverrides !== undefined) {
+        jobData.audioOverrides = audioOverrides
       }
 
       const job = await videoSummarizationQueue.add(
@@ -469,7 +549,20 @@ const summariesRoute: FastifyPluginAsync = async (fastify) => {
 
       if (existing) {
         if (!request.ability.can('update', subject('VideoSummary', existing))) {
-          throw new ForbiddenError('Cannot update this VideoSummary')
+          // FOVEA_DEMO_MODE override (same rationale as the
+          // queue-summarize route): reclaim orphan summaries left
+          // behind by the idle-reset sweeper instead of 403-ing.
+          if (
+            isDemoModeEnabled() &&
+            request.user?.username?.startsWith('demo-anonymous-')
+          ) {
+            await fastify.prisma.videoSummary.update({
+              where: { videoId_personaId: { videoId, personaId } },
+              data: { createdBy: userId },
+            })
+          } else {
+            throw new ForbiddenError('Cannot update this VideoSummary')
+          }
         }
       } else {
         const candidate = subject('VideoSummary', {

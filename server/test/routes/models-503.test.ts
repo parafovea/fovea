@@ -91,7 +91,7 @@ describe('Model Routes - 503 Service Unavailable', () => {
 
       const response = await app.inject({
         method: 'POST',
-        url: '/api/models/select?taskType=detection&modelName=yolov8n',
+        url: '/api/models/select?taskType=object_detection&modelName=yolov8n',
       })
 
       expect(response.statusCode).toBe(503)

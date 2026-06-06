@@ -135,8 +135,8 @@ class TestExtractClaims:
             )
 
         assert response.status_code == 200
-        call_kwargs = uc.execute.call_args.kwargs
-        assert call_kwargs["ontology_context"] == {
+        request_arg = uc.execute.call_args.args[0]
+        assert request_arg.ontology_context == {
             "types": [{"id": "t1", "name": "Person"}],
             "glosses": {"t1": "a human individual"},
         }

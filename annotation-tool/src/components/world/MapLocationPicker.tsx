@@ -1,24 +1,21 @@
 import { useState, useEffect } from 'react'
 import {
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Button,
-  Box,
-  Typography,
-  Paper,
-  ToggleButton,
-  ToggleButtonGroup,
-  Alert,
-  Chip,
-} from '@mui/material'
+  MapPin,
+  Maximize2,
+  Crosshair,
+  Map,
+} from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import {
-  Map as MapIcon,
-  PinDrop as PointIcon,
-  CropFree as ExtentIcon,
-  MyLocation as LocationIcon,
-} from '@mui/icons-material'
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { MapContainer, TileLayer, Marker, Polygon, Polyline, useMap, useMapEvents } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
@@ -115,7 +112,7 @@ function MapInteraction({
     <>
       {/* Show temporary polygon while drawing */}
       {drawing && tempPolygon.length > 0 && (
-        <Polyline 
+        <Polyline
           positions={tempPolygon.map(ll => [ll.lat, ll.lng])}
           pathOptions={{ color: 'blue', dashArray: '10, 10' }}
         />
@@ -151,14 +148,14 @@ export default function MapLocationPicker({
   }, [initialCoordinates])
 
   const handlePointClick = (latlng: L.LatLng) => {
-    const coord: Coordinate = coordinateSystem === 'GPS' 
+    const coord: Coordinate = coordinateSystem === 'GPS'
       ? { latitude: latlng.lat, longitude: latlng.lng }
       : { x: latlng.lng, y: latlng.lat } // Simple conversion for demo
     setPointCoordinate(coord)
   }
 
   const handlePolygonComplete = (points: L.LatLng[]) => {
-    const coords = points.map(p => 
+    const coords = points.map(p =>
       coordinateSystem === 'GPS'
         ? { latitude: p.lat, longitude: p.lng }
         : { x: p.lng, y: p.lat }
@@ -186,7 +183,7 @@ export default function MapLocationPicker({
     onClose()
   }
 
-  const hasSelection = mode === 'point' 
+  const hasSelection = mode === 'point'
     ? (pointCoordinate.latitude !== undefined || pointCoordinate.x !== undefined)
     : polygonCoordinates.length >= 3
 
@@ -204,74 +201,74 @@ export default function MapLocationPicker({
   }
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="lg" fullWidth>
-      <DialogTitle>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <MapIcon color="primary" />
-          Select Location on Map
-        </Box>
-      </DialogTitle>
-      <DialogContent>
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, height: '600px' }}>
+    <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) onClose() }}>
+      <DialogContent className="sm:max-w-4xl">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Map className="size-5 text-primary" />
+            Select Location on Map
+          </DialogTitle>
+        </DialogHeader>
+        <div className="flex flex-col gap-4" style={{ height: '600px' }}>
           {/* Mode selector and instructions */}
-          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <ToggleButtonGroup
-              value={mode}
-              exclusive
-              onChange={(_, value) => {
-                if (value) {
-                  setMode(value)
+          <div className="flex items-center justify-between">
+            <ToggleGroup
+              value={[mode]}
+              onValueChange={(value) => {
+                if (value.length > 0) {
+                  setMode(value[0] as 'point' | 'extent')
                   handleClearSelection()
                 }
               }}
-              size="small"
+              size="sm"
             >
-              <ToggleButton value="point">
-                <PointIcon sx={{ mr: 1 }} />
+              <ToggleGroupItem value="point" className="flex items-center gap-1">
+                <MapPin className="size-4" />
                 Point
-              </ToggleButton>
-              <ToggleButton value="extent">
-                <ExtentIcon sx={{ mr: 1 }} />
+              </ToggleGroupItem>
+              <ToggleGroupItem value="extent" className="flex items-center gap-1">
+                <Maximize2 className="size-4" />
                 Region
-              </ToggleButton>
-            </ToggleButtonGroup>
+              </ToggleGroupItem>
+            </ToggleGroup>
 
             {mode === 'extent' && !drawing && polygonCoordinates.length === 0 && (
               <Button
-                variant="contained"
-                size="small"
+                size="sm"
                 onClick={handleStartDrawing}
-                startIcon={<ExtentIcon />}
               >
+                <Maximize2 className="mr-1 size-4" />
                 Start Drawing Region
               </Button>
             )}
 
             {(hasSelection || drawing) && (
               <Button
-                variant="outlined"
-                size="small"
+                variant="outline"
+                size="sm"
                 onClick={handleClearSelection}
-                color="error"
+                className="text-destructive"
               >
                 Clear Selection
               </Button>
             )}
-          </Box>
+          </div>
 
           {/* Instructions */}
-          <Alert severity="info" sx={{ py: 0.5 }}>
-            {mode === 'point' && "Click anywhere on the map to set a point location."}
-            {mode === 'extent' && !drawing && polygonCoordinates.length === 0 && 
-              "Click 'Start Drawing Region' then click on the map to draw polygon vertices. Double-click to finish."}
-            {mode === 'extent' && drawing && 
-              "Click on the map to add polygon vertices. Double-click to complete the region."}
-            {mode === 'extent' && !drawing && polygonCoordinates.length > 0 &&
-              "Region selected. Click 'Clear Selection' to redraw."}
+          <Alert className="py-1">
+            <AlertDescription>
+              {mode === 'point' && "Click anywhere on the map to set a point location."}
+              {mode === 'extent' && !drawing && polygonCoordinates.length === 0 &&
+                "Click 'Start Drawing Region' then click on the map to draw polygon vertices. Double-click to finish."}
+              {mode === 'extent' && drawing &&
+                "Click on the map to add polygon vertices. Double-click to complete the region."}
+              {mode === 'extent' && !drawing && polygonCoordinates.length > 0 &&
+                "Region selected. Click 'Clear Selection' to redraw."}
+            </AlertDescription>
           </Alert>
 
           {/* Map */}
-          <Paper elevation={2} sx={{ flex: 1, position: 'relative' }}>
+          <div className="relative flex-1 rounded-lg border shadow-sm">
             <MapContainer
               center={[20, 0]}
               zoom={2}
@@ -282,7 +279,7 @@ export default function MapLocationPicker({
                 attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
               />
-              
+
               <MapInteraction
                 mode={mode}
                 onPointClick={handlePointClick}
@@ -303,7 +300,7 @@ export default function MapLocationPicker({
 
               {/* Display selected polygon */}
               {mode === 'extent' && polygonCoordinates.length >= 3 && !drawing && (
-                <Polygon 
+                <Polygon
                   positions={polygonCoordinates
                     .filter(c => c.latitude && c.longitude)
                     .map(c => [c.latitude!, c.longitude!])}
@@ -314,67 +311,46 @@ export default function MapLocationPicker({
 
             {/* Coordinate display overlay */}
             {hoveredCoordinates && (
-              <Paper
-                sx={{
-                  position: 'absolute',
-                  bottom: 10,
-                  left: 10,
-                  zIndex: 1000,
-                  p: 1,
-                  backgroundColor: 'rgba(255,255,255,0.9)',
-                }}
+              <div
+                className="absolute bottom-2.5 left-2.5 z-[1000] rounded-md bg-white/90 p-2"
               >
-                <Typography variant="caption">
+                <span className="text-xs text-muted-foreground">
                   Lat: {hoveredCoordinates.lat.toFixed(6)}, Lng: {hoveredCoordinates.lng.toFixed(6)}
-                </Typography>
-              </Paper>
+                </span>
+              </div>
             )}
 
             {/* Selection display */}
             {hasSelection && (
-              <Paper
-                sx={{
-                  position: 'absolute',
-                  top: 10,
-                  right: 10,
-                  zIndex: 1000,
-                  p: 1,
-                  backgroundColor: 'rgba(255,255,255,0.9)',
-                }}
+              <div
+                className="absolute top-2.5 right-2.5 z-[1000] rounded-md bg-white/90 p-2"
               >
                 {mode === 'point' && pointCoordinate.latitude && (
-                  <Box>
-                    <Chip 
-                      icon={<LocationIcon />} 
-                      label={`${pointCoordinate.latitude.toFixed(6)}, ${pointCoordinate.longitude?.toFixed(6)}`}
-                      size="small"
-                      color="primary"
-                    />
-                  </Box>
+                  <Badge>
+                    <Crosshair className="mr-1 size-3" />
+                    {pointCoordinate.latitude.toFixed(6)}, {pointCoordinate.longitude?.toFixed(6)}
+                  </Badge>
                 )}
                 {mode === 'extent' && polygonCoordinates.length > 0 && (
-                  <Chip 
-                    icon={<ExtentIcon />} 
-                    label={`${polygonCoordinates.length} vertices`}
-                    size="small"
-                    color="primary"
-                  />
+                  <Badge>
+                    <Maximize2 className="mr-1 size-3" />
+                    {polygonCoordinates.length} vertices
+                  </Badge>
                 )}
-              </Paper>
+              </div>
             )}
-          </Paper>
-        </Box>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button
+            onClick={handleConfirm}
+            disabled={!hasSelection}
+          >
+            Confirm Selection
+          </Button>
+        </DialogFooter>
       </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose}>Cancel</Button>
-        <Button 
-          onClick={handleConfirm} 
-          variant="contained"
-          disabled={!hasSelection}
-        >
-          Confirm Selection
-        </Button>
-      </DialogActions>
     </Dialog>
   )
 }

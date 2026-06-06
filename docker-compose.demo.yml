@@ -1,0 +1,35 @@
+# Compose override for the LOCAL demo iteration loop. Mirrors what
+# demo.fovea.video runs in production, but runs entirely on the
+# developer laptop so frontend fixes can be validated in seconds
+# instead of paying the ~30-minute production deploy cycle.
+#
+# Usage:
+#
+#   docker compose \
+#     -f docker-compose.yml \
+#     -f docker-compose.tour-demo.yml \
+#     -f docker-compose.demo.yml \
+#     up -d --build frontend backend postgres redis
+#
+#   # Open http://localhost:3000 — landing is TourCataloguePage.
+#   # Backend mints demo-anonymous-* on first request via
+#   # FOVEA_DEMO_MODE=true + FOVEA_DEMO_ALLOW_ANONYMOUS_AUTH=true.
+#
+# The tour-demo override layers MSW (VITE_TOUR_DEMO=1) so the
+# model-service stays parked under the never-active profile. This
+# override adds the DEMO_PUBLIC frontend gate and the matching
+# backend env vars that make /api/demo/anonymous-session answerable
+# and /api/videos return the full corpus to an anon visitor.
+name: fovea
+
+services:
+  frontend:
+    build:
+      args:
+        - VITE_DEMO_PUBLIC=1
+
+  backend:
+    environment:
+      FOVEA_DEMO_MODE: "true"
+      FOVEA_DEMO_ALLOW_ANONYMOUS_AUTH: "true"
+      ALLOW_REGISTRATION: "false"

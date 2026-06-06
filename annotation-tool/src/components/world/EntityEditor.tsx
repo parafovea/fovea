@@ -1,42 +1,33 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
+import { Plus, Trash2, Package, Globe, Pencil } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Badge } from '@/components/ui/badge'
+import { Separator } from '@/components/ui/separator'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import {
   Dialog,
-  DialogTitle,
   DialogContent,
-  DialogActions,
-  TextField,
-  Button,
-  Box,
-  Typography,
-  Chip,
-  Divider,
-  List,
-  ListItem,
-  ListItemText,
-  ListItemSecondaryAction,
-  IconButton,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  Alert,
-  ToggleButton,
-  ToggleButtonGroup,
-} from '@mui/material'
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import {
-  Add as AddIcon,
-  Delete as DeleteIcon,
-  Edit as EditIcon,
-  Inventory2 as ObjectIcon,
-  Language as WikidataIcon,
-} from '@mui/icons-material'
-import { useAddEntity, useUpdateEntity, useDeleteEntity, usePersonas, useAllPersonaOntologies } from '@store/queries'
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from '@/components/ui/select'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { useAddEntity, useUpdateEntity, usePersonas, useAllPersonaOntologies } from '@store/queries'
 import { useAnnotationUiStore } from '@store/zustand/annotationUiStore'
 import { Entity, EntityTypeAssignment, GlossItem } from '@models/types'
 import GlossEditor from '@components/ontology/GlossEditor'
 import { TypeObjectBadge } from '../shared/TypeObjectToggle'
 import WikidataImportFlow from '../shared/WikidataImportFlow'
-import { useAutoSave, SaveStatusIndicator } from '../../hooks/data'
+import { useUnsavedChangesPrompt } from '../../hooks/data'
 
 interface EntityEditorProps {
   open: boolean
@@ -51,7 +42,6 @@ export default function EntityEditor({ open, onClose, entity }: EntityEditorProp
   const { data: personaOntologies = [] } = useAllPersonaOntologies(personaIds)
   const { mutateAsync: addEntity } = useAddEntity()
   const { mutateAsync: updateEntity } = useUpdateEntity()
-  const { mutate: deleteEntity } = useDeleteEntity()
 
   // Active persona from Zustand store
   const activePersonaId = useAnnotationUiStore((state) => state.selectedPersonaId)
@@ -64,63 +54,24 @@ export default function EntityEditor({ open, onClose, entity }: EntityEditorProp
   const [wikidataId, setWikidataId] = useState<string>('')
   const [wikidataUrl, setWikidataUrl] = useState<string>('')
 
-  // Track auto-created entity ID for cancel cleanup
-  const [autoCreatedEntityId, setAutoCreatedEntityId] = useState<string | null>(null)
-  const autoCreatedIdRef = useRef<string | null>(null)
-
   // For adding new type assignment
   const [selectedPersonaId, setSelectedPersonaId] = useState<string>('')
   const [selectedEntityTypeId, setSelectedEntityTypeId] = useState<string>('')
   const [assignmentConfidence, setAssignmentConfidence] = useState<number>(1.0)
   const [assignmentJustification, setAssignmentJustification] = useState('')
 
-  // Keep ref in sync with state for callbacks
-  useEffect(() => {
-    autoCreatedIdRef.current = autoCreatedEntityId
-  }, [autoCreatedEntityId])
+  const isDirty = open && (
+    entity
+      ? name !== entity.name ||
+        wikidataId !== (entity.wikidataId || '') ||
+        wikidataUrl !== (entity.wikidataUrl || '') ||
+        alternateNamesInput !== (entity.metadata?.alternateNames?.join(', ') || '') ||
+        JSON.stringify(description) !== JSON.stringify(entity.description) ||
+        JSON.stringify(typeAssignments) !== JSON.stringify(entity.typeAssignments || [])
+      : !!name || alternateNamesInput.trim() !== '' || typeAssignments.length > 0
+  )
 
-  // Auto-save hook for new entities
-  const { saveStatus, lastSavedAt, errorMessage, retryCount, forceSave } = useAutoSave({
-    data: { name, description, typeAssignments, wikidataId, wikidataUrl, alternateNamesInput },
-    isEnabled: open && !!name && !entity, // Only for new entities, require name
-    onSave: async (entityData) => {
-      const now = new Date().toISOString()
-      const fullEntityData: Omit<Entity, 'id' | 'createdAt' | 'updatedAt'> = {
-        name: entityData.name,
-        description: entityData.description,
-        typeAssignments: entityData.typeAssignments,
-        wikidataId: entityData.wikidataId || undefined,
-        wikidataUrl: entityData.wikidataUrl || undefined,
-        importedFrom: entityData.wikidataId ? 'wikidata' : undefined,
-        importedAt: entityData.wikidataId ? now : undefined,
-        metadata: {
-          alternateNames: entityData.alternateNamesInput.split(',').map(s => s.trim()).filter(Boolean),
-          externalIds: {},
-          properties: {},
-        },
-      }
-
-      if (autoCreatedIdRef.current) {
-        // Update the auto-created entity
-        await updateEntity({
-          id: autoCreatedIdRef.current,
-          createdAt: now,
-          updatedAt: now,
-          ...fullEntityData,
-        })
-      } else {
-        // Create new entity and track ID
-        const result = await addEntity(fullEntityData)
-        // Get the newly created entity ID from the result
-        const newEntity = result.entities[result.entities.length - 1]
-        if (newEntity) {
-          setAutoCreatedEntityId(newEntity.id)
-        }
-      }
-    },
-    entityType: 'world-object',
-    entityId: entity?.id || autoCreatedIdRef.current || undefined,
-  })
+  const { confirmDiscard } = useUnsavedChangesPrompt({ isDirty })
 
   useEffect(() => {
     if (entity) {
@@ -138,8 +89,6 @@ export default function EntityEditor({ open, onClose, entity }: EntityEditorProp
       setWikidataId('')
       setWikidataUrl('')
     }
-    // Reset auto-created ID when dialog opens/closes or entity changes
-    setAutoCreatedEntityId(null)
   }, [entity, open])
 
   const handleAddTypeAssignment = () => {
@@ -227,22 +176,8 @@ export default function EntityEditor({ open, onClose, entity }: EntityEditorProp
     onClose()
   }
 
-  // Cancel handler deletes auto-created entity
   const handleCancel = () => {
-    if (autoCreatedIdRef.current) {
-      deleteEntity(autoCreatedIdRef.current)
-    }
-    setAutoCreatedEntityId(null)
-    onClose()
-  }
-
-  // Done handler keeps the entity (already saved via autosave)
-  const handleDone = async () => {
-    // Force save any pending changes before closing
-    if (!entity && autoCreatedIdRef.current) {
-      await forceSave()
-    }
-    setAutoCreatedEntityId(null)
+    if (!confirmDiscard()) return
     onClose()
   }
 
@@ -262,42 +197,42 @@ export default function EntityEditor({ open, onClose, entity }: EntityEditorProp
     : []
 
   return (
-    <Dialog open={open} onClose={handleCancel} maxWidth="md" fullWidth>
-      <DialogTitle>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <ObjectIcon color="secondary" />
-          {entity ? 'Edit Entity' : 'Create Entity'}
-          <TypeObjectBadge isType={false} />
-        </Box>
-      </DialogTitle>
-      <DialogContent>
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 2 }}>
-          <Alert severity="info" icon={<ObjectIcon />}>
-            An entity is an actual thing in the world (e.g., "John Smith", "The White House").
-            This is different from entity types which are categories (e.g., "Person", "Building").
+    <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) handleCancel() }}>
+      <DialogContent data-tour-id="entity-editor" className="sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Package className="size-5 text-secondary" />
+            {entity ? 'Edit Entity' : 'Create Entity'}
+            <TypeObjectBadge isType={false} />
+          </DialogTitle>
+        </DialogHeader>
+        <div className="flex flex-col gap-4">
+          <Alert>
+            <Package className="size-4" />
+            <AlertDescription>
+              An entity is an actual thing in the world (e.g., "John Smith", "The White House").
+              This is different from entity types which are categories (e.g., "Person", "Building").
+            </AlertDescription>
           </Alert>
 
           {!entity && (
-            <ToggleButtonGroup
-              value={importMode}
-              exclusive
-              onChange={(_, newMode) => newMode && setImportMode(newMode)}
-              fullWidth
-              size="small"
+            <ToggleGroup
+              value={[importMode]}
+              onValueChange={(value) => {
+                if (value.length > 0) setImportMode(value[0] as 'manual' | 'wikidata')
+              }}
+              size="sm"
+              className="w-full"
             >
-              <ToggleButton value="manual">
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <EditIcon fontSize="small" />
-                  <Typography variant="body2">Manual Entry</Typography>
-                </Box>
-              </ToggleButton>
-              <ToggleButton value="wikidata">
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <WikidataIcon fontSize="small" />
-                  <Typography variant="body2">Import from Wikidata</Typography>
-                </Box>
-              </ToggleButton>
-            </ToggleButtonGroup>
+              <ToggleGroupItem value="manual" className="flex flex-1 items-center gap-1">
+                <Pencil className="size-4" />
+                <span className="text-sm">Manual Entry</span>
+              </ToggleGroupItem>
+              <ToggleGroupItem value="wikidata" className="flex flex-1 items-center gap-1">
+                <Globe className="size-4" />
+                <span className="text-sm">Import from Wikidata</span>
+              </ToggleGroupItem>
+            </ToggleGroup>
           )}
 
           {importMode === 'wikidata' && !entity && (
@@ -310,225 +245,194 @@ export default function EntityEditor({ open, onClose, entity }: EntityEditorProp
             />
           )}
 
-          <TextField
-            label="Name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            fullWidth
-            required
-            helperText="The specific name of this entity"
-          />
+          <div className="space-y-1">
+            <Label htmlFor="entity-name">Name *</Label>
+            <Input
+              id="entity-name"
+              data-tour-id="entity-name-input"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Entity name"
+            />
+            <p className="text-xs text-muted-foreground">The specific name of this entity</p>
+          </div>
 
-          <Box>
-            <Typography variant="subtitle2" gutterBottom>
-              Description
-            </Typography>
+          <div className="space-y-1">
+            <Label>Description</Label>
             <GlossEditor
               gloss={description}
               onChange={setDescription}
-              personaId={activePersonaId} // Use active persona for type references
+              personaId={activePersonaId}
             />
-          </Box>
+          </div>
 
-          <TextField
-            label="Alternate Names"
-            value={alternateNamesInput}
-            onChange={(e) => setAlternateNamesInput(e.target.value)}
-            fullWidth
-            helperText="Other names for this entity (comma-separated)"
-          />
+          <div className="space-y-1">
+            <Label htmlFor="alternate-names">Alternate Names</Label>
+            <Input
+              id="alternate-names"
+              value={alternateNamesInput}
+              onChange={(e) => setAlternateNamesInput(e.target.value)}
+              placeholder="Other names (comma-separated)"
+            />
+            <p className="text-xs text-muted-foreground">Other names for this entity (comma-separated)</p>
+          </div>
 
           {wikidataId && (
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <Chip
-                label={`Wikidata: ${wikidataId}`}
-                size="small"
-                color="secondary"
-                variant="outlined"
-                component="a"
-                href={wikidataUrl}
-                target="_blank"
-                clickable
-              />
-              <Typography variant="caption" color="text.secondary">
+            <div className="flex items-center gap-2">
+              <a href={wikidataUrl} target="_blank" rel="noopener noreferrer">
+                <Badge variant="outline" className="cursor-pointer">
+                  Wikidata: {wikidataId}
+                </Badge>
+              </a>
+              <span className="text-xs text-muted-foreground">
                 Imported from Wikidata
-              </Typography>
-            </Box>
+              </span>
+            </div>
           )}
 
-          <Divider />
+          <Separator />
 
-          <Box>
-            <Typography variant="h6" gutterBottom>
-              Type Assignments by Persona
-            </Typography>
-            <Typography variant="caption" color="text.secondary" paragraph>
+          <div>
+            <h3 className="text-base font-semibold">Type Assignments by Persona</h3>
+            <p className="text-xs text-muted-foreground mb-4">
               Different personas can classify this entity with different types from their ontologies.
-            </Typography>
+            </p>
 
             {/* List existing type assignments */}
             {typeAssignments.length > 0 && (
-              <List dense>
+              <ul className="space-y-2 mb-4">
                 {typeAssignments.map((assignment) => (
-                  <ListItem key={assignment.personaId}>
-                    <ListItemText
-                      primary={
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <Chip
-                            label={getPersonaName(assignment.personaId)}
-                            size="small"
-                            color="primary"
-                          />
-                          <Typography variant="body2">
-                            classifies as
-                          </Typography>
-                          <Chip
-                            label={getEntityTypeName(assignment.personaId, assignment.entityTypeId)}
-                            size="small"
-                            variant="outlined"
-                            color="primary"
-                            sx={{ fontStyle: 'italic' }}
-                          />
-                        </Box>
-                      }
-                      secondary={
-                        <Box>
-                          {assignment.confidence && assignment.confidence < 1 && (
-                            <Typography variant="caption">
-                              Confidence: {(assignment.confidence * 100).toFixed(0)}%
-                            </Typography>
-                          )}
-                          {assignment.justification && (
-                            <Typography variant="caption" display="block">
-                              Justification: {assignment.justification}
-                            </Typography>
-                          )}
-                        </Box>
-                      }
-                    />
-                    <ListItemSecondaryAction>
-                      <IconButton
-                        edge="end"
-                        size="small"
+                  <li key={assignment.personaId} className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Badge>{getPersonaName(assignment.personaId)}</Badge>
+                      <span className="text-sm">classifies as</span>
+                      <Badge variant="outline" className="italic">
+                        {getEntityTypeName(assignment.personaId, assignment.entityTypeId)}
+                      </Badge>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div>
+                        {assignment.confidence && assignment.confidence < 1 && (
+                          <span className="text-xs text-muted-foreground">
+                            Confidence: {(assignment.confidence * 100).toFixed(0)}%
+                          </span>
+                        )}
+                        {assignment.justification && (
+                          <span className="text-xs text-muted-foreground block">
+                            Justification: {assignment.justification}
+                          </span>
+                        )}
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
                         onClick={() => handleRemoveTypeAssignment(assignment.personaId)}
                       >
-                        <DeleteIcon />
-                      </IconButton>
-                    </ListItemSecondaryAction>
-                  </ListItem>
+                        <Trash2 className="size-4" />
+                      </Button>
+                    </div>
+                  </li>
                 ))}
-              </List>
+              </ul>
             )}
 
             {/* Add new type assignment */}
-            <Box sx={{ mt: 2, p: 2, border: 1, borderColor: 'divider', borderRadius: 1 }}>
-              <Typography variant="subtitle2" gutterBottom>
-                Add Type Assignment
-              </Typography>
-              <Box sx={{ display: 'flex', gap: 2, flexDirection: 'column' }}>
-                <FormControl fullWidth size="small">
-                  <InputLabel>Persona</InputLabel>
-                  <Select
-                    value={selectedPersonaId}
-                    onChange={(e) => {
-                      setSelectedPersonaId(e.target.value)
-                      setSelectedEntityTypeId('')
-                    }}
-                    label="Persona"
-                  >
+            <div className="rounded-lg border p-4 space-y-3">
+              <Label className="text-sm font-medium">Add Type Assignment</Label>
+              <div className="flex flex-col gap-3">
+                <Select value={selectedPersonaId} onValueChange={(value) => {
+                  setSelectedPersonaId(value ?? '')
+                  setSelectedEntityTypeId('')
+                }}>
+                  <SelectTrigger className="w-full truncate [&>span]:truncate [&>span]:block [&>span]:overflow-hidden">
+                    <SelectValue placeholder="Select Persona">
+                      {/* Force the resolved persona name into the
+                          trigger so base-ui never falls back to
+                          rendering the controlled value (a UUID) when
+                          the SelectItem siblings haven't mounted yet
+                          — the same bug AnnotationWorkspace's
+                          persona selector documents at length. */}
+                      {personas.find((p) => p.id === selectedPersonaId)?.name || 'Select Persona'}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
                     {personas.map(persona => (
-                      <MenuItem key={persona.id} value={persona.id}>
+                      <SelectItem key={persona.id} value={persona.id}>
                         {persona.name}
-                      </MenuItem>
+                      </SelectItem>
                     ))}
-                  </Select>
-                </FormControl>
+                  </SelectContent>
+                </Select>
 
                 {selectedPersonaId && (
-                  <FormControl fullWidth size="small">
-                    <InputLabel>Entity Type</InputLabel>
-                    <Select
-                      value={selectedEntityTypeId}
-                      onChange={(e) => setSelectedEntityTypeId(e.target.value)}
-                      label="Entity Type"
-                    >
+                  <Select value={selectedEntityTypeId} onValueChange={(v) => setSelectedEntityTypeId(v ?? '')}>
+                    <SelectTrigger className="w-full truncate [&>span]:truncate [&>span]:block [&>span]:overflow-hidden">
+                      {/* Explicit child override: base-ui Select renders
+                          the controlled `value` prop verbatim (a UUID)
+                          when the matching SelectItem hasn't yet
+                          mounted (initial paint before the dropdown
+                          opens). Resolve the name from the
+                          availableEntityTypes list so the trigger never
+                          shows a raw id. */}
+                      <SelectValue placeholder="Select Entity Type">
+                        {selectedEntityTypeId
+                          ? availableEntityTypes.find((t) => t.id === selectedEntityTypeId)?.name ?? null
+                          : null}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
                       {availableEntityTypes.map(type => (
-                        <MenuItem key={type.id} value={type.id}>
+                        <SelectItem key={type.id} value={type.id}>
                           <em>{type.name}</em>
-                        </MenuItem>
+                        </SelectItem>
                       ))}
-                    </Select>
-                  </FormControl>
+                    </SelectContent>
+                  </Select>
                 )}
 
                 {selectedPersonaId && selectedEntityTypeId && (
                   <>
-                    <TextField
-                      label="Confidence (0-1)"
+                    <Input
                       type="number"
-                      size="small"
                       value={assignmentConfidence}
                       onChange={(e) => setAssignmentConfidence(parseFloat(e.target.value))}
-                      inputProps={{ min: 0, max: 1, step: 0.1 }}
+                      min={0}
+                      max={1}
+                      step={0.1}
+                      placeholder="Confidence (0-1)"
                     />
-                    <TextField
-                      label="Justification (optional)"
-                      size="small"
-                      multiline
+                    <textarea
+                      className="flex min-h-16 w-full rounded-lg border border-input bg-transparent px-2.5 py-2 text-sm transition-colors outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
                       rows={2}
                       value={assignmentJustification}
                       onChange={(e) => setAssignmentJustification(e.target.value)}
+                      placeholder="Justification (optional)"
                     />
                     <Button
-                      variant="outlined"
-                      startIcon={<AddIcon />}
+                      variant="outline"
                       onClick={handleAddTypeAssignment}
                       disabled={!selectedEntityTypeId}
                     >
+                      <Plus className="mr-1 size-4" />
                       Add Assignment
                     </Button>
                   </>
                 )}
-              </Box>
-            </Box>
-          </Box>
-        </Box>
+              </div>
+            </div>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={handleCancel}>Cancel</Button>
+          <Button
+            variant="secondary"
+            onClick={handleSave}
+            disabled={!name || description.length === 0}
+          >
+            {entity ? 'Update Entity' : 'Create Entity'}
+          </Button>
+        </DialogFooter>
       </DialogContent>
-      <DialogActions sx={{ justifyContent: 'space-between', px: 3 }}>
-        <Box>
-          {!entity && (
-            <SaveStatusIndicator
-              status={saveStatus}
-              lastSavedAt={lastSavedAt}
-              errorMessage={errorMessage}
-              retryCount={retryCount}
-              onRetry={forceSave}
-            />
-          )}
-        </Box>
-        <Box sx={{ display: 'flex', gap: 1 }}>
-          <Button onClick={handleCancel}>Cancel</Button>
-          {entity ? (
-            <Button
-              onClick={handleSave}
-              variant="contained"
-              color="secondary"
-              disabled={!name || description.length === 0}
-            >
-              Update Entity
-            </Button>
-          ) : (
-            <Button
-              onClick={handleDone}
-              variant="contained"
-              color="secondary"
-              disabled={!name || description.length === 0 || !autoCreatedEntityId}
-            >
-              Done
-            </Button>
-          )}
-        </Box>
-      </DialogActions>
     </Dialog>
   )
 }

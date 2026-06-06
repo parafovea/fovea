@@ -8,6 +8,12 @@ import { VideoRepository } from '../../repositories/VideoRepository.js'
 import { DetectionRequestSchema, DetectionResponseSchema } from './schemas.js'
 import { NotFoundError, ValidationError, InternalError, AppError, ForbiddenError, ErrorResponseSchema } from '../../lib/errors.js'
 import { subject } from '@casl/ability'
+import {
+  fetchModelService,
+  MODEL_SERVICE_TIMEOUTS,
+  ModelServiceTimeoutError,
+  ModelServiceUnreachableError,
+} from '../../lib/fetchModelService.js'
 
 /**
  * Object detection route.
@@ -49,6 +55,8 @@ export const detectRoutes: FastifyPluginAsync<{
           400: ErrorResponseSchema,
           404: ErrorResponseSchema,
           500: ErrorResponseSchema,
+          502: ErrorResponseSchema,
+          504: ErrorResponseSchema,
         },
       },
     },
@@ -131,10 +139,10 @@ export const detectRoutes: FastifyPluginAsync<{
           enableTracking,
         })
 
-        const response = await fetch(`${modelServiceUrl}/api/detection/detect`, {
+        const response = await fetchModelService(`${modelServiceUrl}/api/detection/detect`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(requestBody),
+          timeoutMs: MODEL_SERVICE_TIMEOUTS.detection,
+          body: requestBody,
         })
 
         if (!response.ok) {
@@ -147,38 +155,50 @@ export const detectRoutes: FastifyPluginAsync<{
         }
 
         const rawDetectionResult = await response.json()
-        const detectionResult = camelcaseKeys(rawDetectionResult as Record<string, unknown>, { deep: true }) as {
-          videoId: string
-          query: string
-          frames: Array<{
-            frameNumber: number
-            detections: Array<{
-              boundingBox: { x: number; y: number; width: number; height: number }
-              confidence: number
-              label: string
-            }>
-          }>
+        const detectionResult = camelcaseKeys(rawDetectionResult as Record<string, unknown>, { deep: true }) as Record<string, unknown>
+
+        // Defensive shape check. The model service contract requires
+        // `frames: list[FrameDetections]` per
+        // model-service/src/.../schemas/detection.py:130, but a buggy or
+        // partially-broken upstream can return `{}` or omit `frames`.
+        // Without this guard the route serializes a payload that the
+        // frontend then crashes on while reading `.frames.flatMap`,
+        // hidden inside its error boundary.
+        if (!Array.isArray(detectionResult.frames)) {
+          fastify.log.error(
+            { rawDetectionResult },
+            'Model service detection response is missing the required `frames` array',
+          )
+          return reply.code(502).send({
+            error: 'MODEL_SERVICE_BAD_RESPONSE',
+            message: 'Model service returned a detection payload without a frames array',
+          })
         }
 
-        return reply.send({
-          videoId: detectionResult.videoId,
-          query: detectionResult.query,
-          frameResults: detectionResult.frames.map((frame) => ({
-            frameNumber: frame.frameNumber,
-            detections: frame.detections.map((det) => ({
-              x: det.boundingBox.x,
-              y: det.boundingBox.y,
-              width: det.boundingBox.width,
-              height: det.boundingBox.height,
-              confidence: det.confidence,
-              label: det.label,
-            })),
-          })),
-        })
+        // Pass through the model-service shape verbatim (after the
+        // snake-case to camel-case rename). DetectionResponseSchema in
+        // schemas.ts is the single canonical contract that all three
+        // layers (model-service, backend, frontend `DetectionResponse`)
+        // agree on; reshaping here would just reintroduce drift.
+        return reply.send(detectionResult)
       } catch (error) {
         // Re-throw typed errors to preserve status codes
         if (error instanceof AppError) {
           throw error
+        }
+        if (error instanceof ModelServiceTimeoutError) {
+          fastify.log.error({ endpoint: error.endpoint, timeoutMs: error.timeoutMs }, 'Model service detection timed out')
+          return reply.code(504).send({
+            error: 'MODEL_SERVICE_TIMEOUT',
+            message: error.message,
+          })
+        }
+        if (error instanceof ModelServiceUnreachableError) {
+          fastify.log.error({ endpoint: error.endpoint, cause: error.cause.message }, 'Model service detection unreachable')
+          return reply.code(502).send({
+            error: 'MODEL_SERVICE_UNREACHABLE',
+            message: error.message,
+          })
         }
         fastify.log.error(error)
         throw new InternalError(error instanceof Error ? error.message : 'Failed to detect objects')

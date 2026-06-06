@@ -131,7 +131,7 @@ describe('ClaimRelationsViewer', () => {
     it('shows loading spinner when fetching', () => {
       render(<ClaimRelationsViewer {...defaultProps} />, { wrapper: createWrapper() })
 
-      expect(screen.getByRole('progressbar')).toBeInTheDocument()
+      expect(screen.getByRole('status')).toBeInTheDocument()
     })
   })
 
@@ -248,10 +248,15 @@ describe('ClaimRelationsViewer', () => {
       expect(onAddRelation).toHaveBeenCalledTimes(1)
     })
 
-    it('shows delete button on each relation', async () => {
+    it('shows delete button on each outgoing relation', async () => {
       render(<ClaimRelationsViewer {...defaultProps} />, { wrapper: createWrapper() })
 
-      expect(await screen.findByRole('button', { name: /delete relation/i })).toBeInTheDocument()
+      // Wait for relations to load, then find the delete button (Trash2 icon inside a ghost button)
+      await screen.findByText(/outgoing relations \(1\)/i)
+      const deleteButtons = screen.getAllByRole('button').filter(
+        (btn) => btn.querySelector('svg.lucide-trash-2') !== null
+      )
+      expect(deleteButtons.length).toBeGreaterThan(0)
     })
   })
 

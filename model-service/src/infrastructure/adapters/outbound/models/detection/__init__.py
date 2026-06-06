@@ -6,7 +6,7 @@ implement the IDetectionModel outbound port interface.
 Modules
 -------
 loader
-    Detection loader implementations and factory.
+    Detection loader implementations and the architecture-keyed factory.
 """
 
 from src.infrastructure.adapters.outbound.models.detection.loader import (
@@ -19,8 +19,13 @@ from src.infrastructure.adapters.outbound.models.detection.loader import (
     Florence2Loader,
     GroundingDINOLoader,
     OWLv2Loader,
+    RFDETRLoader,
+    YOLOELoader,
+    YOLOv12Loader,
     YOLOWorldLoader,
     create_detection_loader,
+    detection_onnx_registry,
+    detection_pytorch_registry,
 )
 
 __all__ = [
@@ -33,6 +38,11 @@ __all__ = [
     "Florence2Loader",
     "GroundingDINOLoader",
     "OWLv2Loader",
+    "RFDETRLoader",
+    "YOLOELoader",
     "YOLOWorldLoader",
+    "YOLOv12Loader",
     "create_detection_loader",
+    "detection_onnx_registry",
+    "detection_pytorch_registry",
 ]

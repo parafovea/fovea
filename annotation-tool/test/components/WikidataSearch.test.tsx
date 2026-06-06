@@ -84,7 +84,7 @@ describe('WikidataSearch', () => {
     it('shows entity type placeholder for entity-type import', () => {
       render(<WikidataSearch {...defaultProps} importType="entity-type" />)
 
-      const input = screen.getByRole('combobox')
+      const input = screen.getByRole('textbox')
       expect(input).toHaveAttribute('placeholder', expect.stringContaining('concepts'))
       expect(input).toHaveAttribute('placeholder', expect.stringContaining('Person'))
     })
@@ -92,7 +92,7 @@ describe('WikidataSearch', () => {
     it('shows event type placeholder for event-type import', () => {
       render(<WikidataSearch {...defaultProps} importType="event-type" />)
 
-      const input = screen.getByRole('combobox')
+      const input = screen.getByRole('textbox')
       expect(input).toHaveAttribute('placeholder', expect.stringContaining('event concepts'))
       expect(input).toHaveAttribute('placeholder', expect.stringContaining('Protest'))
     })
@@ -100,7 +100,7 @@ describe('WikidataSearch', () => {
     it('shows role type placeholder for role-type import', () => {
       render(<WikidataSearch {...defaultProps} importType="role-type" />)
 
-      const input = screen.getByRole('combobox')
+      const input = screen.getByRole('textbox')
       expect(input).toHaveAttribute('placeholder', expect.stringContaining('role concepts'))
       expect(input).toHaveAttribute('placeholder', expect.stringContaining('Participant'))
     })
@@ -108,7 +108,7 @@ describe('WikidataSearch', () => {
     it('shows relation type placeholder for relation-type import', () => {
       render(<WikidataSearch {...defaultProps} importType="relation-type" />)
 
-      const input = screen.getByRole('combobox')
+      const input = screen.getByRole('textbox')
       expect(input).toHaveAttribute('placeholder', expect.stringContaining('relation concepts'))
       expect(input).toHaveAttribute('placeholder', expect.stringContaining('Part of'))
     })
@@ -116,7 +116,7 @@ describe('WikidataSearch', () => {
     it('shows generic placeholder when importType is not provided', () => {
       render(<WikidataSearch {...defaultProps} />)
 
-      const input = screen.getByRole('combobox')
+      const input = screen.getByRole('textbox')
       expect(input).toHaveAttribute('placeholder', expect.stringContaining('items'))
     })
   })

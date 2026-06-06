@@ -1,17 +1,8 @@
 import { useState, useRef, useEffect, KeyboardEvent, useCallback, useMemo } from 'react'
-import {
-  Box,
-  TextField,
-  Typography,
-  Paper,
-  Popper,
-  List,
-  ListItem,
-  ListItemText,
-  ListSubheader,
-  ClickAwayListener,
-  Chip,
-} from '@mui/material'
+import { Badge } from '@/components/ui/badge'
+import { Textarea } from '@/components/ui/textarea'
+import { Label } from '@/components/ui/label'
+import { cn } from '@/lib/utils'
 import { usePersonaOntology, useWorld, useAnnotations } from '@store/queries'
 import { GlossItem, TimeInstant, getAnnotationTimeBounds, Claim } from '@models/types'
 
@@ -75,11 +66,25 @@ export default function GlossEditor({
 
   const [inputValue, setInputValue] = useState('')
   const [showAutocomplete, setShowAutocomplete] = useState(false)
-  const [autocompleteAnchor, setAutocompleteAnchor] = useState<null | HTMLElement>(null)
   const [selectedIndex, setSelectedIndex] = useState(0)
   const [searchQuery, setSearchQuery] = useState('')
   const [autocompleteMode, setAutocompleteMode] = useState<'types' | 'objects' | 'annotations' | 'claims'>('types')
-  const inputRef = useRef<HTMLInputElement>(null)
+  const inputRef = useRef<HTMLTextAreaElement>(null)
+  const popperRef = useRef<HTMLDivElement>(null)
+  // Tracks the gloss we most recently emitted via onChange. When the
+  // `gloss` prop re-arrives via the parent's React-Query auto-save
+  // re-render and structurally matches what we just sent up, we suppress
+  // the re-sync into `inputValue` to avoid clobbering whatever the user
+  // typed in the meantime. Without this guard, a fast typist (or
+  // Playwright's keyboard simulation, which fires keystrokes faster than
+  // the cache-invalidation cycle settles) loses characters because the
+  // gloss-prop effect overwrites the local state with the round-tripped
+  // serialization of the older parent value.
+  const lastEmittedGlossRef = useRef<GlossItem[] | null>(null)
+  const emitChange = useCallback((newGloss: GlossItem[]) => {
+    lastEmittedGlossRef.current = newGloss
+    onChange(newGloss)
+  }, [onChange])
   const [cursorPosition, setCursorPosition] = useState(0)
 
   // Get all available types
@@ -259,7 +264,7 @@ export default function GlossEditor({
     const items: GlossItem[] = []
     let currentText = ''
     let i = 0
-    
+
     while (i < text.length) {
       if (text[i] === '#') {
         // Handle type reference
@@ -267,14 +272,14 @@ export default function GlossEditor({
           items.push({ type: 'text', content: currentText })
           currentText = ''
         }
-        
+
         // Check if it's a backtick-delimited reference
         if (text[i + 1] === '`') {
           const endBacktick = text.indexOf('`', i + 2)
           if (endBacktick !== -1) {
             const typeName = text.slice(i + 2, endBacktick)
             const typeObj = allTypes.find(t => t.name === typeName)
-            
+
             if (typeObj) {
               items.push({
                 type: 'typeRef',
@@ -300,24 +305,24 @@ export default function GlossEditor({
           while (j < text.length && text[j] !== '#' && text[j] !== '@') {
             j++
           }
-          
+
           // Try to find the longest matching type name
           let matched = false
           let bestMatch = null
           let bestMatchEnd = i + 1
-          
+
           // Check all possible endpoints for matches
           for (let endPos = i + 1; endPos <= j; endPos++) {
             const typeName = text.slice(i + 1, endPos).trim()
             const typeObj = allTypes.find(t => t.name === typeName)
-            
+
             if (typeObj) {
               bestMatch = typeObj
               bestMatchEnd = endPos
               matched = true
             }
           }
-          
+
           if (matched && bestMatch) {
             items.push({
               type: 'typeRef',
@@ -337,14 +342,14 @@ export default function GlossEditor({
           items.push({ type: 'text', content: currentText })
           currentText = ''
         }
-        
+
         // Check if it's a backtick-delimited reference
         if (text[i + 1] === '`') {
           const endBacktick = text.indexOf('`', i + 2)
           if (endBacktick !== -1) {
             const annName = text.slice(i + 2, endBacktick)
             const ann = allAnnotations.find(a => a.name === annName)
-            
+
             if (ann) {
               items.push({
                 type: 'annotationRef',
@@ -373,14 +378,14 @@ export default function GlossEditor({
           items.push({ type: 'text', content: currentText })
           currentText = ''
         }
-        
+
         // Check if it's a backtick-delimited reference
         if (text[i + 1] === '`') {
           const endBacktick = text.indexOf('`', i + 2)
           if (endBacktick !== -1) {
             const objName = text.slice(i + 2, endBacktick)
             const obj = allObjects.find(o => o.name === objName)
-            
+
             if (obj) {
               items.push({
                 type: 'objectRef',
@@ -405,24 +410,24 @@ export default function GlossEditor({
           while (j < text.length && text[j] !== '#' && text[j] !== '@') {
             j++
           }
-          
+
           // Try to find the longest matching object name
           let matched = false
           let bestMatch = null
           let bestMatchEnd = i + 1
-          
+
           // Check all possible endpoints for matches
           for (let endPos = i + 1; endPos <= j; endPos++) {
             const objName = text.slice(i + 1, endPos).trim()
             const obj = allObjects.find(o => o.name === objName)
-            
+
             if (obj) {
               bestMatch = obj
               bestMatchEnd = endPos
               matched = true
             }
           }
-          
+
           if (matched && bestMatch) {
             items.push({
               type: 'objectRef',
@@ -476,50 +481,58 @@ export default function GlossEditor({
         i++
       }
     }
-    
+
     // Add any remaining text
     if (currentText) {
       items.push({ type: 'text', content: currentText })
     }
-    
+
     return items
   }
 
-  // Initialize input value from gloss
+  // Initialize input value from gloss. Skip the re-sync when the
+  // incoming gloss is the same payload we just emitted via onChange —
+  // the parent's React Query auto-save fans out a re-render carrying
+  // back the gloss we sent up, and re-stringifying it here would clobber
+  // any keystrokes the user has typed in the interval between our
+  // emitChange call and the parent's settle.
   useEffect(() => {
+    if (lastEmittedGlossRef.current && JSON.stringify(gloss) === JSON.stringify(lastEmittedGlossRef.current)) {
+      return
+    }
     setInputValue(glossToString(gloss))
   }, [gloss, glossToString])
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const value = e.target.value
     const cursorPos = e.target.selectionStart || 0
     setInputValue(value)
     setCursorPosition(cursorPos)
-    
+
     // Check if #, @, or ^ was typed
     const lastChar = value[cursorPos - 1]
     if (lastChar === '#') {
       setShowAutocomplete(true)
       setAutocompleteMode('types')
-      setAutocompleteAnchor(e.target)
+
       setSearchQuery('')
       setSelectedIndex(0)
     } else if (lastChar === '@') {
       setShowAutocomplete(true)
       setAutocompleteMode('objects')
-      setAutocompleteAnchor(e.target)
+
       setSearchQuery('')
       setSelectedIndex(0)
     } else if (lastChar === '^' && includeAnnotations) {
       setShowAutocomplete(true)
       setAutocompleteMode('annotations')
-      setAutocompleteAnchor(e.target)
+
       setSearchQuery('')
       setSelectedIndex(0)
     } else if (lastChar === '$' && includeClaims) {
       setShowAutocomplete(true)
       setAutocompleteMode('claims')
-      setAutocompleteAnchor(e.target)
+
       setSearchQuery('')
       setSelectedIndex(0)
     } else if (showAutocomplete) {
@@ -535,10 +548,10 @@ export default function GlossEditor({
         setShowAutocomplete(false)
       }
     }
-    
+
     // Update gloss items
     const newGloss = stringToGloss(value)
-    onChange(newGloss)
+    emitChange(newGloss)
   }
 
   const insertReference = (item: TypeOption | ObjectOption | AnnotationOption | ClaimOption) => {
@@ -547,16 +560,16 @@ export default function GlossEditor({
     const beforeChar = inputValue.lastIndexOf(char, cursorPosition - 1)
     const beforeText = inputValue.slice(0, beforeChar)
     const afterText = inputValue.slice(cursorPosition)
-    
+
     const newValue = `${beforeText}${char}\`${item.name}\` ${afterText}`
     setInputValue(newValue)
-    
+
     const newGloss = stringToGloss(newValue)
-    onChange(newGloss)
-    
+    emitChange(newGloss)
+
     setShowAutocomplete(false)
     setSearchQuery('')
-    
+
     // Focus back to input
     setTimeout(() => {
       if (inputRef.current) {
@@ -567,9 +580,9 @@ export default function GlossEditor({
     }, 0)
   }
 
-  const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+  const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (!showAutocomplete) return
-    
+
     const allFilteredItems = autocompleteMode === 'types'
       ? [...groupedTypes.entity, ...groupedTypes.role, ...groupedTypes.event, ...groupedTypes.relation]
       : autocompleteMode === 'objects'
@@ -577,7 +590,7 @@ export default function GlossEditor({
       : autocompleteMode === 'claims'
       ? filteredClaims
       : filteredAnnotations
-    
+
     if (e.key === 'ArrowDown') {
       e.preventDefault()
       setSelectedIndex((prev) => (prev + 1) % allFilteredItems.length)
@@ -595,15 +608,43 @@ export default function GlossEditor({
     }
   }
 
+  // Close autocomplete on click outside. In demo mode the tour engine
+  // drives the workspace from a fixed StepCard overlay and a full-
+  // screen SpotlightOverlay backdrop; either of those receiving a
+  // mousedown would close the popup on the engine's own Next press
+  // and unmount the gloss-autocomplete-popup anchor the next step
+  // depends on. The popup's only legitimate dismissal paths in demo
+  // mode are Escape and clicking inside the textarea itself, which
+  // GlossEditor's onKeyDown / focus handlers already cover; the
+  // document-level mousedown close is wholesale suppressed for
+  // VITE_DEMO_PUBLIC=1.
+  useEffect(() => {
+    if (import.meta.env.VITE_DEMO_PUBLIC === '1') return
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as Node | null
+      if (!target) return
+      if (
+        popperRef.current &&
+        !popperRef.current.contains(target) &&
+        inputRef.current &&
+        !inputRef.current.contains(target)
+      ) {
+        setShowAutocomplete(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
   // Render gloss preview
   const renderGlossPreview = () => {
-    const getChipStyle = (type: string) => {
+    const getBadgeStyle = (type: string) => {
       switch (type) {
-        case 'typeRef':       return { color: 'primary' as const,   variant: 'outlined' as const, fontStyle: 'italic' }
-        case 'objectRef':     return { color: 'secondary' as const, variant: 'outlined' as const, fontStyle: 'normal' }
-        case 'annotationRef': return { color: 'warning' as const,   variant: 'outlined' as const, fontStyle: 'normal' }
-        case 'claimRef':      return { color: 'info' as const,      variant: 'outlined' as const, fontStyle: 'normal' }
-        default:              return { color: 'default' as const,   variant: 'outlined' as const, fontStyle: 'normal' }
+        case 'typeRef':       return { variant: 'outline' as const, className: 'text-primary border-primary italic' }
+        case 'objectRef':     return { variant: 'secondary' as const, className: '' }
+        case 'annotationRef': return { variant: 'outline' as const, className: 'text-orange-600 border-orange-600' }
+        case 'claimRef':      return { variant: 'outline' as const, className: 'text-blue-600 border-blue-600' }
+        default:              return { variant: 'outline' as const, className: '' }
       }
     }
 
@@ -625,355 +666,142 @@ export default function GlossEditor({
         if (claim) displayName = claim.name
       }
 
-      const chipProps = getChipStyle(item.type)
+      const badgeProps = getBadgeStyle(item.type)
       return (
-        <Chip
+        <Badge
           key={index}
-          label={displayName}
-          size="small"
-          color={chipProps.color}
-          variant={chipProps.variant}
-          sx={{ mx: 0.5, verticalAlign: 'middle', fontStyle: chipProps.fontStyle }}
-        />
+          variant={badgeProps.variant}
+          className={cn('mx-1 align-middle', badgeProps.className)}
+        >
+          {displayName}
+        </Badge>
       )
     })
   }
 
+  const renderAutocompleteList = (
+    items: Array<TypeOption | ObjectOption | AnnotationOption | ClaimOption>,
+    sectionLabel: string,
+    startIndex: number
+  ) => {
+    if (items.length === 0) return null
+    return (
+      <>
+        <div className="px-3 py-1 text-xs font-semibold text-muted-foreground">{sectionLabel}</div>
+        {items.map((item, idx) => {
+          const globalIdx = startIndex + idx
+          return (
+            <div
+              key={item.id}
+              onClick={() => insertReference(item)}
+              className={cn(
+                'px-3 py-1.5 text-sm cursor-pointer hover:bg-accent',
+                selectedIndex === globalIdx && 'bg-accent'
+              )}
+            >
+              {item.name}
+            </div>
+          )
+        })}
+      </>
+    )
+  }
+
   return (
-    <Box>
-      <TextField
-        label={label}
-        inputRef={inputRef}
-        fullWidth
-        multiline
-        minRows={3}
-        maxRows={6}
-        disabled={disabled}
-        value={inputValue}
-        onChange={handleInputChange}
-        onKeyDown={handleKeyDown}
-        placeholder={includeAnnotations
-          ? "Type your gloss definition. Use #`name` for types, @`name` for objects, and ^`name` for annotations."
-          : "Type your gloss definition. Use #`name` for types and @`name` for objects."}
-        variant="outlined"
-        InputLabelProps={{ shrink: true }}
-        InputProps={{
-          inputProps: {
-            'aria-label': label
-          }
-        }}
-        sx={{ mb: 2 }}
-      />
+    <div data-tour-id="gloss-editor">
+      <Label className="mb-2">{label}</Label>
+      <div className="relative">
+        <Textarea
+          ref={inputRef}
+          disabled={disabled}
+          value={inputValue}
+          onChange={handleInputChange}
+          onKeyDown={handleKeyDown}
+          placeholder={includeAnnotations
+            ? "Type your gloss definition. Use #`name` for types, @`name` for objects, and ^`name` for annotations."
+            : "Type your gloss definition. Use #`name` for types and @`name` for objects."}
+          className="mb-4 min-h-20"
+          aria-label={label}
+        />
 
-      <ClickAwayListener onClickAway={() => setShowAutocomplete(false)}>
-        <Popper 
-          open={showAutocomplete} 
-          anchorEl={autocompleteAnchor}
-          placement="bottom-start"
-          style={{ zIndex: 1300 }}
-        >
-          <Paper elevation={8} sx={{ maxHeight: 300, overflow: 'auto', minWidth: 250 }}>
-            <List dense>
-              {autocompleteMode === 'types' ? (
-                <>
-                  {groupedTypes.entity.length > 0 && (
-                    <>
-                      <ListSubheader>Entity Types</ListSubheader>
-                      {groupedTypes.entity.map((type, idx) => {
-                        const globalIdx = idx
-                        return (
-                          <ListItem
-                            key={type.id}
-                            onClick={() => insertReference(type)}
-                            sx={{
-                              backgroundColor: selectedIndex === globalIdx ? 'action.selected' : undefined,
-                              cursor: 'pointer',
-                              '&:hover': {
-                                backgroundColor: 'action.hover',
-                              }
-                            }}
-                          >
-                            <ListItemText primary={type.name} />
-                          </ListItem>
-                        )
-                      })}
-                    </>
-                  )}
-                  
-                  {groupedTypes.role.length > 0 && (
-                    <>
-                      <ListSubheader>Role Types</ListSubheader>
-                      {groupedTypes.role.map((type, idx) => {
-                        const globalIdx = groupedTypes.entity.length + idx
-                        return (
-                          <ListItem
-                            key={type.id}
-                            onClick={() => insertReference(type)}
-                            sx={{
-                              backgroundColor: selectedIndex === globalIdx ? 'action.selected' : undefined,
-                              cursor: 'pointer',
-                              '&:hover': {
-                                backgroundColor: 'action.hover',
-                              }
-                            }}
-                          >
-                            <ListItemText primary={type.name} />
-                          </ListItem>
-                        )
-                      })}
-                    </>
-                  )}
-                  
-                  {groupedTypes.event.length > 0 && (
-                    <>
-                      <ListSubheader>Event Types</ListSubheader>
-                      {groupedTypes.event.map((type, idx) => {
-                        const globalIdx = groupedTypes.entity.length + groupedTypes.role.length + idx
-                        return (
-                          <ListItem
-                            key={type.id}
-                            onClick={() => insertReference(type)}
-                            sx={{
-                              backgroundColor: selectedIndex === globalIdx ? 'action.selected' : undefined,
-                              cursor: 'pointer',
-                              '&:hover': {
-                                backgroundColor: 'action.hover',
-                              }
-                            }}
-                          >
-                            <ListItemText primary={type.name} />
-                          </ListItem>
-                        )
-                      })}
-                    </>
-                  )}
+        {showAutocomplete && (
+          <div
+            ref={popperRef}
+            data-tour-id="gloss-autocomplete-popup"
+            className="absolute z-50 max-h-72 overflow-auto min-w-[250px] rounded-lg border bg-popover text-popover-foreground shadow-md"
+            style={{ top: '100%', left: 0 }}
+          >
+            {autocompleteMode === 'types' ? (
+              <>
+                {renderAutocompleteList(groupedTypes.entity, 'Entity Types', 0)}
+                {renderAutocompleteList(groupedTypes.role, 'Role Types', groupedTypes.entity.length)}
+                {renderAutocompleteList(groupedTypes.event, 'Event Types', groupedTypes.entity.length + groupedTypes.role.length)}
+                {renderAutocompleteList(groupedTypes.relation, 'Relation Types', groupedTypes.entity.length + groupedTypes.role.length + groupedTypes.event.length)}
+                {filteredTypes.length === 0 && (
+                  <div className="px-3 py-2">
+                    <p className="text-sm">No types found</p>
+                    <p className="text-xs text-muted-foreground">Type to search or ESC to close</p>
+                  </div>
+                )}
+              </>
+            ) : autocompleteMode === 'objects' ? (
+              <>
+                {renderAutocompleteList(groupedObjects.entities, 'Entities', 0)}
+                {renderAutocompleteList(groupedObjects.locations, 'Locations', groupedObjects.entities.length)}
+                {renderAutocompleteList(groupedObjects.events, 'Events', groupedObjects.entities.length + groupedObjects.locations.length)}
+                {renderAutocompleteList(groupedObjects.times, 'Times', groupedObjects.entities.length + groupedObjects.locations.length + groupedObjects.events.length)}
+                {filteredObjects.length === 0 && (
+                  <div className="px-3 py-2">
+                    <p className="text-sm">No objects found</p>
+                    <p className="text-xs text-muted-foreground">Type to search or ESC to close</p>
+                  </div>
+                )}
+              </>
+            ) : autocompleteMode === 'annotations' ? (
+              <>
+                {filteredAnnotations.length > 0 ? (
+                  renderAutocompleteList(filteredAnnotations, 'Annotations', 0)
+                ) : (
+                  <div className="px-3 py-2">
+                    <p className="text-sm">No annotations found</p>
+                    <p className="text-xs text-muted-foreground">Type to search or ESC to close</p>
+                  </div>
+                )}
+              </>
+            ) : autocompleteMode === 'claims' ? (
+              <>
+                {filteredClaims.length > 0 ? (
+                  renderAutocompleteList(filteredClaims, 'Claims', 0)
+                ) : (
+                  <div className="px-3 py-2">
+                    <p className="text-sm">No claims found</p>
+                    <p className="text-xs text-muted-foreground">Type to search or ESC to close</p>
+                  </div>
+                )}
+              </>
+            ) : null}
+          </div>
+        )}
+      </div>
 
-                  {groupedTypes.relation.length > 0 && (
-                    <>
-                      <ListSubheader>Relation Types</ListSubheader>
-                      {groupedTypes.relation.map((type, idx) => {
-                        const globalIdx = groupedTypes.entity.length + groupedTypes.role.length + groupedTypes.event.length + idx
-                        return (
-                          <ListItem
-                            key={type.id}
-                            onClick={() => insertReference(type)}
-                            sx={{
-                              backgroundColor: selectedIndex === globalIdx ? 'action.selected' : undefined,
-                              cursor: 'pointer',
-                              '&:hover': {
-                                backgroundColor: 'action.hover',
-                              }
-                            }}
-                          >
-                            <ListItemText primary={type.name} />
-                          </ListItem>
-                        )
-                      })}
-                    </>
-                  )}
-
-                  {filteredTypes.length === 0 && (
-                    <ListItem>
-                      <ListItemText 
-                        primary="No types found" 
-                        secondary="Type to search or ESC to close"
-                      />
-                    </ListItem>
-                  )}
-                </>
-              ) : autocompleteMode === 'objects' ? (
-                <>
-                  {groupedObjects.entities.length > 0 && (
-                    <>
-                      <ListSubheader>Entities</ListSubheader>
-                      {groupedObjects.entities.map((obj, idx) => {
-                        const globalIdx = idx
-                        return (
-                          <ListItem
-                            key={obj.id}
-                            onClick={() => insertReference(obj)}
-                            sx={{
-                              backgroundColor: selectedIndex === globalIdx ? 'action.selected' : undefined,
-                              cursor: 'pointer',
-                              '&:hover': {
-                                backgroundColor: 'action.hover',
-                              }
-                            }}
-                          >
-                            <ListItemText primary={obj.name} />
-                          </ListItem>
-                        )
-                      })}
-                    </>
-                  )}
-                  
-                  {groupedObjects.locations.length > 0 && (
-                    <>
-                      <ListSubheader>Locations</ListSubheader>
-                      {groupedObjects.locations.map((obj, idx) => {
-                        const globalIdx = groupedObjects.entities.length + idx
-                        return (
-                          <ListItem
-                            key={obj.id}
-                            onClick={() => insertReference(obj)}
-                            sx={{
-                              backgroundColor: selectedIndex === globalIdx ? 'action.selected' : undefined,
-                              cursor: 'pointer',
-                              '&:hover': {
-                                backgroundColor: 'action.hover',
-                              }
-                            }}
-                          >
-                            <ListItemText primary={obj.name} />
-                          </ListItem>
-                        )
-                      })}
-                    </>
-                  )}
-                  
-                  {groupedObjects.events.length > 0 && (
-                    <>
-                      <ListSubheader>Events</ListSubheader>
-                      {groupedObjects.events.map((obj, idx) => {
-                        const globalIdx = groupedObjects.entities.length + groupedObjects.locations.length + idx
-                        return (
-                          <ListItem
-                            key={obj.id}
-                            onClick={() => insertReference(obj)}
-                            sx={{
-                              backgroundColor: selectedIndex === globalIdx ? 'action.selected' : undefined,
-                              cursor: 'pointer',
-                              '&:hover': {
-                                backgroundColor: 'action.hover',
-                              }
-                            }}
-                          >
-                            <ListItemText primary={obj.name} />
-                          </ListItem>
-                        )
-                      })}
-                    </>
-                  )}
-                  
-                  {groupedObjects.times.length > 0 && (
-                    <>
-                      <ListSubheader>Times</ListSubheader>
-                      {groupedObjects.times.map((obj, idx) => {
-                        const globalIdx = groupedObjects.entities.length + groupedObjects.locations.length + groupedObjects.events.length + idx
-                        return (
-                          <ListItem
-                            key={obj.id}
-                            onClick={() => insertReference(obj)}
-                            sx={{
-                              backgroundColor: selectedIndex === globalIdx ? 'action.selected' : undefined,
-                              cursor: 'pointer',
-                              '&:hover': {
-                                backgroundColor: 'action.hover',
-                              }
-                            }}
-                          >
-                            <ListItemText primary={obj.name} />
-                          </ListItem>
-                        )
-                      })}
-                    </>
-                  )}
-                  
-                  {filteredObjects.length === 0 && (
-                    <ListItem>
-                      <ListItemText 
-                        primary="No objects found" 
-                        secondary="Type to search or ESC to close"
-                      />
-                    </ListItem>
-                  )}
-                </>
-              ) : autocompleteMode === 'annotations' ? (
-                // Annotations mode
-                <>
-                  {filteredAnnotations.length > 0 ? (
-                    <>
-                      <ListSubheader>Annotations</ListSubheader>
-                      {filteredAnnotations.map((ann, idx) => (
-                        <ListItem
-                          key={ann.id}
-                          onClick={() => insertReference(ann)}
-                          sx={{
-                            backgroundColor: selectedIndex === idx ? 'action.selected' : undefined,
-                            cursor: 'pointer',
-                            '&:hover': {
-                              backgroundColor: 'action.hover',
-                            }
-                          }}
-                        >
-                          <ListItemText primary={ann.name} />
-                        </ListItem>
-                      ))}
-                    </>
-                  ) : (
-                    <ListItem>
-                      <ListItemText
-                        primary="No annotations found"
-                        secondary="Type to search or ESC to close"
-                      />
-                    </ListItem>
-                  )}
-                </>
-              ) : autocompleteMode === 'claims' ? (
-                // Claims mode
-                <>
-                  {filteredClaims.length > 0 ? (
-                    <>
-                      <ListSubheader>Claims</ListSubheader>
-                      {filteredClaims.map((claim, idx) => (
-                        <ListItem
-                          key={claim.id}
-                          onClick={() => insertReference(claim)}
-                          sx={{
-                            backgroundColor: selectedIndex === idx ? 'action.selected' : undefined,
-                            cursor: 'pointer',
-                            '&:hover': {
-                              backgroundColor: 'action.hover',
-                            }
-                          }}
-                        >
-                          <ListItemText primary={claim.name} />
-                        </ListItem>
-                      ))}
-                    </>
-                  ) : (
-                    <ListItem>
-                      <ListItemText
-                        primary="No claims found"
-                        secondary="Type to search or ESC to close"
-                      />
-                    </ListItem>
-                  )}
-                </>
-              ) : null}
-            </List>
-          </Paper>
-        </Popper>
-      </ClickAwayListener>
-
-      <Paper variant="outlined" sx={{ p: 2 }}>
-        <Typography variant="caption" color="text.secondary" gutterBottom display="block">
+      <div className="rounded-lg border p-4" data-tour-id="gloss-preview">
+        <p className="text-xs text-muted-foreground mb-1">
           Preview:
-        </Typography>
-        <Box sx={{ minHeight: 24 }}>
+        </p>
+        <div className="min-h-6">
           {gloss.length === 0 ? (
-            <Typography variant="body2" color="text.secondary">
+            <p className="text-sm text-muted-foreground">
               No gloss definition yet.
-            </Typography>
+            </p>
           ) : (
             renderGlossPreview()
           )}
-        </Box>
-      </Paper>
+        </div>
+      </div>
 
-      <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+      <p className="text-xs text-muted-foreground mt-2">
         Tip: Type # for types, @ for objects{includeClaims ? ', $ for claims' : ''}. References are wrapped in backticks (e.g., @`John Smith`). Use arrow keys to navigate suggestions.
-      </Typography>
-    </Box>
+      </p>
+    </div>
   )
 }

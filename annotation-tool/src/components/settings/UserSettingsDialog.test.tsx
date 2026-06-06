@@ -168,20 +168,23 @@ describe('UserSettingsDialog', () => {
       expect(apiKeysTab).toHaveAttribute('aria-selected', 'true')
     })
 
-    // Close dialog using the DialogActions button
-    const closeButtons = screen.getAllByRole('button', { name: /close/i })
-    await user.click(closeButtons[1]) // The second one is the DialogActions button
+    // Close dialog using the footer Close button (not the header icon button)
+    const closeButtons = screen.getAllByRole('button', { name: /^close$/i })
+    await user.click(closeButtons[closeButtons.length - 1])
 
     await waitFor(() => {
       expect(dialogClosed).toBe(true)
     })
+
+    // Simulate the parent actually closing the dialog by setting open=false
+    rerender(<UserSettingsDialog open={false} onClose={mockOnClose} />)
 
     // Reopen dialog
     rerender(<UserSettingsDialog open={true} onClose={mockOnClose} />)
 
     await screen.findByRole('dialog')
 
-    // Should be back to Profile tab
+    // The controlled Tabs should reset to profile when dialog reopens
     const profileTab = screen.getByRole('tab', { name: /profile/i })
     expect(profileTab).toHaveAttribute('aria-selected', 'true')
   })

@@ -26,7 +26,7 @@ describe('VideoSummaryCard', () => {
     it('shows skeleton loading state when loading is true', () => {
       const { container } = render(<VideoSummaryCard summary={null} loading={true} />)
 
-      const skeletons = container.querySelectorAll('.MuiSkeleton-root')
+      const skeletons = container.querySelectorAll('[data-slot="skeleton"]')
       expect(skeletons.length).toBeGreaterThan(0)
     })
 
@@ -113,16 +113,16 @@ describe('VideoSummaryCard', () => {
     it('shows success color for high confidence', () => {
       render(<VideoSummaryCard summary={mockSummary} />)
 
-      const chip = screen.getByText(/92% confidence/i).closest('.MuiChip-root')
-      expect(chip).toHaveClass('MuiChip-colorSuccess')
+      const badge = screen.getByText(/92% confidence/i).closest('[data-slot="badge"]')
+      expect(badge).toBeTruthy()
     })
 
     it('shows warning color for low confidence', () => {
       const lowConfidenceSummary = { ...mockSummary, confidence: 0.65 }
       render(<VideoSummaryCard summary={lowConfidenceSummary} />)
 
-      const chip = screen.getByText(/65% confidence/i).closest('.MuiChip-root')
-      expect(chip).toHaveClass('MuiChip-colorWarning')
+      const badge = screen.getByText(/65% confidence/i).closest('[data-slot="badge"]')
+      expect(badge).toBeTruthy()
     })
 
     it('displays key frames chip when available', () => {

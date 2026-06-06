@@ -17,7 +17,7 @@
 </p>
 
 <p align="center">
-  <a href="https://fovea.video/docs">Documentation</a> &bull;
+  <a href="https://fovea.video">Documentation</a> &bull;
   <a href="https://github.com/parafovea/fovea/releases">Releases</a> &bull;
   <a href="https://github.com/parafovea/fovea/discussions">Discussions</a> &bull;
   <a href="CHANGELOG.md">Changelog</a>
@@ -33,9 +33,9 @@ The platform combines manual annotation with AI-supported features including vid
 
 | Layer | Technology |
 |---|---|
-| Frontend | React 18, TypeScript, Material UI v5, TanStack Query, Zustand, Vite |
+| Frontend | React 18, TypeScript, shadcn-ui, Tailwind CSS v4, TanStack Query, Zustand, Vite |
 | Backend | Node.js 22, Fastify 5, Prisma 6, BullMQ 5, TypeBox |
-| Model Service | Python 3.12, FastAPI, PyTorch, Transformers, SGLang, vLLM |
+| Model Service | Python 3.12, FastAPI, PyTorch, Transformers, SGLang, vLLM, llama.cpp, ONNX Runtime |
 | Databases | PostgreSQL 16, Redis 7 |
 | Infrastructure | Docker, OpenTelemetry, Prometheus, Grafana |
 | Testing | Vitest, Playwright, pytest, MSW |
@@ -68,6 +68,20 @@ For NVIDIA GPU-accelerated inference:
 docker compose --profile gpu up
 ```
 
+### Trying the demo locally
+
+The guided-tour demo (twelve guided tours, persona-scoped fixtures, real CC-licensed footage) runs end-to-end on a developer laptop with one command:
+
+```bash
+./scripts/run-demo-local.sh
+```
+
+That brings up Postgres + Redis + model-service (CPU build), runs migrations, fetches the demo clip set via yt-dlp + ffmpeg, exports the demo env flags, boots backend + frontend dev servers with `FOVEA_DEMO_MODE=true` + `VITE_FOVEA_DEMO_MODE=true`, and opens `http://localhost:3000/` on the demo landing page.
+
+First-time build is around 15 minutes (model-service downloads CV + audio weights); subsequent runs reuse cached images and the script idempotently picks up. Tear down with `./scripts/run-demo-local.sh --stop` (keeps DB) or `--reset` (drops DB volume).
+
+For deploying the same demo at a public URL (e.g. `demo.fovea.video`), see the [demo deployment runbook](https://fovea.video/docs/operations/demo-fovea-deployment) which uses a different env-var path (`VITE_TOUR_DEMO=1` + `VITE_DEMO_PUBLIC=1`) with the MSW model-service interception layer. The tour-anchor reference and per-tour walkthroughs live under the [Reference](https://fovea.video/docs/reference/tour-anchors) and [Guide](https://fovea.video/docs/guide/tour-catalog) sections.
+
 ### Configuration
 
 Create a `.env` file to customize settings:
@@ -79,8 +93,8 @@ cp .env.example .env
 | Variable | Default | Description |
 |---|---|---|
 | `ADMIN_PASSWORD` | `admin` | Admin password (change for production) |
-| `FOVEA_MODE` | `multi-user` | `single-user` (no login) or `multi-user` |
 | `ALLOW_REGISTRATION` | `false` | Allow new user sign-ups |
+| `HF_TOKEN` | | HuggingFace token for gated models (pyannote diarization, etc.) |
 | `ANTHROPIC_API_KEY` | | Claude API key for external AI |
 | `OPENAI_API_KEY` | | OpenAI API key for external AI |
 | `GOOGLE_API_KEY` | | Google API key for external AI |
@@ -115,7 +129,7 @@ External API keys are optional. Fovea works with local models when no keys are c
 - Provenance tracking and span highlighting
 
 ### Object detection
-- Multi-model support: YOLO-World, OWLv2, Florence-2, Grounding DINO
+- Multi-model support: YOLO-World, OWLv2, Florence-2, Grounding DINO, SAM 3 / 3.1
 - Ontology-aware query prompts
 - Detection candidate review with accept/reject controls
 
@@ -127,7 +141,6 @@ External API keys are optional. Fovea works with local models when no keys are c
 
 ### Authentication
 - Session-based auth with progressive lockout
-- Single-user mode for local use
 - User-scoped API keys with AES-256-GCM encryption
 
 ## Project structure

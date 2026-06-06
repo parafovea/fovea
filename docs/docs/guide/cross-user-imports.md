@@ -7,17 +7,17 @@ two users' data does not collide.
 
 ## Detection
 
-Every full export written by v0.1.7 or later carries a `metadata`
-provenance line with `exporterUserId`:
+Every full export carries a `metadata` provenance line with
+`exporterUserId`:
 
 ```json
-{"type":"metadata","exporterUserId":"<exporter-uuid>","version":"0.1.8"}
+{"type":"metadata","exporterUserId":"<exporter-uuid>","version":"<format-version>"}
 ```
 
 If `exporterUserId` differs from the importer's user id, the
-import path enters cross-user mode. v0.1.7 also added an explicit
-`userId` field on exported object annotations so cross-user
-detection works for exports that contain no persona lines.
+import path enters cross-user mode. Exported object annotations
+also carry an explicit `userId` field so cross-user detection
+works for exports that contain no persona lines.
 
 ## Id regeneration
 
@@ -58,13 +58,10 @@ When annotations are skipped because referenced world objects are
 absent (`missing-dependency` conflicts), `ImportResultDialog`
 shows a yellow `Completed with Warnings` title and a banner
 explaining the skip count and the remediation (re-export from the
-source with the referenced world objects included). The pre-v0.1.8
-dialog showed a green "Import Successful" header in the same
-case, hiding the silent data loss.
+source with the referenced world objects included).
 
 ## importedBy
 
 `POST /api/import` sets `importedBy = request.user.id` on every
-`ImportHistory` row. Without this, the user-scoped
-`GET /api/import/history` filter introduced in v0.1.8 would
-return zero rows for any user.
+`ImportHistory` row so the user-scoped
+`GET /api/import/history` filter returns the requester's imports.

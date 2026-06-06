@@ -1,10 +1,10 @@
 # API keys
 
 Use the API keys API to store credentials for external model
-providers (Anthropic, OpenAI, Google, Cohere, Mistral, AWS, Azure,
-Roboflow, Cloudsight, Eden AI). Keys are AES-256-GCM encrypted at
-rest. Two scopes are supported: user-level keys (visible only to
-the owner) and admin-level keys (a shared pool used as fallback).
+providers (Anthropic, OpenAI, Google). Keys are AES-256-GCM
+encrypted at rest. Two scopes are supported: user-level keys
+(visible only to the owner) and admin-level keys (a shared pool
+used as fallback).
 
 ## Endpoints
 
@@ -20,11 +20,11 @@ POST /api/admin/api-keys              # admin: add to shared pool
 ```bash
 curl -X POST http://localhost:3001/api/api-keys \
   -H 'Content-Type: application/json' --cookie cookies.txt \
-  -d '{"provider":"anthropic","keyName":"my key",
-       "key":"sk-ant-..."}'
+  -d '{"provider":"ANTHROPIC","keyName":"my key",
+       "apiKey":"sk-ant-..."}'
 ```
 
-The route encrypts `key` with `API_KEY_ENCRYPTION_KEY` and stores
+The route encrypts `apiKey` with `API_KEY_ENCRYPTION_KEY` and stores
 only the encrypted form plus a four-character `keyMask` for
 display. `GET /api/api-keys` returns the metadata (provider,
 keyName, keyMask, isActive, lastUsed, usageCount), never the
@@ -53,4 +53,4 @@ openssl rand -hex 32
 ```
 
 Rotating the encryption key requires re-encrypting all stored
-keys; there is no automated rotation path in v0.1.x.
+keys; there is no automated rotation path.

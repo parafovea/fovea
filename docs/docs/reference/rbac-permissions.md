@@ -69,7 +69,7 @@ ability builder short-circuits with `can('manage', 'all')`.
 The integration test helper at
 `server/test/integration/_rbac-baseline.ts` populates the system
 scope under the `user` role with `ownOnly: true` rows for every
-content action — this is what tests against multi-user isolation
+content action; this is what tests against multi-user isolation
 exercise. Production does not seed those rows.
 
 ## Editing

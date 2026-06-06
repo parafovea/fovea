@@ -19,7 +19,7 @@ backend, then trigger the sync:
 cp ~/match.mp4 ./videos/match.mp4
 curl -s -X POST http://localhost:3001/api/videos/sync \
   --cookie cookies.txt
-# {"added":1,"updated":0,"removed":0}
+# {"added":1,"updated":0,"deleted":0,"errors":0,"total":1}
 ```
 
 The video is now listed at `GET /api/videos`. Save its
@@ -29,7 +29,7 @@ its own.
 ## Draw a type annotation
 
 Open the video in the annotation workspace
-(`/annotate/<videoId>?personaId=<personaId>`). The keyboard model
+(`/annotate/<videoId>`). The keyboard model
 is documented in [Reference > Keyboard shortcuts](../reference/keyboard-shortcuts.md);
 the relevant ones for this chapter:
 
@@ -56,10 +56,15 @@ curl -s -X POST http://localhost:3001/api/annotations \
     \"personaId\": \"$PERSONA_ID\",
     \"type\": \"type\",
     \"label\": \"player\",
-    \"frames\": [
-      {\"frame\":0,  \"box\":{\"x\":120,\"y\":80,\"width\":60,\"height\":140}},
-      {\"frame\":60, \"box\":{\"x\":150,\"y\":85,\"width\":60,\"height\":140}}
-    ]
+    \"frames\": {
+      \"boxes\": [
+        {\"frameNumber\":0,  \"x\":120, \"y\":80, \"width\":60, \"height\":140, \"isKeyframe\":true},
+        {\"frameNumber\":60, \"x\":150, \"y\":85, \"width\":60, \"height\":140, \"isKeyframe\":true}
+      ],
+      \"interpolationSegments\": [],
+      \"visibilityRanges\": [],
+      \"totalFrames\": 61, \"keyframeCount\": 2, \"interpolatedFrameCount\": 59
+    }
   }"
 ```
 
@@ -89,17 +94,22 @@ curl -s -X POST http://localhost:3001/api/annotations \
     \"type\": \"object\",
     \"label\": \"$PLAYER_9_ENTITY_ID\",
     \"linkType\": \"entity\",
-    \"frames\": [
-      {\"frame\":0,  \"box\":{\"x\":120,\"y\":80,\"width\":60,\"height\":140}},
-      {\"frame\":60, \"box\":{\"x\":150,\"y\":85,\"width\":60,\"height\":140}}
-    ]
+    \"frames\": {
+      \"boxes\": [
+        {\"frameNumber\":0,  \"x\":120, \"y\":80, \"width\":60, \"height\":140, \"isKeyframe\":true},
+        {\"frameNumber\":60, \"x\":150, \"y\":85, \"width\":60, \"height\":140, \"isKeyframe\":true}
+      ],
+      \"interpolationSegments\": [],
+      \"visibilityRanges\": [],
+      \"totalFrames\": 61, \"keyframeCount\": 2, \"interpolatedFrameCount\": 59
+    }
   }"
 ```
 
 Object annotations linked to events, times, or locations use
-`linkType` values `event`, `time`, `location` respectively. The
-column was added in v0.1.8 so these annotations round-trip through
-export and import without flattening to entity-linked. See
+`linkType` values `event`, `time`, `location` respectively, so
+these annotations round-trip through export and import without
+flattening to entity-linked. See
 [Guide > Annotations](../guide/annotations.md) for the full state
 machine.
 

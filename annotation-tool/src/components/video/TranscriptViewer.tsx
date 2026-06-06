@@ -3,7 +3,7 @@
  * Highlights active segment based on video playback position and supports click-to-seek functionality.
  */
 
-import { Box, List, ListItem, ListItemButton, Typography, useTheme } from '@mui/material'
+import { cn } from '@/lib/utils'
 import { TranscriptJson } from './types'
 
 /**
@@ -54,79 +54,63 @@ function formatTimestamp(seconds: number): string {
  * ```
  */
 export function TranscriptViewer({ transcript, currentTime, onSeek }: TranscriptViewerProps) {
-  const theme = useTheme()
-
   // Handle empty transcript
   if (!transcript || !transcript.segments || transcript.segments.length === 0) {
     return (
-      <Box sx={{ p: 2 }}>
-        <Typography variant="body2" color="text.secondary">
+      <div className="p-4">
+        <p className="text-sm text-muted-foreground">
           No transcript available.
-        </Typography>
-      </Box>
+        </p>
+      </div>
     )
   }
 
   return (
-    <List
-      sx={{
-        width: '100%',
-        maxHeight: 400,
-        overflow: 'auto',
-        bgcolor: 'background.paper',
-      }}
+    <ul
+      data-tour-id="transcript-viewer"
+      className="w-full max-h-[400px] overflow-auto bg-card"
     >
       {transcript.segments.map((segment, index) => {
         // Determine if this segment is currently active
         const isActive = currentTime >= segment.start && currentTime < segment.end
 
         return (
-          <ListItem
+          <li
             key={index}
-            disablePadding
-            sx={{
-              bgcolor: isActive ? theme.palette.primary.light : 'transparent',
-              transition: 'background-color 0.2s',
-              '&:hover': {
-                bgcolor: isActive
-                  ? theme.palette.primary.light
-                  : theme.palette.action.hover,
-              },
-            }}
+            className={cn(
+              'transition-colors duration-200',
+              isActive ? 'bg-primary/20' : 'hover:bg-muted'
+            )}
           >
-            <ListItemButton onClick={() => onSeek(segment.start)}>
-              <Box sx={{ width: '100%' }}>
-                <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1, mb: 0.5 }}>
-                  <Typography
-                    variant="caption"
-                    color="text.secondary"
-                    sx={{ fontWeight: 'medium', minWidth: 50 }}
-                  >
+            <button
+              type="button"
+              className="w-full px-4 py-2 text-left"
+              onClick={() => onSeek(segment.start)}
+            >
+              <div className="w-full">
+                <div className="flex items-baseline gap-2 mb-1">
+                  <span className="text-xs text-muted-foreground font-medium min-w-[50px]">
                     [{formatTimestamp(segment.start)}]
-                  </Typography>
+                  </span>
                   {segment.speaker && (
-                    <Typography
-                      variant="caption"
-                      color="primary"
-                      sx={{ fontWeight: 'medium' }}
-                    >
+                    <span className="text-xs text-primary font-medium">
                       ({segment.speaker})
-                    </Typography>
+                    </span>
                   )}
-                </Box>
-                <Typography
-                  variant="body2"
-                  sx={{
-                    color: isActive ? 'primary.contrastText' : 'text.primary',
-                  }}
+                </div>
+                <p
+                  className={cn(
+                    'text-sm',
+                    isActive ? 'text-primary' : 'text-foreground'
+                  )}
                 >
                   {segment.text}
-                </Typography>
-              </Box>
-            </ListItemButton>
-          </ListItem>
+                </p>
+              </div>
+            </button>
+          </li>
         )
       })}
-    </List>
+    </ul>
   )
 }

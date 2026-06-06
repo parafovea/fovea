@@ -6,12 +6,19 @@ import sys
 
 import pytest
 
+from src.domain.entities.architectures import NemoCanary
 from src.infrastructure.adapters.outbound.models.audio.canary import CanaryQwenLoader
 from src.infrastructure.adapters.outbound.models.audio.loader import (
     AudioFramework,
     AudioTranscriptionLoader,
     TranscriptionConfig,
+    audio_registry,
+    create_audio_loader,
 )
+
+
+def _arch() -> NemoCanary:
+    return NemoCanary()
 
 
 def _config() -> TranscriptionConfig:
@@ -35,16 +42,13 @@ def test_canary_transcribe_without_nemo_raises_importerror(
     monkeypatch.setitem(sys.modules, "nemo.collections", None)
     monkeypatch.setitem(sys.modules, "nemo.collections.asr", None)
     monkeypatch.setitem(sys.modules, "nemo.collections.asr.models", None)
-    loader = CanaryQwenLoader(_config())
+    loader = CanaryQwenLoader(_arch(), _config())
     with pytest.raises(ImportError, match="NeMo"):
         loader.transcribe("audio.wav")
 
 
 def test_canary_loader_registered_in_factory() -> None:
-    """``create_transcription_loader`` returns the Canary loader for NEMO_CANARY."""
-    from src.infrastructure.adapters.outbound.models.audio.loader import (
-        create_transcription_loader,
-    )
-
-    loader = create_transcription_loader("nvidia/canary-qwen", _config())
+    """The audio registry resolves :class:`NemoCanary` to the Canary loader."""
+    assert audio_registry.lookup(NemoCanary) is CanaryQwenLoader
+    loader = create_audio_loader(_arch(), _config())
     assert isinstance(loader, CanaryQwenLoader)

@@ -21,27 +21,37 @@ the collector via `OTEL_EXPORTER_OTLP_ENDPOINT`.
 
 ## Model service spans and metrics
 
-Since v0.3.0 every use case in
-`model-service/src/application/use_cases/` wraps its
-`execute` in an OpenTelemetry span. The span name is the use
-case class name; attributes carry the request DTO's identifying
-fields (video id, persona id, model id where applicable).
+Use cases in `model-service/src/application/use_cases/` wrap
+their work in OpenTelemetry spans. Span names follow per-method
+snake_case conventions; both `<name>_use_case` (for example
+`detect_objects_use_case`, `track_objects_use_case`) and
+`use_case.<name>` (for example `use_case.extract_claims`,
+`use_case.synthesize_summary`) are in use. Some use cases emit
+multiple variant spans rather than a single span per class; for
+example `use_case.augment_ontology.local` and `.external`,
+`use_case.fuse_modalities.sequential` / `.timestamp_aligned` /
+`.native_multimodal` / `.hybrid`, and `summarize_video_with_vlm`
+alongside `summarize_video_external_api`. Span attributes carry
+the request DTO's identifying fields (video id, persona id, model
+id where applicable).
 
-Every outbound adapter in
-`model-service/src/infrastructure/adapters/outbound/` emits a
-`model_inference` metric on every call:
+Outbound adapters in
+`model-service/src/infrastructure/adapters/outbound/` record
+inference metrics through the `record_inference` helper in
+`infrastructure/observability/telemetry.py`:
 
 ```text
-metric        model_inference
-unit          count
-labels        model_id, task, framework, status (success | error)
+counter       model.inference.count    (monotonic; "Number of model inference calls")
+histogram     model.inference.duration (unit s; model inference duration in seconds)
+labels        task, model
+counter-only  result (success | error)
 ```
 
-Complementary histograms record `model_inference_latency_ms`
-keyed by the same labels. The metrics surface in Prometheus
-through the OTel collector's `:8889` exporter and back the
-"Model service inference" panels in the bundled Grafana
-dashboards.
+The counter carries `task`, `model`, and `result`; the duration
+histogram carries `task` and `model` only. The metrics surface in
+Prometheus through the OTel collector's `:8889` exporter. The
+bundled Grafana dashboards (error and RBAC) do not visualize
+these metrics yet; query them directly through Prometheus.
 
 ## Prometheus
 
@@ -52,7 +62,7 @@ metrics exporter on `:8889`. Alert rules are defined in
 
 ## Grafana
 
-Grafana runs at `:3010`. Dashboards live in `grafana-dashboards/`
+Grafana runs at `:3002`. Dashboards live in `grafana-dashboards/`
 in the repo root.
 
 ## Frontend telemetry

@@ -1,68 +1,78 @@
 # syntax=docker/dockerfile:1.4
 # Multi-stage Dockerfile for fovea server backend
+#
+# Build context: repo root (so pnpm-workspace.yaml + root pnpm-lock.yaml + every
+# workspace package.json is visible). docker-compose.yml sets context: . and
+# routes to this Dockerfile via dockerfile: server/Dockerfile.
 
 # Build stage
 FROM node:20-alpine AS builder
 
-WORKDIR /app
+# Install pnpm
+RUN corepack enable && corepack prepare pnpm@10.15.0 --activate
 
-# Copy package files
-COPY package*.json ./
+WORKDIR /repo
 
-# Install dependencies with cache mount for npm
-RUN --mount=type=cache,target=/root/.npm \
-    npm ci
+# Copy workspace metadata + every package's package.json so pnpm can resolve
+# the workspace graph from a single frozen lockfile install.
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY server/package.json ./server/
+COPY annotation-tool/package.json ./annotation-tool/
 
-# Copy Prisma schema first (if exists) for better layer caching
-COPY prisma ./prisma
+# Install dependencies with cache mount for pnpm
+RUN --mount=type=cache,target=/root/.local/share/pnpm/store \
+    pnpm install --frozen-lockfile
 
-# Generate Prisma client
-RUN if [ -d "prisma" ]; then npx prisma generate; fi
-
-# Copy source code
-COPY . .
+# Copy server source (Prisma first for layer caching)
+COPY server/prisma ./server/prisma
+RUN pnpm --filter @fovea/server exec prisma generate
+COPY server/. ./server/
 
 # Build TypeScript
-RUN npm run build
+RUN pnpm --filter @fovea/server build
 
-# Compile seed script for production use (tsx not available in production)
-# Use .cjs extension since package.json has "type": "module"
-RUN npx tsc prisma/seed.ts --outDir prisma --module commonjs --esModuleInterop --target ES2015 && \
+# Compile seed script for production use (tsx not available in production).
+# Use .cjs extension since server/package.json has "type": "module".
+RUN cd server && pnpm exec tsc prisma/seed.ts --outDir prisma --module commonjs --esModuleInterop --target ES2015 && \
     mv prisma/seed.js prisma/seed.cjs
 
 # Production dependencies stage
 FROM node:20-alpine AS deps
 
-WORKDIR /app
+RUN corepack enable && corepack prepare pnpm@10.15.0 --activate
 
-# Copy package files
-COPY package*.json ./
+WORKDIR /repo
 
-# Install production dependencies with cache mount
-RUN --mount=type=cache,target=/root/.npm \
-    npm ci --omit=dev
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY server/package.json ./server/
+COPY annotation-tool/package.json ./annotation-tool/
 
-# Copy Prisma schema and generate client
-COPY --link prisma ./prisma
-RUN npx prisma generate
+# Install production dependencies for the server filter only
+RUN --mount=type=cache,target=/root/.local/share/pnpm/store \
+    pnpm install --frozen-lockfile --filter @fovea/server --prod
+
+# Generate Prisma client into pnpm's virtual store (the canonical resolution
+# path under @prisma/client → .prisma/client/default for pnpm layouts)
+COPY --link server/prisma ./server/prisma
+RUN pnpm --filter @fovea/server exec prisma generate
 
 # Production stage
 FROM node:20-alpine AS production
 
+RUN corepack enable && corepack prepare pnpm@10.15.0 --activate
+
 WORKDIR /app
 
-# Copy production dependencies from deps stage
-COPY --link --from=deps /app/node_modules ./node_modules
+# Copy the production deps tree (pnpm's virtual store holds the generated
+# Prisma client) from deps stage. We pull just the server package's resolved
+# tree by copying the workspace as-is and pointing CWD at /app/server below.
+COPY --link --from=deps /repo /app
 
-# Copy Prisma client from deps stage
-COPY --link --from=deps /app/node_modules/.prisma ./node_modules/.prisma
+# Copy built application + prisma artifacts (compiled seed.cjs) from builder
+COPY --link --from=builder /repo/server/dist ./server/dist
+COPY --link --from=builder /repo/server/prisma ./server/prisma
 
-# Copy built application
-COPY --link --from=builder /app/dist ./dist
-COPY --link --from=builder /app/package.json ./package.json
-
-# Copy Prisma schema, migrations, and compiled seed script for database setup
-COPY --link --from=builder /app/prisma ./prisma
+WORKDIR /app/server
 
 # Create data directory
 RUN mkdir -p /data

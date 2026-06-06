@@ -6,7 +6,7 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import EditUserDialog from './EditUserDialog.js'
+import { EditUserDialog } from './EditUserDialog.js'
 import { http, HttpResponse } from 'msw'
 import { server } from '@test/setup.js'
 import { UserWithStats } from '@store/queries/admin/useUsers.js'
@@ -153,7 +153,7 @@ describe('EditUserDialog', () => {
 
     await screen.findByRole('button', { name: /save changes/i })
 
-    const checkbox = screen.getByRole('checkbox', { name: /administrator/i })
+    const checkbox = screen.getByRole('checkbox')
     expect(checkbox).not.toBeChecked()
 
     await user.click(checkbox)

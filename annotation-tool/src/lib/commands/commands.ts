@@ -8,7 +8,7 @@
  * - File: Save, export, import
  * - Video: Playback controls
  * - Annotation: Annotation workspace actions
- * - Ontology: Ontology builder actions
+ * - Ontology: Persona builder actions
  * - Object: Object builder actions
  */
 
@@ -38,10 +38,10 @@ export const globalCommands: Omit<Command, 'execute'>[] = [
   },
   {
     id: 'navigate.ontologyBuilder',
-    title: 'Go to Ontology Builder',
+    title: 'Go to Persona Builder',
     category: 'navigation',
     keybinding: 'mod+2',
-    description: 'Navigate to ontology builder workspace'
+    description: 'Navigate to persona builder workspace'
   },
   {
     id: 'navigate.objectBuilder',
@@ -52,11 +52,11 @@ export const globalCommands: Omit<Command, 'execute'>[] = [
   },
   {
     id: 'navigate.toggleOntology',
-    title: 'Toggle Ontology Builder',
+    title: 'Toggle Persona Builder',
     category: 'navigation',
-    keybinding: 'o',
+    keybinding: 'p',
     when: '!inputFocused && !dialogOpen',
-    description: 'Toggle between current view and ontology builder'
+    description: 'Toggle between current view and persona builder'
   },
   {
     id: 'navigate.toggleWorld',
@@ -309,7 +309,7 @@ export const annotationCommands: Omit<Command, 'execute'>[] = [
 ]
 
 /**
- * Ontology builder commands.
+ * Persona builder commands.
  */
 export const ontologyCommands: Omit<Command, 'execute'>[] = [
   {

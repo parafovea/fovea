@@ -17,10 +17,8 @@ POST   /api/videos/summaries/generate            # enqueue VLM job
 GET    /api/jobs/:jobId                          # poll the VLM job
 ```
 
-`GET /api/videos/:videoId/summaries` since v0.1.8 returns only
-summaries on personas the requester owns. The pre-v0.1.8 unscoped
-listing let a foreign user's imported summary mask the importer's
-own summary in the persona switcher.
+`GET /api/videos/:videoId/summaries` returns only summaries on
+personas the requester owns.
 
 ## Generate a summary
 
@@ -34,16 +32,16 @@ curl -X POST http://localhost:3001/api/videos/summaries/generate \
 The job runs in the BullMQ summarization queue. The model service
 performs frame extraction, audio transcription, and VLM
 captioning; when complete it writes the result back as a
-`VideoSummary` row. Poll the job at `GET /api/jobs/:jobId`. Since
-v0.1.8 the poll endpoint enforces ownership of the persona that
-owns the job's data.
+`VideoSummary` row. Poll the job at `GET /api/jobs/:jobId`; the
+poll endpoint enforces ownership of the persona that owns the
+job's data.
 
 ## Summary row fields
 
 The columns most commonly read by clients:
 
 ```text
-summary           Json    paragraphs of prose, one per array element
+summary           Json    GlossItem[]; each item is {type, content, refType?, refPersonaId?, refClaimId?} for rich text with inline references
 visualAnalysis    String? raw VLM output before paragraph splitting
 audioTranscript   String? transcript text
 keyFrames         Json?   selected frame ids and timestamps
@@ -51,7 +49,7 @@ transcriptJson    Json?   structured transcript (vendor-specific)
 audioLanguage     String? ISO code from the transcription vendor
 audioModelUsed    String? vendor adapter id
 visualModelUsed   String? VLM id (e.g. "qwen-2-5-vl-7b")
-fusionStrategy    String? "sequential" | "parallel" | "audio-first"
+fusionStrategy    String? "sequential" | "timestamp_aligned" | "native_multimodal" | "hybrid"
 claimsJson        Json?   serialized extracted claims (denormalized)
 comment           Text?   user-authored comment
 ```
@@ -62,10 +60,13 @@ canonical TypeBox is in `server/src/routes/summaries.ts`.
 
 ## Edit a summary
 
-`PUT /api/videos/:videoId/summaries/:summaryId` accepts a partial
-update. The route runs `assertSummaryOwned` so only the owning
-user can edit. Use this to correct the summary text or set the
-`comment` field.
+`PUT /api/videos/:videoId/summaries/:summaryId` replaces the
+`summary` field with a new `GlossItem[]` array (the request body
+accepts only `summary`; no other fields are writable through this
+endpoint). The route loads the existing row and runs
+`request.ability.can('update', subject('VideoSummary', existing))`,
+throwing `ForbiddenError` if the caller's abilities (built by
+`buildAbilities`) do not permit updating that specific row.
 
 ## Reasoning traces
 

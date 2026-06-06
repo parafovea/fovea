@@ -7,39 +7,39 @@
 
 import { useState } from 'react'
 import {
-  Box,
-  Button,
-  TextField,
+  Plus,
+  Pencil,
+  Trash2,
+  Play,
+  Send,
+  ListChecks,
+} from 'lucide-react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Badge } from '@/components/ui/badge'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Spinner } from '@/components/ui/spinner'
+import { Separator } from '@/components/ui/separator'
+import { Switch } from '@/components/ui/switch'
+import { Textarea } from '@/components/ui/textarea'
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import {
   Table,
   TableBody,
   TableCell,
-  TableContainer,
   TableHead,
+  TableHeader,
   TableRow,
-  IconButton,
-  Chip,
-  Alert,
-  CircularProgress,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Typography,
-  Divider,
-  Paper,
-  FormControlLabel,
-  Switch,
-} from '@mui/material'
-import {
-  Add as AddIcon,
-  Edit as EditIcon,
-  Delete as DeleteIcon,
-  PlayArrow as EvaluateIcon,
-  Send as AssignIcon,
-  PlaylistAddCheck as ApplyAllIcon,
-} from '@mui/icons-material'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import ConfirmDialog from '../shared/ConfirmDialog'
+} from '@/components/ui/table'
+import { ConfirmDialog } from '../shared/ConfirmDialog'
 
 interface AssignmentRule {
   id: string
@@ -74,7 +74,7 @@ const assignmentKeys = {
  * @returns Array of assignment rules
  */
 async function fetchRules(): Promise<AssignmentRule[]> {
-  const response = await fetch('/api/admin/assignment-rules', { credentials: 'include' })
+  const response = await fetch('/api/admin/video-assignments/rules', { credentials: 'include' })
   if (!response.ok) {
     const error = await response.json()
     throw new Error(error.message || 'Failed to fetch assignment rules')
@@ -86,7 +86,7 @@ async function fetchRules(): Promise<AssignmentRule[]> {
  * Admin video assignment management page.
  * Provides three sections: manual assignment, assignment rules CRUD, and bulk operations.
  */
-export default function VideoAssignmentPage() {
+export function VideoAssignmentPage(): JSX.Element {
   const queryClient = useQueryClient()
   const { data: rules = [], isLoading, error } = useQuery({
     queryKey: assignmentKeys.ruleList(),
@@ -144,7 +144,7 @@ export default function VideoAssignmentPage() {
 
   const createRule = useMutation({
     mutationFn: async (data: RuleFormData) => {
-      const response = await fetch('/api/admin/assignment-rules', {
+      const response = await fetch('/api/admin/video-assignments/rules', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -164,7 +164,7 @@ export default function VideoAssignmentPage() {
 
   const updateRule = useMutation({
     mutationFn: async ({ id, data }: { id: string; data: RuleFormData }) => {
-      const response = await fetch(`/api/admin/assignment-rules/${id}`, {
+      const response = await fetch(`/api/admin/video-assignments/rules/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -184,7 +184,7 @@ export default function VideoAssignmentPage() {
 
   const deleteRule = useMutation({
     mutationFn: async (id: string) => {
-      const response = await fetch(`/api/admin/assignment-rules/${id}`, {
+      const response = await fetch(`/api/admin/video-assignments/rules/${id}`, {
         method: 'DELETE',
         credentials: 'include',
       })
@@ -202,7 +202,7 @@ export default function VideoAssignmentPage() {
 
   const evaluateRule = useMutation({
     mutationFn: async (ruleId: string) => {
-      const response = await fetch(`/api/admin/assignment-rules/${ruleId}/evaluate`, {
+      const response = await fetch(`/api/admin/video-assignments/rules/${ruleId}/evaluate`, {
         method: 'POST',
         credentials: 'include',
       })
@@ -219,7 +219,7 @@ export default function VideoAssignmentPage() {
 
   const applyAllRules = useMutation({
     mutationFn: async () => {
-      const response = await fetch('/api/admin/assignment-rules/apply-all', {
+      const response = await fetch('/api/admin/video-assignments/rules/evaluate-all', {
         method: 'POST',
         credentials: 'include',
       })
@@ -285,231 +285,234 @@ export default function VideoAssignmentPage() {
 
   if (isLoading) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
-        <CircularProgress />
-      </Box>
+      <div className="flex justify-center p-8" data-tour-id="project-video-assignment">
+        <Spinner />
+      </div>
     )
   }
 
   if (error) {
     return (
-      <Box sx={{ p: 3 }}>
-        <Alert severity="error">
-          Failed to load assignment rules: {error instanceof Error ? error.message : 'Unknown error'}
+      <div className="p-6" data-tour-id="project-video-assignment">
+        <Alert variant="destructive">
+          <AlertDescription>
+            Failed to load assignment rules: {error instanceof Error ? error.message : 'Unknown error'}
+          </AlertDescription>
         </Alert>
-      </Box>
+      </div>
     )
   }
 
   return (
-    <Box sx={{ p: 3, display: 'flex', flexDirection: 'column', gap: 4 }}>
+    <div className="flex flex-col gap-8 p-6" data-tour-id="project-video-assignment">
       {/* Section 1: Manual Assignment */}
-      <Paper variant="outlined" sx={{ p: 3 }}>
-        <Typography variant="h6" gutterBottom>
+      <div className="rounded-lg border bg-card p-6">
+        <h3 className="text-lg font-semibold mb-1">
           Manual Assignment
-        </Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+        </h3>
+        <p className="text-sm text-muted-foreground mb-4">
           Assign specific videos to a project or user by ID.
-        </Typography>
-        <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start' }}>
-          <TextField
-            label="Video IDs"
-            value={videoIds}
-            onChange={(e) => setVideoIds(e.target.value)}
-            placeholder="Comma-separated UUIDs"
-            size="small"
-            sx={{ flexGrow: 1 }}
-            helperText="Enter one or more video UUIDs separated by commas"
-          />
-          <TextField
-            label="Target (Project/User ID)"
-            value={assignTarget}
-            onChange={(e) => setAssignTarget(e.target.value)}
-            size="small"
-            sx={{ minWidth: 260 }}
-          />
+        </p>
+        <div className="flex gap-4 items-start">
+          <div className="flex-grow space-y-2">
+            <Label htmlFor="video-ids">Video IDs</Label>
+            <Input
+              id="video-ids"
+              value={videoIds}
+              onChange={(e) => setVideoIds(e.target.value)}
+              placeholder="Comma-separated UUIDs"
+            />
+            <p className="text-sm text-muted-foreground">Enter one or more video UUIDs separated by commas</p>
+          </div>
+          <div className="min-w-[260px] space-y-2">
+            <Label htmlFor="assign-target">Target (Project/User ID)</Label>
+            <Input
+              id="assign-target"
+              value={assignTarget}
+              onChange={(e) => setAssignTarget(e.target.value)}
+            />
+          </div>
           <Button
-            variant="contained"
-            startIcon={<AssignIcon />}
+            className="mt-7"
             onClick={handleManualAssign}
             disabled={!videoIds || !assignTarget || manualAssign.isPending}
-            sx={{ mt: '1px' }}
           >
+            <Send className="mr-2 h-4 w-4" />
             Assign
           </Button>
-        </Box>
+        </div>
         {assignResult && (
-          <Alert severity={assignResult.startsWith('Assigned') ? 'success' : 'error'} sx={{ mt: 2 }} onClose={() => setAssignResult(null)}>
-            {assignResult}
+          <Alert variant={assignResult.startsWith('Assigned') ? 'default' : 'destructive'} className="mt-4">
+            <AlertDescription>{assignResult}</AlertDescription>
           </Alert>
         )}
-      </Paper>
+      </div>
 
-      <Divider />
+      <Separator />
 
       {/* Section 2: Assignment Rules */}
-      <Box>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-          <Typography variant="h6">Assignment Rules</Typography>
-          <Button variant="contained" startIcon={<AddIcon />} onClick={handleOpenCreateRule}>
+      <div>
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-lg font-semibold">Assignment Rules</h3>
+          <Button onClick={handleOpenCreateRule}>
+            <Plus className="mr-2 h-4 w-4" />
             Create Rule
           </Button>
-        </Box>
+        </div>
 
-        <TableContainer>
-          <Table>
-            <TableHead>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Name</TableHead>
+              <TableHead>Target</TableHead>
+              <TableHead>Conditions</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Created At</TableHead>
+              <TableHead className="text-right">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {rules.length === 0 ? (
               <TableRow>
-                <TableCell>Name</TableCell>
-                <TableCell>Target</TableCell>
-                <TableCell>Conditions</TableCell>
-                <TableCell>Status</TableCell>
-                <TableCell>Created At</TableCell>
-                <TableCell align="right">Actions</TableCell>
+                <TableCell colSpan={6} className="text-center py-8">
+                  No assignment rules defined
+                </TableCell>
               </TableRow>
-            </TableHead>
-            <TableBody>
-              {rules.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={6} align="center" sx={{ py: 4 }}>
-                    No assignment rules defined
+            ) : (
+              rules.map((rule) => (
+                <TableRow key={rule.id}>
+                  <TableCell>{rule.name}</TableCell>
+                  <TableCell>
+                    <Badge variant="outline">{rule.target}</Badge>
+                  </TableCell>
+                  <TableCell>
+                    <span className="font-mono text-xs max-w-[300px] overflow-hidden text-ellipsis whitespace-nowrap block">
+                      {rule.conditions}
+                    </span>
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant={rule.active ? 'secondary' : 'outline'}>
+                      {rule.active ? 'Active' : 'Inactive'}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>{formatDate(rule.createdAt)}</TableCell>
+                  <TableCell className="text-right">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => evaluateRule.mutate(rule.id)}
+                      aria-label="evaluate rule"
+                      title="Dry-run evaluation"
+                    >
+                      <Play className="h-4 w-4" />
+                    </Button>
+                    <Button variant="ghost" size="icon" onClick={() => handleOpenEditRule(rule)} aria-label="edit rule">
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => { setDeletingRule(rule); setDeleteConfirmOpen(true) }}
+                      aria-label="delete rule"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
                   </TableCell>
                 </TableRow>
-              ) : (
-                rules.map((rule) => (
-                  <TableRow key={rule.id} hover>
-                    <TableCell>{rule.name}</TableCell>
-                    <TableCell>
-                      <Chip label={rule.target} size="small" variant="outlined" />
-                    </TableCell>
-                    <TableCell>
-                      <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.75rem', maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {rule.conditions}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Chip
-                        label={rule.active ? 'Active' : 'Inactive'}
-                        size="small"
-                        color={rule.active ? 'success' : 'default'}
-                      />
-                    </TableCell>
-                    <TableCell>{formatDate(rule.createdAt)}</TableCell>
-                    <TableCell align="right">
-                      <IconButton
-                        size="small"
-                        onClick={() => evaluateRule.mutate(rule.id)}
-                        aria-label="evaluate rule"
-                        title="Dry-run evaluation"
-                      >
-                        <EvaluateIcon fontSize="small" />
-                      </IconButton>
-                      <IconButton size="small" onClick={() => handleOpenEditRule(rule)} aria-label="edit rule">
-                        <EditIcon fontSize="small" />
-                      </IconButton>
-                      <IconButton
-                        size="small"
-                        onClick={() => { setDeletingRule(rule); setDeleteConfirmOpen(true) }}
-                        aria-label="delete rule"
-                      >
-                        <DeleteIcon fontSize="small" />
-                      </IconButton>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </TableContainer>
+              ))
+            )}
+          </TableBody>
+        </Table>
 
         {evaluationResult && (
-          <Alert severity="info" sx={{ mt: 2 }} onClose={() => setEvaluationResult(null)}>
-            Evaluation result: {evaluationResult.matchedVideos} video(s) matched, {evaluationResult.targetUsers} target user(s).
+          <Alert className="mt-4">
+            <AlertDescription>
+              Evaluation result: {evaluationResult.matchedVideos} video(s) matched, {evaluationResult.targetUsers} target user(s).
+            </AlertDescription>
           </Alert>
         )}
-      </Box>
+      </div>
 
-      <Divider />
+      <Separator />
 
       {/* Section 3: Bulk Operations */}
-      <Paper variant="outlined" sx={{ p: 3 }}>
-        <Typography variant="h6" gutterBottom>
+      <div className="rounded-lg border bg-card p-6">
+        <h3 className="text-lg font-semibold mb-1">
           Bulk Operations
-        </Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+        </h3>
+        <p className="text-sm text-muted-foreground mb-4">
           Apply all active assignment rules at once. This evaluates each active rule and creates assignments for matching videos.
-        </Typography>
+        </p>
         <Button
-          variant="contained"
-          color="warning"
-          startIcon={<ApplyAllIcon />}
           onClick={() => applyAllRules.mutate()}
           disabled={applyAllRules.isPending}
         >
+          <ListChecks className="mr-2 h-4 w-4" />
           {applyAllRules.isPending ? 'Applying...' : 'Apply All Rules'}
         </Button>
         {bulkResult && (
           <Alert
-            severity={bulkResult.startsWith('Applied') ? 'success' : 'error'}
-            sx={{ mt: 2 }}
-            onClose={() => setBulkResult(null)}
+            variant={bulkResult.startsWith('Applied') ? 'default' : 'destructive'}
+            className="mt-4"
           >
-            {bulkResult}
+            <AlertDescription>{bulkResult}</AlertDescription>
           </Alert>
         )}
-      </Paper>
+      </div>
 
       {/* Rule Create/Edit Dialog */}
-      <Dialog open={ruleDialogOpen} onClose={handleCloseRuleDialog} maxWidth="sm" fullWidth>
-        <DialogTitle>{editingRule ? 'Edit Rule' : 'Create Rule'}</DialogTitle>
-        <DialogContent>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
-            <TextField
-              label="Name"
-              value={ruleFormData.name}
-              onChange={(e) => setRuleFormData({ ...ruleFormData, name: e.target.value })}
-              fullWidth
-              required
-            />
-            <TextField
-              label="Target"
-              value={ruleFormData.target}
-              onChange={(e) => setRuleFormData({ ...ruleFormData, target: e.target.value })}
-              fullWidth
-              required
-              helperText="Project or user ID to assign matched videos to"
-            />
-            <TextField
-              label="Conditions"
-              value={ruleFormData.conditions}
-              onChange={(e) => setRuleFormData({ ...ruleFormData, conditions: e.target.value })}
-              fullWidth
-              multiline
-              rows={3}
-              required
-              helperText="JSON condition expression for matching videos"
-            />
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={ruleFormData.active}
-                  onChange={(e) => setRuleFormData({ ...ruleFormData, active: e.target.checked })}
-                />
-              }
-              label="Active"
-            />
-          </Box>
+      <Dialog open={ruleDialogOpen} onOpenChange={(isOpen) => !isOpen && handleCloseRuleDialog()}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{editingRule ? 'Edit Rule' : 'Create Rule'}</DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-col gap-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="rule-name">Name *</Label>
+              <Input
+                id="rule-name"
+                value={ruleFormData.name}
+                onChange={(e) => setRuleFormData({ ...ruleFormData, name: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="rule-target">Target *</Label>
+              <Input
+                id="rule-target"
+                value={ruleFormData.target}
+                onChange={(e) => setRuleFormData({ ...ruleFormData, target: e.target.value })}
+              />
+              <p className="text-sm text-muted-foreground">Project or user ID to assign matched videos to</p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="rule-conditions">Conditions *</Label>
+              <Textarea
+                id="rule-conditions"
+                value={ruleFormData.conditions}
+                onChange={(e) => setRuleFormData({ ...ruleFormData, conditions: e.target.value })}
+                rows={3}
+              />
+              <p className="text-sm text-muted-foreground">JSON condition expression for matching videos</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Switch
+                id="rule-active"
+                checked={ruleFormData.active}
+                onCheckedChange={(checked) => setRuleFormData({ ...ruleFormData, active: checked })}
+              />
+              <Label htmlFor="rule-active">Active</Label>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={handleCloseRuleDialog}>Cancel</Button>
+            <Button
+              onClick={handleSubmitRule}
+              disabled={!ruleFormData.name || !ruleFormData.target || !ruleFormData.conditions || createRule.isPending || updateRule.isPending}
+            >
+              {editingRule ? 'Save' : 'Create'}
+            </Button>
+          </DialogFooter>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={handleCloseRuleDialog}>Cancel</Button>
-          <Button
-            onClick={handleSubmitRule}
-            variant="contained"
-            disabled={!ruleFormData.name || !ruleFormData.target || !ruleFormData.conditions || createRule.isPending || updateRule.isPending}
-          >
-            {editingRule ? 'Save' : 'Create'}
-          </Button>
-        </DialogActions>
       </Dialog>
 
       {/* Delete Confirmation */}
@@ -518,11 +521,11 @@ export default function VideoAssignmentPage() {
         title="Delete Rule"
         message={`Are you sure you want to delete rule "${deletingRule?.name}"? This action cannot be undone.`}
         confirmText="Delete"
-        confirmColor="error"
+        confirmVariant="destructive"
         onConfirm={() => { if (deletingRule) deleteRule.mutate(deletingRule.id) }}
         onCancel={() => { setDeleteConfirmOpen(false); setDeletingRule(null) }}
         loading={deleteRule.isPending}
       />
-    </Box>
+    </div>
   )
 }

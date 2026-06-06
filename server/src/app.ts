@@ -278,6 +278,15 @@ export async function buildApp() {
   const apiKeysRoute = await import('./routes/api-keys.js')
   await app.register(apiKeysRoute.default)
 
+  const preferencesRoute = await import('./routes/preferences.js')
+  await app.register(preferencesRoute.default)
+
+  const personaPreferencesRoute = await import('./routes/persona-preferences.js')
+  await app.register(personaPreferencesRoute.default)
+
+  const adminConfigRoute = await import('./routes/admin-config.js')
+  await app.register(adminConfigRoute.default)
+
   const configRoute = await import('./routes/config.js')
   await app.register(configRoute.default)
 
@@ -325,6 +334,16 @@ export async function buildApp() {
 
   const videoAssignmentsRoute = await import('./routes/video-assignments.js')
   await app.register(videoAssignmentsRoute.default)
+
+  // Tours-manifest API — product feature, ships in every deployment.
+  const toursRoute = await import('./routes/tours.js')
+  await app.register(toursRoute.default)
+
+  // Demo deployment layer — FOVEA_DEMO_MODE-gated. Each sub-plugin
+  // no-ops at register time if its flag is off; a stock build pays
+  // nothing for this import.
+  const demoLayer = await import('./demo/index.js')
+  await demoLayer.registerDemoLayer(app)
 
   return app
 }

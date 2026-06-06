@@ -1,28 +1,26 @@
-import React, { useState } from 'react'
+import { useState } from 'react'
 import {
   Dialog,
-  DialogTitle,
   DialogContent,
-  DialogActions,
-  Button,
-  Box,
-  Typography,
-  FormControl,
-  InputLabel,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Label } from '@/components/ui/label'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import {
   Select,
-  MenuItem,
-  List,
-  ListItem,
-  ListItemButton,
-  ListItemText,
-  ListItemIcon,
-  Checkbox,
-  Tabs,
-  Tab,
-  Chip,
-  Alert,
-} from '@mui/material'
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { usePersonas, usePersonaOntology, useImportFromPersona } from '@store/queries'
+import { glossToText } from '@/utils/glossUtils'
 import { ImportRequest } from '@models/types'
 
 interface ImportDialogProps {
@@ -31,32 +29,13 @@ interface ImportDialogProps {
   targetPersonaId: string | null
 }
 
-interface TabPanelProps {
-  children?: React.ReactNode
-  index: number
-  value: number
-}
-
-function TabPanel(props: TabPanelProps) {
-  const { children, value, index, ...other } = props
-  return (
-    <div
-      role="tabpanel"
-      hidden={value !== index}
-      {...other}
-    >
-      {value === index && <Box sx={{ p: 2 }}>{children}</Box>}
-    </div>
-  )
-}
-
 export default function ImportDialog({ open, onClose, targetPersonaId }: ImportDialogProps) {
   // TanStack Query hooks
   const { data: personas = [] } = usePersonas()
   const { mutate: importFromPersonaMutation } = useImportFromPersona()
 
   const [sourcePersonaId, setSourcePersonaId] = useState<string>('')
-  const [tabValue, setTabValue] = useState(0)
+  const [activeTab, setActiveTab] = useState('entities')
   const [selectedEntities, setSelectedEntities] = useState<string[]>([])
   const [selectedRoles, setSelectedRoles] = useState<string[]>([])
   const [selectedEvents, setSelectedEvents] = useState<string[]>([])
@@ -91,7 +70,7 @@ export default function ImportDialog({ open, onClose, targetPersonaId }: ImportD
     setSelectedEvents([])
     setSelectedRelationTypes([])
     setIncludeRelations(false)
-    setTabValue(0)
+    setActiveTab('entities')
   }
 
   const toggleEntity = (entityId: string) => {
@@ -128,202 +107,231 @@ export default function ImportDialog({ open, onClose, targetPersonaId }: ImportD
 
   const selectAllInTab = () => {
     if (!sourceOntology) return
-    
-    switch (tabValue) {
-      case 0:
+
+    switch (activeTab) {
+      case 'entities':
         setSelectedEntities(sourceOntology.entities.map(e => e.id))
         break
-      case 1:
+      case 'roles':
         setSelectedRoles(sourceOntology.roles.map(r => r.id))
         break
-      case 2:
+      case 'events':
         setSelectedEvents(sourceOntology.events.map(e => e.id))
         break
-      case 3:
+      case 'relations':
         setSelectedRelationTypes(sourceOntology.relationTypes.map(r => r.id))
         break
     }
   }
 
   const deselectAllInTab = () => {
-    switch (tabValue) {
-      case 0:
+    switch (activeTab) {
+      case 'entities':
         setSelectedEntities([])
         break
-      case 1:
+      case 'roles':
         setSelectedRoles([])
         break
-      case 2:
+      case 'events':
         setSelectedEvents([])
         break
-      case 3:
+      case 'relations':
         setSelectedRelationTypes([])
         break
     }
   }
 
-  const totalSelected = selectedEntities.length + selectedRoles.length + 
+  const totalSelected = selectedEntities.length + selectedRoles.length +
                         selectedEvents.length + selectedRelationTypes.length
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
-      <DialogTitle>Import from Another Persona</DialogTitle>
-      <DialogContent>
-        <Box sx={{ mb: 2 }}>
-          <Alert severity="info">
-            Importing will copy selected items to {targetPersona?.name}. The original items will remain unchanged.
+    <Dialog open={open} onOpenChange={(val) => { if (!val) onClose() }}>
+      <DialogContent data-tour-id="import-dialog" className="sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>Import from Another Persona</DialogTitle>
+        </DialogHeader>
+
+        <div className="flex flex-col gap-4">
+          <Alert>
+            <AlertDescription>
+              Importing will copy selected items to {targetPersona?.name}. The original items will remain unchanged.
+            </AlertDescription>
           </Alert>
-        </Box>
 
-        <FormControl fullWidth sx={{ mb: 2 }}>
-          <InputLabel>Source Persona</InputLabel>
-          <Select
-            value={sourcePersonaId}
-            onChange={(e) => setSourcePersonaId(e.target.value)}
-            label="Source Persona"
-          >
-            {personas
-              .filter(p => p.id !== targetPersonaId)
-              .map(persona => (
-                <MenuItem key={persona.id} value={persona.id}>
-                  <Box>
-                    <Typography>{persona.name}</Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      {persona.role}
-                    </Typography>
-                  </Box>
-                </MenuItem>
-              ))}
-          </Select>
-        </FormControl>
+          <div>
+            <Label className="mb-2">Source Persona</Label>
+            <Select value={sourcePersonaId} onValueChange={(val) => { if (val !== null) setSourcePersonaId(val) }}>
+              <SelectTrigger className="w-full truncate [&>span]:truncate [&>span]:block [&>span]:overflow-hidden">
+                {/* Explicit child override: base-ui Select renders the
+                    controlled `value` prop verbatim (a UUID) when the
+                    matching SelectItem hasn't yet mounted (initial paint
+                    before the dropdown opens). Resolve the label from
+                    the personas list so the trigger never shows a raw
+                    id. */}
+                <SelectValue placeholder="Select a persona">
+                  {(() => {
+                    const p = personas.find((x) => x.id === sourcePersonaId)
+                    return p ? `${p.name} (${p.role})` : null
+                  })()}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                {personas
+                  .filter(p => p.id !== targetPersonaId)
+                  .map(persona => (
+                    <SelectItem key={persona.id} value={persona.id}>
+                      <div>
+                        <span>{persona.name}</span>
+                        <span className="ml-2 text-xs text-muted-foreground">
+                          {persona.role}
+                        </span>
+                      </div>
+                    </SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
+          </div>
 
-        {sourceOntology && (
-          <>
-            <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
-              <Tabs value={tabValue} onChange={(_, v) => setTabValue(v)}>
-                <Tab label={`Entities (${sourceOntology.entities.length})`} />
-                <Tab label={`Roles (${sourceOntology.roles.length})`} />
-                <Tab label={`Events (${sourceOntology.events.length})`} />
-                <Tab label={`Relations (${sourceOntology.relationTypes.length})`} />
+          {sourceOntology && (
+            <>
+              <Tabs value={activeTab} onValueChange={setActiveTab}>
+                <TabsList>
+                  <TabsTrigger value="entities">
+                    Entities ({sourceOntology.entities.length})
+                  </TabsTrigger>
+                  <TabsTrigger value="roles">
+                    Roles ({sourceOntology.roles.length})
+                  </TabsTrigger>
+                  <TabsTrigger value="events">
+                    Events ({sourceOntology.events.length})
+                  </TabsTrigger>
+                  <TabsTrigger value="relations">
+                    Relations ({sourceOntology.relationTypes.length})
+                  </TabsTrigger>
+                </TabsList>
+
+                <div className="flex items-center justify-between py-2">
+                  <Badge>
+                    {totalSelected} items selected
+                  </Badge>
+                  <div className="flex gap-1">
+                    <Button size="sm" variant="ghost" onClick={selectAllInTab}>Select All</Button>
+                    <Button size="sm" variant="ghost" onClick={deselectAllInTab}>Deselect All</Button>
+                  </div>
+                </div>
+
+                <div className="max-h-[300px] overflow-auto">
+                  <TabsContent value="entities">
+                    <ul className="space-y-1">
+                      {sourceOntology.entities.map(entity => (
+                        <li key={entity.id}>
+                          <label
+                            className="flex items-center gap-3 rounded-md px-2 py-1.5 cursor-pointer hover:bg-accent"
+                            onClick={() => toggleEntity(entity.id)}
+                          >
+                            <Checkbox
+                              checked={selectedEntities.includes(entity.id)}
+                              tabIndex={-1}
+                            />
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium">{entity.name}</p>
+                              <p className="text-xs text-muted-foreground truncate">
+                                {glossToText(entity.gloss, sourceOntology ?? undefined).substring(0, 100)}
+                              </p>
+                            </div>
+                          </label>
+                        </li>
+                      ))}
+                    </ul>
+                  </TabsContent>
+
+                  <TabsContent value="roles">
+                    <ul className="space-y-1">
+                      {sourceOntology.roles.map(role => (
+                        <li key={role.id}>
+                          <label
+                            className="flex items-center gap-3 rounded-md px-2 py-1.5 cursor-pointer hover:bg-accent"
+                            onClick={() => toggleRole(role.id)}
+                          >
+                            <Checkbox
+                              checked={selectedRoles.includes(role.id)}
+                              tabIndex={-1}
+                            />
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium">{role.name}</p>
+                              <p className="text-xs text-muted-foreground">
+                                Allows: {role.allowedFillerTypes.join(', ')}
+                              </p>
+                            </div>
+                          </label>
+                        </li>
+                      ))}
+                    </ul>
+                  </TabsContent>
+
+                  <TabsContent value="events">
+                    <ul className="space-y-1">
+                      {sourceOntology.events.map(event => (
+                        <li key={event.id}>
+                          <label
+                            className="flex items-center gap-3 rounded-md px-2 py-1.5 cursor-pointer hover:bg-accent"
+                            onClick={() => toggleEvent(event.id)}
+                          >
+                            <Checkbox
+                              checked={selectedEvents.includes(event.id)}
+                              tabIndex={-1}
+                            />
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium">{event.name}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {event.roles.length} roles
+                              </p>
+                            </div>
+                          </label>
+                        </li>
+                      ))}
+                    </ul>
+                  </TabsContent>
+
+                  <TabsContent value="relations">
+                    <ul className="space-y-1">
+                      {sourceOntology.relationTypes.map(relationType => (
+                        <li key={relationType.id}>
+                          <label
+                            className="flex items-center gap-3 rounded-md px-2 py-1.5 cursor-pointer hover:bg-accent"
+                            onClick={() => toggleRelationType(relationType.id)}
+                          >
+                            <Checkbox
+                              checked={selectedRelationTypes.includes(relationType.id)}
+                              tabIndex={-1}
+                            />
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium">{relationType.name}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {relationType.sourceTypes.join('/')} &rarr; {relationType.targetTypes.join('/')}
+                              </p>
+                            </div>
+                          </label>
+                        </li>
+                      ))}
+                    </ul>
+                  </TabsContent>
+                </div>
               </Tabs>
-            </Box>
+            </>
+          )}
+        </div>
 
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', p: 1 }}>
-              <Box>
-                <Chip label={`${totalSelected} items selected`} size="small" color="primary" />
-              </Box>
-              <Box>
-                <Button size="small" onClick={selectAllInTab}>Select All</Button>
-                <Button size="small" onClick={deselectAllInTab}>Deselect All</Button>
-              </Box>
-            </Box>
-
-            <Box sx={{ maxHeight: 300, overflow: 'auto' }}>
-              <TabPanel value={tabValue} index={0}>
-                <List dense>
-                  {sourceOntology.entities.map(entity => (
-                    <ListItem key={entity.id} disablePadding>
-                      <ListItemButton onClick={() => toggleEntity(entity.id)}>
-                        <ListItemIcon>
-                          <Checkbox
-                            edge="start"
-                            checked={selectedEntities.includes(entity.id)}
-                            tabIndex={-1}
-                            disableRipple
-                          />
-                        </ListItemIcon>
-                        <ListItemText
-                          primary={entity.name}
-                          secondary={entity.gloss.map(g => g.content).join(' ').substring(0, 100)}
-                        />
-                      </ListItemButton>
-                    </ListItem>
-                  ))}
-                </List>
-              </TabPanel>
-
-              <TabPanel value={tabValue} index={1}>
-                <List dense>
-                  {sourceOntology.roles.map(role => (
-                    <ListItem key={role.id} disablePadding>
-                      <ListItemButton onClick={() => toggleRole(role.id)}>
-                        <ListItemIcon>
-                          <Checkbox
-                            edge="start"
-                            checked={selectedRoles.includes(role.id)}
-                            tabIndex={-1}
-                            disableRipple
-                          />
-                        </ListItemIcon>
-                        <ListItemText
-                          primary={role.name}
-                          secondary={`Allows: ${role.allowedFillerTypes.join(', ')}`}
-                        />
-                      </ListItemButton>
-                    </ListItem>
-                  ))}
-                </List>
-              </TabPanel>
-
-              <TabPanel value={tabValue} index={2}>
-                <List dense>
-                  {sourceOntology.events.map(event => (
-                    <ListItem key={event.id} disablePadding>
-                      <ListItemButton onClick={() => toggleEvent(event.id)}>
-                        <ListItemIcon>
-                          <Checkbox
-                            edge="start"
-                            checked={selectedEvents.includes(event.id)}
-                            tabIndex={-1}
-                            disableRipple
-                          />
-                        </ListItemIcon>
-                        <ListItemText
-                          primary={event.name}
-                          secondary={`${event.roles.length} roles`}
-                        />
-                      </ListItemButton>
-                    </ListItem>
-                  ))}
-                </List>
-              </TabPanel>
-
-              <TabPanel value={tabValue} index={3}>
-                <List dense>
-                  {sourceOntology.relationTypes.map(relationType => (
-                    <ListItem key={relationType.id} disablePadding>
-                      <ListItemButton onClick={() => toggleRelationType(relationType.id)}>
-                        <ListItemIcon>
-                          <Checkbox
-                            edge="start"
-                            checked={selectedRelationTypes.includes(relationType.id)}
-                            tabIndex={-1}
-                            disableRipple
-                          />
-                        </ListItemIcon>
-                        <ListItemText
-                          primary={relationType.name}
-                          secondary={`${relationType.sourceTypes.join('/')} → ${relationType.targetTypes.join('/')}`}
-                        />
-                      </ListItemButton>
-                    </ListItem>
-                  ))}
-                </List>
-              </TabPanel>
-            </Box>
-          </>
-        )}
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button
+            onClick={handleImport}
+            disabled={totalSelected === 0}
+          >
+            Import {totalSelected} Item{totalSelected !== 1 ? 's' : ''}
+          </Button>
+        </DialogFooter>
       </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose}>Cancel</Button>
-        <Button
-          onClick={handleImport}
-          variant="contained"
-          disabled={totalSelected === 0}
-        >
-          Import {totalSelected} Item{totalSelected !== 1 ? 's' : ''}
-        </Button>
-      </DialogActions>
     </Dialog>
   )
 }

@@ -20,7 +20,13 @@ export const videoKeys = {
  * Fetch all videos from the backend.
  */
 async function fetchVideos(): Promise<VideoMetadata[]> {
-  const response = await fetch('/api/videos')
+  // credentials: 'include' is required for the anon-session cookie
+  // (set httpOnly by /api/demo/anonymous-session) to ride along.
+  // Without it the browser dropped the cookie, /api/videos answered
+  // 401, useQuery threw, and the VideoBrowser rendered "No videos
+  // found" against a deployment whose corpus actually had 99
+  // videos — the exact bug surfaced on 2026-06-05.
+  const response = await fetch('/api/videos', { credentials: 'include' })
   if (!response.ok) {
     throw new Error('Failed to fetch videos')
   }
@@ -31,7 +37,7 @@ async function fetchVideos(): Promise<VideoMetadata[]> {
  * Fetch a single video by ID.
  */
 async function fetchVideo(videoId: string): Promise<VideoMetadata> {
-  const response = await fetch(`/api/videos/${videoId}`)
+  const response = await fetch(`/api/videos/${videoId}`, { credentials: 'include' })
   if (!response.ok) {
     throw new Error('Failed to fetch video')
   }
@@ -42,7 +48,7 @@ async function fetchVideo(videoId: string): Promise<VideoMetadata> {
  * Delete a video by ID.
  */
 async function deleteVideo(videoId: string): Promise<void> {
-  const response = await fetch(`/api/videos/${videoId}`, {
+  const response = await fetch(`/api/videos/${videoId}`, { credentials: 'include',
     method: 'DELETE',
   })
   if (!response.ok) {

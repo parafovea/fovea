@@ -270,6 +270,6 @@ describe('VideoPlayer', () => {
     )
 
     const outerBox = container.firstChild as HTMLElement
-    expect(outerBox).toHaveStyle({ position: 'relative' })
+    expect(outerBox).toHaveClass('relative')
   })
 })

@@ -40,6 +40,7 @@ class WhisperTranscriberAdapter(ITranscriber):
         enable_diarization: bool = False,
     ) -> TranscriptionResultDTO:
         """Transcribe audio from a video file."""
+        from src.domain.entities.architectures import Whisper  # noqa: PLC0415
         from src.infrastructure.adapters.outbound.models.audio.loader import (  # noqa: PLC0415
             AudioFramework,
             TranscriptionConfig,
@@ -66,7 +67,7 @@ class WhisperTranscriberAdapter(ITranscriber):
                 language=language,
                 device=device,
             )
-            loader = WhisperLoader(config)
+            loader = WhisperLoader(Whisper(), config)
             loader.load()
             try:
                 with record_inference(task="transcribe", model_id=self._model_id):
