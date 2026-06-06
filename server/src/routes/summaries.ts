@@ -534,12 +534,26 @@ const summariesRoute: FastifyPluginAsync = async (fastify) => {
       const userId = request.user!.id
 
       // Resolve project scope from the persona. Required for CASL's
-      // project-scoped conditions to evaluate correctly.
+      // project-scoped conditions to evaluate correctly. Pulled with
+      // userId + isSystemGenerated so the ownership precheck below can
+      // verify the persona is one the caller is allowed to author
+      // under without an extra round-trip.
       const persona = await fastify.prisma.persona.findUnique({
         where: { id: personaId },
-        select: { projectId: true },
+        select: { projectId: true, userId: true, isSystemGenerated: true },
       })
       if (!persona) throw new NotFoundError('Persona', personaId)
+
+      // Ensure the caller can use this persona as the summary's owner.
+      // The v0.4.1 baseline create rule grants any signed-in user a
+      // self-owning create on VideoSummary; without an explicit persona
+      // precheck a user could hang a summary off another user's
+      // private persona (the @@unique([videoId, personaId]) would then
+      // wedge the real owner out of their own row). Mirrors the same
+      // check the annotations POST route already runs.
+      if (!request.ability.can('read', subject('Persona', persona))) {
+        throw new ForbiddenError('Cannot create a summary under this Persona')
+      }
 
       // Load any existing row so we can distinguish create vs update and
       // apply the correct instance-level check.

@@ -543,12 +543,18 @@ describe('Cross-resource ownership conditions', () => {
 // =============================================================================
 
 describe('Import CASL enforcement', () => {
-  it('Ability denies annotation create with no permissions', () => {
+  it('Ability denies annotation create that names a different user as creator', () => {
+    // v0.4.1 grants every signed-in user a baseline create on resources
+    // they will own (createdByUserId === caller), so the denial path is
+    // exercised by trying to forge createdByUserId to a different user.
     const roles: UserRoles = { systemRole: 'user', groupRoles: [], projectRoles: [] }
     const ability = defineAbilitiesFor('user-a', roles, [])
 
-    const candidate = subject('Annotation', partial({ createdByUserId: 'user-a', projectId: null }))
-    expect(ability.can('create', candidate)).toBe(false)
+    const ownCandidate = subject('Annotation', partial({ createdByUserId: 'user-a', projectId: null }))
+    const foreignCandidate = subject('Annotation', partial({ createdByUserId: 'user-b', projectId: null }))
+
+    expect(ability.can('create', ownCandidate)).toBe(true)
+    expect(ability.can('create', foreignCandidate)).toBe(false)
   })
 
   it('Ability allows annotation create with system-level ownOnly permission', () => {
@@ -562,7 +568,12 @@ describe('Import CASL enforcement', () => {
     expect(ability.can('create', candidate)).toBe(true)
   })
 
-  it('Ability denies create into a project the user is not a member of', () => {
+  it('Ability denies create into a project the user is not a member of when not the candidate creator', () => {
+    // Same v0.4.1 nuance: the project-scoped annotator grant lets the
+    // caller create in proj-1 with any createdByUserId; the baseline
+    // grant additionally lets them create their own anywhere; the
+    // denial path is the intersection of "not your candidate" AND
+    // "not your project".
     const perms: RolePermissionRow[] = [
       { scope: 'project', role: 'annotator', resourceType: 'annotation', action: 'create', ownOnly: false },
     ]
@@ -574,9 +585,14 @@ describe('Import CASL enforcement', () => {
     const ability = defineAbilitiesFor('user-a', roles, perms)
 
     const inProject = subject('Annotation', partial({ createdByUserId: 'user-a', projectId: 'proj-1' }))
-    const wrongProject = subject('Annotation', partial({ createdByUserId: 'user-a', projectId: 'proj-999' }))
+    const ownInWrongProject = subject('Annotation', partial({ createdByUserId: 'user-a', projectId: 'proj-999' }))
+    const foreignInWrongProject = subject('Annotation', partial({ createdByUserId: 'user-b', projectId: 'proj-999' }))
 
+    // Annotator role grants create in proj-1.
     expect(ability.can('create', inProject)).toBe(true)
-    expect(ability.can('create', wrongProject)).toBe(false)
+    // Baseline self-owned create works even outside their projects.
+    expect(ability.can('create', ownInWrongProject)).toBe(true)
+    // Neither own nor in-project: denied.
+    expect(ability.can('create', foreignInWrongProject)).toBe(false)
   })
 })

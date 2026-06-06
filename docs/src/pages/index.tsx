@@ -6,19 +6,19 @@ import styles from './index.module.css';
 export default function Home(): JSX.Element {
   return (
     <Layout
-      title="Video Annotation Tool"
-      description="Video annotation tool for building ontologies with persona-based approaches, keyframe sequences, and AI-powered tracking.">
+      title="FOVEA"
+      description="FOVEA: Flexible Ontology Visual Event Analyzer. Author ontologies, annotate video, and extract grounded claims through persona-based interpretive lenses.">
       <main className={styles.page}>
         <div className={styles.content}>
-          <img className={styles.mark} src="/img/logo.svg" alt="Fovea" />
+          <img className={styles.mark} src="/img/logo.svg" alt="FOVEA" />
 
-          <h1 className={styles.title}>Fovea</h1>
+          <h1 className={styles.title}>FOVEA</h1>
           <p className={styles.subtitle}>
-            Structured, multi-perspective event annotation for video.
+            Flexible Ontology Visual Event Analyzer
           </p>
           <p className={styles.description}>
-            Build structured ontologies, annotate with multiple analyst perspectives,
-            and ground your labels in shared semantics. Open source.
+            Author ontologies, annotate video, and extract grounded claims through
+            persona-based interpretive lenses. Open source.
           </p>
 
           <nav className={styles.links}>

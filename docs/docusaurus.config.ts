@@ -3,8 +3,8 @@ import type {Config} from '@docusaurus/types';
 import type * as Preset from '@docusaurus/preset-classic';
 
 const config: Config = {
-  title: 'Fovea Documentation',
-  tagline: 'Web-based video annotation tool for developing annotation ontologies',
+  title: 'FOVEA Documentation',
+  tagline: 'Flexible Ontology Visual Event Analyzer',
   favicon: 'img/favicon.ico',
 
   future: {
@@ -70,15 +70,15 @@ const config: Config = {
       respectPrefersColorScheme: true,
     },
     metadata: [
-      {name: 'keywords', content: 'video annotation, object detection, tracking, ontology, personas, temporal model, bounding boxes, fovea, keyframe sequences, ai-powered analysis'},
-      {name: 'description', content: 'FOVEA is a web-based video annotation tool for developing annotation ontologies with persona-based approaches, keyframe sequences, and AI-powered analysis.'},
+      {name: 'keywords', content: 'video annotation, object detection, tracking, ontology, personas, temporal model, bounding boxes, FOVEA, keyframe sequences, claim extraction, speaker diarization'},
+      {name: 'description', content: 'FOVEA: Flexible Ontology Visual Event Analyzer. Author ontologies, annotate video, and extract grounded claims through persona-based interpretive lenses.'},
       {name: 'og:image', content: 'img/fovea-social-card.png'},
       {name: 'twitter:card', content: 'summary_large_image'},
     ],
     navbar: {
-      title: 'Fovea',
+      title: 'FOVEA',
       logo: {
-        alt: 'Fovea Logo',
+        alt: 'FOVEA Logo',
         src: 'img/logo.svg',
       },
       items: [

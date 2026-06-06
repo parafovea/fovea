@@ -212,10 +212,13 @@ describe('Bounding Box Resize Behavior', () => {
         </svg>
       )
 
-      // The foreignObject should have a fixed width (200) not tied to box width
+      // The foreignObject has a fixed width independent of the box width.
+      // Bumped from 200 to 240 in v0.4.1 so longer Wikidata-grounded
+      // labels (e.g., "Spectator → spectator at LoanDepot Park") do
+      // not truncate prematurely against the readable badge.
       const foreignObject = screen.getByTestId('bounding-box').querySelector('foreignObject')
       expect(foreignObject).toBeTruthy()
-      expect(foreignObject?.getAttribute('width')).toBe('200')
+      expect(foreignObject?.getAttribute('width')).toBe('240')
     })
 
     it('label is visible in keyframe mode', () => {

@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest'
+import { subject } from '@casl/ability'
 import {
   defineAbilitiesFor,
   serializeAbilities,
@@ -83,9 +84,15 @@ describe('defineAbilitiesFor', () => {
     const ability = defineAbilitiesFor('user-1', roles, basePermissions)
 
     expect(ability.can('read', 'Annotation')).toBe(true)
-    // viewer should not create, update, or delete annotations (unless ownOnly baseline grants)
-    // The ownOnly baseline grants read/update/delete on own resources, so we check the general case
-    expect(ability.can('create', 'Annotation')).toBe(false)
+    // Viewer cannot create an Annotation under another user. The baseline
+    // create rule is conditional on createdByUserId matching the caller,
+    // so a candidate that names a different creator is still denied.
+    expect(
+      ability.can(
+        'create',
+        subject('Annotation', { createdByUserId: 'other-user', projectId: 'proj-1' }),
+      ),
+    ).toBe(false)
   })
 
   it('user with no project or group roles has baseline permissions only', () => {
@@ -172,6 +179,73 @@ describe('defineAbilitiesFor', () => {
     expect(ability.can('delete', 'Annotation')).toBe(true)
   })
 
+  it('baseline ownership grants create on own resources without any project_membership', () => {
+    // Closes the production-demo 403 storm: a signed-in user with no
+    // project_memberships row was 403-ing on every POST /api/summaries,
+    // /api/annotations, and /api/summaries/:id/claims because the only
+    // create grants came from project-scoped roles. Now the baseline
+    // grants create conditional on the caller owning the candidate.
+    const roles: UserRoles = {
+      systemRole: 'user',
+      groupRoles: [],
+      projectRoles: [],
+    }
+    const ability = defineAbilitiesFor('user-1', roles, basePermissions)
+
+    // Own-resource creates: allowed.
+    expect(
+      ability.can(
+        'create',
+        subject('Annotation', { createdByUserId: 'user-1', projectId: null }),
+      ),
+    ).toBe(true)
+    expect(
+      ability.can(
+        'create',
+        subject('VideoSummary', { createdBy: 'user-1', projectId: null }),
+      ),
+    ).toBe(true)
+    expect(
+      ability.can(
+        'create',
+        subject('Claim', { createdBy: 'user-1', projectId: null }),
+      ),
+    ).toBe(true)
+    expect(ability.can('create', subject('Persona', { userId: 'user-1' }))).toBe(true)
+    expect(
+      ability.can('create', subject('WorldState', { userId: 'user-1' })),
+    ).toBe(true)
+
+    // Cross-user creates: denied (cannot forge createdBy = other-user).
+    expect(
+      ability.can(
+        'create',
+        subject('Annotation', { createdByUserId: 'other-user', projectId: null }),
+      ),
+    ).toBe(false)
+    expect(
+      ability.can(
+        'create',
+        subject('VideoSummary', { createdBy: 'other-user', projectId: null }),
+      ),
+    ).toBe(false)
+    expect(
+      ability.can(
+        'create',
+        subject('Claim', { createdBy: 'other-user', projectId: null }),
+      ),
+    ).toBe(false)
+    // Persona is intentionally NOT in this cross-user denial check: the
+    // basePermissions fixture grants `{ scope: 'system', role: 'user',
+    // resourceType: 'persona', action: 'create', ownOnly: false }` which
+    // makes Persona create open to every signed-in user regardless of
+    // the candidate's userId. The baseline conditional-create rule is a
+    // strict subset of that.
+    expect(
+      ability.can('create', subject('WorldState', { userId: 'other-user' })),
+    ).toBe(false)
+  })
+
   it('baseline ownership grants read/update/delete on own video summaries', () => {
     const roles: UserRoles = {
       systemRole: 'user',
@@ -226,8 +300,15 @@ describe('defineAbilitiesFor', () => {
     // Baseline ownership rules still apply
     expect(ability.can('read', 'Annotation')).toBe(true)
     expect(ability.can('read', 'Video')).toBe(true)
-    // But project-scoped rules should not be present (no matching permissions)
-    expect(ability.can('create', 'Annotation')).toBe(false)
+    // Baseline create is conditional on caller-owns. With an empty
+    // permissions table no project-scoped open create exists, so a
+    // cross-user create is still denied.
+    expect(
+      ability.can(
+        'create',
+        subject('Annotation', { createdByUserId: 'other-user', projectId: 'p1' }),
+      ),
+    ).toBe(false)
   })
 
   it('ignores permissions with unknown resource types', () => {
