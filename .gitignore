@@ -78,6 +78,7 @@ storybook-static/
 # Generated API documentation
 docs/docs/api-reference/frontend/
 docs/docs/api-reference/backend/
+docs/docs/api-reference/model-service/
 docs/static/api-reference/
 docs/api/
 model-service/docs/_build/
