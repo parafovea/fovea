@@ -148,6 +148,34 @@ export function TimelineRoot({
   const [selectedKeyframes, setSelectedKeyframes] = useState<ReadonlySet<number>>(new Set())
 
   const rulerTrackRef = useRef<HTMLDivElement>(null)
+  // Synchronised vertical scrollers for the track-header column (left)
+  // and the keyframe-surface column (right). Both halves carry one row
+  // per visible track and must remain row-aligned, so a scroll on
+  // either side mirrors to the other without entering an infinite
+  // feedback loop (the suppressing flag below).
+  const leftScrollRef = useRef<HTMLDivElement>(null)
+  const rightScrollRef = useRef<HTMLDivElement>(null)
+  const suppressScrollSyncRef = useRef(false)
+  const handleLeftScroll = useCallback((event: React.UIEvent<HTMLDivElement>) => {
+    if (suppressScrollSyncRef.current) return
+    suppressScrollSyncRef.current = true
+    if (rightScrollRef.current) {
+      rightScrollRef.current.scrollTop = event.currentTarget.scrollTop
+    }
+    requestAnimationFrame(() => {
+      suppressScrollSyncRef.current = false
+    })
+  }, [])
+  const handleRightScroll = useCallback((event: React.UIEvent<HTMLDivElement>) => {
+    if (suppressScrollSyncRef.current) return
+    suppressScrollSyncRef.current = true
+    if (leftScrollRef.current) {
+      leftScrollRef.current.scrollTop = event.currentTarget.scrollTop
+    }
+    requestAnimationFrame(() => {
+      suppressScrollSyncRef.current = false
+    })
+  }, [])
 
   const activeAnnotationId = annotation?.id ?? null
 
@@ -394,59 +422,91 @@ export function TimelineRoot({
           )}
           style={{ width: TRACK_HEADER_WIDTH_PX }}
         >
-          <div className="h-8 border-b border-white/5 bg-slate-950/60 px-2 py-1.5 text-[10px] uppercase tracking-[0.1em] text-slate-500">
+          <div className="h-8 shrink-0 border-b border-white/5 bg-slate-950/60 px-2 py-1.5 text-[10px] uppercase tracking-[0.1em] text-slate-500">
             Tracks
           </div>
-          {visibleTracks.length === 0 ? (
-            <div className="px-3 py-4 text-xs text-slate-500">
-              No annotations on this video yet.
-            </div>
-          ) : (
-            visibleTracks.map((track) => (
-              <TimelineTrackHeader
-                key={track.id}
-                track={track}
-                onSelect={selectTrack}
-                onToggleLock={toggleLock}
-                onToggleSolo={toggleSolo}
-              />
-            ))
-          )}
+          {/*
+            Scrollable list of track headers. Pre-v0.4.2 the parent
+            column had `overflow-hidden` and no inner scroller, so the
+            bottom of the track stack was clipped the moment the
+            annotation count exceeded the visible area. The new
+            `flex-1 min-h-0 overflow-y-auto` shell lets the headers
+            scroll vertically; visibility ranges and lock / solo
+            controls remain reachable for every track.
+          */}
+          <div
+            data-slot="timeline-track-header-scroll"
+            ref={leftScrollRef}
+            onScroll={handleLeftScroll}
+            className="flex-1 min-h-0 overflow-y-auto"
+          >
+            {visibleTracks.length === 0 ? (
+              <div className="px-3 py-4 text-xs text-slate-500">
+                No annotations on this video yet.
+              </div>
+            ) : (
+              visibleTracks.map((track) => (
+                <TimelineTrackHeader
+                  key={track.id}
+                  track={track}
+                  onSelect={selectTrack}
+                  onToggleLock={toggleLock}
+                  onToggleSolo={toggleSolo}
+                />
+              ))
+            )}
+          </div>
         </div>
 
         <div
           ref={containerRef}
-          className="relative flex-1 overflow-hidden"
+          className="relative flex-1 overflow-hidden flex flex-col"
           onWheel={handleWheel}
         >
           <TimelineRuler viewport={viewport} fps={videoFps} />
+          {/*
+            Vertical scroller for the right-hand track surface. Sized
+            to flex-1 with min-h-0 so it claims the rest of the
+            available height beneath the (sticky-by-position) ruler
+            row. Wheel/touch scroll is synchronised to the left-hand
+            track-header scroller via syncedScrollRef so the headers
+            and lanes stay row-aligned no matter which side the user
+            drives.
+          */}
           <div
-            ref={rulerTrackRef}
-            data-slot="timeline-track-surface"
-            className="relative min-h-0"
-            onPointerDown={handleSurfacePointerDown}
+            data-slot="timeline-track-scroll"
+            ref={rightScrollRef}
+            onScroll={handleRightScroll}
+            className="relative flex-1 min-h-0 overflow-y-auto"
           >
-            {visibleTracks.length === 0 ? (
-              <div className="flex h-10 items-center justify-center text-xs text-slate-500">
-                Create an annotation to start placing keyframes.
-              </div>
-            ) : (
-              visibleTracks.map((track) => (
-                <TimelineTrack
-                  key={track.id}
-                  track={track}
-                  viewport={viewport}
-                  currentFrame={currentFrame}
-                  selectedKeyframes={selectedKeyframes}
-                  onKeyframePointerDown={handleKeyframePointerDown}
-                />
-              ))
-            )}
-            <TimelinePlayhead
-              frame={currentFrame}
-              viewport={viewport}
-              isScrubbing={isScrubbing}
-            />
+            <div
+              ref={rulerTrackRef}
+              data-slot="timeline-track-surface"
+              className="relative min-h-0"
+              onPointerDown={handleSurfacePointerDown}
+            >
+              {visibleTracks.length === 0 ? (
+                <div className="flex h-10 items-center justify-center text-xs text-slate-500">
+                  Create an annotation to start placing keyframes.
+                </div>
+              ) : (
+                visibleTracks.map((track) => (
+                  <TimelineTrack
+                    key={track.id}
+                    track={track}
+                    viewport={viewport}
+                    currentFrame={currentFrame}
+                    selectedKeyframes={selectedKeyframes}
+                    onKeyframePointerDown={handleKeyframePointerDown}
+                  />
+                ))
+              )}
+              <TimelinePlayhead
+                frame={currentFrame}
+                viewport={viewport}
+                isScrubbing={isScrubbing}
+              />
+            </div>
           </div>
         </div>
       </div>

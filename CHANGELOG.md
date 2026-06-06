@@ -5,6 +5,21 @@ All notable changes to the Fovea project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.2] - 2026-06-06
+
+### Fixed
+
+#### Annotation Save Duplication on Add Keyframe (cachedIdsRef Regression)
+
+- `annotation-tool/src/store/queries/useAnnotations.ts` converts the `useSaveAnnotations` hook's `cachedIdsRef` from a plain `{ current: new Set<string>() }` literal to `useRef<Set<string>>()`. The literal was reconstructed on every render; `onMutate`'s call to `queryClient.setQueryData(...)` triggers a synchronous re-render that ran the hook again and produced a fresh empty ref before `mutationFn` read it. With the ref now an empty Set, every annotation in the list was treated as new and routed through `api.saveAnnotation` (POST = create). The observable symptom: clicking Add Keyframe on any existing annotation triggered a wave of N new annotation rows on the canvas (one per existing annotation), and the new keyframe never attached to the selected annotation because the original annotation row was unchanged on the server while the optimistically-mutated cache row was orphaned by the round-trip. The bug was present in v0.1.11's `useSaveAnnotations.ts` too (identical literal-ref pattern), but v0.1.11 sat behind the separate `useAutoSaveAnnotations` hook which short-circuited saves via a JSON.stringify no-op comparison; v0.4.x replaced that custom path with the generic `useAutoSave` which fires far more aggressively and exposed the latent ref bug.
+- `annotation-tool/src/store/queries/useAnnotations.test.tsx` adds two regression tests pinning the fix:
+  - "routes an annotation already in cache through PUT, not POST": seeds the QueryClient cache with one annotation, calls `mutateAsync` with the same id, asserts zero POSTs and exactly one PUT to `/api/annotations/existing-1`, and asserts the result counts (`created: 0, updated: 1`).
+  - "does not duplicate every annotation when many existing rows are saved together (Add Keyframe simulation)": seeds the cache with four annotations, calls `mutateAsync` with the same four, asserts zero POSTs and exactly four PUTs (one per id), and asserts the result counts (`created: 0, updated: 4`).
+
+#### Timeline Track List Clipping
+
+- `annotation-tool/src/components/annotation/timeline/TimelineRoot.tsx` wraps the track-header column and the keyframe-surface column in their own `flex-1 min-h-0 overflow-y-auto` scrollers, with a synchronised-scroll handler pair (`handleLeftScroll` / `handleRightScroll` guarded by a `suppressScrollSyncRef` flag) that mirrors `scrollTop` between the two halves so the header column and the lane column stay row-aligned no matter which side the user drives. The prior `overflow-hidden` columns clipped the bottom of the track stack the moment the annotation count exceeded the visible area, hiding lock / solo / mute controls and the playhead for every track beyond row N.
+
 ## [0.4.1] - 2026-06-06
 
 ### Fixed
