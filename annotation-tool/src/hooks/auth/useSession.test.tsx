@@ -210,4 +210,41 @@ describe('useSession', () => {
 
     consoleErrorSpy.mockRestore()
   })
+
+  it('retries /api/config after a transient 5xx so appConfig is eventually set', async () => {
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    let configAttempts = 0
+
+    server.use(
+      http.get('/api/config', () => {
+        configAttempts++
+        // Fail the first attempt with a 503, succeed on the retry. The first
+        // backoff delay is 500ms, so the second attempt lands quickly.
+        if (configAttempts === 1) {
+          return new HttpResponse(null, { status: 503 })
+        }
+        return HttpResponse.json(mockConfig)
+      }),
+      http.get('/api/auth/me', () => {
+        return HttpResponse.json({ user: mockUser })
+      })
+    )
+
+    renderHook(() => useSession())
+
+    await waitFor(
+      () => {
+        expect(useAuthStore.getState().appConfig).not.toBeNull()
+      },
+      { timeout: 4000 }
+    )
+
+    // The first 503 did not leave appConfig stuck null; the retry recovered it.
+    expect(configAttempts).toBeGreaterThanOrEqual(2)
+    expect(useAuthStore.getState().mode).toBe('multi-user')
+
+    consoleWarnSpy.mockRestore()
+    consoleErrorSpy.mockRestore()
+  })
 })

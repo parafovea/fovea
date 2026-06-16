@@ -74,6 +74,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAuthStore(state => state.isAuthenticated)
   const isLoading = useAuthStore(state => state.isLoading)
   const mode = useAuthStore(state => state.mode)
+  const appConfig = useAuthStore(state => state.appConfig)
   const location = useLocation()
 
   if (isLoading) {
@@ -96,6 +97,19 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   // expected booth experience.
   if (DEMO_PUBLIC) {
     return <>{children}</>
+  }
+
+  // Hold the loading screen until the server's deployment mode is actually
+  // known. `appConfig === null` is the only authoritative "config not yet
+  // fetched" signal — the default `mode: 'single-user'` is a placeholder, not
+  // a real answer. Without this gate a transient /api/config 5xx under load
+  // leaves appConfig null with mode at the single-user default, and a 401 from
+  // /api/auth/me then clears isLoading, so a logged-out visitor briefly falls
+  // through to the protected Layout before the next request lands them on
+  // /login. useSession retries /api/config with backoff so this is a transient
+  // hold, not a permanent one, on a healthy server.
+  if (appConfig === null) {
+    return <LoadingScreen />
   }
 
   if (mode === 'multi-user' && !isAuthenticated) {
