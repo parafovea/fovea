@@ -144,7 +144,7 @@ export class AnnotationWorkspacePage extends BasePage {
     const personaOption = personaName
       ? this.page
           .getByRole('option')
-          .filter({ hasText: new RegExp('^' + personaName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ' -') })
+          .filter({ hasText: new RegExp('^' + personaName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ' \\(') })
           .first()
       : personaListbox.getByRole('option').filter({ hasNotText: /^None$/i }).first()
     await expect(personaOption).toBeVisible({ timeout: 5000 })
