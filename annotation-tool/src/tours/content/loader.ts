@@ -268,7 +268,7 @@ export class TourContentLoadError extends Error {
 export async function loadTourContentBundle(): Promise<TourContentBundle> {
   let response: Response
   try {
-    response = await fetch('/tour-content.json', { cache: 'no-store' })
+    response = await fetch('/tour-content.json', { credentials: 'include', cache: 'no-store' })
   } catch (err) {
     throw new TourContentLoadError(
       '/tour-content.json is unreachable. See docs/tour-customization.md.',

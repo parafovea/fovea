@@ -295,6 +295,7 @@ export default function EventEditor({ open, onClose, event }: EventEditorProps) 
             <Label htmlFor="event-name">Name *</Label>
             <Input
               id="event-name"
+              data-tour-id="event-name-input"
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Event name"

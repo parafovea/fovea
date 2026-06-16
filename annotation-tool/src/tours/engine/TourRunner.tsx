@@ -28,10 +28,34 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { SpotlightOverlay } from './SpotlightOverlay'
 import { StepCard } from './StepCard'
 import { waitForAnchor } from './waitForAnchor'
-import type { TourScript } from './types'
+import { simulateAction } from './simulateAction'
+import type { TourScript, TourStep } from './types'
+
+/**
+ * Resolve a route template like `/app/annotate/:videoId` against a
+ * routeParams object like `{ videoId: 'abc123' }` into a concrete
+ * path the React Router navigate function accepts. Throws if the
+ * template contains a `:param` without a matching key — tours must
+ * declare their parameters to keep navigation deterministic. Returns
+ * null when the step declares no route (engine stays put).
+ */
+function resolveStepRoute(step: TourStep | undefined): string | null {
+  if (!step?.route) return null
+  const params = step.routeParams ?? {}
+  return step.route.replace(/:([A-Za-z_][A-Za-z0-9_]*)/g, (_, name: string) => {
+    const value = params[name]
+    if (value === undefined) {
+      throw new Error(
+        `[tour] step anchor=${step.anchor} declared route ${step.route} but routeParams.${name} is undefined`,
+      )
+    }
+    return encodeURIComponent(value)
+  })
+}
 
 export type TourTelemetryEvent =
   | { kind: 'started'; tourId: string }
@@ -132,20 +156,164 @@ export function TourRunner({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // Per-step navigation. When the current step declares a route that
+  // differs from the visitor's location, push it onto React Router
+  // BEFORE we begin polling for the anchor. This is the gold-standard
+  // fix for the demo-public regression where every tour anchor that
+  // lived inside a workspace the visitor hadn't entered failed to
+  // resolve and the engine showed "Couldn't find this UI element."
+  // The dependency captures `stepIndex` (not `step`) so a same-route
+  // step transition doesn't re-trigger navigation — only an actual
+  // route change does.
+  const navigate = useNavigate()
+  const location = useLocation()
+  const resolvedRoute = step ? resolveStepRoute(step) : null
+  useEffect(() => {
+    if (resolvedRoute && resolvedRoute !== location.pathname) {
+      navigate(resolvedRoute)
+    }
+    // navigate + location.pathname intentionally omitted from the deps:
+    // (a) navigate is stable across React Router renders, (b) reading
+    // location.pathname here would re-fire the effect on EVERY route
+    // change anywhere in the app and stomp the visitor back to the
+    // step's route mid-interaction.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resolvedRoute, stepIndex])
+
   // Resolve anchor whenever step changes; cancel on the next change. Reset
   // the dwell stopwatch on the same beat so per-step telemetry stays
-  // accurate across navigation.
+  // accurate across navigation. The waitForAnchor budget covers the
+  // post-navigation React commit + lazy-route mount window — anchors
+  // that live behind a route change are still found inside its 3 s
+  // ceiling.
+  //
+  // When the step declares `revealBy` (a data-tour-id of an element
+  // whose click reveals the real anchor — typically a button that
+  // opens a dialog/popover the anchor lives inside), synthesize that
+  // click first and let the engine's normal waitForAnchor flow find
+  // the resulting anchor. The reveal click is best-effort: if the
+  // opener element isn't in the DOM (already-open dialog, route
+  // pre-state, etc.) we skip it silently and proceed to the anchor
+  // poll — that way a step CAN declare revealBy hopefully without
+  // forcing the opener to exist on every entry path.
   useEffect(() => {
     if (!step) return undefined
     stepEnteredAtRef.current = performance.now()
     const ac = new AbortController()
     setAnchor(null)
     setResolving(true)
-    waitForAnchor(step.anchor, ac.signal).then((el) => {
-      if (ac.signal.aborted) return
-      setAnchor(el)
-      setResolving(false)
-    })
+    // revealBy: a step whose anchor lives inside a lazy-mounted
+    // dialog / popover declares the data-tour-id of its opener. The
+    // engine polls for the opener inside a 1.5 s window (covers the
+    // post-route-change React commit + lazy-route mount + the
+    // engine's own microtask boundary), clicks it once, and falls
+    // through to the normal waitForAnchor flow. The poll is bounded
+    // so a missing opener (the dialog is already open, the script
+    // declared the wrong opener, etc.) does not delay the step
+    // indefinitely — waitForAnchor's own 3 s ceiling still applies.
+    // Two important invariants live in this block:
+    //
+    //   1) Sequential, not parallel — the chain MUST finish before
+    //      we start waitForAnchor. Previously both ran together, so
+    //      waitForAnchor's 3 s ceiling started ticking while the
+    //      chain was still clicking; a chain with a tab switch +
+    //      dialog open + Radix animation consumed most of the
+    //      anchor budget before the dialog had even mounted, and
+    //      the "Couldn't find this UI element" banner appeared
+    //      across the wikidata, model-in-the-loop, and
+    //      import-export tours. With the await in place each phase
+    //      gets its full budget.
+    //
+    //   2) Idempotent — re-clicking a FAB or tab trigger whose
+    //      target is ALREADY open closes it. So before running the
+    //      chain we short-circuit if the anchor is already present.
+    //      And before clicking each link we check whether that
+    //      specific link's downstream effect is already achieved by
+    //      polling the anchor between clicks. If at any point the
+    //      anchor appears, the rest of the chain is skipped. This
+    //      is what makes stepping forward inside an already-open
+    //      dialog (Tour 3 advancing from manual-mode to wikidata-
+    //      mode without toggling the dialog closed) just work.
+    const PER_LINK_TIMEOUT = 3_000
+    // base-ui's Dialog enter animation is ~150 ms; allow a comfortable
+    // settle so the second click in a chain lands inside the dialog
+    // that just opened rather than racing the mount.
+    const PER_LINK_SETTLE = 400
+    const anchorSelector = `[data-tour-id="${CSS.escape(step.anchor)}"]`
+    const anchorAlreadyMounted = () =>
+      document.querySelector(anchorSelector) instanceof HTMLElement
+    const clickChain = async () => {
+      if (!step.revealBy) return
+      if (anchorAlreadyMounted()) return
+      const openers = Array.isArray(step.revealBy)
+        ? step.revealBy
+        : [step.revealBy]
+      for (const id of openers) {
+        if (ac.signal.aborted) return
+        if (anchorAlreadyMounted()) return
+        const selector = `[data-tour-id="${CSS.escape(id)}"]`
+        const start = performance.now()
+        let opener: HTMLElement | null = null
+        while (performance.now() - start < PER_LINK_TIMEOUT) {
+          if (ac.signal.aborted) return
+          opener = document.querySelector(selector) as HTMLElement | null
+          if (opener) break
+          await new Promise<void>((r) => window.setTimeout(r, 60))
+        }
+        if (!opener) {
+          console.warn(`[tour] revealBy opener not found: ${id}`)
+          continue
+        }
+        opener.click()
+        await new Promise<void>((r) => window.setTimeout(r, PER_LINK_SETTLE))
+      }
+    }
+    // Demo deployments drive the workspace themselves — the engine
+    // simulates the step's expectAction (draw a bbox, click a
+    // button, scrub the playhead, type into a field) so the
+    // visitor never has to know HOW to perform the action; they
+    // just watch and press Next. The real workspace handlers
+    // process the synthetic events exactly as they would a human's,
+    // so the resulting state (the annotation row, the typed
+    // value) is real and the NEXT step's anchor mounts against
+    // it. Stock builds skip simulation entirely — production
+    // tours preserve the visitor-performs-the-action shape.
+    const demoPublic = import.meta.env.VITE_DEMO_PUBLIC === '1'
+    // Resolve the anchor with up to one retry of the revealBy chain.
+    // The first pass clicks the openers and waits for the target
+    // anchor; if waitForAnchor times out (deep-stacked dialogs,
+    // contended animations, slow /api round-trip), the engine clicks
+    // the chain a second time and waits again. The retry handles the
+    // race where a dialog's open click fires but its mount commit
+    // misses the first observer window; without it a transient miss
+    // would surface the missing-anchor banner even though the anchor
+    // would have mounted on the next React commit.
+    const resolveAnchor = async (): Promise<HTMLElement | null> => {
+      await clickChain()
+      if (ac.signal.aborted) return null
+      const first = await waitForAnchor(step.anchor, ac.signal)
+      if (first || ac.signal.aborted || !step.revealBy) return first
+      await clickChain()
+      if (ac.signal.aborted) return null
+      return waitForAnchor(step.anchor, ac.signal)
+    }
+    void resolveAnchor()
+      .then(async (el) => {
+        if (ac.signal.aborted) return
+        setAnchor(el ?? null)
+        setResolving(false)
+        if (el && demoPublic && step.expectAction && step.expectAction !== 'none') {
+          // Let the spotlight paint + StepCard animate before we
+          // start firing pointer events — feels less jumpy than
+          // simulating immediately on mount.
+          await new Promise<void>((r) => window.setTimeout(r, 350))
+          if (ac.signal.aborted) return
+          await simulateAction(step.expectAction, el, ac.signal, step)
+        }
+      })
+      .catch(() => {
+        if (!ac.signal.aborted) setResolving(false)
+      })
     return () => ac.abort()
   }, [step])
 

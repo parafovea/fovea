@@ -24,26 +24,51 @@ export function buildImportExportTour(
     id: 'import-export',
     title: 'Import & export',
     description:
-      'Pull in COCO, CSV, or Fovea-native dumps; review what landed with conflict resolution; export filtered by persona, time range, or type.',
+      'Pull in COCO, CSV, or Fovea-native dumps. Review what landed with conflict resolution. Export filtered by persona, time range, or type.',
     durationMinutes: 2,
     tags: ['import', 'export', 'data-management'],
     fixtureBundle: 'import-export',
+    startRoute: '/app',
     recap:
-      'Annotations are portable. Export is filtered; import surfaces conflicts before applying.',
+      'Annotations are portable. Export is filtered. Import surfaces conflicts before applying.',
     steps: [
       {
         anchor: 'import-dialog',
+        route: '/app',
+        // The import-dialog is a Radix DialogContent that only
+        // mounts after the header Import button is clicked. The
+        // engine synthesizes that click via revealBy before
+        // running waitForAnchor.
+        revealBy: 'import-trigger',
         narration: 'Pull in COCO, CSV, or Fovea-native dumps.',
         expectAction: 'click',
         requiresFixture: false,
       },
       {
-        anchor: 'import-result-dialog',
-        narration: 'See exactly what landed, with conflict resolution.',
+        // The import-result-dialog only mounts after a real upload
+        // completes, so a public-catalogue tour cannot count on it
+        // being present. The format-spec accordion inside the same
+        // open import-dialog is always there and documents the
+        // on-the-wire shape (including the annotationType / typeId
+        // fields the importer's conflict detector keys on), so
+        // narrate that surface instead. The actual conflict-resolution
+        // UI is exercised by the E2E spec, which performs a real
+        // upload.
+        anchor: 'import-format-spec-trigger',
+        route: '/app',
+        revealBy: 'import-trigger',
+        narration:
+          'Expand the format spec to see what the importer reads. Fields, references, conflict keys.',
+        expectAction: 'click',
         requiresFixture: false,
       },
       {
         anchor: 'export-dialog',
+        route: '/app',
+        // Same idea — the export-dialog only mounts after the
+        // header Export button is clicked. The engine opens it
+        // via revealBy before polling for the dialog anchor.
+        revealBy: 'export-trigger',
         narration: 'Export filtered by persona, time range, or type.',
         expectAction: 'click',
         requiresFixture: false,

@@ -26,19 +26,23 @@ export function buildWelcomeTour(): TourScript {
     recap:
       'FOVEA is a Flexible Ontology Visual Event Analyzer. Annotation is structured language tied to structured pixels.',
     followUpTourId: 'first-annotation',
+    startRoute: '/app',
     steps: [
       {
         anchor: 'app-shell',
+        route: '/app',
         narration:
           'FOVEA: Flexible Ontology Visual Event Analyzer. Annotation is structured language tied to structured pixels.',
       },
       {
         anchor: 'app-shell',
+        route: '/app',
         narration:
           'Four layers stack together: persona ontologies (what types exist), world objects (what specific instances exist), annotations (boxes on frames), and claims (sentences about the video). The other tours walk each layer.',
       },
       {
         anchor: 'app-shell',
+        route: '/app',
         narration:
           'When the demo runs the model service offline, the mocked outputs you see are realistic almost-there results an analyst would then polish. The point of every tour is the editing loop between proposal and final form.',
       },

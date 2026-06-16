@@ -98,7 +98,7 @@ export function PermissionsPage(): JSX.Element {
 
   if (isLoading) {
     return (
-      <div className="flex justify-center p-8">
+      <div className="flex justify-center p-8" data-tour-id="permissions-page">
         <Spinner />
       </div>
     )
@@ -106,7 +106,7 @@ export function PermissionsPage(): JSX.Element {
 
   if (error) {
     return (
-      <div className="p-6">
+      <div className="p-6" data-tour-id="permissions-page">
         <Alert variant="destructive">
           <AlertDescription>
             Failed to load permissions: {error instanceof Error ? error.message : 'Unknown error'}
@@ -118,7 +118,7 @@ export function PermissionsPage(): JSX.Element {
 
   if (!data || data.roles.length === 0) {
     return (
-      <div className="p-6">
+      <div className="p-6" data-tour-id="permissions-page">
         <Alert>
           <AlertDescription>No permission data available.</AlertDescription>
         </Alert>

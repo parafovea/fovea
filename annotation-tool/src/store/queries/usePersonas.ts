@@ -64,7 +64,7 @@ export interface TypeDeletionResult {
  * Fetch all personas from the API.
  */
 async function fetchPersonas(): Promise<Persona[]> {
-  const response = await fetch('/api/personas')
+  const response = await fetch('/api/personas', { credentials: 'include' })
   if (!response.ok) {
     throw new Error('Failed to fetch personas')
   }
@@ -76,7 +76,7 @@ async function fetchPersonas(): Promise<Persona[]> {
  * Fetch a persona's ontology from the API.
  */
 async function fetchPersonaOntology(personaId: string): Promise<PersonaOntology> {
-  const response = await fetch(`/api/personas/${personaId}/ontology`)
+  const response = await fetch(`/api/personas/${personaId}/ontology`, { credentials: 'include' })
   if (!response.ok) {
     throw new Error('Failed to fetch persona ontology')
   }

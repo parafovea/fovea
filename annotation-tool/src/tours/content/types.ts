@@ -27,6 +27,10 @@ export interface TourTypeSlot {
   name: string
   /** Human-readable definition that lands in the gloss field. */
   gloss: string
+  /** Optional Wikidata Q-identifier (e.g. 'Q1758' for baseball game). When
+   *  set the seeded type carries the grounding and the visitor can see it
+   *  surfaced as a chip in the editor. */
+  wikidataId?: string
 }
 
 export interface TourFirstAnnotationContent {
@@ -321,6 +325,45 @@ export interface TourImportExportContent {
 }
 
 /**
+ * World-object seed. Materialized into the persona's WorldState at
+ * demo-seed time so the gloss-editor's @-popup, the ClaimEditor's
+ * time / location pickers, and the world workspace all have non-empty
+ * data on first paint. Tour 2's narration references @LoanDepotPark
+ * and @2025-09-05; the seed has to contain matching rows or those
+ * references resolve to "No objects found".
+ */
+export interface TourWorldSeedLocation {
+  /** Display name shown in pickers and gloss badges. */
+  name: string
+  /** Wikidata Q-identifier (e.g. 'Q1366085' for LoanDepot Park). */
+  wikidataId?: string
+  /** Free-text gloss / description. */
+  description?: string
+  latitude?: number
+  longitude?: number
+}
+
+export interface TourWorldSeedTime {
+  /** ISO 8601 timestamp. */
+  timestamp: string
+  /** Short human label (e.g. '2025-09-05'). */
+  label?: string
+}
+
+export interface TourWorldSeedEntity {
+  name: string
+  wikidataId?: string
+  description?: string
+}
+
+export interface TourWorldSeed {
+  locations?: TourWorldSeedLocation[]
+  times?: TourWorldSeedTime[]
+  entities?: TourWorldSeedEntity[]
+  entityCollections?: { name: string; description?: string }[]
+}
+
+/**
  * Aggregate. An admin tailoring tours for their users provides a
  * complete bundle of this shape and passes it as TourProvider's
  * `contentBundle` prop. Partial bundles aren't supported. every
@@ -337,4 +380,8 @@ export interface TourContentBundle {
   summariesAndClaims: TourSummariesAndClaimsContent
   collaboration: TourCollaborationContent
   importExport: TourImportExportContent
+  /** Optional pre-seeded world objects (locations, times, entities) that
+   *  the @-popup, ClaimEditor pickers, and world workspace read on
+   *  first paint. Omit to ship an empty world. */
+  world?: TourWorldSeed
 }

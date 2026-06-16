@@ -340,6 +340,7 @@ export default function TimeEditor({ open, onClose, time }: TimeEditorProps) {
             <Label htmlFor="time-label">Label</Label>
             <Input
               id="time-label"
+              data-tour-id="time-label-input"
               value={label}
               onChange={(e) => setLabel(e.target.value)}
               placeholder="e.g., Apollo 11 Launch, Summer 2024"

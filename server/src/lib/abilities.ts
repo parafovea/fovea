@@ -169,18 +169,35 @@ export function defineAbilitiesFor(
   // Baseline ownership rules: every user can always act on resources they
   // own, regardless of their role permissions. Uses the per-model ownership
   // field so conditions resolve against real Prisma rows.
+  //
+  // The `create` baselines are condition-scoped to the createdBy / userId
+  // field on the candidate row so a user can only create resources they
+  // will own — the upstream route always sets the candidate's ownership
+  // field to request.user.id, so the rule matches and any attempt to
+  // forge createdBy=otherUser fails. Pre-baseline behaviour required a
+  // project_memberships row giving the user one of annotator /
+  // project_manager / project_owner just to create a personal-persona
+  // summary; with no such row (the production demo signed-up users
+  // have zero project_memberships) every authoring action 403'd, and
+  // the autosave loop in VideoSummaryEditor fired POST /api/summaries
+  // every keystroke into a wall of 403s with no recovery.
+  rules.push({ action: 'create', subject: 'Annotation', conditions: { createdByUserId: userId } })
   rules.push({ action: 'read', subject: 'Annotation', conditions: { createdByUserId: userId } })
   rules.push({ action: 'update', subject: 'Annotation', conditions: { createdByUserId: userId } })
   rules.push({ action: 'delete', subject: 'Annotation', conditions: { createdByUserId: userId } })
+  rules.push({ action: 'create', subject: 'VideoSummary', conditions: { createdBy: userId } })
   rules.push({ action: 'read', subject: 'VideoSummary', conditions: { createdBy: userId } })
   rules.push({ action: 'update', subject: 'VideoSummary', conditions: { createdBy: userId } })
   rules.push({ action: 'delete', subject: 'VideoSummary', conditions: { createdBy: userId } })
+  rules.push({ action: 'create', subject: 'Claim', conditions: { createdBy: userId } })
   rules.push({ action: 'read', subject: 'Claim', conditions: { createdBy: userId } })
   rules.push({ action: 'update', subject: 'Claim', conditions: { createdBy: userId } })
   rules.push({ action: 'delete', subject: 'Claim', conditions: { createdBy: userId } })
+  rules.push({ action: 'create', subject: 'Persona', conditions: { userId } })
   rules.push({ action: 'read', subject: 'Persona', conditions: { userId } })
   rules.push({ action: 'update', subject: 'Persona', conditions: { userId } })
   rules.push({ action: 'delete', subject: 'Persona', conditions: { userId } })
+  rules.push({ action: 'create', subject: 'WorldState', conditions: { userId } })
   rules.push({ action: 'read', subject: 'WorldState', conditions: { userId } })
   rules.push({ action: 'update', subject: 'WorldState', conditions: { userId } })
   rules.push({ action: 'delete', subject: 'WorldState', conditions: { userId } })

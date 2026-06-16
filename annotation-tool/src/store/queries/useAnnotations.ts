@@ -7,7 +7,7 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { useCallback } from 'react'
+import { useCallback, useRef } from 'react'
 import { Annotation, BoundingBox, InterpolationType, InterpolationSegment } from '@models/types'
 import { api } from '@services/api'
 import { generateId } from '@utils/uuid'
@@ -164,9 +164,18 @@ export function useDeleteAnnotation() {
 export function useSaveAnnotations() {
   const queryClient = useQueryClient()
 
-  // Store cachedIds before optimistic update so mutationFn can access them
-  // This ref bridges the gap between onMutate and mutationFn
-  const cachedIdsRef = { current: new Set<string>() }
+  // Store cachedIds before optimistic update so mutationFn can access them.
+  // MUST be useRef, not a plain { current: new Set() } literal: the literal
+  // is reconstructed on every render, and onMutate's `queryClient.setQueryData`
+  // call triggers a synchronous re-render that races with mutationFn (which
+  // fires after onMutate awaits). With the plain-literal form, mutationFn's
+  // closure resolved against the re-rendered (empty) cachedIdsRef, so every
+  // annotation was treated as new and routed through api.saveAnnotation
+  // (POST = create). The visible symptom was Add Keyframe duplicating every
+  // existing annotation on the canvas — N annotations in, N new rows out.
+  // useRef gives a stable ref object whose .current write survives the
+  // intermediate re-render that onMutate kicks off.
+  const cachedIdsRef = useRef<Set<string>>(new Set<string>())
 
   return useMutation({
     mutationFn: async ({ videoId, annotations }: {

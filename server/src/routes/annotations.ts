@@ -6,6 +6,7 @@ import { subject } from '@casl/ability'
 import { NotFoundError, ForbiddenError } from '../lib/errors.js'
 import { requireAuth } from '../middleware/auth.js'
 import { buildAbilities } from '../middleware/abilities.js'
+import { isDemoModeEnabled } from '../lib/demo-flags.js'
 
 /**
  * TypeBox schema for Annotation response.
@@ -57,14 +58,35 @@ const annotationsRoute: FastifyPluginAsync = async (fastify) => {
     const { videoId } = request.params as { videoId: string }
     if (!request.ability) throw new ForbiddenError('No abilities defined')
 
+    // FOVEA_DEMO_MODE override: demo deployments seed system-
+    // generated annotations on the curated tour videos that are
+    // not authored by the visitor, so the CASL accessibleBy
+    // filter would hide them. In demo mode we also surface every
+    // annotation whose source flag marks it a fixture row — the
+    // demo seeder writes `source: 'demo-fixture'` for every
+    // hand-authored or model-service-produced tour annotation,
+    // so a self-hoster with no demo seed sees zero extra rows.
+    const baseWhere = isDemoModeEnabled()
+      ? {
+          videoId,
+          OR: [
+            accessibleBy(request.ability, 'read').Annotation,
+            // The demo seeder writes `source: 'demo-fixture:<stableId>'`
+            // so each hand-authored track persists as its own row.
+            // startsWith matches the whole family without coupling
+            // the read path to the per-track stable IDs.
+            { source: { startsWith: 'demo-fixture' } },
+          ],
+        }
+      : {
+          AND: [
+            { videoId },
+            accessibleBy(request.ability, 'read').Annotation,
+          ],
+        }
     const annotations = await fastify.prisma.annotation.findMany({
-      where: {
-        AND: [
-          { videoId },
-          accessibleBy(request.ability, 'read').Annotation,
-        ],
-      },
-      orderBy: { createdAt: 'asc' }
+      where: baseWhere,
+      orderBy: { createdAt: 'asc' },
     })
 
     return reply.send(annotations.map(a => ({

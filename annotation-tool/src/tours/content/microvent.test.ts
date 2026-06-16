@@ -16,20 +16,24 @@ describe('TourContentBundle admin tailoring', () => {
     expect(microventContent.firstAnnotation.personaName).toBe(
       'Tech-Curious Spectator',
     )
-    expect(microventContent.ontologyAuthoring.entityType.name).toBe('gunshot')
-    expect(microventContent.ontologyAuthoring.eventType.name).toBe('wildfire')
-    expect(microventContent.ontologyAuthoring.roleType.name).toBe('perpetrator')
+    expect(microventContent.ontologyAuthoring.entityType.name).toBe(
+      'Shipping container',
+    )
+    expect(microventContent.ontologyAuthoring.eventType.name).toBe(
+      'Container collapse',
+    )
+    expect(microventContent.ontologyAuthoring.roleType.name).toBe(
+      'collapsed-stack',
+    )
     expect(microventContent.ontologyAuthoring.relationType.name).toBe(
-      'occurred-at',
+      'stowed-on',
     )
-    expect(microventContent.wikidataAugmentation.searchTerm).toBe('dust cloud')
-    expect(microventContent.eventsRolesClaims.firstActor.name).toBe(
-      'Phillies fan Karen',
-    )
+    expect(microventContent.wikidataAugmentation.searchTerm).toBe('foul ball')
+    expect(microventContent.eventsRolesClaims.firstActor.name).toBe('Spectator')
     expect(microventContent.eventsRolesClaims.secondActor.name).toBe(
-      'Phillies fan son',
+      'Spectator',
     )
-    expect(microventContent.eventsRolesClaims.eventType.name).toBe('ball-grab')
+    expect(microventContent.eventsRolesClaims.eventType.name).toBe('ball grab')
     expect(microventContent.worldLayer.entityName).toBe('LoanDepot Park')
     expect(microventContent.summariesAndClaims.summaryText.length).toBeGreaterThan(
       20,
@@ -56,10 +60,10 @@ describe('TourContentBundle admin tailoring', () => {
     const step2Narration = tour2!.steps[1].narration
     expect(
       step2Narration,
-      "narration mentions microvent's gunshot entity type",
-    ).toContain('gunshot')
-    const step4Narration = tour2!.steps[3].narration
-    expect(step4Narration).toContain('wildfire')
+      "narration mentions microvent's shipping container entity type",
+    ).toContain('Shipping container')
+    const step6Narration = tour2!.steps[5].narration
+    expect(step6Narration).toContain('Container collapse')
   })
 
   it('swapping the bundle reroutes every narration to the new content', () => {

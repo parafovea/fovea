@@ -548,7 +548,7 @@ export function SystemConfigPanel() {
 
   if (isLoading) {
     return (
-      <div className="space-y-4">
+      <div className="space-y-4" data-tour-id="system-config-panel">
         <Skeleton className="h-10 w-full" />
         <Skeleton className="h-40 w-full" />
       </div>
@@ -557,10 +557,12 @@ export function SystemConfigPanel() {
 
   if (error) {
     return (
-      <Alert variant="destructive">
-        <AlertCircle className="size-4" />
-        <AlertDescription>Failed to load system config: {error.message}</AlertDescription>
-      </Alert>
+      <div data-tour-id="system-config-panel">
+        <Alert variant="destructive">
+          <AlertCircle className="size-4" />
+          <AlertDescription>Failed to load system config: {error.message}</AlertDescription>
+        </Alert>
+      </div>
     )
   }
 

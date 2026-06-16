@@ -282,4 +282,189 @@ describe('useAutoSave', () => {
       expect(typeof result.current.forceSave).toBe('function')
     })
   })
+
+  describe('debounce stability — does not reschedule on identity churn', () => {
+    // These tests pin the fix for the v0.4.0 regression where the
+    // Edit Video Summary dialog shook at ~60 Hz because the
+    // debounce useEffect listed `performSave` in its deps, and the
+    // caller's onSave identity changed on every render (because
+    // currentSummary changed on every TanStack Query refetch). The
+    // fix holds performSave in a ref; the tests below verify it.
+
+    it('data change triggers exactly one save after debounceMs', async () => {
+      vi.useFakeTimers()
+      try {
+        const onSave = vi.fn().mockResolvedValue(undefined)
+        const { rerender } = renderHook(
+          ({ data }) =>
+            useAutoSave({
+              data,
+              isEnabled: true,
+              onSave,
+              debounceMs: 100,
+              periodicMs: 0,
+              entityType: 'summary',
+            }),
+          { initialProps: { data: { v: 'initial' } } },
+        )
+
+        // Initial render schedules a save (data is non-empty and
+        // differs from lastSavedDataRef which starts ''). Flush it.
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(150)
+        })
+        expect(onSave).toHaveBeenCalledTimes(1)
+        onSave.mockClear()
+
+        // Change data. Expect exactly ONE additional save after the
+        // debounce window — not one per intermediate render.
+        rerender({ data: { v: 'changed' } })
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(150)
+        })
+        expect(onSave).toHaveBeenCalledTimes(1)
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('rerenders WITHOUT data change trigger zero saves', async () => {
+      vi.useFakeTimers()
+      try {
+        const onSave = vi.fn().mockResolvedValue(undefined)
+        // Pass the SAME data reference each render to assert that
+        // useAutoSave does not save on identity-only churn of the
+        // surrounding props.
+        const data = { v: 'pinned' }
+        const { rerender } = renderHook(
+          ({ tick }) =>
+            useAutoSave({
+              data,
+              isEnabled: true,
+              onSave,
+              debounceMs: 100,
+              periodicMs: 0,
+              entityType: 'summary',
+              // tick is captured to force a rerender; useAutoSave
+              // should ignore it because data is unchanged
+              entityId: `tick-${tick}`,
+            }),
+          { initialProps: { tick: 0 } },
+        )
+
+        // Flush the initial save from the first render.
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(150)
+        })
+        expect(onSave).toHaveBeenCalledTimes(1)
+        onSave.mockClear()
+
+        // Now force 20 rerenders WITHOUT touching data. The fixed
+        // hook should NOT re-arm the debounce timer because data is
+        // referentially identical; advance time and confirm zero
+        // additional saves. The pre-fix hook would have rescheduled
+        // a save on every render and the test would catch that as
+        // multiple onSave calls.
+        for (let i = 1; i <= 20; i++) {
+          rerender({ tick: i })
+        }
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(500)
+        })
+        expect(onSave).toHaveBeenCalledTimes(0)
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('swapping onSave mid-stream calls the LATEST onSave on the next scheduled save', async () => {
+      vi.useFakeTimers()
+      try {
+        const onSaveA = vi.fn().mockResolvedValue(undefined)
+        const onSaveB = vi.fn().mockResolvedValue(undefined)
+
+        const { rerender } = renderHook(
+          ({ data, onSave }) =>
+            useAutoSave({
+              data,
+              isEnabled: true,
+              onSave,
+              debounceMs: 100,
+              periodicMs: 0,
+              entityType: 'summary',
+            }),
+          { initialProps: { data: { v: 'first' }, onSave: onSaveA } },
+        )
+
+        // Flush the initial save — should hit onSaveA.
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(150)
+        })
+        expect(onSaveA).toHaveBeenCalledTimes(1)
+        expect(onSaveB).toHaveBeenCalledTimes(0)
+        onSaveA.mockClear()
+
+        // Swap onSave AND change data so the next scheduled save fires.
+        rerender({ data: { v: 'second' }, onSave: onSaveB })
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(150)
+        })
+        // The next save MUST use onSaveB (the latest closure), not the
+        // onSaveA that was the value of `onSave` when the timer was
+        // originally armed.
+        expect(onSaveA).toHaveBeenCalledTimes(0)
+        expect(onSaveB).toHaveBeenCalledTimes(1)
+        expect(onSaveB).toHaveBeenCalledWith({ v: 'second' })
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('swapping onSave WITHOUT a data change does not schedule a new save', async () => {
+      // A pure identity churn of onSave (the v0.4.0 regression
+      // pattern — currentSummary changes object identity on every
+      // refetch, which cascades to handleAutoSave, which cascades to
+      // performSave, which used to retrigger the debounce effect)
+      // must NOT cause a save. Confirms the ref-based fix isolates
+      // the schedule from the callback identity.
+      vi.useFakeTimers()
+      try {
+        const data = { v: 'pinned' }
+        const onSaveA = vi.fn().mockResolvedValue(undefined)
+        const onSaveB = vi.fn().mockResolvedValue(undefined)
+
+        const { rerender } = renderHook(
+          ({ onSave }) =>
+            useAutoSave({
+              data,
+              isEnabled: true,
+              onSave,
+              debounceMs: 100,
+              periodicMs: 0,
+              entityType: 'summary',
+            }),
+          { initialProps: { onSave: onSaveA } },
+        )
+
+        // Flush initial save.
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(150)
+        })
+        expect(onSaveA).toHaveBeenCalledTimes(1)
+        onSaveA.mockClear()
+
+        // Swap onSave 10 times without touching data. Zero saves.
+        for (let i = 0; i < 10; i++) {
+          rerender({ onSave: i % 2 === 0 ? onSaveB : onSaveA })
+        }
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(500)
+        })
+        expect(onSaveA).toHaveBeenCalledTimes(0)
+        expect(onSaveB).toHaveBeenCalledTimes(0)
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+  })
 })

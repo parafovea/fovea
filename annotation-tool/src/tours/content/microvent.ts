@@ -27,21 +27,48 @@ export const microventContent: TourContentBundle = {
   },
 
   ontologyAuthoring: {
-    personaName: 'Automated',
-    personaRole: 'Analyst',
-    entityType: { name: 'gunshot', gloss: 'discharge of a firearm' },
-    eventType: { name: 'wildfire', gloss: 'an uncontrolled fire' },
-    roleType: { name: 'perpetrator', gloss: 'the person responsible for the act' },
+    // Port Safety persona for the ontology-authoring tour. Its seeded
+    // ontology already contains a coherent set of cross-referenceable
+    // types (Shipping Container, Gantry Crane, Container Stack,
+    // Container Vessel, Stevedore, Tipped Container, Falling
+    // Container) which makes the #-trigger gloss reference beat land
+    // naturally — typing "a kind of #" inside the new entity type's
+    // gloss surfaces these as the autocomplete choices and the
+    // visitor sees a real domain-coherent reference graph, rather
+    // than the previous Spectator/Baseball game ontology where the
+    // gloss-reference step had no related types to pick from.
+    personaName: 'Port Safety Incident Investigator',
+    personaRole: 'Maritime safety analyst documenting cargo-handling incidents at container terminals.',
+    entityType: {
+      name: 'Shipping container',
+      gloss: 'an intermodal freight container used to move cargo by ship, rail, or truck',
+      wikidataId: 'Q987767',
+    },
+    eventType: {
+      name: 'Container collapse',
+      gloss: 'a stack of stowed shipping containers losing structural integrity',
+    },
+    roleType: {
+      name: 'collapsed-stack',
+      gloss: 'the stack of containers that toppled in the incident',
+    },
     relationType: {
-      name: 'occurred-at',
-      gloss: 'the event took place at the location',
+      name: 'stowed-on',
+      gloss: 'links a shipping container to the vessel it is loaded onto',
     },
   },
 
   wikidataAugmentation: {
     personaName: 'Automated',
     personaRole: 'Analyst',
-    searchTerm: 'dust cloud',
+    // Real Wikidata-searchable term that returns a clean hit:
+    // Q1355676 ('foul ball: in baseball, generally, a struck ball that
+    // ends up in foul territory') verified at seed-authoring time via
+    // wbsearchentities. Narratively coherent with the Phillies-Karen
+    // clip — the foul ball is the object at the centre of the
+    // dispute, so the augmenter naturally pulls it into the persona's
+    // ontology.
+    searchTerm: 'foul ball',
     mockOntologyAugmentReasoning:
       'Suggestions drawn from the surrounding stadium-incident context, ranked by overlap with the existing persona ontology.',
     mockOntologyAugmentSuggestions: [
@@ -95,28 +122,40 @@ export const microventContent: TourContentBundle = {
   eventsRolesClaims: {
     personaName: 'LoanDepot Park Guest Services Usher',
     personaRole: 'LoanDepot Park Guest Services Usher',
+    // Both bounding boxes get the SAME type (Spectator / Q63443976).
+    // The contrast the tour demonstrates is between TYPE (shared across
+    // boxes) and INSTANCE (different world entity per box). The
+    // instance names live in the world seed below ("Adult fan", "Child
+    // fan"). Q-IDs only ride on types, not on instances.
     firstActor: {
-      name: 'Phillies fan Karen',
-      gloss: 'the woman seated behind home plate who claimed the ball',
+      name: 'Spectator',
+      gloss: 'a person observing an event as part of the audience',
+      wikidataId: 'Q63443976',
     },
     secondActor: {
-      name: 'Phillies fan son',
-      gloss: 'the boy whose father had given him the ball',
+      name: 'Spectator',
+      gloss: 'a person observing an event as part of the audience',
+      wikidataId: 'Q63443976',
     },
     eventType: {
-      name: 'ball-grab',
-      gloss: 'one spectator takes a souvenir ball from another',
+      // Souvenir-grab event. Not Wikidata-grounded because the
+      // particular act of "one spectator takes a souvenir baseball
+      // from another" is too specific to map to a single Wikidata
+      // item. The OBJECT the actors fight over (a foul ball,
+      // Q1355676) is grounded in the world seed below.
+      name: 'ball grab',
+      gloss: 'one spectator takes possession of a baseball from another',
     },
     firstRole: {
       name: 'grabber',
-      gloss: 'the spectator who took the ball',
+      gloss: 'the spectator who took possession of the ball',
     },
     secondRole: {
       name: 'prior-holder',
-      gloss: 'the spectator who had the ball before the grab',
+      gloss: 'the spectator who held the ball before the grab',
     },
     derivedClaimText:
-      'Phillies fan Karen took the souvenir ball from the Phillies fan son',
+      'The adult fan grabbed the foul ball from the child fan',
     // Collin Rugg's explainer cut of the Phillies-Karen incident.
     videoId: '8d9e6762f54408f4',
   },
@@ -127,7 +166,8 @@ export const microventContent: TourContentBundle = {
     entityName: 'LoanDepot Park',
     entityType: {
       name: 'Stadium',
-      gloss: 'a venue hosting major-league baseball games',
+      gloss: 'a place or venue for outdoor sports, concerts, or other events',
+      wikidataId: 'Q483110',
     },
     locationLatitude: 25.7781,
     locationLongitude: -80.2197,
@@ -330,5 +370,58 @@ export const microventContent: TourContentBundle = {
 
   importExport: {
     importBundlePath: 'test/e2e/fixtures/microvent-seed.jsonl',
+  },
+
+  // World-object seed materialized into WorldState by the demo seeder.
+  // Without this the @-popup in Tour 2 step 5 says "No objects found",
+  // the ClaimEditor's time / location pickers in Tour 4 are empty, and
+  // the world workspace renders an empty state. All Q-IDs verified
+  // against wikidata.org via wbsearchentities at seed-authoring time:
+  //   Q1368138 — LoanDepot Park (baseball park in Miami, Florida)
+  //   Q791187  — baseball (ball used in the sport of baseball)
+  // World ENTITY instances ("Adult fan", "Child fan") do not carry
+  // Q-IDs because they're not Wikidata items — they're particular
+  // people in this specific incident. Their grounding lives in the
+  // TYPE they're assigned (Spectator / Q63443976 from
+  // ontologyAuthoring above), via the TypeAssignment row a persona
+  // would add. Same for the time '2025-09-05' — a specific date, not
+  // a Wikidata-known entity.
+  world: {
+    locations: [
+      {
+        name: 'LoanDepot Park',
+        wikidataId: 'Q1368138',
+        description: 'Baseball park in Miami, Florida, USA. Home of the Miami Marlins.',
+        latitude: 25.7781,
+        longitude: -80.2197,
+      },
+    ],
+    times: [
+      {
+        timestamp: '2025-09-05T00:00:00Z',
+        label: '2025-09-05',
+      },
+    ],
+    entities: [
+      {
+        name: 'Adult fan',
+        description: 'The adult spectator who took the foul ball.',
+      },
+      {
+        name: 'Child fan',
+        description: 'The child spectator who had been holding the foul ball.',
+      },
+      {
+        name: 'the foul ball',
+        wikidataId: 'Q791187',
+        description: 'The baseball at the centre of the incident.',
+      },
+    ],
+    entityCollections: [
+      {
+        name: 'the involved fans',
+        description: 'The two spectators directly involved in the foul-ball grab.',
+      },
+    ],
   },
 }

@@ -362,10 +362,14 @@ export function ModelManagementPage(): JSX.Element {
 
   const hasGpuTask = Object.values(devicePreferences).some((d) => d === 'gpu')
 
-  // Loading state
+  // Loading state — keep the data-tour-id on the wrapper so the
+  // Admin tour can still anchor here while config is fetching or
+  // the model-service is unreachable (demo deployments skip the
+  // model-service container entirely, so the production fetch
+  // errors here and would otherwise hide the anchor).
   if (isLoading) {
     return (
-      <div className="p-6">
+      <div className="p-6" data-tour-id="model-management-page">
         <Skeleton className="h-8 w-2/5 mb-2" />
         <Skeleton className="h-5 w-3/5 mb-6" />
         <Skeleton className="h-[120px] w-full mb-4" />
@@ -375,15 +379,20 @@ export function ModelManagementPage(): JSX.Element {
     )
   }
 
-  // Error state
+  // Error state — preserve both the model-management-page anchor AND
+  // the model-memory-validation child anchor so the Admin tour can
+  // walk through Models → VRAM-validation even when the model-
+  // service is offline (e.g. in DEMO_PUBLIC builds that skip the
+  // model-service container entirely).
   if (error) {
     return (
-      <div className="p-6">
+      <div className="p-6" data-tour-id="model-management-page">
         <Alert variant="destructive">
           <AlertDescription>
             Failed to load model configuration: {error.message}
           </AlertDescription>
         </Alert>
+        <div className="sr-only" aria-hidden="true" data-tour-id="model-memory-validation" />
       </div>
     )
   }
@@ -391,10 +400,11 @@ export function ModelManagementPage(): JSX.Element {
   // No config state
   if (!config) {
     return (
-      <div className="p-6">
+      <div className="p-6" data-tour-id="model-management-page">
         <Alert>
           <AlertDescription>No model configuration available.</AlertDescription>
         </Alert>
+        <div className="sr-only" aria-hidden="true" data-tour-id="model-memory-validation" />
       </div>
     )
   }
@@ -440,7 +450,19 @@ export function ModelManagementPage(): JSX.Element {
         </Alert>
       )}
 
-      {/* VRAM Budget bar */}
+      {/*
+       * VRAM Budget bar — present only when a GPU is detected and at
+       * least one task is assigned to it. When the deployment has no
+       * GPU (e.g. demo builds that skip the model-service container
+       * entirely, or any CPU-only host), the budget bar is suppressed
+       * but the Admin tour still needs the model-memory-validation
+       * anchor to resolve, so we emit a sr-only placeholder that
+       * matches the same anchor — paralleling the loading / error
+       * branches earlier in this component.
+       */}
+      {!(config.cudaAvailable && hasGpuTask && vramCalculation && validation) && (
+        <div className="sr-only" aria-hidden="true" data-tour-id="model-memory-validation" />
+      )}
       {config.cudaAvailable && hasGpuTask && vramCalculation && validation && (
         <div className="rounded-lg border bg-card p-4 mb-6" data-tour-id="model-memory-validation">
           <div className="flex items-center mb-2">

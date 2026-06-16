@@ -5,7 +5,47 @@ All notable changes to the Fovea project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.4.0] - 2026-06-04
+## [0.4.2] - 2026-06-06
+
+### Fixed
+
+#### Annotation Save Duplication on Add Keyframe (cachedIdsRef Regression)
+
+- `annotation-tool/src/store/queries/useAnnotations.ts` converts the `useSaveAnnotations` hook's `cachedIdsRef` from a plain `{ current: new Set<string>() }` literal to `useRef<Set<string>>()`. The literal was reconstructed on every render; `onMutate`'s call to `queryClient.setQueryData(...)` triggers a synchronous re-render that ran the hook again and produced a fresh empty ref before `mutationFn` read it. With the ref now an empty Set, every annotation in the list was treated as new and routed through `api.saveAnnotation` (POST = create). The observable symptom: clicking Add Keyframe on any existing annotation triggered a wave of N new annotation rows on the canvas (one per existing annotation), and the new keyframe never attached to the selected annotation because the original annotation row was unchanged on the server while the optimistically-mutated cache row was orphaned by the round-trip. The bug was present in v0.1.11's `useSaveAnnotations.ts` too (identical literal-ref pattern), but v0.1.11 sat behind the separate `useAutoSaveAnnotations` hook which short-circuited saves via a JSON.stringify no-op comparison; v0.4.x replaced that custom path with the generic `useAutoSave` which fires far more aggressively and exposed the latent ref bug.
+- `annotation-tool/src/store/queries/useAnnotations.test.tsx` adds two regression tests pinning the fix:
+  - "routes an annotation already in cache through PUT, not POST": seeds the QueryClient cache with one annotation, calls `mutateAsync` with the same id, asserts zero POSTs and exactly one PUT to `/api/annotations/existing-1`, and asserts the result counts (`created: 0, updated: 1`).
+  - "does not duplicate every annotation when many existing rows are saved together (Add Keyframe simulation)": seeds the cache with four annotations, calls `mutateAsync` with the same four, asserts zero POSTs and exactly four PUTs (one per id), and asserts the result counts (`created: 0, updated: 4`).
+
+#### Timeline Track List Clipping
+
+- `annotation-tool/src/components/annotation/timeline/TimelineRoot.tsx` wraps the track-header column and the keyframe-surface column in their own `flex-1 min-h-0 overflow-y-auto` scrollers, with a synchronised-scroll handler pair (`handleLeftScroll` / `handleRightScroll` guarded by a `suppressScrollSyncRef` flag) that mirrors `scrollTop` between the two halves so the header column and the lane column stay row-aligned no matter which side the user drives. The prior `overflow-hidden` columns clipped the bottom of the track stack the moment the annotation count exceeded the visible area, hiding lock / solo / mute controls and the playhead for every track beyond row N.
+
+## [0.4.1] - 2026-06-06
+
+### Fixed
+
+#### CASL Baseline Create Permissions (Production-Demo 403 Storm)
+
+- Every signed-in user now receives a baseline `create` grant on resources they will own (`Annotation`, `VideoSummary`, `Claim`, `Persona`, `WorldState`), conditional on the candidate row's `createdBy` / `createdByUserId` / `userId` field matching the caller. The prior `server/src/lib/abilities.ts` baseline covered only `read`, `update`, and `delete` on owned resources, which forced any user without an explicit `project_memberships` row to obtain a project role (annotator / project_manager / project_owner) before they could create anything. On demo.fovea.video this produced an authoring-deadlock: the autosave loop in `VideoSummaryEditor` fired `POST /api/summaries` within seconds of the Edit Video Summary dialog opening, and the route's CASL gate (`ability.can('create', subject('VideoSummary', { projectId: persona.projectId, createdBy: userId }))`) denied every attempt, so the dialog rendered the error text "Cannot create this VideoSummary" as the actual summary body and re-fired the same `POST` every few seconds in a 403 storm. The same wall blocked `POST /api/annotations` (every keyframe save) and `POST /api/summaries/:summaryId/claims` (every manual claim) and contributed to the keyframe-snaps-back behaviour where one keyframe edit landed under the baseline `update` while the next round-tripped through a `create` that 403'd. With the baseline `create` rules in place, a personal-project user can create their own resources without needing a project_memberships row; cross-user creates (a candidate naming a different `createdBy`) still fail because the CASL condition still scopes to the caller.
+- `server/test/lib/abilities.test.ts` adds a positive baseline-create suite that asserts `can('create', subject(model, { ownerField: 'user-1' }))` is true for all five models (own VideoSummary, own Annotation, own Claim, own Persona, own WorldState) and that the cross-user variants (`ownerField: 'other-user'`) are denied. The prior `viewer can only read annotations` and `handles empty permissions array gracefully` assertions are now subject-aware so the bare `can('create', 'Annotation')` check no longer fires a false-positive against the new conditional rule. 20/20 abilities tests green.
+
+#### Bounding Box Visibility
+
+- Bumped the `InteractiveBoundingBox` stroke width from 2px / 4px to 3px / 6px (type vs object annotation) so the boxes are visible against busy video frames at lower viewport zooms; the prior 2px stroke was lost in high-saturation regions of the underlying clip.
+- Bumped the always-on annotation type badge from `text-[clamp(10px,0.75rem,14px)]` with `h-6` to `text-[clamp(13px,1rem,18px)] font-semibold` with `h-8`, widened the `foreignObject` from 200×30 to 240×38 (y offset shifted from -30 to -38), and bumped `max-w` from 180 to 220 px so longer Wikidata-grounded labels (e.g., "Spectator → spectator at LoanDepot Park") don't truncate prematurely.
+
+#### Demo Deploy Hygiene
+
+- `.github/workflows/deploy.yml` no longer builds or starts the `model-service` container on demo.fovea.video. The demo server cannot withstand CVPR-scale concurrent inference traffic; the frontend's `modelsDisabled` gate already greys every model-service-hitting button (Detect Objects, Transcribe Audio, per-card Summarize, Summarize All Videos, Extract Claims, Suggest Types) when `/api/models/config` 503s, which is the steady-state with no model-service container. Both DEMO_MODE branches now restrict `docker compose up` to `backend frontend` instead of bringing up every service in the base compose file, and `docker compose build` excludes model-service so the ~5 GB CPU image rebuild no longer happens on every deploy. The minimal-CPU image continues to publish from `docker.yml` for any downstream stack that wants it; the live local-backup the CVPR demo runs on the booth laptop builds its full-CPU variant via `docker-compose.local-full.yml`.
+- `.github/workflows/release.yml` repointed the frontend and backend Build Release Images jobs from `context: ./annotation-tool` / `context: ./server` to `context: .` with explicit `file: <package>/Dockerfile`, matching `docker.yml`. The prior `context: ./<package>` config made buildx fail with `failed to compute cache key: "/annotation-tool": not found` because the Dockerfiles `COPY annotation-tool/...` / `COPY server/...` from the pnpm-workspace lockfile at the repo root, not from inside the package directory. The two model-service entries keep `context: ./model-service` (their Dockerfile is package-local) with `file` left unset so the action defaults to `./model-service/Dockerfile`. v0.4.0 GHCR image publication was broken by the prior config; v0.4.1 re-tag triggers a green release run.
+- `docs/scripts/generate-api-docs.sh`-generated `docs/docs/api-reference/model-service/` subtree is now `.gitignore`d alongside the already-ignored `frontend/` and `backend/` mirrors so the auto-generated MD files do not show up as untracked after a docs rebuild.
+- `annotation-tool/probe-*.mjs` and root `probe-*.mjs` are now `.gitignore`d so ad-hoc Playwright probes don't pollute `git status`; the four pre-existing committed probes (probe-gloss / probe-one / probe-state-isolation / probe-tours) stay tracked.
+
+#### Docusaurus MDX Build
+
+- `annotation-tool/src/tours/engine/simulateAction.ts` `humanType` TSDoc wraps `KeyboardEvent('keydown')` / `InputEvent('beforeinput')` / `InputEvent('input', { data, inputType: 'insertText' })` / `KeyboardEvent('keyup')` in inline-code backticks so MDX 3 stops trying to parse the `{ data, inputType: 'insertText' }` literal as a JSX expression. The prior un-quoted form blew up Docusaurus' acorn parse with `Could not parse expression with acorn` at the generated `humanType.md` line 20 col 43, breaking the Documentation CI workflow on every commit since the TSDoc landed.
+
+## [0.4.0] - 2026-06-06
 
 ### Added
 

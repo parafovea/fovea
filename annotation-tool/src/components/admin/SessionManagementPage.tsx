@@ -101,7 +101,7 @@ export function SessionManagementPage(): JSX.Element {
 
   if (isLoading) {
     return (
-      <div className="flex justify-center p-8">
+      <div className="flex justify-center p-8" data-tour-id="session-management-page">
         <Spinner />
       </div>
     )
@@ -109,7 +109,7 @@ export function SessionManagementPage(): JSX.Element {
 
   if (error) {
     return (
-      <div className="p-6">
+      <div className="p-6" data-tour-id="session-management-page">
         <Alert variant="destructive">
           <AlertDescription>Failed to load sessions: {error.message}</AlertDescription>
         </Alert>

@@ -164,7 +164,20 @@ const VideoSummaryEditor = forwardRef<VideoSummaryEditorRef, VideoSummaryEditorP
     forceSave,
   } = useAutoSave({
     data: localSummary,
-    isEnabled: !!videoId && !!personaId && !!summaryId,
+    // Autosave is enabled as soon as videoId + personaId resolve. The
+    // previous gate (&& !!summaryId) meant the dialog could only
+    // autosave AFTER a row already existed for this video/persona —
+    // which silently broke the common workflow of opening Edit Video
+    // Summary to add atomic claims first: claims need a parent
+    // summaryId, the parent summary is only ever created by the
+    // autosave path, so without summaryId the autosave never fired,
+    // the summary was never created, and the Add Claim click had
+    // nothing to POST against. handleAutoSave above handles the
+    // create-on-first-save branch (the `if (!currentSummary)` arm),
+    // so dropping summaryId from the gate lets the initial debounce
+    // tick fire a save with empty `localSummary` on first mount,
+    // materializing the parent row before any claim work.
+    isEnabled: !!videoId && !!personaId,
     onSave: handleAutoSave,
     entityType: 'summary',
     entityId: `${videoId}-${personaId}`,
@@ -441,6 +454,7 @@ const VideoSummaryEditor = forwardRef<VideoSummaryEditorRef, VideoSummaryEditorP
                       onClick={() => setExtractDialogOpen(true)}
                       disabled={extracting || !summaryId || localSummary.length === 0 || modelsDisabled}
                       size="sm"
+                      data-tour-id="extract-claims-button"
                     >
                       Extract Claims
                     </Button>
@@ -457,7 +471,15 @@ const VideoSummaryEditor = forwardRef<VideoSummaryEditorRef, VideoSummaryEditorP
               variant="outline"
               size="sm"
               onClick={() => handleAddClaim()}
-              disabled={!summaryId}
+              // In demo mode the public visitor cannot persist a
+              // summary (anonymous-session RBAC rejects the empty-
+              // summary auto-create POST), so summaryId stays
+              // undefined. We still want the ClaimEditor to open so
+              // the gloss-reference showcase has a textarea to type
+              // into — the editor's Save is the no-op path for
+              // anonymous visitors but the dialog still renders.
+              disabled={!summaryId && import.meta.env.VITE_DEMO_PUBLIC !== '1'}
+              data-tour-id="add-manual-claim-button"
             >
               <Plus className="size-4 mr-1" />
               Add Manual Claim
@@ -471,8 +493,8 @@ const VideoSummaryEditor = forwardRef<VideoSummaryEditorRef, VideoSummaryEditorP
         <CardContent className="p-0">
           <Tabs value={activeTab} onValueChange={handleTabChange}>
             <TabsList className="m-2">
-              <TabsTrigger value="summary">Summary</TabsTrigger>
-              <TabsTrigger value="claims">
+              <TabsTrigger value="summary" data-tour-id="summary-tab-summary">Summary</TabsTrigger>
+              <TabsTrigger value="claims" data-tour-id="summary-tab-claims">
                 <span className="flex items-center gap-1">
                   Claims
                   {claims.length > 0 && (

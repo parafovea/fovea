@@ -36,6 +36,9 @@ import { DemoLandingPage } from './pages/DemoLandingPage'
 import { PostTourPage } from './pages/PostTourPage'
 import { createAnonymousSession, seedFixture } from './api'
 import { isPresenterMode } from './mode-flags'
+import { loadTourContentBundle } from '@/tours/content/loader'
+import { saveWorldState, worldKeys } from '@store/queries/useWorld'
+import { queryClient } from '@/main'
 
 export function DemoShell() {
   const [error, setError] = useState<string | null>(null)
@@ -64,14 +67,101 @@ export function DemoShell() {
             sessionUserId: userId,
           })
         } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err)
-          setError(
-            `Could not seed tour "${tour.title}": ${msg}. ` +
-              `Tell the presenter — check that the backend is running ` +
-              `with FOVEA_DEMO_MODE=true and that VITE_FOVEA_DEMO_SEED_TOKEN ` +
-              `matches the backend's FOVEA_DEMO_SEED_TOKEN.`,
-          )
-          throw err
+          // seedFixture 404s when no on-disk fixture JSON exists for
+          // the tour. That is the production-demo state today: the
+          // backend ships without per-tour fixture bundles, so the
+          // call always 404s and the tour proceeds without crashing
+          // (the personas and world the bundle would seed are sourced
+          // from elsewhere instead). Surface the error to the console
+          // for diagnosis but do not throw — a 404 on this optional
+          // endpoint should not abort the launch.
+          console.warn('[demo] seedFixture failed (continuing):', err)
+        }
+
+        // Materialize the world bundle from the tour content into the
+        // demo user's WorldState so the @-popup in Tour 2 step 5,
+        // Tour 4's ClaimEditor time/location pickers, and Tour 5's
+        // world workspace all have non-empty data on first paint.
+        // Without this every tour that references @LoanDepotPark /
+        // @2025-09-05 renders "No objects found". The seed runs once
+        // per anonymous session (idempotent PUT replaces the entire
+        // WorldState row) and uses the same content the tour scripts
+        // do (tour-content.json with microvent.ts as the in-code
+        // fallback) so a single source of truth covers narration +
+        // world data.
+        try {
+          const bundle = await loadTourContentBundle()
+          const world = bundle.world
+          if (world) {
+            const now = new Date().toISOString()
+            const entities = [
+              ...(world.locations ?? []).map((l, i) => ({
+                id: `demo-loc-${i}`,
+                name: l.name,
+                description: [{ type: 'text' as const, content: l.description ?? '' }],
+                wikidataId: l.wikidataId,
+                wikidataUrl: l.wikidataId ? `https://www.wikidata.org/wiki/${l.wikidataId}` : undefined,
+                importedFrom: l.wikidataId ? ('wikidata' as const) : undefined,
+                typeAssignments: [],
+                metadata: {},
+                createdAt: now,
+                updatedAt: now,
+                locationType: 'point' as const,
+                coordinateSystem: 'GPS' as const,
+                coordinates: {
+                  latitude: l.latitude,
+                  longitude: l.longitude,
+                },
+              })),
+              ...(world.entities ?? []).map((e, i) => ({
+                id: `demo-ent-${i}`,
+                name: e.name,
+                description: [{ type: 'text' as const, content: e.description ?? '' }],
+                wikidataId: e.wikidataId,
+                wikidataUrl: e.wikidataId ? `https://www.wikidata.org/wiki/${e.wikidataId}` : undefined,
+                importedFrom: e.wikidataId ? ('wikidata' as const) : undefined,
+                typeAssignments: [],
+                metadata: {},
+                createdAt: now,
+                updatedAt: now,
+              })),
+            ]
+            const times = (world.times ?? []).map((t, i) => ({
+              id: `demo-time-${i}`,
+              type: 'instant' as const,
+              timestamp: t.timestamp,
+              label: t.label,
+              createdAt: now,
+              updatedAt: now,
+            }))
+            const entityCollections = (world.entityCollections ?? []).map((c, i) => ({
+              id: `demo-ec-${i}`,
+              name: c.name,
+              description: [{ type: 'text' as const, content: c.description ?? '' }],
+              entityIds: [],
+              collectionType: 'group' as const,
+              typeAssignments: [],
+              createdAt: now,
+              updatedAt: now,
+            }))
+            await saveWorldState({
+              entities,
+              events: [],
+              times,
+              entityCollections,
+              eventCollections: [],
+              timeCollections: [],
+              relations: [],
+            })
+            // Invalidate the cached world query so the GlossEditor's
+            // useWorld() refetches the just-PUT data instead of reading
+            // the stale empty cache for staleTime (5 min). Without this
+            // the @-popup still shows "No objects found" on the FIRST
+            // tour the visitor runs after seed.
+            await queryClient.invalidateQueries({ queryKey: worldKeys.all })
+          }
+        } catch (err) {
+          console.warn('[demo] world seed failed (continuing):', err)
         }
       }}
       onTelemetry={(e) => {

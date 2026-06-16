@@ -477,19 +477,19 @@ export default function ObjectWorkspace() {
 
       <Tabs value={tabValue} onValueChange={setTabValue} className="flex-1 flex flex-col">
         <TabsList className="mx-4" data-tour-id="world-panel-tabs">
-          <TabsTrigger value="entities">
+          <TabsTrigger value="entities" data-tour-id="world-tab-entities">
             <User className="size-4 mr-1" />Entities ({entities.length})
           </TabsTrigger>
-          <TabsTrigger value="events">
+          <TabsTrigger value="events" data-tour-id="world-tab-events">
             <CalendarDays className="size-4 mr-1" />Events ({events.length})
           </TabsTrigger>
-          <TabsTrigger value="locations">
+          <TabsTrigger value="locations" data-tour-id="world-tab-locations">
             <MapPin className="size-4 mr-1" />Locations ({locations.length})
           </TabsTrigger>
-          <TabsTrigger value="times">
+          <TabsTrigger value="times" data-tour-id="world-tab-times">
             <Clock className="size-4 mr-1" />Times ({times.length})
           </TabsTrigger>
-          <TabsTrigger value="collections">
+          <TabsTrigger value="collections" data-tour-id="world-tab-collections">
             <Layers className="size-4 mr-1" />Collections ({entityCollections.length + eventCollections.length})
           </TabsTrigger>
         </TabsList>
@@ -645,6 +645,7 @@ export default function ObjectWorkspace() {
                   setSelectedCollectionType('entity')
                   setCollectionEditorOpen(true)
                 }}
+                data-tour-id="world-add-entity-collection-button"
               >
                 + Entity Collection
               </Button>
@@ -663,6 +664,7 @@ export default function ObjectWorkspace() {
                 variant="outline"
                 size="sm"
                 onClick={() => setTimeCollectionEditorOpen(true)}
+                data-tour-id="world-add-time-collection-button"
               >
                 + Time Pattern
               </Button>
@@ -784,6 +786,7 @@ export default function ObjectWorkspace() {
                 className="absolute bottom-4 right-4 rounded-full shadow-lg"
                 aria-label="add"
                 onClick={handleAddNew}
+                data-tour-id="world-add-object-button"
               />
             }
           >

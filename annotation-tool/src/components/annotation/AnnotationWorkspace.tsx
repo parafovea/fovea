@@ -177,11 +177,18 @@ export default function AnnotationWorkspace() {
   // when the matching SelectItem isn't yet mounted (which happens
   // during the initial personas query — the trigger paints before
   // the dropdown). Render the resolved label explicitly so the
-  // trigger never shows a UUID.
+  // trigger never shows a UUID. Only the name lands in the trigger:
+  // the role string can be a 100+ char description (e.g. "Maritime
+  // safety analyst documenting cargo-handling incidents at container
+  // terminals.") which spills out of the 250-px trigger container
+  // and visually overlaps the adjacent Select Type / Detect Objects
+  // controls in the second toolbar row. The dropdown list keeps the
+  // full "name - role" label so visitors can still tell personas
+  // apart on the rare occasion two share a name.
   const selectedPersonaLabel = useMemo(() => {
     if (!selectedPersonaId) return null
     const p = personas.find((p) => p.id === selectedPersonaId)
-    return p ? `${p.name} - ${p.role}` : null
+    return p ? `${p.name} (${p.role})` : null
   }, [personas, selectedPersonaId])
 
   // Get filtered annotations for display (by selected persona)
@@ -207,6 +214,54 @@ export default function AnnotationWorkspace() {
       }
     }
   }, [videoAnnotations, selectedAnnotation, setSelectedAnnotation])
+
+  // Demo deployments auto-select the first loaded fixture annotation
+  // AND switch the persona dropdown to match that annotation's
+  // personaId. Without the persona switch, the workspace's display
+  // filter (which scopes annotations to the selected persona) would
+  // hide every fixture row that doesn't belong to whatever persona
+  // the visitor last opened — landing on a video with three pre-
+  // tracked Spectator annotations but seeing "All Annotations (0)"
+  // because the Port Safety persona is still selected from a prior
+  // tour. The effect bails on tours that walk through creating a
+  // FIRST annotation (no seeded rows) so the empty-canvas narration
+  // still lines up with reality, and only runs under VITE_DEMO_PUBLIC.
+  useEffect(() => {
+    if (import.meta.env.VITE_DEMO_PUBLIC !== '1') return
+    if (videoAnnotations.length === 0) return
+    const fixtureRow = videoAnnotations.find((a) => {
+      // The backend's `source` flag rides through the API client's
+      // transformBackendToFrontend under metadata.source — the
+      // discriminated-union Annotation type does not declare
+      // `source` as a top-level field but every row carries the
+      // metadata bag. Match against the 'demo-fixture' prefix the
+      // server seeder emits so a self-hoster with no demo seed
+      // still sees their own annotations untouched.
+      const src = a.metadata?.source
+      return typeof src === 'string' && src.startsWith('demo-fixture')
+    })
+    if (!fixtureRow) return
+    // Read personaId off the row regardless of whether the
+    // serialised annotation uses `annotationType: 'type'` (the
+    // discriminated-union shape) or the legacy `type: 'type'` shape
+    // the backend route emits. Either way, the value lives on the
+    // top-level personaId field.
+    const fixturePersonaId =
+      (fixtureRow as unknown as { personaId?: string | null }).personaId ?? null
+    if (fixturePersonaId && selectedPersonaId !== fixturePersonaId) {
+      setSelectedPersonaId(fixturePersonaId)
+    }
+    if (!selectedAnnotation) {
+      setSelectedAnnotation(fixtureRow)
+    }
+  }, [
+    videoAnnotations,
+    selectedAnnotation,
+    setSelectedAnnotation,
+    selectedPersonaId,
+    setSelectedPersonaId,
+  ])
+
 
   // TanStack Query for world data
   const { data: worldData } = useWorld()
@@ -834,6 +889,7 @@ export default function AnnotationWorkspace() {
                   variant={timelineExpanded ? 'default' : 'outline'}
                   onClick={() => setTimelineExpanded(!timelineExpanded)}
                   size="sm"
+                  data-tour-id="show-timeline-button"
                 >
                   {timelineExpanded ? 'Hide Timeline' : 'Show Timeline'}
                 </Button>
@@ -841,16 +897,40 @@ export default function AnnotationWorkspace() {
 
               {/* Second Row: Persona Selector and Type/Object Selection */}
               <div className="flex items-center gap-4">
-                {/* Persona Selector */}
-                <div className="w-[250px]">
+                {/* Persona Selector — fixed width + min-w-0 so the
+                    flex parent can shrink it instead of letting an
+                    overflowing trigger label push the adjacent
+                    type-picker and action buttons under each other,
+                    which is the overlap mode the toolbar screenshot
+                    from 2026-06-06 caught. */}
+                <div className="w-[250px] shrink-0 min-w-0">
                   <Select
                     value={selectedPersonaId || ''}
                     onValueChange={(val) => setSelectedPersonaId(val || null)}
                     disabled={annotationMode === 'object'}
                   >
-                    <SelectTrigger aria-label="Select Persona">
+                    <SelectTrigger
+                      aria-label="Select Persona"
+                      className="w-full truncate [&>span]:truncate [&>span]:block [&>span]:overflow-hidden"
+                    >
+                      {/*
+                        The base-ui Select trigger renders the
+                        controlled `value` prop verbatim whenever the
+                        SelectValue children resolve to null /
+                        undefined — which is exactly what happens
+                        during the (often-slow) initial /api/personas
+                        round-trip, when `personas` is still empty
+                        and selectedPersonaLabel is null. The
+                        observable failure mode is a UUID showing up
+                        as the displayed persona name on first paint
+                        (the bug from 2026-06-05 the screenshot
+                        flagged). Force the trigger to show the
+                        placeholder text instead until the resolved
+                        label is ready, so a raw UUID can never be
+                        the persona dropdown's visible label.
+                      */}
                       <SelectValue placeholder="Select Persona">
-                        {selectedPersonaLabel}
+                        {selectedPersonaLabel || 'Select Persona'}
                       </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
@@ -859,7 +939,7 @@ export default function AnnotationWorkspace() {
                       </SelectItem>
                       {personas.map((persona) => (
                         <SelectItem key={persona.id} value={persona.id}>
-                          {persona.name} - {persona.role}
+                          {persona.name} ({persona.role})
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -868,7 +948,14 @@ export default function AnnotationWorkspace() {
 
                 {/* Type/Object Selection */}
                 {(annotationMode === 'type' || annotationMode === 'object') && (
-                  <div className="flex-1 max-w-[400px]">
+                  // Tour 1 step 5 ("assign type") spotlights this
+                  // wrapper. The autocomplete is always mounted in
+                  // 'type' / 'object' annotation modes (default
+                  // 'type' on workspace entry) so the anchor is
+                  // available the moment the annotate route paints —
+                  // no drawing, dialog open, or sidebar selection
+                  // needed.
+                  <div className="flex-1 max-w-[400px]" data-tour-id="type-assignment-picker">
                     <AnnotationAutocomplete
                       mode={annotationMode}
                       personaId={selectedPersonaId}
@@ -902,6 +989,7 @@ export default function AnnotationWorkspace() {
                           onClick={() => setDetectionDialogOpen(true)}
                           size="sm"
                           disabled={modelsDisabled}
+                          data-tour-id="detect-objects-button"
                         >
                           <Search className="size-4 mr-1" />
                           Detect Objects
@@ -913,25 +1001,40 @@ export default function AnnotationWorkspace() {
                     </Tooltip>
                   )}
 
-                  {/* Transcribe Audio Button */}
-                  {currentVideo && videoId && (
-                    <Button
-                      variant="outline"
-                      onClick={() => {
-                        setTranscriptError(null)
-                        transcribeMutation.mutate({
-                          videoId,
-                          enableDiarization: diarizationRequested,
-                        })
-                      }}
-                      size="sm"
-                      disabled={transcribeMutation.isPending}
-                      data-testid="transcribe-audio-button"
-                      data-tour-id="transcribe-audio-button"
-                    >
-                      <Mic className="size-4 mr-1" />
-                      {transcribeMutation.isPending ? 'Transcribing…' : 'Transcribe Audio'}
-                    </Button>
+                  {/* Transcribe Audio Button — render as soon as the
+                      workspace mounts (videoId comes from the URL) so
+                      tour anchors targeting the toolbar stay stable
+                      across the video-metadata fetch window. Disable
+                      until currentVideo resolves; an undefined videoId
+                      (an /app/annotate/ visit without a parameter)
+                      still gates the button entirely. */}
+                  {videoId && (
+                    <Tooltip>
+                      <TooltipTrigger render={<span />}>
+                        <Button
+                          variant="outline"
+                          onClick={() => {
+                            setTranscriptError(null)
+                            transcribeMutation.mutate({
+                              videoId,
+                              enableDiarization: diarizationRequested,
+                            })
+                          }}
+                          size="sm"
+                          disabled={transcribeMutation.isPending || !currentVideo || modelsDisabled}
+                          data-testid="transcribe-audio-button"
+                          data-tour-id="transcribe-audio-button"
+                        >
+                          <Mic className="size-4 mr-1" />
+                          {transcribeMutation.isPending ? 'Transcribing…' : 'Transcribe Audio'}
+                        </Button>
+                      </TooltipTrigger>
+                      {modelsDisabled && (
+                        <TooltipContent>
+                          This deployment has no model service. Audio transcription is unavailable.
+                        </TooltipContent>
+                      )}
+                    </Tooltip>
                   )}
 
                   {/* Video Summary Button */}
@@ -940,6 +1043,7 @@ export default function AnnotationWorkspace() {
                       variant="outline"
                       onClick={() => setSummaryDialogOpen(true)}
                       size="sm"
+                      data-tour-id="edit-summary-button"
                     >
                       <Pencil className="size-4 mr-1" />
                       Edit Summary
@@ -1014,13 +1118,14 @@ export default function AnnotationWorkspace() {
                 </p>
               </li>
             )}
-            {sortedAnnotations.map((annotation) => {
+            {sortedAnnotations.map((annotation, index) => {
               const isActive = isAnnotationActive(annotation)
               const isSelected = selectedAnnotation?.id === annotation.id
 
               return (
                 <li
                   key={annotation.id}
+                  data-tour-id={index === 0 ? 'annotation-list-first' : undefined}
                   className={`flex items-start justify-between py-2 px-2 cursor-pointer rounded-sm transition-colors ${
                     isSelected ? 'bg-accent ring-1 ring-primary/30' : isActive ? 'bg-muted' : 'hover:bg-muted'
                   }`}

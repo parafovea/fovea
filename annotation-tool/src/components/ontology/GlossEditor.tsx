@@ -608,14 +608,26 @@ export default function GlossEditor({
     }
   }
 
-  // Close autocomplete on click outside
+  // Close autocomplete on click outside. In demo mode the tour engine
+  // drives the workspace from a fixed StepCard overlay and a full-
+  // screen SpotlightOverlay backdrop; either of those receiving a
+  // mousedown would close the popup on the engine's own Next press
+  // and unmount the gloss-autocomplete-popup anchor the next step
+  // depends on. The popup's only legitimate dismissal paths in demo
+  // mode are Escape and clicking inside the textarea itself, which
+  // GlossEditor's onKeyDown / focus handlers already cover; the
+  // document-level mousedown close is wholesale suppressed for
+  // VITE_DEMO_PUBLIC=1.
   useEffect(() => {
+    if (import.meta.env.VITE_DEMO_PUBLIC === '1') return
     const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as Node | null
+      if (!target) return
       if (
         popperRef.current &&
-        !popperRef.current.contains(e.target as Node) &&
+        !popperRef.current.contains(target) &&
         inputRef.current &&
-        !inputRef.current.contains(e.target as Node)
+        !inputRef.current.contains(target)
       ) {
         setShowAutocomplete(false)
       }
@@ -715,6 +727,7 @@ export default function GlossEditor({
         {showAutocomplete && (
           <div
             ref={popperRef}
+            data-tour-id="gloss-autocomplete-popup"
             className="absolute z-50 max-h-72 overflow-auto min-w-[250px] rounded-lg border bg-popover text-popover-foreground shadow-md"
             style={{ top: '100%', left: 0 }}
           >
@@ -771,7 +784,7 @@ export default function GlossEditor({
         )}
       </div>
 
-      <div className="rounded-lg border p-4">
+      <div className="rounded-lg border p-4" data-tour-id="gloss-preview">
         <p className="text-xs text-muted-foreground mb-1">
           Preview:
         </p>

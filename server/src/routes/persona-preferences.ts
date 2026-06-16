@@ -4,6 +4,7 @@ import { FastifyPluginAsync } from 'fastify'
 import { requireAuth } from '../middleware/auth.js'
 import { buildAbilities } from '../middleware/abilities.js'
 import { ErrorResponseSchema, NotFoundError, ForbiddenError } from '../lib/errors.js'
+import { isDemoModeEnabled } from '../lib/demo-flags.js'
 
 /**
  * Partial per-persona overrides layered on top of the user-level document.
@@ -94,7 +95,14 @@ const personaPreferencesRoute: FastifyPluginAsync = async (fastify) => {
       if (!persona) throw new NotFoundError('Persona', personaId)
       if (!request.ability) throw new ForbiddenError('No abilities defined')
       if (!request.ability.can('read', subject('Persona', persona))) {
-        throw new ForbiddenError('Cannot read this Persona')
+        // FOVEA_DEMO_MODE override — callers whose CASL ability is
+        // scoped to their own data (anonymous demo sessions,
+        // non-admin users opening a tour) still need to read
+        // per-persona inference preferences for the seeded
+        // system personas the deployment exposes via tours.
+        if (!isDemoModeEnabled() || !persona.isSystemGenerated) {
+          throw new ForbiddenError('Cannot read this Persona')
+        }
       }
 
       const row = await fastify.prisma.personaPreferences.findUnique({

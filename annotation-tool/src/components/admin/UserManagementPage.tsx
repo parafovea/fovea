@@ -166,7 +166,7 @@ export function UserManagementPage(): JSX.Element {
 
   if (isLoading) {
     return (
-      <div className="flex justify-center p-8">
+      <div className="flex justify-center p-8" data-tour-id="user-management-page">
         <Spinner />
       </div>
     )
@@ -174,7 +174,7 @@ export function UserManagementPage(): JSX.Element {
 
   if (error) {
     return (
-      <div className="p-6">
+      <div className="p-6" data-tour-id="user-management-page">
         <Alert variant="destructive">
           <AlertDescription>Failed to load users: {error.message}</AlertDescription>
         </Alert>

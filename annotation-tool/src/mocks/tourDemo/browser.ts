@@ -13,7 +13,16 @@
  * Unhandled requests pass through (`onUnhandledRequest: 'bypass'`)
  * so the non-mocked surfaces of the app; auth, persona CRUD, video
  * streaming, the static assets the SPA serves; keep talking to the
- * real backend exactly as they would in production.
+ * real backend exactly as they would in production. NOTE: a
+ * registered service worker still intercepts every same-origin
+ * fetch and routes unmatched ones through MSW's passthrough()
+ * helper, which has been observed to reject with "TypeError: Failed
+ * to fetch" for certain navigation requests inside the service
+ * worker context. The boot-time auth probe in `main.tsx`
+ * (`isRealSignedInUser`) is the real safety net: it skips MSW
+ * registration entirely when a non-anonymous-demo user is signed in
+ * so the worker is never installed for admin sessions and the
+ * passthrough rejection cannot fire.
  *
  * The module-level guard `import.meta.env.VITE_TOUR_DEMO` is
  * statically analysable by Vite, which means the entire mocks

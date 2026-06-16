@@ -86,9 +86,20 @@ export function SaveStatusIndicator({
   maxRetries = 3,
   onRetry,
   compact = false,
-}: SaveStatusIndicatorProps): JSX.Element | null {
+}: SaveStatusIndicatorProps): JSX.Element {
   if (status === 'idle') {
-    return null
+    // Idle still renders an invisible placeholder so the
+    // save-indicator data-tour-id is present in the DOM for the
+    // first-annotation tour's "Saved. No submit button" step.
+    // Visually identical to no indicator (height 0, no children).
+    return (
+      <div
+        data-testid="save-status-idle"
+        data-tour-id="save-indicator"
+        aria-hidden="true"
+        className="sr-only"
+      />
+    )
   }
 
   if (compact) {

@@ -235,10 +235,11 @@ export default function BaseTypeEditor({
               Delete
             </Button>
           )}
-          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button variant="outline" onClick={onClose} data-tour-id="type-editor-cancel">Cancel</Button>
           <Button
             onClick={onSave}
             disabled={!isValid}
+            data-tour-id="type-editor-save"
           >
             {isEditing ? 'Save' : 'Create'}
           </Button>

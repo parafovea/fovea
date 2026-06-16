@@ -33,6 +33,7 @@ import { defaultBuiltInTours } from '@/tours/scripts'
 export function TourCataloguePage(): JSX.Element {
   const { launch } = useTour()
   const tours = defaultBuiltInTours
+
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b bg-card">

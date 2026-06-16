@@ -19,9 +19,12 @@
  * NODE_ENV or similar.
  */
 
-export function isDemoModeEnabled(): boolean {
-  return process.env.FOVEA_DEMO_MODE === 'true' || process.env.FOVEA_DEMO_MODE === '1'
-}
+// Re-export the canonical predicate so demo-layer call-sites keep
+// their existing import path. The implementation lives in lib/ so
+// product code can also import it without violating the demo->product
+// layering rule enforced by eslint no-restricted-imports.
+import { isDemoModeEnabled } from '../lib/demo-flags.js'
+export { isDemoModeEnabled }
 
 /**
  * Secondary flag — required for the anonymous-session endpoint to

@@ -18,12 +18,28 @@ jobs:
     strategy:
       matrix:
         service:
+          # Frontend and backend pull from the pnpm-workspace lockfile
+          # at the repo root, so their build context is `.` and the
+          # Dockerfile path is qualified. docker.yml has this right;
+          # the prior release.yml shipped with `context: ./annotation-
+          # tool` and `./server` which made buildx fail with
+          # "annotation-tool: not found" because once the context is
+          # the package directory the COPY annotation-tool/... line
+          # resolves to <context>/annotation-tool which does not
+          # exist (it would be /annotation-tool/annotation-tool).
           - name: frontend
-            context: ./annotation-tool
+            context: .
+            file: annotation-tool/Dockerfile
             platforms: linux/amd64,linux/arm64
           - name: backend
-            context: ./server
+            context: .
+            file: server/Dockerfile
             platforms: linux/amd64,linux/arm64
+          # model-service entries keep their context at ./model-service
+          # because the Dockerfile COPYs `pyproject.toml`, `src`, `config`,
+          # `scripts` from paths relative to the package, not the repo
+          # root. Leaving `file:` unset on these two lets the action
+          # default to <context>/Dockerfile = ./model-service/Dockerfile.
           - name: model-service-cpu
             context: ./model-service
             platforms: linux/amd64
@@ -67,6 +83,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: ${{ matrix.service.context }}
+          file: ${{ matrix.service.file }}
           platforms: ${{ matrix.service.platforms }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}

@@ -28,7 +28,19 @@ export async function waitForAnchor(
   // element mounts; we then take the document.querySelector measurement
   // (cheap) and resolve.
   return new Promise<HTMLElement | null>((resolve) => {
-    const ceilingMs = 3000
+    // 8 s ceiling. Every route is eagerly bundled (no React.lazy),
+    // so anchors normally mount within a few microtasks of the
+    // route change + the workspace's data-fetch round-trip. The
+    // ceiling tolerates a slow /api round-trip on a poor
+    // connection. After the ceiling fires the resolver returns
+    // null and the StepCard shows its "skip" affordance — but the
+    // engine's step effect ALSO keeps a separate, longer-running
+    // observer alive (see TourRunner.tsx) so a late mount during
+    // the same step still wakes the spotlight without forcing the
+    // visitor to skip; the ceiling here is the deadline for
+    // showing the visible 'skip' button, not for ever finding the
+    // anchor.
+    const ceilingMs = 8000
     let settled = false
 
     function finish(result: HTMLElement | null) {

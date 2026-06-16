@@ -63,6 +63,27 @@ export class VideoAccessService {
       return 'all'
     }
 
+    // 1b. Demo deployment override: when FOVEA_DEMO_MODE=true the
+    // operator has explicitly opted into the booth flow where every
+    // visitor — including auto-issued demo-anonymous-* sessions — must
+    // see the same curated demo corpus the tours are anchored to
+    // (the Phillies-Karen / cargo-spill clips synced from the demo S3
+    // bucket). Without this override the per-user sharing/group/
+    // project chain returns the empty set for every booth visitor
+    // (anonymous users have no projects, no group memberships, no
+    // shares), the VideoBrowser renders "No videos found", and every
+    // tour that targets a video card or the annotation workspace
+    // shows the missing-anchor banner because the anchor never
+    // mounts. This is gated on FOVEA_DEMO_MODE so a self-hosted
+    // production deployment with the same code keeps its per-user
+    // RBAC intact.
+    if (process.env.FOVEA_DEMO_MODE === 'true') {
+      span.setAttribute('video_access.result_count', -1)
+      span.setAttribute('video_access.demo_mode_override', true)
+      span.end()
+      return 'all'
+    }
+
     try {
       // 2. Get user's group IDs via GroupMembership
       const groupMemberships = await this.prisma.groupMembership.findMany({

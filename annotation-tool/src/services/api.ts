@@ -60,6 +60,13 @@ export function transformBackendToFrontend(backendAnnotation: BackendAnnotation)
     confidence: backendAnnotation.confidence ?? undefined,
     createdAt: backendAnnotation.createdAt,
     updatedAt: backendAnnotation.updatedAt,
+    // Forward the server's source flag through the metadata bag so
+    // the workspace can tell hand-authored fixture rows (source:
+    // 'demo-fixture:...') from real user annotations. The flag is
+    // required for the demo-mode per-video persona switch — it's
+    // the signal that says 'this row was seeded for a tour, switch
+    // the persona to match it'.
+    metadata: { source: backendAnnotation.source },
   }
 
   if (backendAnnotation.type === 'type' && backendAnnotation.personaId) {

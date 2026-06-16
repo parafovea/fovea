@@ -208,16 +208,34 @@ export function useAutoSave<T>({
     [onSave, entityType, entityId, maxRetries]
   )
 
+  // Stable ref to the latest performSave so the debounce/periodic
+  // effects below don't re-fire every time performSave's identity
+  // changes — which previously happened on every render because
+  // performSave depends on `onSave`, and `onSave` (the caller's
+  // handleAutoSave) typically depends on a TanStack Query result
+  // (currentSummary, currentAnnotation, etc.) whose object identity
+  // changes after every save's success refetch. Without this ref the
+  // debounce effect would clear and reinstall its setTimeout on EVERY
+  // re-render, schedule a save, the save would re-trigger a refetch,
+  // the refetch would re-rebuild onSave, and the dialog would shake at
+  // ~60 Hz until the parent unmounted (the visible 'extremely jittery,
+  // can't click elements' bug).
+  const performSaveRef = useRef(performSave)
+  useEffect(() => {
+    performSaveRef.current = performSave
+  }, [performSave])
+
   // Force save function
   const forceSave = useCallback(async () => {
     if (debounceTimerRef.current) {
       clearTimeout(debounceTimerRef.current)
       debounceTimerRef.current = null
     }
-    await performSave()
-  }, [performSave])
+    await performSaveRef.current()
+  }, [])
 
-  // Debounced save on data change
+  // Debounced save on data change. Deps deliberately exclude
+  // performSave (held via ref above) — see the ref comment.
   useEffect(() => {
     if (!isEnabled) return
 
@@ -231,7 +249,7 @@ export function useAutoSave<T>({
     }
 
     debounceTimerRef.current = setTimeout(() => {
-      performSave()
+      performSaveRef.current()
     }, debounceMs)
 
     return () => {
@@ -239,15 +257,16 @@ export function useAutoSave<T>({
         clearTimeout(debounceTimerRef.current)
       }
     }
-  }, [data, isEnabled, debounceMs, performSave])
+  }, [data, isEnabled, debounceMs])
 
-  // Periodic backup save
+  // Periodic backup save. performSave intentionally NOT in deps for
+  // the same reason — periodicTimer should NOT re-arm every render.
   useEffect(() => {
     if (!isEnabled || periodicMs <= 0) return
 
     periodicTimerRef.current = setInterval(() => {
       if (pendingChanges && !saveInProgressRef.current) {
-        performSave()
+        performSaveRef.current()
       }
     }, periodicMs)
 
@@ -256,7 +275,7 @@ export function useAutoSave<T>({
         clearInterval(periodicTimerRef.current)
       }
     }
-  }, [isEnabled, periodicMs, pendingChanges, performSave])
+  }, [isEnabled, periodicMs, pendingChanges])
 
   // Save before page unload
   useEffect(() => {

@@ -387,14 +387,24 @@ export default function VideoBrowser() {
 
   if (isLoading) {
     return (
-      <div className="flex justify-center items-center h-full">
+      // Mount video-browser-root even during the videos-list fetch
+      // round-trip so the on-ramp tour's step 2 spotlight never races
+      // the data-load. The shelf inside renders a Spinner until the
+      // /api/videos response arrives; the engine and the visitor see
+      // the spotlight land on the shelf either way.
+      <div id="video-browser-root" data-tour-id="video-browser-root" className="flex justify-center items-center h-full">
         <Spinner className="size-8" />
       </div>
     )
   }
 
   return (
-    <div id="video-browser-root">
+    // Tour 1 step 2 spotlights the shelf at this top-level container.
+    // It is always mounted on /app, independent of the videos-list
+    // fetch round-trip, so the on-ramp tour never races the fixture
+    // data-load. The deeper card-level anchor still exists for tours
+    // that want to spotlight a specific tile.
+    <div id="video-browser-root" data-tour-id="video-browser-root">
       <div className="mb-6">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
@@ -420,8 +430,19 @@ export default function VideoBrowser() {
                 value={activePersonaId || ''}
                 onValueChange={(v) => v && handlePersonaChange(v)}
               >
-                <SelectTrigger>
-                  <SelectValue placeholder="Persona" />
+                <SelectTrigger className="w-full truncate [&>span]:truncate [&>span]:block [&>span]:overflow-hidden">
+                  {/* Explicit child override: base-ui Select renders the
+                      controlled `value` prop verbatim (a UUID) when the
+                      matching SelectItem hasn't yet mounted (initial
+                      paint before the dropdown opens). Resolve the
+                      label from the personas list so the trigger never
+                      shows a raw id. */}
+                  <SelectValue placeholder="Persona">
+                    {(() => {
+                      const p = personas.find((x) => x.id === activePersonaId)
+                      return p ? `${p.name}${p.role ? ` (${p.role})` : ''}` : null
+                    })()}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {personas.length === 0 && (
@@ -439,13 +460,27 @@ export default function VideoBrowser() {
               </Select>
             </div>
 
-            <Button
-              onClick={handleSummarizeAll}
-              disabled={!activePersonaId || isBatchSummarizing || filteredVideos.length === 0}
-            >
-              {isBatchSummarizing ? <Spinner className="size-4 mr-2" /> : <Sparkles className="size-4 mr-2" />}
-              {isBatchSummarizing ? 'Summarizing...' : 'Summarize All Videos'}
-            </Button>
+            <Tooltip>
+              <TooltipTrigger render={<span />}>
+                <Button
+                  onClick={handleSummarizeAll}
+                  disabled={
+                    !activePersonaId ||
+                    isBatchSummarizing ||
+                    filteredVideos.length === 0 ||
+                    modelsDisabled
+                  }
+                >
+                  {isBatchSummarizing ? <Spinner className="size-4 mr-2" /> : <Sparkles className="size-4 mr-2" />}
+                  {isBatchSummarizing ? 'Summarizing...' : 'Summarize All Videos'}
+                </Button>
+              </TooltipTrigger>
+              {modelsDisabled && (
+                <TooltipContent>
+                  This deployment has no model service. Summarization is unavailable.
+                </TooltipContent>
+              )}
+            </Tooltip>
           </div>
         </div>
       )}

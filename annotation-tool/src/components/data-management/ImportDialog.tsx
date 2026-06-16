@@ -161,8 +161,19 @@ export default function ImportDialog({ open, onClose, targetPersonaId }: ImportD
           <div>
             <Label className="mb-2">Source Persona</Label>
             <Select value={sourcePersonaId} onValueChange={(val) => { if (val !== null) setSourcePersonaId(val) }}>
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Select a persona" />
+              <SelectTrigger className="w-full truncate [&>span]:truncate [&>span]:block [&>span]:overflow-hidden">
+                {/* Explicit child override: base-ui Select renders the
+                    controlled `value` prop verbatim (a UUID) when the
+                    matching SelectItem hasn't yet mounted (initial paint
+                    before the dropdown opens). Resolve the label from
+                    the personas list so the trigger never shows a raw
+                    id. */}
+                <SelectValue placeholder="Select a persona">
+                  {(() => {
+                    const p = personas.find((x) => x.id === sourcePersonaId)
+                    return p ? `${p.name} (${p.role})` : null
+                  })()}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 {personas

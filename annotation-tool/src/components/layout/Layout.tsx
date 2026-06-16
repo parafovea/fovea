@@ -299,8 +299,23 @@ export default function Layout() {
               value={activeProjectId ?? ''}
               onValueChange={handleProjectChange}
             >
-              <SelectTrigger className="h-8 w-[180px] text-sm" aria-label="Project context">
-                <SelectValue placeholder="Personal Workspace" />
+              <SelectTrigger className="h-8 w-[180px] text-sm truncate [&>span]:truncate [&>span]:block [&>span]:overflow-hidden" aria-label="Project context">
+                {/* Explicit child override: base-ui Select otherwise
+                    paints the raw value (UUID) before SelectContent
+                    first mounts, because the trigger label is sourced
+                    from a SelectItem ref that only registers when the
+                    dropdown opens. Resolve the project name from the
+                    myProjects list here so the navbar shows
+                    'My Project' on first paint instead of a raw
+                    'de1957f8-1ff8-4225-...' id. Same pattern as the
+                    persona-trigger fix in AnnotationWorkspace and
+                    VideoSummaryDialog, and the group-owner fix in
+                    ProjectsPage's Create Project dialog. */}
+                <SelectValue placeholder="Personal Workspace">
+                  {activeProjectId
+                    ? myProjects.find((p) => p.id === activeProjectId)?.name ?? null
+                    : null}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="">Personal Workspace</SelectItem>
@@ -365,6 +380,7 @@ export default function Layout() {
                     variant="ghost"
                     size="sm"
                     onClick={handleExport}
+                    data-tour-id="export-trigger"
                   />
                 }
               >
@@ -380,6 +396,7 @@ export default function Layout() {
                     variant="ghost"
                     size="sm"
                     onClick={importDialog.openDialog}
+                    data-tour-id="import-trigger"
                   />
                 }
               >

@@ -187,7 +187,7 @@ export function DetectionDialog({
 
   return (
     <Dialog open={open} onOpenChange={(val) => { if (!val) onClose() }}>
-      <DialogContent className="sm:max-w-2xl">
+      <DialogContent className="sm:max-w-2xl" data-tour-id="detect-dialog">
         <DialogHeader>
           <DialogTitle>Detect Objects</DialogTitle>
         </DialogHeader>
@@ -423,6 +423,7 @@ export function DetectionDialog({
           <Button
             onClick={handleDetect}
             disabled={isLoading || !canDetect}
+            data-tour-id="detect-dialog-run-button"
           >
             {isLoading ? (
               <Spinner className="mr-2 h-4 w-4" />

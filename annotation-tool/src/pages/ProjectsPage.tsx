@@ -102,7 +102,7 @@ export default function ProjectsPage(): JSX.Element {
     <div className="mx-auto max-w-screen-lg px-4" data-tour-id="projects-page">
       <div className="flex items-center justify-between py-6">
         <h1 className="text-2xl font-bold">My Projects</h1>
-        <Button onClick={() => setDialogOpen(true)}>
+        <Button data-tour-id="projects-create-button" onClick={() => setDialogOpen(true)}>
           <Plus className="size-4" />
           Create Project
         </Button>
@@ -155,6 +155,7 @@ export default function ProjectsPage(): JSX.Element {
               <Label htmlFor="project-name">Name</Label>
               <Input
                 id="project-name"
+                data-tour-id="project-name-input"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 autoFocus
@@ -187,7 +188,21 @@ export default function ProjectsPage(): JSX.Element {
               <Label>Owner Group (optional)</Label>
               <Select value={ownerGroupId} onValueChange={(value) => setOwnerGroupId(value ?? '')}>
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Personal (no group)" />
+                  {/* Explicit child override: base-ui Select otherwise
+                      paints the raw value (UUID) before SelectContent
+                      first opens, because the trigger label is sourced
+                      from a SelectItem ref that only registers when the
+                      dropdown mounts. Resolve the group name from the
+                      groups list here so the trigger shows 'My Group'
+                      on first paint and only falls back to the
+                      placeholder when no group is selected. Same pattern
+                      as the persona-trigger fix in VideoSummaryDialog
+                      and AnnotationWorkspace. */}
+                  <SelectValue placeholder="Personal (no group)">
+                    {ownerGroupId
+                      ? (groups ?? []).find((g) => g.id === ownerGroupId)?.name ?? null
+                      : null}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="">Personal (no group)</SelectItem>

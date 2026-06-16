@@ -28,7 +28,14 @@ import type { TourScript } from './types'
 
 const CARD_WIDTH = 360
 const CARD_OFFSET = 16
-const CARD_HEIGHT_ESTIMATE = 220
+// The card's rendered height varies with narration / body / banner /
+// fixture-note text — empirically up to ~340 px on a step with all
+// optional rows present. Earlier we used 220 which left the bottom of
+// the card hanging off the viewport on long steps; the visitor saw
+// the buttons clipped or scrolled out of reach. Over-estimate is safe
+// (card simply sits a bit higher than strictly necessary); under-
+// estimate is the demo-killer.
+const CARD_HEIGHT_ESTIMATE = 360
 
 interface StepCardProps {
   tour: TourScript
@@ -126,7 +133,7 @@ export function StepCard({
           ) : null}
           {cannotResolve ? (
             <p className="mt-2 text-xs text-amber-600 dark:text-amber-400" role="status">
-              Couldn't find this UI element — skip to continue.
+              Couldn't find this UI element; skip to continue.
             </p>
           ) : null}
           {step.requiresFixture ? (
@@ -235,6 +242,16 @@ function computePosition(
   }
   let left = r.left + r.width / 2 - CARD_WIDTH / 2
   left = Math.max(CARD_OFFSET, Math.min(vp.width - CARD_WIDTH - CARD_OFFSET, left))
+  // Hard guard: regardless of which branch we took above, never let
+  // the card extend below the viewport. The branches use
+  // CARD_HEIGHT_ESTIMATE which is conservative but not exact — a long
+  // step with a wider-than-estimated body would still clip. Clamp
+  // here so the card stays fully inside the viewport even in the
+  // pathological case.
+  top = Math.max(
+    CARD_OFFSET,
+    Math.min(top, vp.height - CARD_HEIGHT_ESTIMATE - CARD_OFFSET),
+  )
   return { top, left }
 }
 

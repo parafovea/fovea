@@ -36,12 +36,16 @@ describe('waitForAnchor', () => {
   })
 
   it('returns null when the anchor never appears (no throw)', async () => {
+    // waitForAnchor's ceiling is 8 s (bumped from the original 3 s to
+    // tolerate slow first-paints behind React.lazy + a slow /api round-
+    // trip), so the timer needs to be advanced past it for the resolver
+    // to settle on the no-anchor branch.
     vi.useFakeTimers()
     const promise = waitForAnchor('does-not-exist')
-    await vi.advanceTimersByTimeAsync(3100)
+    await vi.advanceTimersByTimeAsync(8100)
     const result = await promise
     expect(result).toBeNull()
-  })
+  }, 12000)
 
   it('resolves to the element when it appears mid-poll', async () => {
     vi.useFakeTimers()

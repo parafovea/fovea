@@ -533,7 +533,7 @@ export function ImportDataDialog({ open, onClose, onImportComplete }: ImportData
             {/* Format Documentation Accordion */}
             <Accordion>
               <AccordionItem value="format-spec">
-                <AccordionTrigger>
+                <AccordionTrigger data-tour-id="import-format-spec-trigger">
                   Format Specification & Example
                 </AccordionTrigger>
                 <AccordionContent>

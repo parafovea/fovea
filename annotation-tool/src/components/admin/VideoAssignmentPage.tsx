@@ -74,7 +74,7 @@ const assignmentKeys = {
  * @returns Array of assignment rules
  */
 async function fetchRules(): Promise<AssignmentRule[]> {
-  const response = await fetch('/api/admin/assignment-rules', { credentials: 'include' })
+  const response = await fetch('/api/admin/video-assignments/rules', { credentials: 'include' })
   if (!response.ok) {
     const error = await response.json()
     throw new Error(error.message || 'Failed to fetch assignment rules')
@@ -144,7 +144,7 @@ export function VideoAssignmentPage(): JSX.Element {
 
   const createRule = useMutation({
     mutationFn: async (data: RuleFormData) => {
-      const response = await fetch('/api/admin/assignment-rules', {
+      const response = await fetch('/api/admin/video-assignments/rules', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -164,7 +164,7 @@ export function VideoAssignmentPage(): JSX.Element {
 
   const updateRule = useMutation({
     mutationFn: async ({ id, data }: { id: string; data: RuleFormData }) => {
-      const response = await fetch(`/api/admin/assignment-rules/${id}`, {
+      const response = await fetch(`/api/admin/video-assignments/rules/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -184,7 +184,7 @@ export function VideoAssignmentPage(): JSX.Element {
 
   const deleteRule = useMutation({
     mutationFn: async (id: string) => {
-      const response = await fetch(`/api/admin/assignment-rules/${id}`, {
+      const response = await fetch(`/api/admin/video-assignments/rules/${id}`, {
         method: 'DELETE',
         credentials: 'include',
       })
@@ -202,7 +202,7 @@ export function VideoAssignmentPage(): JSX.Element {
 
   const evaluateRule = useMutation({
     mutationFn: async (ruleId: string) => {
-      const response = await fetch(`/api/admin/assignment-rules/${ruleId}/evaluate`, {
+      const response = await fetch(`/api/admin/video-assignments/rules/${ruleId}/evaluate`, {
         method: 'POST',
         credentials: 'include',
       })
@@ -219,7 +219,7 @@ export function VideoAssignmentPage(): JSX.Element {
 
   const applyAllRules = useMutation({
     mutationFn: async () => {
-      const response = await fetch('/api/admin/assignment-rules/apply-all', {
+      const response = await fetch('/api/admin/video-assignments/rules/evaluate-all', {
         method: 'POST',
         credentials: 'include',
       })
@@ -285,7 +285,7 @@ export function VideoAssignmentPage(): JSX.Element {
 
   if (isLoading) {
     return (
-      <div className="flex justify-center p-8">
+      <div className="flex justify-center p-8" data-tour-id="project-video-assignment">
         <Spinner />
       </div>
     )
@@ -293,7 +293,7 @@ export function VideoAssignmentPage(): JSX.Element {
 
   if (error) {
     return (
-      <div className="p-6">
+      <div className="p-6" data-tour-id="project-video-assignment">
         <Alert variant="destructive">
           <AlertDescription>
             Failed to load assignment rules: {error instanceof Error ? error.message : 'Unknown error'}

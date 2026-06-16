@@ -341,15 +341,23 @@ export default function LocationEditor({ open, onClose, location }: LocationEdit
   return (
     <>
     <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) handleCancel() }}>
-      <DialogContent data-tour-id="location-map-picker" className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
+      <DialogContent data-tour-id="location-map-picker" className="sm:max-w-3xl max-h-[90vh] !grid-rows-[auto_1fr_auto] !p-0 !gap-0">
+        <DialogHeader className="px-6 pt-6 pb-4 border-b">
           <DialogTitle className="flex items-center gap-2">
             <MapPin className="size-5 text-secondary" />
             {location ? 'Edit Location' : 'Create Location'}
             <TypeObjectBadge isType={false} />
           </DialogTitle>
         </DialogHeader>
-        <div className="flex flex-col gap-4">
+        {/* Scrollable body wrapper. Without this the form fields
+            overflow the DialogContent's max-h-[90vh] but the grid
+            layout doesn't surface a scrollbar (the rows auto-size to
+            content), so the Cancel / Save footer is rendered below the
+            viewport and unreachable — visitor can't save the location.
+            The grid-rows override above pins the header and footer to
+            fixed rows and gives the middle row min-h-0 + overflow-y so
+            the form scrolls cleanly. */}
+        <div className="flex flex-col gap-4 px-6 py-4 overflow-y-auto min-h-0">
           <Alert>
             <MapPin className="size-4" />
             <AlertDescription>
@@ -414,6 +422,7 @@ export default function LocationEditor({ open, onClose, location }: LocationEdit
             <Label htmlFor="location-name">Location Name *</Label>
             <Input
               id="location-name"
+              data-tour-id="location-name-input"
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Location name"
@@ -635,8 +644,18 @@ export default function LocationEditor({ open, onClose, location }: LocationEdit
                   setSelectedPersonaId(!value || value === '_none' ? '' : value)
                   setSelectedEntityTypeId('')
                 }}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Persona" />
+                  <SelectTrigger className="w-full truncate [&>span]:truncate [&>span]:block [&>span]:overflow-hidden">
+                    {/* Explicit child override: base-ui Select renders
+                        the controlled `value` prop verbatim (a UUID)
+                        when the matching SelectItem hasn't yet mounted
+                        (initial paint before the dropdown opens).
+                        Resolve the name from the personas list so the
+                        trigger never shows a raw id. */}
+                    <SelectValue placeholder="Persona">
+                      {selectedPersonaId
+                        ? personas.find((p) => p.id === selectedPersonaId)?.name ?? null
+                        : null}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="_none">Select Persona</SelectItem>
@@ -652,8 +671,19 @@ export default function LocationEditor({ open, onClose, location }: LocationEdit
               {selectedPersonaId && (
                 <div style={{ minWidth: 150 }}>
                   <Select value={selectedEntityTypeId || '_none'} onValueChange={(value) => setSelectedEntityTypeId(!value || value === '_none' ? '' : value)}>
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Entity Type" />
+                    <SelectTrigger className="w-full truncate [&>span]:truncate [&>span]:block [&>span]:overflow-hidden">
+                      {/* Explicit child override: base-ui Select renders
+                          the controlled `value` prop verbatim (a UUID)
+                          when the matching SelectItem hasn't yet
+                          mounted (initial paint before the dropdown
+                          opens). Resolve the name from the
+                          availableEntityTypes list so the trigger never
+                          shows a raw id. */}
+                      <SelectValue placeholder="Entity Type">
+                        {selectedEntityTypeId
+                          ? availableEntityTypes.find((t) => t.id === selectedEntityTypeId)?.name ?? null
+                          : null}
+                      </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="_none">Select Type</SelectItem>
@@ -678,7 +708,7 @@ export default function LocationEditor({ open, onClose, location }: LocationEdit
             </div>
           </div>
         </div>
-        <DialogFooter>
+        <DialogFooter className="px-6 py-4 border-t">
           <Button variant="outline" onClick={handleCancel}>Cancel</Button>
           <Button
             variant="secondary"

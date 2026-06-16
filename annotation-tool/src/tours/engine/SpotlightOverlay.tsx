@@ -57,7 +57,7 @@ function prefersReducedMotion(): boolean {
 export function SpotlightOverlay({
   target,
   modal = true,
-  backdropColor = 'rgba(0, 0, 0, 0.45)',
+  backdropColor = 'rgba(0, 0, 0, 0.55)',
 }: SpotlightOverlayProps) {
   const [rect, setRect] = useState<Rect | null>(null)
   const [viewport, setViewport] = useState(() => ({
@@ -146,7 +146,42 @@ export function SpotlightOverlay({
     }
   }, [target])
 
-  if (!rect) return null
+  // Full-screen backdrop when there is no specific anchor to spotlight
+  // OR the spotlight would cover most of the viewport (anchors like
+  // 'app-shell' are page-level; spotlighting them is the same as
+  // spotlighting nothing because there's no visible contrast between
+  // the cutout and the surround). Render a single dimming layer over
+  // the whole page so the step card has the visitor's focus.
+  const FULL_BACKDROP_COVERAGE_THRESHOLD = 0.7
+  const useFullBackdrop =
+    !rect ||
+    rect.width * rect.height >
+      viewport.width * viewport.height * FULL_BACKDROP_COVERAGE_THRESHOLD
+  if (useFullBackdrop) {
+    return (
+      <svg
+        data-fovea-tour-spotlight=""
+        width={viewport.width}
+        height={viewport.height}
+        style={{
+          position: 'fixed',
+          inset: 0,
+          zIndex: 1000,
+          pointerEvents: 'none',
+        }}
+        aria-hidden="true"
+      >
+        <rect
+          x={0}
+          y={0}
+          width={viewport.width}
+          height={viewport.height}
+          fill={backdropColor}
+          style={{ pointerEvents: modal ? 'auto' : 'none' }}
+        />
+      </svg>
+    )
+  }
 
   // Backdrop is built from four rectangles that surround the spotlight
   // hole. The spotlight rect itself has NO backdrop fill above it, so

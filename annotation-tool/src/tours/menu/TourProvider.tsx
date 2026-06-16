@@ -26,15 +26,38 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { Button } from '@components/ui/button'
 import { Play, X } from 'lucide-react'
 import { TourMenu } from './TourMenu'
 import { TourRunner, type TourTelemetryEvent } from '../engine'
-import type { TourScript } from '../engine/types'
+import type { TourScript, TourStep } from '../engine/types'
 import { getBuiltInTours } from '../scripts'
 import { microventContent } from '../content/microvent'
 import type { TourContentBundle } from '../content/types'
 import { TourContext, type TourContextValue } from './tour-context'
+
+/**
+ * Same resolution logic the TourRunner uses for per-step routes,
+ * lifted to module scope so `launch()` can compute the initial
+ * navigation target without a circular dependency on the runner. Tour
+ * scripts that pin step 0 to a concrete workspace get launched there;
+ * scripts that omit step 0's route fall through to `tour.startRoute`,
+ * which falls through to `/app`.
+ */
+function resolveStepRouteForLaunch(step: TourStep): string | null {
+  if (!step.route) return null
+  const params = step.routeParams ?? {}
+  return step.route.replace(/:([A-Za-z_][A-Za-z0-9_]*)/g, (_, name: string) => {
+    const value = params[name]
+    if (value === undefined) {
+      throw new Error(
+        `[tour] step anchor=${step.anchor} declared route ${step.route} but routeParams.${name} is undefined`,
+      )
+    }
+    return encodeURIComponent(value)
+  })
+}
 
 interface TourProviderProps {
   children: ReactNode
@@ -164,6 +187,20 @@ export function TourProvider({
   // double-write the pause storage entry.
   const pausingRef = useRef(false)
 
+  // VITE_DEMO_PUBLIC builds present the catalogue at `/` (TourCataloguePage).
+  // Every tour script is anchored to elements that live inside the
+  // authenticated Layout under `/app/*` (sidebar, video browser,
+  // workspaces). Launching a tour from the catalogue would paint the
+  // engine's "Couldn't find this UI element" banner on every step
+  // because none of those anchors exist on the public catalogue. The
+  // launch() implementation below uses these to navigate the visitor
+  // into `/app` BEFORE setting the active tour, so the runner mounts
+  // against the real Layout and its anchors resolve. Stock builds skip
+  // this (the catalogue isn't there and the user is already in /).
+  const navigate = useNavigate()
+  const location = useLocation()
+  const isDemoPublic = import.meta.env.VITE_DEMO_PUBLIC === '1'
+
   const captureTelemetry = useCallback(
     (e: TourTelemetryEvent) => {
       telemetryBufferRef.current.push(e)
@@ -188,6 +225,92 @@ export function TourProvider({
         clearPaused()
         setPaused(null)
       }
+      // Reset every workspace slice so a fresh launch never inherits a
+      // stale tab, persona, selection, detection panel, timeline
+      // position, or link target from a prior tour. The store exposes a
+      // single resetAllState() that returns every slice to its
+      // canonical initialState (18 slices including selectedAnnotation,
+      // ontologySelectedPersonaId, detectionResults, timelineExpanded,
+      // linkTarget*, currentFrame) — anything less than a full reset
+      // surfaces as cross-tour bleed (e.g. Tour 12 leaving the
+      // timeline open, Tour 6 leaving detection candidates mounted,
+      // Tour 4 leaving a link target set, Tour 3 leaving a persona
+      // selected). The annotationMode default is 'type' which matches
+      // every tour's expected starting mode.
+      if (typeof window !== 'undefined') {
+        try {
+          const mod = await import('@/store/zustand/annotationUiStore')
+          mod.useAnnotationUiStore.getState().resetAllState?.()
+        } catch {
+          // best-effort — the store may not be available in unit tests
+        }
+        // Dismiss any sticky Radix / base-ui dialog, popover, dropdown,
+        // or tooltip the previous tour left open. The Zustand reset
+        // above clears state, but a dialog whose open prop lives in a
+        // workspace that hasn't unmounted yet (route change happens
+        // later in this function) keeps painting until parent state
+        // flips. Two paths cover the two failure modes:
+        //   1. Escape keydown at the document. Both Radix and base-ui
+        //      register a document-level Escape listener that calls
+        //      onOpenChange(false, {reason:'escape-key'}). Our demo
+        //      Dialog wrapper allows escape-key through (only outside-
+        //      press / focus-out / trigger-press are intercepted), so
+        //      this closes any dialog whose parent flips state on
+        //      Escape.
+        //   2. Programmatic click on every visible dialog's close
+        //      button. Dialogs whose escape handler was suppressed by
+        //      a competing modal layer, or whose parent ignores the
+        //      Escape (no onEscapeKeyDown handler), still respond to
+        //      a click on the X button — every Radix / base-ui dialog
+        //      ships a CloseTrigger that flips its open state to
+        //      false synchronously.
+        try {
+          for (let i = 0; i < 2; i++) {
+            document.dispatchEvent(
+              new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
+            )
+            await new Promise((resolve) => setTimeout(resolve, 16))
+          }
+          const closeTriggers = document.querySelectorAll<HTMLElement>(
+            '[data-state="open"] [data-slot="dialog-close"], [data-state="open"] [aria-label="Close"]',
+          )
+          closeTriggers.forEach((btn) => btn.click())
+        } catch {
+          // ignore
+        }
+      }
+      // Persona pre-switch: every tour that names its demonstrator
+      // persona (via TourScript.personaName, sourced from the content
+      // bundle's per-tour personaName field) sets the active
+      // selectedPersonaId BEFORE the runner mounts so narrations like
+      // "as the Tech-Curious Spectator" / "from the Ballpark Guest
+      // Services Supervisor's perspective" match the persona dropdown
+      // in the workspace toolbar instead of leaving whatever persona
+      // happened to sort first selected. Best-effort: if the personas
+      // query is in-flight we don't block — the per-step logic later
+      // can still pick a persona, but narrating mismatched names is
+      // the first-paint failure the demo probe caught at step 5 of
+      // first-annotation ("Assign type 'Person'. The list comes from
+      // this persona's ontology" while showing the wrong persona).
+      if (tour.personaName && typeof window !== 'undefined') {
+        try {
+          const res = await fetch('/api/personas', {
+            credentials: 'include',
+          })
+          if (res.ok) {
+            const personas = (await res.json()) as Array<{ id: string; name: string }>
+            const wanted = personas.find(
+              (p) => p.name.toLowerCase() === tour.personaName!.toLowerCase(),
+            )
+            if (wanted) {
+              const mod = await import('@/store/zustand/annotationUiStore')
+              mod.useAnnotationUiStore.getState().setSelectedPersonaId?.(wanted.id)
+            }
+          }
+        } catch (err) {
+          console.warn('[tour] persona pre-switch failed', err)
+        }
+      }
       try {
         await onBeforeLaunch?.(tour)
       } catch (err) {
@@ -200,10 +323,45 @@ export function TourProvider({
         console.warn('[tour] onBeforeLaunch failed', err)
         return false
       }
+      // Decide the route to navigate to before mounting the runner.
+      // Precedence:
+      //   1. step 0's `route` (with routeParams substitution) — a
+      //      tour that pins its very first step to a specific
+      //      workspace effectively declares that workspace as its
+      //      entry. We honour that without forcing the author to
+      //      also set `startRoute`.
+      //   2. tour.startRoute — explicit per-tour entry point.
+      //   3. `/app` — the default authenticated landing.
+      //
+      // We always navigate when the visitor is on `/` (the public
+      // catalogue) so the runner mounts against the real Layout.
+      // For visitors already inside `/app/*`, only navigate if the
+      // target differs from the current pathname — avoid stomping
+      // a Sign-in-then-resume flow that already landed in the right
+      // place.
+      const step0Route =
+        tour.steps[0] ? resolveStepRouteForLaunch(tour.steps[0]) : null
+      const targetRoute = step0Route ?? tour.startRoute ?? '/app'
+      const needsNavigation =
+        isDemoPublic && targetRoute !== location.pathname
+      if (needsNavigation) {
+        navigate(targetRoute)
+        // Defer setActive to a microtask so React commits the route
+        // change before the runner mounts. waitForAnchor then handles
+        // any further settle delay (lazy sub-routes, animations).
+        await new Promise<void>((resolve) => queueMicrotask(resolve))
+      }
       setActive(tour)
       return true
     },
-    [captureTelemetry, onBeforeLaunch, paused],
+    [
+      captureTelemetry,
+      isDemoPublic,
+      location.pathname,
+      navigate,
+      onBeforeLaunch,
+      paused,
+    ],
   )
 
   // Pause: capture the runner's current step + the visitor's location
@@ -361,7 +519,18 @@ export function TourProvider({
           tour={active}
           onTelemetry={captureTelemetry}
           restoreFocusTo={restoreFocusRef.current}
-          onClose={() => setActive(null)}
+          onClose={() => {
+            setActive(null)
+            // VITE_DEMO_PUBLIC: when a tour finishes (or is abandoned)
+            // the booth visitor should land back on the public
+            // catalogue at `/` so they can pick another tour without
+            // hunting for the back button. Stock builds stay where
+            // they are — the user's workspace state is the natural
+            // post-tour destination.
+            if (isDemoPublic) {
+              navigate('/')
+            }
+          }}
           onPause={pause}
         />
       ) : null}

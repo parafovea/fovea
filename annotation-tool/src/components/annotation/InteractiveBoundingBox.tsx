@@ -164,10 +164,13 @@ export default function InteractiveBoundingBox({
 
   const strokeColor = getStrokeColor()
 
-  // Get visual style based on mode
-  // Type annotations use thinner stroke (2px), object annotations use thicker stroke (4px)
+  // Get visual style based on mode.
+  // Type annotations use stroke 3, object annotations use stroke 6.
+  // Earlier values (2 / 4) were too thin to see against the moving
+  // video frame underneath, especially for high-saturation regions
+  // and at lower viewport zooms.
   const getVisualStyle = () => {
-    const baseStroke = annotation.annotationType === 'type' ? 2 : 4
+    const baseStroke = annotation.annotationType === 'type' ? 3 : 6
     switch (mode) {
       case 'keyframe':
         return {
@@ -468,15 +471,27 @@ export default function InteractiveBoundingBox({
     return null
   }
 
-  // Get badge label
+  // Get badge label. For type annotations show the resolved type name
+  // (falling back to a category-prefixed id snippet so the visitor sees
+  // "entity • d20a07" instead of the literal category word "entity"
+  // which reads as if it were the actual type name). For object
+  // annotations, show the linked world object's name; only fall back
+  // to the kind-word literal ("Entity", "Event", …) when no linked
+  // object resolved at all, in which case the visitor at least sees
+  // what KIND of link the annotation declared.
   const badgeLabel =
-    isTypeAnnotation(annotation) ? (typeName || annotation.typeCategory) :
-    linkedObject?.name ||
-    (isObjectAnnotation(annotation) && annotation.linkedEntityId ? 'Entity' :
-     isObjectAnnotation(annotation) && annotation.linkedEventId ? 'Event' :
-     isObjectAnnotation(annotation) && annotation.linkedLocationId ? 'Location' :
-     isObjectAnnotation(annotation) && annotation.linkedCollectionId ? 'Collection' :
-     'Annotation')
+    isTypeAnnotation(annotation)
+      ? (typeName || `${annotation.typeCategory} • ${annotation.typeId.slice(0, 6)}`)
+      : linkedObject?.name ||
+        (isObjectAnnotation(annotation) && annotation.linkedEntityId
+          ? `Entity • ${annotation.linkedEntityId.slice(0, 6)}`
+          : isObjectAnnotation(annotation) && annotation.linkedEventId
+          ? `Event • ${annotation.linkedEventId.slice(0, 6)}`
+          : isObjectAnnotation(annotation) && annotation.linkedLocationId
+          ? `Location • ${annotation.linkedLocationId.slice(0, 6)}`
+          : isObjectAnnotation(annotation) && annotation.linkedCollectionId
+          ? `Collection • ${annotation.linkedCollectionId.slice(0, 6)}`
+          : 'Annotation')
 
   // Get badge variant based on annotation type
   const getBadgeVariant = (): 'default' | 'secondary' | 'destructive' | 'outline' => {
@@ -618,19 +633,25 @@ export default function InteractiveBoundingBox({
         </>
       )}
 
-      {/* Label for annotation type indicator */}
+      {/* Label for annotation type indicator. Sized for readability
+          over the video — earlier 0.75rem text with h-6 badge was
+          nearly illegible against busy frames; bumped the font to
+          1rem floor / 1.125rem ceiling and the badge height to
+          h-8, with a wider 240px foreignObject so longer labels
+          (e.g., "Spectator → spectator at LoanDepot Park") don't
+          truncate prematurely. */}
       {mode !== 'ghost' && (
         <foreignObject
           x={currentBox.x}
-          y={currentBox.y - 30}
-          width={200}
-          height={30}
+          y={currentBox.y - 38}
+          width={240}
+          height={38}
           style={{ pointerEvents: 'none', overflow: 'visible' }}
         >
           <div style={{ width: 'fit-content', display: 'flex', justifyContent: 'flex-start' }}>
             <Badge
               variant={getBadgeVariant()}
-              className="h-6 min-w-[60px] max-w-[180px] text-[clamp(10px,0.75rem,14px)] truncate"
+              className="h-8 min-w-[60px] max-w-[220px] text-[clamp(13px,1rem,18px)] font-semibold truncate px-2.5 shadow-sm"
             >
               {badgeLabel}
             </Badge>

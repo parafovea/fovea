@@ -249,7 +249,7 @@ export function GroupManagementPage(): JSX.Element {
   }
 
   return (
-    <div className="p-6">
+    <div className="p-6" data-tour-id="group-management-page">
       <div className="flex gap-4 mb-6 justify-end">
         <Button onClick={handleOpenCreate}>
           <Plus className="mr-2 h-4 w-4" />
@@ -409,8 +409,19 @@ export function GroupManagementPage(): JSX.Element {
             <div className="space-y-2">
               <Label htmlFor="member-user">User *</Label>
               <Select value={newMemberUserId} onValueChange={(val) => { if (val !== null) setNewMemberUserId(val) }}>
-                <SelectTrigger id="member-user">
-                  <SelectValue placeholder="Select a user" />
+                <SelectTrigger id="member-user" className="w-full truncate [&>span]:truncate [&>span]:block [&>span]:overflow-hidden">
+                  {/* Explicit child override: base-ui Select renders the
+                      controlled `value` prop verbatim (a UUID) when the
+                      matching SelectItem hasn't yet mounted (initial
+                      paint before the dropdown opens). Resolve the
+                      label from the allUsers list so the trigger never
+                      shows a raw id. */}
+                  <SelectValue placeholder="Select a user">
+                    {(() => {
+                      const u = allUsers.find((x) => x.id === newMemberUserId)
+                      return u ? `${u.username} (${u.displayName})` : null
+                    })()}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {allUsers.map((user) => (

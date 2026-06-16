@@ -269,7 +269,7 @@ function flushErrors(useKeepalive = false): void {
     : JSON.stringify({ errors: batch })
 
   try {
-    fetch(endpoint, {
+    fetch(endpoint, { credentials: 'include',
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -298,7 +298,7 @@ function sendErrorReport(report: ErrorReport, useKeepalive = false): void {
   report.sessionId = sessionId
 
   try {
-    fetch(config.endpoint, {
+    fetch(config.endpoint, { credentials: 'include',
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

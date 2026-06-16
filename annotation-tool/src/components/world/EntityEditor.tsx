@@ -249,6 +249,7 @@ export default function EntityEditor({ open, onClose, entity }: EntityEditorProp
             <Label htmlFor="entity-name">Name *</Label>
             <Input
               id="entity-name"
+              data-tour-id="entity-name-input"
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Entity name"
@@ -343,8 +344,16 @@ export default function EntityEditor({ open, onClose, entity }: EntityEditorProp
                   setSelectedPersonaId(value ?? '')
                   setSelectedEntityTypeId('')
                 }}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select Persona" />
+                  <SelectTrigger className="w-full truncate [&>span]:truncate [&>span]:block [&>span]:overflow-hidden">
+                    <SelectValue placeholder="Select Persona">
+                      {/* Force the resolved persona name into the
+                          trigger so base-ui never falls back to
+                          rendering the controlled value (a UUID) when
+                          the SelectItem siblings haven't mounted yet
+                          — the same bug AnnotationWorkspace's
+                          persona selector documents at length. */}
+                      {personas.find((p) => p.id === selectedPersonaId)?.name || 'Select Persona'}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     {personas.map(persona => (
@@ -357,8 +366,19 @@ export default function EntityEditor({ open, onClose, entity }: EntityEditorProp
 
                 {selectedPersonaId && (
                   <Select value={selectedEntityTypeId} onValueChange={(v) => setSelectedEntityTypeId(v ?? '')}>
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Select Entity Type" />
+                    <SelectTrigger className="w-full truncate [&>span]:truncate [&>span]:block [&>span]:overflow-hidden">
+                      {/* Explicit child override: base-ui Select renders
+                          the controlled `value` prop verbatim (a UUID)
+                          when the matching SelectItem hasn't yet
+                          mounted (initial paint before the dropdown
+                          opens). Resolve the name from the
+                          availableEntityTypes list so the trigger never
+                          shows a raw id. */}
+                      <SelectValue placeholder="Select Entity Type">
+                        {selectedEntityTypeId
+                          ? availableEntityTypes.find((t) => t.id === selectedEntityTypeId)?.name ?? null
+                          : null}
+                      </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
                       {availableEntityTypes.map(type => (

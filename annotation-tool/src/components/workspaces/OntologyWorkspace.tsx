@@ -149,6 +149,30 @@ export default function OntologyWorkspace() {
     }
   }, [selectedPersonaId, personas, selectedPersona, setSelectedPersonaIdStore])
 
+  // Auto-select the first available persona on a deployment that
+  // mounts the public tour catalogue (VITE_DEMO_PUBLIC=1). The
+  // ontology workspace renders <PersonaBrowser /> whenever
+  // selectedPersonaId is null and only renders the type-list tabs
+  // once a persona is picked, which means the ontology-rooted tours
+  // (ontology-authoring, wikidata-augmentation) launch into a
+  // workspace whose anchor (ontology-workspace-tabs) has not
+  // mounted. Auto-selecting the seeded Automated persona for a
+  // visitor who has not made an explicit choice yet brings the
+  // workspace into its expected state without forcing the visitor
+  // to click through a browser they did not ask for. The effect
+  // only fires when VITE_DEMO_PUBLIC=1, so the standard PersonaBrowser-
+  // first flow stays intact on every self-hosted deployment where
+  // an admin expects new users to pick a persona deliberately.
+  useEffect(() => {
+    if (
+      import.meta.env.VITE_DEMO_PUBLIC === '1' &&
+      !selectedPersonaId &&
+      personas.length > 0
+    ) {
+      setSelectedPersonaIdStore(personas[0].id)
+    }
+  }, [selectedPersonaId, personas, setSelectedPersonaIdStore])
+
   // Auto-save persona ontology on changes (debounced 1 second)
   useEffect(() => {
     if (!selectedPersonaId || !selectedOntology) return
@@ -516,19 +540,19 @@ export default function OntologyWorkspace() {
         className="flex-1 flex flex-col"
       >
         <TabsList className="mx-4 mt-2" data-tour-id="ontology-workspace-tabs">
-          <TabsTrigger value="entities">
+          <TabsTrigger value="entities" data-tour-id="ontology-tab-entities">
             <Blocks className="size-4 mr-1" />
             Entity Types ({filteredEntities.length}/{selectedOntology?.entities.length || 0})
           </TabsTrigger>
-          <TabsTrigger value="roles">
+          <TabsTrigger value="roles" data-tour-id="ontology-tab-roles">
             <Users className="size-4 mr-1" />
             Role Types ({filteredRoles.length}/{selectedOntology?.roles.length || 0})
           </TabsTrigger>
-          <TabsTrigger value="events">
+          <TabsTrigger value="events" data-tour-id="ontology-tab-events">
             <CalendarDays className="size-4 mr-1" />
             Event Types ({filteredEvents.length}/{selectedOntology?.events.length || 0})
           </TabsTrigger>
-          <TabsTrigger value="relations">
+          <TabsTrigger value="relations" data-tour-id="ontology-tab-relations">
             <Share2 className="size-4 mr-1" />
             Relation Types ({filteredRelations.length}/{selectedOntology?.relationTypes.length || 0})
           </TabsTrigger>
@@ -564,9 +588,9 @@ export default function OntologyWorkspace() {
               filteredEvents,
               handleEditEventType,
               (event) => deleteEventMutation({ personaId: selectedPersonaId, eventId: event.id }),
-              (event) => event.roles.length > 0 ? (
+              (event) => (event.roles?.length ?? 0) > 0 ? (
                 <span className="text-xs text-muted-foreground block">
-                  Roles: {event.roles.length}
+                  Roles: {event.roles?.length ?? 0}
                 </span>
               ) : null,
             )}
@@ -580,7 +604,7 @@ export default function OntologyWorkspace() {
               (relation) => deleteRelationTypeMutation({ personaId: selectedPersonaId, relationTypeId: relation.id }),
               (relation) => (
                 <span className="text-xs text-muted-foreground block">
-                  {relation.sourceTypes.join(', ')} -&gt; {relation.targetTypes.join(', ')}
+                  {(relation.sourceTypes ?? []).join(', ')} -&gt; {(relation.targetTypes ?? []).join(', ')}
                 </span>
               ),
             )}
@@ -596,6 +620,7 @@ export default function OntologyWorkspace() {
                 size="icon-lg"
                 className="absolute bottom-4 right-4 rounded-full shadow-lg"
                 aria-label="add type"
+                data-tour-id="ontology-add-type-button"
                 onClick={handleAddType}
               />
             }

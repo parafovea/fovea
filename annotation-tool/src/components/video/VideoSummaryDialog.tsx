@@ -69,7 +69,23 @@ export default function VideoSummaryDialog({
             onValueChange={(value) => setSelectedPersonaId(value || null)}
           >
             <SelectTrigger className="w-full" id="summary-persona-select">
-              <SelectValue placeholder="Select a persona to create a summary" />
+              {/* Explicit child override: the base-ui Select reads its
+                  trigger label from a matching SelectItem ref AFTER the
+                  Content portal mounts. On first paint the dialog opens
+                  with `selectedPersonaId` already set but
+                  `<SelectContent>` is closed, so no SelectItem has
+                  reported its label yet — base-ui falls back to rendering
+                  the raw `value` (a UUID) until the menu is opened once.
+                  Resolving the label here from the personas list and
+                  passing it as the SelectValue child overrides that fall-
+                  back so the dropdown shows the persona's name on first
+                  paint, not its UUID. */}
+              <SelectValue placeholder="Select a persona to create a summary">
+                {(() => {
+                  const p = personas.find((x) => x.id === selectedPersonaId)
+                  return p ? `${p.name} (${p.role})` : null
+                })()}
+              </SelectValue>
             </SelectTrigger>
             <SelectContent>
               {personas.length === 0 && (
@@ -79,7 +95,7 @@ export default function VideoSummaryDialog({
               )}
               {personas.map((persona) => (
                 <SelectItem key={persona.id} value={persona.id}>
-                  {persona.name} - {persona.role}
+                  {persona.name} ({persona.role})
                 </SelectItem>
               ))}
             </SelectContent>

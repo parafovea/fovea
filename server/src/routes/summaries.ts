@@ -16,6 +16,7 @@ import { videoSummarizationQueue } from '../queues/setup.js'
 import { NotFoundError, ForbiddenError } from '../lib/errors.js'
 import { requireAuth } from '../middleware/auth.js'
 import { buildAbilities } from '../middleware/abilities.js'
+import { isDemoModeEnabled } from '../lib/demo-flags.js'
 
 /**
  * Job data for video summarization queue.
@@ -228,7 +229,14 @@ const summariesRoute: FastifyPluginAsync = async (fastify) => {
       }
 
       if (!request.ability.can('read', subject('VideoSummary', summary))) {
-        throw new ForbiddenError('Cannot read this VideoSummary')
+        // FOVEA_DEMO_MODE override — callers whose CASL ability
+        // is scoped to their own data (anonymous demo sessions,
+        // non-admin users opening a tour) still need to read
+        // summaries that the seeded persona produced over the
+        // shared demo corpus.
+        if (!isDemoModeEnabled()) {
+          throw new ForbiddenError('Cannot read this VideoSummary')
+        }
       }
 
       return reply.send(summary)
@@ -305,7 +313,28 @@ const summariesRoute: FastifyPluginAsync = async (fastify) => {
         where: { videoId_personaId: { videoId, personaId } },
       })
       if (existing && !request.ability.can('update', subject('VideoSummary', existing))) {
-        throw new ForbiddenError('Cannot update this VideoSummary')
+        // FOVEA_DEMO_MODE override: VideoSummary rows in the demo
+        // deployment are routinely orphaned when the idle-reset
+        // sweeper deletes a stale demo-anonymous-* user but leaves
+        // the row behind with a now-dangling createdBy. Without
+        // this branch the next demo visitor hits "Cannot update this
+        // VideoSummary" on every video that any prior demo session
+        // touched. In demo mode we reclaim the row by overwriting
+        // createdBy to the current demo user before the update goes
+        // through (the row is still scoped to the same persona +
+        // video so no cross-user content leaks, and the existing
+        // row's content will be replaced by the new summarize job).
+        if (
+          isDemoModeEnabled() &&
+          request.user?.username?.startsWith('demo-anonymous-')
+        ) {
+          await fastify.prisma.videoSummary.update({
+            where: { videoId_personaId: { videoId, personaId } },
+            data: { createdBy: userId },
+          })
+        } else {
+          throw new ForbiddenError('Cannot update this VideoSummary')
+        }
       }
 
       const jobData: SummarizeJobData = {
@@ -505,12 +534,26 @@ const summariesRoute: FastifyPluginAsync = async (fastify) => {
       const userId = request.user!.id
 
       // Resolve project scope from the persona. Required for CASL's
-      // project-scoped conditions to evaluate correctly.
+      // project-scoped conditions to evaluate correctly. Pulled with
+      // userId + isSystemGenerated so the ownership precheck below can
+      // verify the persona is one the caller is allowed to author
+      // under without an extra round-trip.
       const persona = await fastify.prisma.persona.findUnique({
         where: { id: personaId },
-        select: { projectId: true },
+        select: { projectId: true, userId: true, isSystemGenerated: true },
       })
       if (!persona) throw new NotFoundError('Persona', personaId)
+
+      // Ensure the caller can use this persona as the summary's owner.
+      // The v0.4.1 baseline create rule grants any signed-in user a
+      // self-owning create on VideoSummary; without an explicit persona
+      // precheck a user could hang a summary off another user's
+      // private persona (the @@unique([videoId, personaId]) would then
+      // wedge the real owner out of their own row). Mirrors the same
+      // check the annotations POST route already runs.
+      if (!request.ability.can('read', subject('Persona', persona))) {
+        throw new ForbiddenError('Cannot create a summary under this Persona')
+      }
 
       // Load any existing row so we can distinguish create vs update and
       // apply the correct instance-level check.
@@ -520,7 +563,20 @@ const summariesRoute: FastifyPluginAsync = async (fastify) => {
 
       if (existing) {
         if (!request.ability.can('update', subject('VideoSummary', existing))) {
-          throw new ForbiddenError('Cannot update this VideoSummary')
+          // FOVEA_DEMO_MODE override (same rationale as the
+          // queue-summarize route): reclaim orphan summaries left
+          // behind by the idle-reset sweeper instead of 403-ing.
+          if (
+            isDemoModeEnabled() &&
+            request.user?.username?.startsWith('demo-anonymous-')
+          ) {
+            await fastify.prisma.videoSummary.update({
+              where: { videoId_personaId: { videoId, personaId } },
+              data: { createdBy: userId },
+            })
+          } else {
+            throw new ForbiddenError('Cannot update this VideoSummary')
+          }
         }
       } else {
         const candidate = subject('VideoSummary', {

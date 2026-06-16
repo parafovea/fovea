@@ -77,7 +77,7 @@ export default function GroupsPage(): JSX.Element {
     <div className="mx-auto max-w-screen-lg px-4" data-tour-id="groups-page">
       <div className="flex items-center justify-between py-6">
         <h1 className="text-2xl font-bold">My Groups</h1>
-        <Button onClick={() => setDialogOpen(true)}>
+        <Button data-tour-id="groups-create-button" onClick={() => setDialogOpen(true)}>
           <Plus className="size-4" />
           Create Group
         </Button>
@@ -132,6 +132,7 @@ export default function GroupsPage(): JSX.Element {
               <Label htmlFor="group-name">Name</Label>
               <Input
                 id="group-name"
+                data-tour-id="group-name-input"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 autoFocus

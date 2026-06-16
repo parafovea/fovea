@@ -7,7 +7,7 @@
  * update across the catalogue without touching the engine.
  *
  * Importers that need the static catalogue (the menu when no admin
- * override is in scope; the static-anchor smoke; the test handle's
+ * override is in scope. The static-anchor smoke. The test handle's
  * findTour) read `defaultBuiltInTours`. Importers that need to render
  * tours against a specific admin's bundle call `getBuiltInTours(bundle)`.
  */

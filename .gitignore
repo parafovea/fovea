@@ -78,7 +78,16 @@ storybook-static/
 # Generated API documentation
 docs/docs/api-reference/frontend/
 docs/docs/api-reference/backend/
+docs/docs/api-reference/model-service/
 docs/static/api-reference/
+
+# Ad-hoc dev probe scripts (one-off Playwright / Node helpers).
+# Matches at any depth so probe-live.mjs at repo root and
+# annotation-tool/probe-*.mjs are both ignored. The four
+# probes that pre-date this rule (probe-gloss / probe-one /
+# probe-state-isolation / probe-tours) stay tracked because
+# gitignore does not retroactively untrack files.
+probe-*.mjs
 docs/api/
 model-service/docs/_build/
 model-service/docs/make.bat
