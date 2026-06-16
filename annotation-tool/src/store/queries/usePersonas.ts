@@ -124,8 +124,30 @@ export function usePersonaOntology(personaId: string | null | undefined) {
 }
 
 /**
+ * Batch-fetch ontologies for many personas in a single request.
+ */
+async function fetchPersonaOntologiesBatch(personaIds: string[]): Promise<PersonaOntology[]> {
+  const response = await fetch('/api/personas/ontologies', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ personaIds }),
+  })
+  if (!response.ok) {
+    throw new Error('Failed to fetch persona ontologies')
+  }
+  const data = await response.json()
+  return Array.isArray(data) ? data : []
+}
+
+/**
  * Hook to fetch all persona ontologies (for multiple personas).
  * Useful when you need all ontologies at once.
+ *
+ * Issues a single batched request rather than one request per persona, so the
+ * VideoBrowser's initial load does not fan out into O(personas) calls (which on
+ * a large deployment trips the server rate limit). The per-persona ontology
+ * cache is seeded from the response so single-persona readers stay warm.
  */
 export function useAllPersonaOntologies(personaIds: string[]) {
   const queryClient = useQueryClient()
@@ -133,16 +155,12 @@ export function useAllPersonaOntologies(personaIds: string[]) {
   return useQuery({
     queryKey: [...personaKeys.allOntologies(), personaIds.join(',')],
     queryFn: async () => {
-      const ontologies: PersonaOntology[] = []
-      for (const personaId of personaIds) {
-        // Try to get from cache first
-        const cached = queryClient.getQueryData<PersonaOntology>(personaKeys.ontology(personaId))
-        if (cached) {
-          ontologies.push(cached)
-        } else {
-          const ontology = await fetchPersonaOntology(personaId)
-          queryClient.setQueryData(personaKeys.ontology(personaId), ontology)
-          ontologies.push(ontology)
+      const ontologies = await fetchPersonaOntologiesBatch(personaIds)
+      // Seed the per-persona ontology cache so single-persona readers
+      // (usePersonaOntology) hit the cache instead of refetching.
+      for (const ontology of ontologies) {
+        if (ontology.personaId) {
+          queryClient.setQueryData(personaKeys.ontology(ontology.personaId), ontology)
         }
       }
       return ontologies

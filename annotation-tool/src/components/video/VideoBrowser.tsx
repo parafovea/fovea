@@ -48,7 +48,7 @@ import { useAnnotationUiStore } from '@store/zustand'
 import { formatTimestamp, formatDuration } from '@utils/formatters'
 import { VideoMetadata, Persona } from '@models/types'
 import { useCommands, useCommandContext } from '@hooks/commands'
-import { useVideos, useGenerateSummary, useVideoSummary, useModelConfig } from '@store/queries'
+import { useVideos, useGenerateSummary, useVideoSummary, useVideoSummariesLookup, useModelConfig } from '@store/queries'
 import { useMergedOverrides } from '@/store/preferences/useInferencePreferences'
 import { useVideoUiStore } from '@store/zustand'
 import { VideoSummaryCard } from './VideoSummaryCard'
@@ -247,6 +247,17 @@ export default function VideoBrowser() {
       video.tags?.some(tag => tag.toLowerCase().includes(searchLower))
     )
   })
+
+  // Batch which videos already have a summary for the active persona in one
+  // request, rather than letting each VideoCard fetch its own. Keyed on the
+  // full video list (not the search-filtered subset) so typing in the search
+  // box does not refetch; cards read the cache this seeds. Cards are gated on
+  // `summariesLoaded` so they never issue their own per-card request.
+  const allVideoIds = videos.map((video: VideoMetadata) => video.id)
+  const { isSuccess: summariesLoaded } = useVideoSummariesLookup(
+    allVideoIds,
+    activePersonaId || ''
+  )
 
   /**
    * Calculates grid layout columns based on viewport width.
@@ -513,6 +524,7 @@ export default function VideoBrowser() {
               modelsDisabled={modelsDisabled}
               allowExternalVideoLinks={allowExternalVideoLinks}
               addVideoSummary={addVideoSummary}
+              summariesLoaded={summariesLoaded}
             />
           )
         })}
@@ -576,6 +588,12 @@ interface VideoCardProps {
   allowExternalVideoLinks: boolean
   /** Handler to sync discovered summaries to local state */
   addVideoSummary: (videoId: string, personaId: string) => void
+  /**
+   * Whether the batched per-persona summary lookup has settled. The card's own
+   * useVideoSummary is gated on this so it reads the cache the batch seeded
+   * instead of firing a per-card request (avoids the initial-load fan-out).
+   */
+  summariesLoaded: boolean
 }
 
 /**
@@ -602,6 +620,7 @@ function VideoCard({
   modelsDisabled,
   allowExternalVideoLinks,
   addVideoSummary,
+  summariesLoaded,
 }: VideoCardProps) {
   const jobKey = activePersonaId ? `${video.id}:${activePersonaId}` : null
   const activeJobId = jobKey ? activeSummaryJobs[jobKey] : null
@@ -612,9 +631,13 @@ function VideoCard({
     video.id,
     activePersonaId || '',
     {
-      // Always attempt to fetch summary when persona is active - don't rely on local state
-      // This ensures summaries created in other browsers/sessions are discovered
-      enabled: !!activePersonaId,
+      // Gated on the batched lookup settling. The batch seeds this exact cache
+      // key (value or null) for every visible video, so once enabled this query
+      // reads fresh cache and never fires its own per-card request — which is
+      // what previously fanned the initial load out into one request per video.
+      // This still discovers summaries created in other browsers/sessions,
+      // because the batch is what does the discovery.
+      enabled: !!activePersonaId && summariesLoaded,
     }
   )
 

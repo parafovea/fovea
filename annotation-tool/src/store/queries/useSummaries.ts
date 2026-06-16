@@ -29,6 +29,8 @@ export const summaryKeys = {
   video: (videoId: string) => [...summaryKeys.videos(), videoId] as const,
   summary: (videoId: string, personaId: string) =>
     [...summaryKeys.video(videoId), personaId] as const,
+  lookup: (personaId: string, videoIds: string[]) =>
+    [...summaryKeys.all, 'lookup', personaId, videoIds.join(',')] as const,
 }
 
 /**
@@ -76,6 +78,43 @@ export function useVideoSummary(
     queryFn: () => apiClient.getVideoSummary(videoId, personaId),
     staleTime: 5 * 60 * 1000, // 5 minutes
     ...options,
+  })
+}
+
+/**
+ * Batch-fetch which of many videos already have a summary for one persona.
+ *
+ * Replaces the per-video {@link useVideoSummary} fan-out on the VideoBrowser's
+ * initial load (one request per card) with a single request. On success it
+ * seeds the per-(video, persona) cache for every requested video — the returned
+ * summary where one exists, otherwise `null` — so the per-card
+ * {@link useVideoSummary} reads fresh cache and never fires its own request
+ * (gate each card's `enabled` on this query's success).
+ *
+ * @param videoIds - Video identifiers to look up
+ * @param personaId - Persona identifier (empty disables the query)
+ * @returns Query result whose data is the sparse array of existing summaries
+ */
+export function useVideoSummariesLookup(videoIds: string[], personaId: string) {
+  const queryClient = useQueryClient()
+
+  return useQuery<VideoSummary[], ApiError>({
+    queryKey: summaryKeys.lookup(personaId, videoIds),
+    queryFn: async () => {
+      const summaries = await apiClient.lookupVideoSummaries(videoIds, personaId)
+      const byVideo = new Map(summaries.map((s) => [s.videoId, s]))
+      // Seed every requested video's cache so the per-card useVideoSummary
+      // resolves from cache (value or null) instead of issuing a request.
+      for (const videoId of videoIds) {
+        queryClient.setQueryData(
+          summaryKeys.summary(videoId, personaId),
+          byVideo.get(videoId) ?? null
+        )
+      }
+      return summaries
+    },
+    enabled: !!personaId && videoIds.length > 0,
+    staleTime: 5 * 60 * 1000, // 5 minutes
   })
 }
 

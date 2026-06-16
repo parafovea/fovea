@@ -693,6 +693,80 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
   })
 
   /**
+   * Batch-fetch ontologies for many personas in one round-trip.
+   *
+   * The VideoBrowser needs every visible persona's ontology on initial load.
+   * Fetching them one at a time (GET /api/personas/:id/ontology per persona)
+   * turns a single page load into one request per persona, which on a large
+   * deployment fans out far enough to trip the rate limit. This endpoint
+   * applies the same per-persona read-permission rules as the single GET and
+   * returns only the ontologies the caller may read (personas that are missing,
+   * have no ontology, or are not readable are simply omitted). Each entry
+   * carries its `personaId` so the client can index the result.
+   */
+  fastify.post<{ Body: { personaIds: string[] } }>('/api/personas/ontologies', {
+    onRequest: [optionalAuth, buildAbilities],
+    schema: {
+      description: 'Batch-fetch ontologies for multiple personas',
+      tags: ['personas', 'ontology'],
+      body: Type.Object({
+        personaIds: Type.Array(Type.String({ format: 'uuid' }), { maxItems: 100000 })
+      }),
+      response: {
+        200: Type.Array(Type.Object({
+          id: Type.String(),
+          personaId: Type.String(),
+          entities: Type.Array(Type.Any()),
+          roles: Type.Array(Type.Any()),
+          events: Type.Array(Type.Any()),
+          relationTypes: Type.Array(Type.Any()),
+          relations: Type.Array(Type.Any()),
+          createdAt: Type.String(),
+          updatedAt: Type.String()
+        }))
+      }
+    }
+  }, async (request, reply) => {
+    const { personaIds } = request.body
+    if (personaIds.length === 0) {
+      return reply.send([])
+    }
+
+    const personas = await fastify.prisma.persona.findMany({
+      where: { id: { in: personaIds } },
+      include: { ontology: true }
+    })
+
+    const ontologies = []
+    for (const persona of personas) {
+      if (!persona.ontology) continue
+
+      // Mirror the read checks from GET /api/personas/:id/ontology exactly.
+      if (!request.user || !request.ability) {
+        // Unauthenticated: only visible system personas.
+        if (!persona.isSystemGenerated || persona.hidden) continue
+      } else if (!request.ability.can('read', subject('Persona', persona))) {
+        // Demo mode widens read to seeded system personas (see single GET).
+        if (!isDemoModeEnabled() || !persona.isSystemGenerated) continue
+      }
+
+      ontologies.push({
+        id: persona.ontology.id,
+        personaId: persona.ontology.personaId,
+        entities: persona.ontology.entityTypes || [],
+        roles: persona.ontology.roleTypes || [],
+        events: persona.ontology.eventTypes || [],
+        relationTypes: persona.ontology.relationTypes || [],
+        relations: [],
+        createdAt: persona.ontology.createdAt.toISOString(),
+        updatedAt: persona.ontology.updatedAt.toISOString()
+      })
+    }
+
+    return reply.send(ontologies)
+  })
+
+  /**
    * Update ontology for a specific persona.
    */
   fastify.put<{ Params: { id: string }; Body: OntologyUpdateBody }>('/api/personas/:id/ontology', {

@@ -9,9 +9,11 @@ import { ReactNode } from 'react'
 import {
   useVideoSummaries,
   useVideoSummary,
+  useVideoSummariesLookup,
   useGenerateSummary,
   useSaveSummary,
   useDeleteSummary,
+  summaryKeys,
 } from './useSummaries'
 import { server } from '@test/setup'
 import { http, HttpResponse } from 'msw'
@@ -219,6 +221,71 @@ describe('useSummaries hooks', () => {
 
       await waitFor(() => expect(result.current.isError).toBe(true))
       expect(result.current.error).toBeTruthy()
+    })
+  })
+
+  describe('useVideoSummariesLookup', () => {
+    it('issues a single batched request and seeds the per-video cache (value and null)', async () => {
+      let lookupCalls = 0
+      server.use(
+        http.post('/api/videos/summaries/lookup', async ({ request }) => {
+          lookupCalls++
+          const body = (await request.json()) as { videoIds: string[]; personaId: string }
+          // Only vid-a has a summary; vid-b and vid-c do not.
+          return HttpResponse.json(
+            body.videoIds.includes('vid-a')
+              ? [{ id: 's-a', videoId: 'vid-a', personaId: body.personaId, summary: [] }]
+              : []
+          )
+        })
+      )
+
+      const queryClient = new QueryClient({
+        defaultOptions: { queries: { retry: false } },
+      })
+      const wrapper = ({ children }: { children: ReactNode }) => (
+        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+      )
+
+      const videoIds = ['vid-a', 'vid-b', 'vid-c']
+      const { result } = renderHook(
+        () => useVideoSummariesLookup(videoIds, 'persona-1'),
+        { wrapper }
+      )
+
+      await waitFor(() => expect(result.current.isSuccess).toBe(true))
+
+      // One request replaced what used to be one-per-video.
+      expect(lookupCalls).toBe(1)
+      expect(result.current.data).toHaveLength(1)
+
+      // Every requested video's per-(video, persona) cache is seeded: the
+      // existing summary for vid-a, and null for vid-b / vid-c, so the
+      // per-card useVideoSummary never has to fetch.
+      expect(queryClient.getQueryData(summaryKeys.summary('vid-a', 'persona-1'))).toMatchObject({
+        videoId: 'vid-a',
+      })
+      expect(queryClient.getQueryData(summaryKeys.summary('vid-b', 'persona-1'))).toBeNull()
+      expect(queryClient.getQueryData(summaryKeys.summary('vid-c', 'persona-1'))).toBeNull()
+    })
+
+    it('is disabled when no persona is selected', async () => {
+      let lookupCalls = 0
+      server.use(
+        http.post('/api/videos/summaries/lookup', () => {
+          lookupCalls++
+          return HttpResponse.json([])
+        })
+      )
+
+      const { result } = renderHook(() => useVideoSummariesLookup(['vid-a'], ''), {
+        wrapper: createWrapper(),
+      })
+
+      // Give any erroneous request a chance to fire.
+      await new Promise((r) => setTimeout(r, 50))
+      expect(result.current.fetchStatus).toBe('idle')
+      expect(lookupCalls).toBe(0)
     })
   })
 })

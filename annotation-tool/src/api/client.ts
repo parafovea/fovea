@@ -815,6 +815,33 @@ export class ApiClient {
   }
 
   /**
+   * Batch lookup of summaries for many videos under a single persona.
+   *
+   * Replaces O(videos) calls to {@link getVideoSummary} on the VideoBrowser's
+   * initial render with a single request. Returns only the summaries that exist
+   * and that the caller may read; videos with no summary are simply absent.
+   *
+   * @param videoIds - Video identifiers to look up
+   * @param personaId - Persona identifier
+   * @returns Array of video summaries (sparse — only those that exist)
+   * @throws ApiError if request fails
+   */
+  async lookupVideoSummaries(
+    videoIds: string[],
+    personaId: string
+  ): Promise<VideoSummary[]> {
+    try {
+      const response = await this.client.post<VideoSummary[]>(
+        '/api/videos/summaries/lookup',
+        { videoIds, personaId }
+      )
+      return Array.isArray(response.data) ? response.data : []
+    } catch (error) {
+      throw this.handleError(error)
+    }
+  }
+
+  /**
    * Queue a video summary generation job.
    *
    * @param request - Summary generation parameters
