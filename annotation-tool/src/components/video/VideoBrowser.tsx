@@ -254,7 +254,12 @@ export default function VideoBrowser() {
   // box does not refetch; cards read the cache this seeds. Cards are gated on
   // `summariesLoaded` so they never issue their own per-card request.
   const allVideoIds = videos.map((video: VideoMetadata) => video.id)
-  const { isSuccess: summariesLoaded } = useVideoSummariesLookup(
+  // Gate the per-card summary fetch on the batch lookup having SETTLED (not just
+  // succeeded): on success the cache is seeded so cards read it without a
+  // request; on failure (e.g. an older backend without the batch route) the
+  // cards fall back to fetching individually, so the feature degrades
+  // gracefully instead of leaving summaries permanently unloaded.
+  const { isFetched: summariesLoaded } = useVideoSummariesLookup(
     allVideoIds,
     activePersonaId || ''
   )

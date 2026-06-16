@@ -5,6 +5,42 @@ All notable changes to the Fovea project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.3] - 2026-06-16
+
+This release works through the open issue backlog: it closes three issues that were already resolved on `main` (verified by running their tests) and fixes four that were still outstanding.
+
+### Added
+
+#### Claim Timestamps (#134)
+
+- Claims can now record the video segment(s) they are grounded in. A new `Claim.timeSpans` JSON column (`server/prisma/schema.prisma`, migration `20260616000000_add_claim_time_spans`) stores a list of `{ start, end, source, annotationIds? }` objects, supporting **discontiguous** spans, and is threaded through the claim create/update routes and their TypeBox schemas (`server/src/routes/claims.ts`), import (`server/src/services/import-handler.ts`), and export (`server/src/services/export-handler.ts`). The matching frontend type is `ClaimTimeSpan` in `annotation-tool/src/models/claims.ts`.
+- The `ClaimEditor` lets annotators set spans two ways: by **scrubbing** the video — the dialog hides, a workspace capture banner reads the playhead for the span start then end, and the dialog returns with the span appended (state machine in `annotation-tool/src/store/zustand/claimsUiStore.ts`, banner + hide/reopen wiring in `AnnotationWorkspace.tsx` / `VideoSummaryEditor.tsx`) — or by **deriving** spans from the time bounds of selected object/bounding-box annotations (reusing `getAnnotationTimeBounds`). Spans render as removable chips in the editor and read-only badges in `ClaimsViewer`.
+
+#### Recursive Video Discovery + Corpus Manifest (#108)
+
+- `LocalStorageProvider.listVideos` (`server/src/services/videoStorage.ts`) now discovers videos recursively, so videos organized into subdirectories sync without flattening; keys are stored subdirectory-relative and resolve through the existing streaming and metadata-sidecar paths.
+- A new optional `fovea.manifest.json` at the root of the videos storage declares projects and user groups. During sync (`server/src/services/videoManifest.ts`, applied from `server/src/services/videoSync.ts`), projects and groups are upserted by slug, group memberships are reconciled additively (members are added and roles updated, never removed), and each video is assigned to the project whose path glob is the most specific match ("nearest wins"). Assignments carry `source: "folder"` and re-syncing is idempotent. A missing manifest is a no-op; a malformed one is logged and skipped. Documented in `docs/docs/guide/deployment.md`.
+
+#### Batch Lookup Endpoints (#136)
+
+- `POST /api/personas/ontologies` and `POST /api/videos/summaries/lookup` return sparse arrays in a single round-trip, replacing the per-persona and per-video request fan-out on the VideoBrowser's initial load.
+
+### Fixed
+
+#### Auth Race Lets Logged-Out Users Briefly See the Video Browser (#92)
+
+- `ProtectedRoute` (`annotation-tool/src/App.tsx`) now holds the loading screen until `appConfig !== null`, and `useSession` (`annotation-tool/src/hooks/auth/useSession.ts`) wraps the `/api/config` fetch in a bounded exponential-backoff retry (`[500, 1000, 2000, 4000, 8000]` ms). Previously a transient 5xx on `/api/config` under load left the deployment mode unknown (defaulting to single-user) while a `/api/auth/me` 401 cleared the loading flag, so a logged-out visitor briefly fell through to the protected Layout. The jsdom test setup also gains a Web Storage polyfill so the persisted auth store can write during tests.
+
+#### Initial-Load Fan-Out Trips the Rate Limit (#136)
+
+- The frontend no longer fans a hard refresh out into one request per persona and one per video. `useAllPersonaOntologies` and the VideoBrowser per-card summary fetch now use the new batch endpoints and seed the per-id caches; the per-card `useVideoSummary` is gated on the batch settling and falls back to individual fetches if the batch route is unavailable. The Fastify rate-limit cap and window are now env-configurable via `RATE_LIMIT_MAX` and `RATE_LIMIT_WINDOW` (`server/src/app.ts`) so operators can size the limit to their corpus.
+
+### Verified Already Resolved (closed without code change)
+
+- **#100 — Import yields annotation conflicts for new users.** Cross-user import already regenerates all UUIDs on `main`; confirmed by `server/test/services/import-cross-user.test.ts`, `import-handler-remap-ids.test.ts`, and the `cross-user-import-{foreign,rich,real}-fixture` + `import-export-cross-user` integration tests.
+- **#121 — Display issues for imported annotations.** Entity deduplication and structure-agnostic inline-UUID remapping already ship on `main`; the foreign/rich fixtures assert no duplicate annotations, claims display, and no stale exporter UUIDs in claim text.
+- **#122 — Vitest dual-React Dialog tests.** The dual-React `useContext` failure no longer reproduces on `main`; the exact files named in the issue (`persona-deletion.test.tsx`, `PersonaBrowser.test.tsx`) and the Dialog-rendering tests all pass.
+
 ## [0.4.2] - 2026-06-06
 
 ### Fixed
