@@ -1413,4 +1413,62 @@ describe('ClaimEditor', () => {
       expect(useClaimsUiStore.getState().draftClaim).toBeNull()
     })
   })
+
+  describe('time spans', () => {
+    it('renders existing discontiguous time spans as chips', () => {
+      const claim: Claim = {
+        ...mockClaim,
+        timeSpans: [
+          { start: 1.5, end: 3.0, source: 'scrub' },
+          { start: 10.0, end: 12.5, source: 'annotation', annotationIds: ['a-1'] },
+        ],
+      }
+      render(<ClaimEditor {...defaultProps} claim={claim} />, { wrapper: createWrapper() })
+
+      const chips = screen.getAllByTestId('claim-time-span-chip')
+      expect(chips).toHaveLength(2)
+      // The annotation-derived span is marked as such.
+      expect(screen.getByText('(object)')).toBeInTheDocument()
+    })
+
+    it('begins a scrub capture: persists the draft, enters capture mode, and closes', async () => {
+      const user = userEvent.setup()
+      const onClose = vi.fn()
+      render(<ClaimEditor {...defaultProps} onClose={onClose} />, { wrapper: createWrapper() })
+
+      await user.click(screen.getByTestId('claim-scrub-capture-button'))
+
+      expect(onClose).toHaveBeenCalled()
+      expect(useClaimsUiStore.getState().timestampCapture).toEqual({ phase: 'start' })
+      const draft = useClaimsUiStore.getState().draftClaim
+      expect(draft).not.toBeNull()
+      expect(draft?.videoId).toBe('video-1')
+    })
+
+    it('includes timeSpans in the saved claim and lets a chip be removed', async () => {
+      const user = userEvent.setup()
+      const onSave = vi.fn()
+      const claim: Claim = {
+        ...mockClaim,
+        timeSpans: [
+          { start: 1.0, end: 2.0, source: 'scrub' },
+          { start: 5.0, end: 6.0, source: 'scrub' },
+        ],
+      }
+      render(<ClaimEditor {...defaultProps} claim={claim} onSave={onSave} />, {
+        wrapper: createWrapper(),
+      })
+
+      // Remove the first span.
+      const removeButtons = screen.getAllByRole('button', { name: /remove time span/i })
+      expect(removeButtons).toHaveLength(2)
+      await user.click(removeButtons[0])
+
+      await user.click(screen.getByRole('button', { name: 'Save' }))
+
+      expect(onSave).toHaveBeenCalledWith(
+        expect.objectContaining({ timeSpans: [{ start: 5.0, end: 6.0, source: 'scrub' }] })
+      )
+    })
+  })
 })

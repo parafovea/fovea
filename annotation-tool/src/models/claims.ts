@@ -51,6 +51,24 @@ export interface ClaimTextSpan extends ClaimSpan {
 }
 
 /**
+ * @interface ClaimTimeSpan
+ * @description A video time span (in seconds) a claim is grounded in. A claim
+ * may carry several discontiguous spans. Each records its provenance: `scrub`
+ * for spans set by scrubbing the video, `annotation` for spans derived from one
+ * or more object annotations.
+ */
+export interface ClaimTimeSpan {
+  /** Span start in seconds */
+  start: number
+  /** Span end in seconds */
+  end: number
+  /** How this span was set */
+  source: 'scrub' | 'annotation'
+  /** For annotation-derived spans, the contributing annotation ids */
+  annotationIds?: string[]
+}
+
+/**
  * @interface Claim
  * @description An atomic factual statement extracted from a summary.
  * Can be hierarchically decomposed into subclaims.
@@ -100,6 +118,9 @@ export interface Claim {
 
   /** Text spans mapping claim to source text (discontiguous) */
   textSpans?: ClaimTextSpan[]
+
+  /** Video time spans the claim is grounded in (discontiguous) */
+  timeSpans?: ClaimTimeSpan[]
 
   /** Type of entity making this claim */
   claimerType?: ClaimerType | null
@@ -336,6 +357,8 @@ export interface CreateClaimRequest {
   parentClaimId?: string
   /** Text spans in source summary */
   textSpans?: ClaimTextSpan[]
+  /** Video time spans the claim is grounded in (discontiguous) */
+  timeSpans?: ClaimTimeSpan[]
   /** Type of claimer */
   claimerType?: ClaimerType | null
   /** Rich text claimer identification */
@@ -370,6 +393,8 @@ export interface UpdateClaimRequest {
   gloss?: GlossItem[]
   /** Updated text spans */
   textSpans?: ClaimTextSpan[]
+  /** Updated video time spans the claim is grounded in (discontiguous) */
+  timeSpans?: ClaimTimeSpan[]
   /** Updated claimer type */
   claimerType?: ClaimerType | null
   /** Updated claimer gloss */

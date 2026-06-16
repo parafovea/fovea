@@ -116,6 +116,31 @@ export default function AnnotationWorkspace() {
   const [transcriptError, setTranscriptError] = useState<string | null>(null)
   const [diarizationRequested, setDiarizationRequested] = useState(true)
 
+  // Scrub timestamp capture (claim time spans). While a capture is active the
+  // summary dialog is hidden so the player is reachable; the dialog is reopened
+  // when the capture finishes (the ClaimEditor then restores from the draft).
+  const timestampCapture = useClaimsUiStore((state) => state.timestampCapture)
+  const resumeClaimEditor = useClaimsUiStore((state) => state.resumeClaimEditor)
+  const captureTimestamp = useClaimsUiStore((state) => state.captureTimestamp)
+  const cancelTimestampCapture = useClaimsUiStore((state) => state.cancelTimestampCapture)
+  const consumeResume = useClaimsUiStore((state) => state.consumeResume)
+
+  useEffect(() => {
+    if (timestampCapture) {
+      // Hide the summary dialog so the user can scrub the player underneath.
+      setSummaryDialogOpen(false)
+    }
+  }, [timestampCapture])
+
+  useEffect(() => {
+    if (resumeClaimEditor) {
+      // Capture finished: reopen the summary dialog; VideoSummaryEditor's
+      // draft-restore effect re-opens the ClaimEditor with the appended span.
+      setSummaryDialogOpen(true)
+      consumeResume()
+    }
+  }, [resumeClaimEditor, consumeResume])
+
   // Timeline UI state from Zustand store
   const timelineExpanded = useAnnotationUiStore(state => state.timelineExpanded)
   const setTimelineExpanded = useAnnotationUiStore(state => state.setTimelineExpanded)
@@ -649,6 +674,27 @@ export default function AnnotationWorkspace() {
 
   return (
     <div className="flex h-full">
+      {timestampCapture && (
+        <div
+          className="fixed inset-x-0 top-0 z-50 flex items-center justify-center gap-3 bg-primary px-4 py-2 text-primary-foreground shadow-md"
+          data-testid="timestamp-capture-banner"
+        >
+          <span className="text-sm font-medium">
+            Scrub the video to the {timestampCapture.phase} of the span, then capture.
+          </span>
+          <Button
+            variant="secondary"
+            size="sm"
+            data-testid="timestamp-capture-confirm"
+            onClick={() => captureTimestamp(videoPlayerRef.current?.currentTime ?? currentTime)}
+          >
+            Capture {timestampCapture.phase} ({(videoPlayerRef.current?.currentTime ?? currentTime).toFixed(1)}s)
+          </Button>
+          <Button variant="ghost" size="sm" onClick={cancelTimestampCapture} data-testid="timestamp-capture-cancel">
+            Cancel
+          </Button>
+        </div>
+      )}
       <div className="flex-1 flex flex-col">
         <div className="rounded-lg ring-1 ring-foreground/10 bg-card p-4 mb-4 shadow-sm">
           <div className="flex flex-col gap-2">

@@ -471,6 +471,11 @@ describe('Import/export field-level round-trip fidelity', () => {
         video: { framesObserved: [10, 20, 30], region: 'top-left' } as object as never,
         metadata: { reviewer: 'qa-1', tags: ['important', 'reviewed'] } as object as never,
         textSpans: [{ start: 0, end: 5 }],
+        // Discontiguous video time spans must survive export+import unchanged.
+        timeSpans: [
+          { start: 1.5, end: 3.0, source: 'scrub' },
+          { start: 10.0, end: 12.5, source: 'annotation', annotationIds: ['anno-x'] },
+        ],
         claimerType: 'speaker',
         claimerGloss: [{ type: 'text', content: 'speaker' }],
         claimRelation: 'asserts',

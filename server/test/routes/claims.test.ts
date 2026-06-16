@@ -1224,4 +1224,67 @@ describe('Claims API', () => {
       expect(relation.notes).toBe('Test notes for relation')
     })
   })
+
+  describe('claim timeSpans', () => {
+    const discontiguousSpans = [
+      { start: 1.5, end: 3.0, source: 'scrub' },
+      { start: 10.0, end: 12.5, source: 'annotation', annotationIds: ['anno-1', 'anno-2'] },
+    ]
+
+    it('persists discontiguous time spans on create and returns them on read', async () => {
+      const createRes = await app.inject({
+        method: 'POST',
+        url: `/api/summaries/${testSummaryId}/claims`,
+        cookies: { session_token: testSessionToken },
+        payload: {
+          summaryType: 'video',
+          text: 'A claim grounded in two video segments',
+          timeSpans: discontiguousSpans,
+        },
+      })
+      expect(createRes.statusCode).toBe(201)
+
+      const getRes = await app.inject({
+        method: 'GET',
+        url: `/api/summaries/${testSummaryId}/claims`,
+        cookies: { session_token: testSessionToken },
+      })
+      expect(getRes.statusCode).toBe(200)
+      const claims = getRes.json()
+      expect(claims).toHaveLength(1)
+      expect(claims[0].timeSpans).toEqual(discontiguousSpans)
+    })
+
+    it('updates time spans on PUT', async () => {
+      const created = await prisma.claim.create({
+        data: { summaryId: testSummaryId, summaryType: 'video', text: 'Timed claim', gloss: [], createdBy: testUserId },
+      })
+
+      const newSpans = [{ start: 5.0, end: 7.0, source: 'scrub' }]
+      const putRes = await app.inject({
+        method: 'PUT',
+        url: `/api/summaries/${testSummaryId}/claims/${created.id}`,
+        cookies: { session_token: testSessionToken },
+        payload: { timeSpans: newSpans },
+      })
+      expect(putRes.statusCode).toBe(200)
+
+      const reloaded = await prisma.claim.findUnique({ where: { id: created.id } })
+      expect(reloaded?.timeSpans).toEqual(newSpans)
+    })
+
+    it('rejects a negative time span value', async () => {
+      const res = await app.inject({
+        method: 'POST',
+        url: `/api/summaries/${testSummaryId}/claims`,
+        cookies: { session_token: testSessionToken },
+        payload: {
+          summaryType: 'video',
+          text: 'Bad span',
+          timeSpans: [{ start: -1, end: 2, source: 'scrub' }],
+        },
+      })
+      expect(res.statusCode).toBe(400)
+    })
+  })
 })
