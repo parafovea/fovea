@@ -263,8 +263,11 @@ test.describe('Bounding Box Window Resize', () => {
     await page.setViewportSize({ width: 1024, height: 768 })
     await page.waitForTimeout(500)
 
-    // Draw a bounding box at the resized viewport
-    await annotationWorkspace.drawSimpleBoundingBox()
+    // Draw a bounding box at the resized viewport. Pass the worker's own
+    // persona (which owns testEntityType) so a type is selectable and the draw
+    // actually persists an annotation; the default picks the first global
+    // persona, which under parallel workers can be a type-less one.
+    await annotationWorkspace.drawSimpleBoundingBox({ personaName: testPersona.name })
     await annotationWorkspace.expectBoundingBoxVisible()
 
     // Verify the box was created successfully

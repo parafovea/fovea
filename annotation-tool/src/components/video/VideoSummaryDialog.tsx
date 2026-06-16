@@ -49,6 +49,12 @@ export default function VideoSummaryDialog({
   const [selectedPersonaId, setSelectedPersonaId] = useState<string | null>(
     draftPersonaIdForVideo() ?? initialPersonaId
   )
+  // While a scrub timestamp capture is active, force this dialog closed so its
+  // modal overlay does not intercept clicks on the capture banner and so the
+  // user can scrub the player underneath. It re-opens automatically when the
+  // capture finishes (timestampCapture returns to null) because `open` stays
+  // true throughout.
+  const timestampCapture = useClaimsUiStore((state) => state.timestampCapture)
   const { data: personas = [] } = usePersonas()
   const editorRef = useRef<VideoSummaryEditorRef>(null)
 
@@ -64,14 +70,14 @@ export default function VideoSummaryDialog({
   // opens). On a scrub-capture resume, prefer the draft's persona so the
   // in-progress claim re-opens under the persona it was authored with.
   useEffect(() => {
-    if (open) {
+    if (open && !timestampCapture) {
       setSelectedPersonaId(draftPersonaIdForVideo() ?? initialPersonaId)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, initialPersonaId, videoId])
+  }, [open, initialPersonaId, videoId, timestampCapture])
 
   return (
-    <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) onClose() }}>
+    <Dialog open={open && !timestampCapture} onOpenChange={(isOpen) => { if (!isOpen && !timestampCapture) onClose() }}>
       <DialogContent className="sm:max-w-2xl min-h-[60vh] max-h-[80vh]">
         <DialogHeader>
           <DialogTitle>Edit Video Summary</DialogTitle>

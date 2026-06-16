@@ -128,7 +128,7 @@ test.describe('Labels and Visual Distinction (Issue #60)', () => {
     await annotationWorkspace.expectBoundingBoxVisible()
 
     // Verify the stroke width for type annotation
-    // Type annotations use baseStroke=2, which may be scaled by mode (keyframe=1x, interpolated=0.75x)
+    // Type annotations use baseStroke=3 (object=6), scaled by mode (keyframe=1x, interpolated=0.75x)
     const strokeWidth = await page.evaluate(() => {
       const rect = document.querySelector('[data-testid="bounding-box"] rect')
       if (!rect) return null
@@ -140,9 +140,10 @@ test.describe('Labels and Visual Distinction (Issue #60)', () => {
     })
 
     expect(strokeWidth).not.toBeNull()
-    // Type annotations should have stroke width between 1.5 and 2 (base=2, scaled by mode)
-    expect(strokeWidth).toBeGreaterThanOrEqual(1.5)
-    expect(strokeWidth).toBeLessThanOrEqual(2)
+    // Type annotations should have stroke width between 2.25 (3*0.75) and 3,
+    // which also distinguishes them from object annotations (4.5-6).
+    expect(strokeWidth).toBeGreaterThanOrEqual(2.25)
+    expect(strokeWidth).toBeLessThanOrEqual(3)
   })
 })
 

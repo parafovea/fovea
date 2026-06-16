@@ -116,30 +116,15 @@ export default function AnnotationWorkspace() {
   const [transcriptError, setTranscriptError] = useState<string | null>(null)
   const [diarizationRequested, setDiarizationRequested] = useState(true)
 
-  // Scrub timestamp capture (claim time spans). While a capture is active the
-  // summary dialog is hidden so the player is reachable; the dialog is reopened
-  // when the capture finishes (the ClaimEditor then restores from the draft).
+  // Scrub timestamp capture (claim time spans). The VideoSummaryDialog gates
+  // its own `open` on this state so it closes while a capture is active (the
+  // player becomes reachable and the capture banner is clickable) and re-opens
+  // automatically when the capture finishes — no summaryDialogOpen toggling
+  // here, which previously raced and left the modal overlay intercepting the
+  // banner. The banner below reads the capture phase and drives capture/cancel.
   const timestampCapture = useClaimsUiStore((state) => state.timestampCapture)
-  const resumeClaimEditor = useClaimsUiStore((state) => state.resumeClaimEditor)
   const captureTimestamp = useClaimsUiStore((state) => state.captureTimestamp)
   const cancelTimestampCapture = useClaimsUiStore((state) => state.cancelTimestampCapture)
-  const consumeResume = useClaimsUiStore((state) => state.consumeResume)
-
-  useEffect(() => {
-    if (timestampCapture) {
-      // Hide the summary dialog so the user can scrub the player underneath.
-      setSummaryDialogOpen(false)
-    }
-  }, [timestampCapture])
-
-  useEffect(() => {
-    if (resumeClaimEditor) {
-      // Capture finished: reopen the summary dialog; VideoSummaryEditor's
-      // draft-restore effect re-opens the ClaimEditor with the appended span.
-      setSummaryDialogOpen(true)
-      consumeResume()
-    }
-  }, [resumeClaimEditor, consumeResume])
 
   // Timeline UI state from Zustand store
   const timelineExpanded = useAnnotationUiStore(state => state.timelineExpanded)
