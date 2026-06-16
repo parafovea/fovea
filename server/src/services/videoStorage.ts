@@ -318,6 +318,35 @@ class LocalStorageProvider implements VideoStorageProvider {
     };
   }
 
+  /**
+   * Recursively collect video files under a directory, returning their paths
+   * relative to {@link basePath} with forward slashes so they work as storage
+   * keys (which `getFullPath` resolves via `path.join`) and as glob-match
+   * targets regardless of platform. Hidden files and directories (names
+   * starting with a dot) are skipped.
+   */
+  private async collectVideoFilesRecursively(
+    dir: string,
+    relativePrefix = ''
+  ): Promise<string[]> {
+    const entries = await fs.readdir(dir, { withFileTypes: true });
+    const results: string[] = [];
+    for (const entry of entries) {
+      if (entry.name.startsWith('.')) continue; // skip hidden files / dirs
+      const relPath = relativePrefix ? `${relativePrefix}/${entry.name}` : entry.name;
+      if (entry.isDirectory()) {
+        const nested = await this.collectVideoFilesRecursively(
+          path.join(dir, entry.name),
+          relPath
+        );
+        results.push(...nested);
+      } else if (entry.isFile() && /\.(webm|mp4|ogg|mov|avi|mkv)$/i.test(entry.name)) {
+        results.push(relPath);
+      }
+    }
+    return results;
+  }
+
   async listVideos(options?: {
     maxKeys?: number;
     continuationToken?: string;
@@ -332,11 +361,10 @@ class LocalStorageProvider implements VideoStorageProvider {
     isTruncated: boolean;
   }> {
     try {
-      // Read directory contents
-      const files = await fs.readdir(this.basePath);
-
-      // Filter for video files only
-      const videoFiles = files.filter(f => /\.(webm|mp4|ogg|mov|avi|mkv)$/i.test(f));
+      // Discover video files recursively so videos organized into subdirectories
+      // are found, not just those in the flat root. Sorted for deterministic
+      // pagination (the continuation token is an index into this list).
+      const videoFiles = (await this.collectVideoFilesRecursively(this.basePath)).sort();
 
       // Apply pagination if requested
       const maxKeys = options?.maxKeys || videoFiles.length;
