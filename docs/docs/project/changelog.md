@@ -33,6 +33,11 @@ The 0.5.0 cycle delivers the architecture-modularization roadmap (`notes/archite
 - The model-service now reads every environment variable through one typed `Settings(BaseSettings)` in `model-service/src/infrastructure/config/settings.py` (`pydantic-settings`), validated once and instantiated at the top of the FastAPI `lifespan` so an invalid environment fails fast at startup. All 13 scattered `os.environ`/`os.getenv` reads across the routes, services, adapters, and observability layers now route through it; a guard test asserts no env read remains outside the settings module. The existing `models.yaml` discriminated-union catalog validation is unchanged - `Settings` only resolves which catalog to load and feeds the DI container, subsuming the two previously-divergent `MODEL_CONFIG_PATH` resolution sites into one.
 - The dynamic `<PROVIDER>_API_KEY` lookup becomes a typed `Settings.get_provider_api_key(provider)` helper, the `HUGGING_FACE_HUB_TOKEN`/`HF_TOKEN` pair becomes one alias-choice field, and the single `OTEL_EXPORTER_OTLP_ENDPOINT` fans out to the traces and metrics endpoints through derived properties that preserve the prior two-default behavior exactly.
 
+#### Configuration Drift Guard and Deployment-Mode Summary
+
+- A CI guard (`pnpm check:env`, run in the backend lint job) fails the build when `.env.example` declares a duplicate key or omits any variable the backend config module reads, so the committed template cannot silently drift from the code. `.env.example` is brought into sync: the previously-undocumented `SESSION_IDLE_TIMEOUT_MINUTES`, `ALLOW_TEST_ADMIN_BYPASS`, `DEFAULT_USER_USERNAME`/`DEFAULT_USER_DISPLAY_NAME`, `MODEL_SERVICE_ADMIN_TOKEN`, `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`, and the demo/tours variables are now documented (as commented optional entries).
+- The backend resolves its mode and demo flags into one derived `config.deploymentMode` object (typed `auth` and `demo`) and logs a one-line summary at startup (for example `[config] deployment mode: auth=multi-user demo=off`). A new operations guide (`docs/docs/operations/configuration.md`) documents the configuration model, fail-fast startup, and the deployment-mode taxonomy across all three services.
+
 ### Fixed
 
 #### Release Workflow Now Publishes GitHub Releases
