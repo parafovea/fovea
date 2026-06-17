@@ -36,6 +36,7 @@ import { getBuiltInTours } from '../scripts'
 import { microventContent } from '../content/microvent'
 import type { TourContentBundle } from '../content/types'
 import { TourContext, type TourContextValue } from './tour-context'
+import { config } from '@/config'
 
 /**
  * Same resolution logic the TourRunner uses for per-step routes,
@@ -199,7 +200,7 @@ export function TourProvider({
   // this (the catalogue isn't there and the user is already in /).
   const navigate = useNavigate()
   const location = useLocation()
-  const isDemoPublic = import.meta.env.VITE_DEMO_PUBLIC === '1'
+  const isDemoPublic = config.deploymentMode.publicBooth
 
   const captureTelemetry = useCallback(
     (e: TourTelemetryEvent) => {
@@ -458,7 +459,7 @@ export function TourProvider({
   )
 
   useEffect(() => {
-    if (!import.meta.env.VITE_E2E) return undefined
+    if (!config.deploymentMode.e2e) return undefined
     const handle = {
       launch: async (tourId: string) => {
         const tour = findTour(tourId)

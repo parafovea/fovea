@@ -7,6 +7,8 @@
  * 3. Default public Wikidata API
  */
 
+import { config as appConfig } from '@/config'
+
 /** Default public Wikidata API endpoint */
 const DEFAULT_WIKIDATA_URL = 'https://www.wikidata.org/w/api.php'
 
@@ -85,7 +87,7 @@ async function fetchRuntimeConfig(): Promise<WikidataConfig> {
  */
 export async function getWikidataUrl(): Promise<string> {
   // Build-time env var takes precedence
-  const envUrl = import.meta.env.VITE_WIKIDATA_URL
+  const envUrl = appConfig.wikidata.url
   if (envUrl) {
     return envUrl
   }
@@ -107,7 +109,7 @@ export async function getWikidataUrl(): Promise<string> {
  */
 export async function getWikidataMode(): Promise<'online' | 'offline'> {
   // Build-time env var takes precedence
-  const envMode = import.meta.env.VITE_WIKIDATA_MODE
+  const envMode = appConfig.wikidata.mode
   if (envMode === 'online' || envMode === 'offline') {
     return envMode
   }
@@ -124,8 +126,8 @@ export async function getWikidataMode(): Promise<'online' | 'offline'> {
  * @returns Promise resolving to WikidataConfig
  */
 export async function getWikidataConfig(): Promise<WikidataConfig> {
-  const envUrl = import.meta.env.VITE_WIKIDATA_URL
-  const envMode = import.meta.env.VITE_WIKIDATA_MODE
+  const envUrl = appConfig.wikidata.url
+  const envMode = appConfig.wikidata.mode
 
   // If both env vars are set, use them directly (but still fetch for idMapping and allowExternalLinks)
   if (envUrl && (envMode === 'online' || envMode === 'offline')) {

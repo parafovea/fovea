@@ -71,6 +71,7 @@ import { useModelConfig } from '@store/queries/useModelConfig'
 import { TimelineComponent } from './TimelineComponent'
 import { useCommands, useCommandContext } from '@hooks/commands'
 import { useAutoSave, SaveStatusIndicator } from '@hooks/data'
+import { config } from '@/config'
 
 const DRAWER_WIDTH = 300
 
@@ -237,7 +238,7 @@ export default function AnnotationWorkspace() {
   // FIRST annotation (no seeded rows) so the empty-canvas narration
   // still lines up with reality, and only runs under VITE_DEMO_PUBLIC.
   useEffect(() => {
-    if (import.meta.env.VITE_DEMO_PUBLIC !== '1') return
+    if (!config.deploymentMode.publicBooth) return
     if (videoAnnotations.length === 0) return
     const fixtureRow = videoAnnotations.find((a) => {
       // The backend's `source` flag rides through the API client's

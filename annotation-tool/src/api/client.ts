@@ -7,6 +7,7 @@ import axios, { AxiosInstance, AxiosError } from 'axios'
 import { GlossItem } from '@models/types'
 import { TranscriptJson } from '@components/video/types'
 import { logError } from '@services/errorLogging'
+import { config as appConfig } from '@/config'
 
 /**
  * Video summary data structure returned by the API.
@@ -724,14 +725,7 @@ export interface ApiClientConfig {
  * the synchronous calls return in seconds), the default mirrors the
  * backend's prod default ceiling of 60_000 ms.
  */
-const INFERENCE_TIMEOUT_MS: number = (() => {
-  const raw = import.meta.env.VITE_INFERENCE_TIMEOUT_MS as string | undefined
-  if (typeof raw === 'string' && raw.length > 0) {
-    const parsed = Number.parseInt(raw, 10)
-    if (Number.isFinite(parsed) && parsed > 0) return parsed
-  }
-  return 60_000
-})()
+const INFERENCE_TIMEOUT_MS: number = appConfig.api.inferenceTimeoutMs
 
 /**
  * HTTP client for backend API communication.
@@ -753,7 +747,7 @@ export class ApiClient {
     // Use relative URLs by default to work with Vite proxy
     // This ensures SSH port forwarding works when only port 3000 is forwarded
     // The Vite proxy forwards /api/* to the backend server
-    const baseURL = config.baseURL ?? import.meta.env.VITE_API_URL ?? ''
+    const baseURL = config.baseURL ?? appConfig.api.url
 
     this.client = axios.create({
       baseURL,

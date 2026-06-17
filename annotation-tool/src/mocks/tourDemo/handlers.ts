@@ -380,6 +380,10 @@ export function createTourDemoHandlers(
   // set VITE_E2E=1 — keeping the prod demo path honest while still
   // letting the rigorous walkthrough spec exercise the engine
   // against a stable, backend-free fixture.
+  // Kept INLINE (not routed through config): this literal comparison is what
+  // lets Vite statically drop the `dataLayerHandlers` array (and its fixture
+  // data) from any tour-demo build that does not set VITE_E2E=1.
+  // eslint-disable-next-line no-restricted-syntax
   const includeDataLayer = import.meta.env.VITE_E2E === '1'
   return [
     ...(includeDataLayer ? dataLayerHandlers : []),
