@@ -3,6 +3,7 @@ import { Type, Static } from '@sinclair/typebox'
 import { PrismaClient } from '@prisma/client'
 import camelcaseKeys from 'camelcase-keys'
 import snakecaseKeys from 'snakecase-keys'
+import { config } from '../../config.js'
 import { buildDetectionQueryFromPersona, DetectionQueryOptions } from '../../utils/queryBuilder.js'
 import { VideoRepository } from '../../repositories/VideoRepository.js'
 import { DetectionRequestSchema, DetectionResponseSchema } from './schemas.js'
@@ -128,7 +129,7 @@ export const detectRoutes: FastifyPluginAsync<{
         // Backend uses /data, model service uses /videos
         const modelVideoPath = video.path.replace('/data/', '/videos/')
 
-        const modelServiceUrl = process.env.MODEL_SERVICE_URL || 'http://localhost:8000'
+        const modelServiceUrl = config.modelService.url
 
         const requestBody = snakecaseKeys({
           videoId,

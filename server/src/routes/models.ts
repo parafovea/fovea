@@ -1,6 +1,7 @@
 import { FastifyPluginAsync } from 'fastify'
 import axios, { AxiosError } from 'axios'
 import camelcaseKeys from 'camelcase-keys'
+import { config } from '../config.js'
 import { InternalError, ValidationError } from '../lib/errors.js'
 
 /**
@@ -56,7 +57,7 @@ function normalizeAndAssertTaskType(taskType: string): string {
  */
 
 const modelsRoute: FastifyPluginAsync = async (fastify) => {
-  const MODEL_SERVICE_URL = process.env.MODEL_SERVICE_URL || 'http://model-service:8000'
+  const MODEL_SERVICE_URL = config.modelService.url
 
   /**
    * Get model configuration.

@@ -13,6 +13,8 @@ import {
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { readFile } from 'fs/promises';
 
+import { config as appConfig } from '../config.js';
+
 /**
  * Video Storage Provider Interface
  *
@@ -927,50 +929,49 @@ class HybridStorageProvider implements VideoStorageProvider {
  * Load storage configuration from environment variables
  */
 export function loadStorageConfig(): VideoStorageConfig {
-  const storageType = (process.env.VIDEO_STORAGE_TYPE || 'local') as
+  const storageType = appConfig.storage.videoStorageType as
     | 'local'
     | 's3'
     | 'hybrid';
 
   const config: VideoStorageConfig = {
     type: storageType,
-    localPath: process.env.STORAGE_PATH || '/videos',
-    baseUrl: process.env.VIDEO_BASE_URL || '/api/videos',
+    localPath: appConfig.storage.path,
+    baseUrl: appConfig.storage.videoBaseUrl,
   };
 
   // S3 configuration
   if (storageType === 's3' || storageType === 'hybrid') {
     // In test environment, allow missing S3 credentials
     // Tests should mock storage operations or provide test credentials
-    if (process.env.NODE_ENV !== 'test' && (!process.env.S3_BUCKET || !process.env.S3_REGION)) {
+    if (!appConfig.server.isTest && (!appConfig.storage.s3.bucket || !appConfig.storage.s3.region)) {
       throw new Error('S3_BUCKET and S3_REGION are required for S3 storage');
     }
 
     config.s3 = {
-      bucket: process.env.S3_BUCKET || 'test-bucket',
-      region: process.env.S3_REGION || 'us-east-1',
-      accessKeyId: process.env.AWS_ACCESS_KEY_ID || process.env.S3_ACCESS_KEY_ID,
-      secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || process.env.S3_SECRET_ACCESS_KEY,
-      endpoint: process.env.S3_ENDPOINT,
-      publicBucket: process.env.S3_PUBLIC_BUCKET === 'true',
+      bucket: appConfig.storage.s3.bucket || 'test-bucket',
+      region: appConfig.storage.s3.region || 'us-east-1',
+      accessKeyId: appConfig.storage.s3.accessKeyId,
+      secretAccessKey: appConfig.storage.s3.secretAccessKey,
+      endpoint: appConfig.storage.s3.endpoint,
+      publicBucket: appConfig.storage.s3.publicBucket,
     };
   }
 
   // CDN configuration
-  if (process.env.CDN_ENABLED === 'true') {
+  if (appConfig.storage.cdn.enabled) {
     config.cdn = {
       enabled: true,
-      baseUrl: process.env.CDN_BASE_URL || '',
-      signedUrls: process.env.CDN_SIGNED_URLS !== 'false',
+      baseUrl: appConfig.storage.cdn.baseUrl,
+      signedUrls: appConfig.storage.cdn.signedUrls,
     };
   }
 
   // Thumbnail storage configuration
   config.thumbnails = {
-    storageType:
-      (process.env.THUMBNAIL_STORAGE_TYPE as 'local' | 's3') || 'local',
-    localPath: process.env.THUMBNAIL_PATH || '/videos/thumbnails',
-    s3Prefix: process.env.THUMBNAIL_S3_PREFIX || 'thumbnails/',
+    storageType: appConfig.storage.thumbnails.storageType as 'local' | 's3',
+    localPath: appConfig.storage.thumbnails.path,
+    s3Prefix: appConfig.storage.thumbnails.s3Prefix,
   };
 
   return config;

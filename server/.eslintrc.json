@@ -28,6 +28,13 @@
           }
         ]
       }
+    ],
+    "no-restricted-syntax": [
+      "error",
+      {
+        "selector": "MemberExpression[object.name='process'][property.name='env']",
+        "message": "Read environment variables only via src/config.ts. Add the value to the typed config module and import `config` instead of reading process.env directly."
+      }
     ]
   },
   "overrides": [
@@ -36,8 +43,19 @@
       "rules": { "no-restricted-imports": "off" }
     },
     {
+      "files": ["src/config.ts"],
+      "rules": { "no-restricted-syntax": "off" }
+    },
+    {
+      "files": ["prisma/**/*"],
+      "rules": { "no-restricted-syntax": "off" }
+    },
+    {
       "files": ["test/**/*"],
-      "rules": { "no-restricted-imports": "off" }
+      "rules": {
+        "no-restricted-imports": "off",
+        "no-restricted-syntax": "off"
+      }
     }
   ],
   "ignorePatterns": ["dist", "node_modules", "coverage"]

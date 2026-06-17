@@ -8,6 +8,7 @@ import { requireAuth, optionalAuth } from '@middleware/auth.js'
 import { buildAbilities } from '../middleware/abilities.js'
 import { NotFoundError, ForbiddenError } from '@lib/errors.js'
 import { isDemoModeEnabled } from '../lib/demo-flags.js'
+import { isSingleUserMode } from '@services/user-service.js'
 import { personaOperationCounter } from '../metrics.js'
 import {
   updateGlossesInTypes,
@@ -117,9 +118,7 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
       }
     }
   }, async (request, reply) => {
-    const mode = process.env.FOVEA_MODE || 'multi-user'
-
-    if (mode === 'single-user') {
+    if (isSingleUserMode()) {
       // Single-user mode: return all non-hidden personas
       const personas = await fastify.prisma.persona.findMany({
         where: { hidden: false },
@@ -156,7 +155,7 @@ const personasRoute: FastifyPluginAsync = async (fastify) => {
     // single-user deployment shows. This is gated on FOVEA_DEMO_MODE
     // so production multi-user deployments keep their per-user RBAC
     // intact.
-    if (process.env.FOVEA_DEMO_MODE === 'true') {
+    if (isDemoModeEnabled()) {
       // The seeded Automated persona ships with hidden=true so it
       // does not clutter a multi-user deployment's persona dropdown
       // for end users who do not need it. The tour flow that walks

@@ -2,6 +2,7 @@ import { FastifyPluginAsync } from 'fastify'
 import { Type } from '@sinclair/typebox'
 import { PrismaClient } from '@prisma/client'
 import camelcaseKeys from 'camelcase-keys'
+import { config } from '../../config.js'
 import { VideoRepository } from '../../repositories/VideoRepository.js'
 import { NotFoundError, AppError, ErrorResponseSchema } from '../../lib/errors.js'
 import {
@@ -137,7 +138,7 @@ export const transcribeRoutes: FastifyPluginAsync<{
       }
 
       const modelVideoPath = video.path.replace('/data/', '/videos/')
-      const modelServiceUrl = process.env.MODEL_SERVICE_URL || 'http://localhost:8000'
+      const modelServiceUrl = config.modelService.url
 
       try {
         const transcribeRes = await fetchModelService(`${modelServiceUrl}/api/transcribe`, {

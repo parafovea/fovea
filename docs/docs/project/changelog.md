@@ -11,6 +11,18 @@ All notable changes to the Fovea project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-06-17
+
+The 0.5.0 cycle delivers the architecture-modularization roadmap (`notes/architecture-review.md`): single sources of truth for configuration, containerization, the build/test surface, and cross-service contracts. Changes land incrementally on `release/0.5.x`; this section accumulates them.
+
+### Changed
+
+#### Backend Configuration Single-Source-of-Truth
+
+- All backend environment access is centralized in one typed, validated module, `server/src/config.ts`. It is the only file in `server/src` permitted to read `process.env` (enforced by a new ESLint `no-restricted-syntax` rule with a `config.ts`/`prisma`/`test` exemption), loads an optional local `.env` via `dotenv`, exposes a deep-frozen `config` object grouped by concern (`server`, `redis`, `auth`, `storage`, `modelService`, `rateLimit`, `cors`, `otel`, `mode`, `demo`, `tours`, `wikidata`, `externalLinks`, `defaultUser`), and centralizes every default and coercion. All 31 previously-scattered `process.env` reads across routes, services, queues, middleware, and libs now go through it. The two dynamic read patterns are exposed as typed helpers: `config.modelService.timeoutMs(endpoint)` and `config.getProviderApiKey(provider)`.
+- Configuration is now validated once at startup and fails fast: `config.ts` is imported first in `server/src/index.ts` (before tracing), validates numeric env vars through a TypeBox schema, requires `API_KEY_ENCRYPTION_KEY` to hex-decode to 32 bytes at boot (previously validated lazily at first key use), and refuses an unset or dev-default `SESSION_SECRET` in production.
+- Four environment defaults that previously disagreed across read sites are unified to one value each: `STORAGE_PATH` (the repo-relative `videos` path), `FOVEA_MODE` (`multi-user`), `MODEL_SERVICE_URL` (`http://localhost:8000`), and `OTEL_EXPORTER_OTLP_ENDPOINT` (`http://localhost:4318`). These defaults only apply when the variable is unset; every docker/production deployment sets them explicitly, so deployed behavior is unchanged. Single-user and demo-mode branching now route through the single `isSingleUserMode()` / `isDemoModeEnabled()` predicates (reading from `config`) instead of inline per-handler `process.env` comparisons.
+
 ## [0.4.4] - 2026-06-17
 
 The first installment of the architecture-modularization roadmap (`notes/architecture-review.md`, Phase 0): reversible cleanups with no user-facing behavior change — dead dependencies removed, a configuration template de-duplicated, and one latent model-loader gap closed with a regression guard.

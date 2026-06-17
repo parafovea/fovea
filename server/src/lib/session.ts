@@ -1,7 +1,6 @@
 import crypto from 'crypto'
+import { config } from '../config.js'
 import { prisma } from './prisma.js'
-
-const SESSION_TIMEOUT_DAYS = parseInt(process.env.SESSION_TIMEOUT_DAYS || '7', 10)
 
 /**
  * Generates a secure random session token.
@@ -26,7 +25,7 @@ export async function createSession(
   userAgent?: string
 ) {
   const token = generateSessionToken()
-  const daysToExpire = rememberMe ? 30 : SESSION_TIMEOUT_DAYS
+  const daysToExpire = rememberMe ? 30 : config.auth.sessionTimeoutDays
   const expiresAt = new Date()
   expiresAt.setDate(expiresAt.getDate() + daysToExpire)
 

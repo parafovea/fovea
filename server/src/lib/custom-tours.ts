@@ -21,6 +21,8 @@
 import { readdir, readFile, stat } from 'node:fs/promises'
 import { extname, join } from 'node:path'
 
+import { config } from '../config.js'
+
 export interface CustomTourSummary {
   id: string
   title: string
@@ -43,7 +45,7 @@ const VALID_EXTS = new Set(['.json', '.yaml', '.yml'])
  * never authored a custom tour pays nothing.
  */
 export async function loadCustomTours(): Promise<LoaderResult> {
-  const dir = process.env.FOVEA_TOURS_DIR
+  const dir = config.tours.dir
   if (!dir || dir.length === 0) {
     return { tours: [], failures: [] }
   }

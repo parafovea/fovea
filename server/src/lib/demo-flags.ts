@@ -13,13 +13,14 @@
  * re-exports through `demo/config.js` so its own callers do not
  * cross the boundary in either direction.
  *
- * Keep this file dependency-free. It is read by both layers and a
- * misplaced cross-import here would defeat the layering rule.
+ * Keep this file free of cross-layer imports. It reads the flag through
+ * the central config module (the single env reader) and is consumed by
+ * both layers; a misplaced cross-import here would defeat the layering
+ * rule.
  */
 
+import { config } from '../config.js'
+
 export function isDemoModeEnabled(): boolean {
-  return (
-    process.env.FOVEA_DEMO_MODE === 'true' ||
-    process.env.FOVEA_DEMO_MODE === '1'
-  )
+  return config.demo.enabled
 }

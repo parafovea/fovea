@@ -4,10 +4,12 @@ import { Prisma, type WorldState as PrismaWorldState } from '@prisma/client'
 import { accessibleBy } from '@casl/prisma'
 import { subject } from '@casl/ability'
 import { optionalAuth, requireAdmin, requireAuth } from '@middleware/auth.js'
+import { config } from '../config.js'
 import { buildAbilities } from '../middleware/abilities.js'
 import type { AppAbility } from '../lib/abilities.js'
 import { NotFoundError, UnauthorizedError, InternalError, ForbiddenError } from '@lib/errors.js'
 import { isDemoModeEnabled } from '../lib/demo-flags.js'
+import { isSingleUserMode } from '@services/user-service.js'
 import { convertObjectRefsToText, countObjectRefsInGlosses } from '@lib/reference-cleanup.js'
 import {
   asEntityTypes,
@@ -97,16 +99,14 @@ const worldRoute: FastifyPluginAsync = async (fastify) => {
       }
     }
   }, async (request, reply) => {
-    const mode = process.env.FOVEA_MODE || 'multi-user'
-
     // Get user ID: use authenticated user or find default user in single-user mode
     let userId: string
     if (request.user) {
       userId = request.user.id
-    } else if (mode === 'single-user') {
+    } else if (isSingleUserMode()) {
       // Find default user
       const defaultUser = await fastify.prisma.user.findFirst({
-        where: { username: process.env.DEFAULT_USER_USERNAME || 'default-user' }
+        where: { username: config.defaultUser.username }
       })
       if (!defaultUser) {
         throw new InternalError('Default user not found in single-user mode')
@@ -219,16 +219,14 @@ const worldRoute: FastifyPluginAsync = async (fastify) => {
       }
     }
   }, async (request, reply) => {
-    const mode = process.env.FOVEA_MODE || 'multi-user'
-
     // Get user ID: use authenticated user or find default user in single-user mode
     let userId: string
     if (request.user) {
       userId = request.user.id
-    } else if (mode === 'single-user') {
+    } else if (isSingleUserMode()) {
       // Find default user
       const defaultUser = await fastify.prisma.user.findFirst({
-        where: { username: process.env.DEFAULT_USER_USERNAME || 'default-user' }
+        where: { username: config.defaultUser.username }
       })
       if (!defaultUser) {
         throw new InternalError('Default user not found in single-user mode')
@@ -387,13 +385,11 @@ const worldRoute: FastifyPluginAsync = async (fastify) => {
    * Helper to get user ID from request or default user.
    */
   async function getUserId(request: { user?: { id: string } }): Promise<string> {
-    const mode = process.env.FOVEA_MODE || 'multi-user'
-
     if (request.user) {
       return request.user.id
-    } else if (mode === 'single-user') {
+    } else if (isSingleUserMode()) {
       const defaultUser = await fastify.prisma.user.findFirst({
-        where: { username: process.env.DEFAULT_USER_USERNAME || 'default-user' }
+        where: { username: config.defaultUser.username }
       })
       if (!defaultUser) {
         throw new InternalError('Default user not found in single-user mode')

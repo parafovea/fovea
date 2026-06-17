@@ -1,18 +1,9 @@
 import crypto from 'crypto'
+import { config } from '../config.js'
 import { prisma } from '../lib/prisma.js'
 import { User, Session } from '@prisma/client'
 import { AuthProvider, AuthCredentials, AuthResult } from './auth/types.js'
 import { PasswordAuthProvider } from './auth/password-provider.js'
-
-/**
- * Session idle timeout in minutes.
- * Sessions are invalidated if there is no activity for this duration.
- * Configurable via SESSION_IDLE_TIMEOUT_MINUTES environment variable.
- */
-const SESSION_IDLE_TIMEOUT_MINUTES = parseInt(
-  process.env.SESSION_IDLE_TIMEOUT_MINUTES || '60',
-  10
-)
 
 /**
  * Authentication service managing providers and sessions.
@@ -120,7 +111,7 @@ export class AuthService {
     }
 
     // Check idle timeout
-    const idleTimeoutMs = SESSION_IDLE_TIMEOUT_MINUTES * 60 * 1000
+    const idleTimeoutMs = config.auth.sessionIdleTimeoutMinutes * 60 * 1000
     const lastActivity = session.lastActivityAt || session.createdAt
     if (now.getTime() - lastActivity.getTime() > idleTimeoutMs) {
       // Session has been idle too long

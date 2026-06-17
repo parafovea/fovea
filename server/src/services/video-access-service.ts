@@ -7,6 +7,8 @@
 import { PrismaClient } from '@prisma/client'
 import { trace } from '@opentelemetry/api'
 
+import { isDemoModeEnabled } from '../lib/demo-flags.js'
+
 const tracer = trace.getTracer('fovea-rbac')
 
 /**
@@ -77,7 +79,7 @@ export class VideoAccessService {
     // mounts. This is gated on FOVEA_DEMO_MODE so a self-hosted
     // production deployment with the same code keeps its per-user
     // RBAC intact.
-    if (process.env.FOVEA_DEMO_MODE === 'true') {
+    if (isDemoModeEnabled()) {
       span.setAttribute('video_access.result_count', -1)
       span.setAttribute('video_access.demo_mode_override', true)
       span.end()

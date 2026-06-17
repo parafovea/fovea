@@ -11,6 +11,7 @@ import { BullMQAdapter } from '@bull-board/api/bullMQAdapter'
 import { FastifyAdapter } from '@bull-board/fastify'
 import { videoSummarizationQueue, claimExtractionQueue, closeQueues } from './queues/setup.js'
 import { apiRequestCounter, apiRequestDuration } from './metrics.js'
+import { config } from './config.js'
 import { prisma } from './lib/prisma.js'
 import { AppError, TooManyRequestsError } from './lib/errors.js'
 import { recordApiError } from './lib/errorMetrics.js'
@@ -40,8 +41,8 @@ export async function buildApp() {
   const app = Fastify({
     trustProxy: true,
     logger: {
-      level: process.env.LOG_LEVEL || 'info',
-      transport: process.env.NODE_ENV !== 'production' ? {
+      level: config.server.logLevel,
+      transport: !config.server.isProduction ? {
         target: 'pino-pretty',
         options: {
           colorize: true,
@@ -70,12 +71,10 @@ export async function buildApp() {
   // their corpus: a deployment with many videos x personas fans a hard refresh
   // out into hundreds of per-persona / per-video requests, which trips a cap
   // sized for a small instance. Defaults match the historical 1000 / 1 minute.
-  if (process.env.NODE_ENV !== 'test') {
-    const rateLimitMax = Number(process.env.RATE_LIMIT_MAX) || 1000
-    const rateLimitWindow = process.env.RATE_LIMIT_WINDOW || '1 minute'
+  if (!config.server.isTest) {
     await app.register(fastifyRateLimit, {
-      max: rateLimitMax,
-      timeWindow: rateLimitWindow,
+      max: config.rateLimit.max,
+      timeWindow: config.rateLimit.window,
       keyGenerator: (request) => {
         return request.ip
       }
@@ -86,18 +85,13 @@ export async function buildApp() {
   // Include both localhost and 127.0.0.1 to handle browser differences
   // Some browsers treat localhost and 127.0.0.1 as different origins
   await app.register(fastifyCors, {
-    origin: process.env.ALLOWED_ORIGINS?.split(',') || [
-      'http://localhost:5173',
-      'http://localhost:3000',
-      'http://127.0.0.1:5173',
-      'http://127.0.0.1:3000'
-    ],
+    origin: config.cors.allowedOrigins,
     credentials: true
   })
 
   // Cookie support for session management
   await app.register(fastifyCookie, {
-    secret: process.env.SESSION_SECRET || 'dev-secret-change-in-production',
+    secret: config.auth.sessionSecret,
   })
 
   // OpenAPI documentation
