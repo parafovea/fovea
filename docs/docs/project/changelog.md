@@ -60,6 +60,10 @@ The 0.5.0 cycle delivers the architecture-modularization roadmap (`notes/archite
 
 - The `model-service` and `model-service-gpu` services in `docker-compose.yml` now set `THUMBNAIL_OUTPUT_ROOT` (following the backend's `THUMBNAIL_PATH`, default `/videos/thumbnails`) into the shared `/videos` mount. Previously the model-service defaulted to its container-local `/tmp/thumbnails`, so generated thumbnails landed where the backend could never read them.
 
+#### Orphaned Model-Service Tests Now Run
+
+- The model-service had two parallel test trees: `test/` (the configured `testpaths`) and a separate `tests/` holding the architecture-registry and per-family loader-factory suites. Because `pytest.ini` pins `testpaths = test`, the `tests/` tree was never collected, so 118 tests silently did not run. Moved `tests/infrastructure/` into `test/infrastructure/` and deleted the duplicate tree, bringing those 118 tests into the standard model-service suite.
+
 ## [0.4.4] - 2026-06-17
 
 The first installment of the architecture-modularization roadmap (`notes/architecture-review.md`, Phase 0): reversible cleanups with no user-facing behavior change — dead dependencies removed, a configuration template de-duplicated, and one latent model-loader gap closed with a regression guard.
