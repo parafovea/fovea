@@ -185,32 +185,22 @@ Includes hot-reload volumes, Jaeger tracing at [localhost:16686](http://localhos
 
 ### Running tests
 
-**Frontend:**
+All install, lint, type-check, test, and build recipes live in one place: the
+root `Makefile` (Node via pnpm, Python via uv). Run `make help` to list every
+target.
 
 ```bash
-cd annotation-tool
-npm run test              # Vitest unit tests
-npm run test:e2e          # Playwright E2E tests
-npm run lint              # ESLint
-npx tsc --noEmit          # Type check
+make install          # Install all dependencies (pnpm workspace + uv)
+make lint             # Lint every component
+make typecheck        # Type-check every component (tsc + mypy)
+make test             # Run every test suite
+make build            # Build the frontend and backend
 ```
 
-**Backend:**
-
-```bash
-cd server
-npm run test              # Vitest unit tests
-npm run lint              # ESLint
-```
-
-**Model Service:**
-
-```bash
-cd model-service
-uv run pytest             # Unit tests
-uv run ruff check src/    # Lint
-uv run mypy src/          # Type check
-```
+Per-suite targets are also available, e.g. `make test-frontend`,
+`make test-backend`, `make test-model-service`, `make test-wikibase` (and the
+matching `lint-*`). Backend tests need Postgres and Redis — start them first
+with `make dev-infra`.
 
 ### Monitoring
 

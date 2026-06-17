@@ -44,6 +44,10 @@ The 0.5.0 cycle delivers the architecture-modularization roadmap (`notes/archite
 
 - Deleted the duplicate `server/docker-compose.dev.yml`, which redefined Postgres, Redis, and the full observability stack with conflicting credentials (`user`/`password` versus the root stack's `fovea`/`fovea_password`) and a separate volume. The `dev:infra`, `dev:infra:full`, `stop`, and `clean` scripts now drive the root `docker-compose.yml` (plus its `dev` overlay for the observability services), so local development and the full stack share one Postgres definition and one set of credentials. Local dev databases that relied on the old `user`/`password` credentials must point their `DATABASE_URL` at the canonical `fovea`/`fovea_password` (matching `.env.example`).
 
+#### Unified Build and Test Entrypoint
+
+- A root `Makefile` is now the single source for the install/lint/typecheck/test/build recipe across all four components (Node via pnpm, Python via uv): `make lint`, `make typecheck`, `make test`, `make build`, plus per-suite targets such as `make test-model-service` (run `make help` to list them). The README and CONTRIBUTING guides point at it, replacing their previously-divergent per-package instructions, which had drifted between `npm` and `pnpm` and between bare `pytest` and `uv run pytest`.
+
 ### Fixed
 
 #### Release Workflow Now Publishes GitHub Releases
