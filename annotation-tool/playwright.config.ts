@@ -31,7 +31,11 @@ export default defineConfig({
       testDir: './test/e2e/smoke',
       timeout: 30000,
       retries: 2,
-      workers: undefined,  // Use all available cores
+      // The tour specs in this project drive the tour engine, whose anchor
+      // resolution + spotlight measurement are timing-sensitive; running at
+      // all-cores under docker starved them and produced spurious step-card
+      // timeouts. Cap at 2 (matching the other projects) for reliable runs.
+      workers: 2,
       use: {
         ...devices['Desktop Chrome'],
         viewport: { width: 1280, height: 720 }
