@@ -4,8 +4,6 @@ Provides the endpoint for extracting thumbnails from video files.
 """
 
 import logging
-import os
-from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
 from opentelemetry import trace
@@ -23,6 +21,7 @@ from src.infrastructure.adapters.outbound.video.processor import (
     VideoProcessingError,
     extract_thumbnail,
 )
+from src.infrastructure.config.settings import get_settings
 
 router = APIRouter()
 tracer = trace.get_tracer(__name__)
@@ -78,7 +77,7 @@ async def generate_thumbnail(
         # against. Defaults to ``/tmp/thumbnails`` so tests don't need to
         # mount a real video volume; operators point ``THUMBNAIL_OUTPUT_ROOT``
         # at the shared data disk in production.
-        thumbnails_dir = Path(os.environ.get("THUMBNAIL_OUTPUT_ROOT", "/tmp/thumbnails"))  # noqa: S108
+        thumbnails_dir = get_settings().thumbnail_output_root
         thumbnails_dir.mkdir(parents=True, exist_ok=True)
         output_path = str(thumbnails_dir / f"{request.video_id}_{request.size}.jpg")
 

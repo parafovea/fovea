@@ -20,7 +20,6 @@ session or cookie is involved — this is service-to-service only.
 from __future__ import annotations
 
 import logging
-import os
 from typing import Literal
 
 from fastapi import APIRouter, Header, HTTPException, status
@@ -30,6 +29,7 @@ from src.infrastructure.adapters.inbound.fastapi.dependencies import (
     ModelManagerDep,  # noqa: TC001  # FastAPI resolves this annotation at runtime
 )
 from src.infrastructure.adapters.outbound.video.processor import reconfigure_roots
+from src.infrastructure.config.settings import get_settings
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -106,7 +106,7 @@ class ReconfigureAck(BaseModel):
 
 def _require_admin_token(x_admin_token: str | None) -> None:
     """Reject callers that do not present the shared admin token."""
-    expected = os.environ.get("MODEL_SERVICE_ADMIN_TOKEN")
+    expected = get_settings().model_service_admin_token
     if not expected:
         logger.warning("MODEL_SERVICE_ADMIN_TOKEN not configured; refusing reconfigure")
         raise HTTPException(

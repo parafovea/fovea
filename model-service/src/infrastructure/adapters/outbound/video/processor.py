@@ -27,6 +27,8 @@ import cv2
 import numpy as np
 from opentelemetry import trace
 
+from src.infrastructure.config.settings import get_settings
+
 if TYPE_CHECKING:
     from numpy.typing import NDArray
 
@@ -41,22 +43,14 @@ class VideoProcessingError(Exception):
     """Raised when video processing operations fail."""
 
 
-def _resolve_root(env_var: str, default: str) -> Path:
-    """Resolve a root path from an env var, falling back to ``default``."""
-    return Path(os.environ.get(env_var, default)).resolve(strict=False)
-
-
 # Roots constrain where videos may be read from and where outputs may be
-# written. Override via environment variables at service start-up.
-_VIDEO_DATA_ROOT: Path = _resolve_root("VIDEO_DATA_ROOT", "/videos")
-_THUMBNAIL_OUTPUT_ROOT: Path = _resolve_root(
-    "THUMBNAIL_OUTPUT_ROOT",
-    "/tmp/thumbnails",  # noqa: S108
-)
-_AUDIO_OUTPUT_ROOT: Path = _resolve_root(
-    "AUDIO_OUTPUT_ROOT",
-    "/tmp/audio",  # noqa: S108
-)
+# written. Sourced from the typed settings (which own every environment
+# read) and resolved here so later validation is symlink-safe. Override via
+# the corresponding environment variables at service start-up.
+_settings = get_settings()
+_VIDEO_DATA_ROOT: Path = _settings.video_data_root.resolve(strict=False)
+_THUMBNAIL_OUTPUT_ROOT: Path = _settings.thumbnail_output_root.resolve(strict=False)
+_AUDIO_OUTPUT_ROOT: Path = _settings.processor_audio_output_root.resolve(strict=False)
 
 # Prefix constants with the trailing separator baked in. Each file-system
 # sink guards on ``realpath(user_input).startswith(<prefix>)`` — a single

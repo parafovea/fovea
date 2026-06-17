@@ -5,15 +5,14 @@ selection, loading, unloading, and memory validation.
 """
 
 import logging
-import os
 from datetime import datetime, timezone
-from pathlib import Path
 
 import torch
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from src.infrastructure.adapters.inbound.fastapi.dependencies import ModelManagerDep
+from src.infrastructure.config.settings import get_settings
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -330,9 +329,7 @@ async def check_task_ready(
             "framework": model_config.framework,
         }
 
-    cache_dir = Path(
-        os.environ.get("TRANSFORMERS_CACHE", Path.home() / ".cache" / "huggingface" / "hub")
-    )
+    cache_dir = get_settings().transformers_cache
     model_cache_name = f"models--{model_config.model_id.replace('/', '--')}"
     model_cache_path = cache_dir / model_cache_name
     cached = model_cache_path.is_dir()

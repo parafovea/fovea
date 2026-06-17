@@ -22,18 +22,17 @@ def get_container_dep() -> Container:
     still receive a usable container; production lifespan initializes
     the global container explicitly.
     """
-    from pathlib import Path  # noqa: PLC0415
-
     from src.infrastructure.config.container import (  # noqa: PLC0415
         Container,
         ContainerConfig,
         get_container,
     )
+    from src.infrastructure.config.settings import get_settings  # noqa: PLC0415
 
     try:
         return get_container()
     except RuntimeError:
-        return Container(ContainerConfig(model_config_path=Path("config/models.yaml")))
+        return Container(ContainerConfig(model_config_path=get_settings().model_config_path))
 
 
 def get_model_manager() -> ModelManager:

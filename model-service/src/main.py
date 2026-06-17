@@ -6,11 +6,9 @@ AI models. Serves as the composition root, wiring the dependency injection
 container to the FastAPI application.
 """
 
-import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
-from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -22,6 +20,7 @@ from .infrastructure.config.container import (
     init_container,
     shutdown_container,
 )
+from .infrastructure.config.settings import get_settings
 from .infrastructure.observability import configure_observability, instrument_app
 
 
@@ -42,19 +41,15 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     None
         Control during application runtime.
     """
-    # Startup
+    # Startup. Validate the environment once, up front, so a misconfigured
+    # deployment fails fast before observability or the container come up.
+    settings = get_settings()
+
     configure_observability()
 
     # Initialize DI container
-    config_path = Path(
-        os.getenv(
-            "MODEL_CONFIG_PATH",
-            str(Path(__file__).parent.parent / "config" / "models.yaml"),
-        )
-    )
-
     config = ContainerConfig(
-        model_config_path=config_path,
+        model_config_path=settings.model_config_path,
         enable_warmup=True,
     )
     container = init_container(config)

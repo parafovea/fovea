@@ -17,6 +17,7 @@ dependencies = [
     # converging. `>=` bounds let pip pick a single set in one pass.
     "uvicorn[standard]>=0.27",
     "pydantic>=2.9",
+    "pydantic-settings>=2.5",
     "python-multipart>=0.0.9",
     # opentelemetry was previously pinned to 1.28.0 (instrumentation
     # 0.49b0) across the board. That collides with pyannote.audio 4.x,
