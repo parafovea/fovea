@@ -139,6 +139,8 @@ async function start() {
   const app = await buildApp()
   const PORT = config.server.port
 
+  app.log.info(`[config] deployment mode: ${config.deploymentMode.summary}`)
+
   try {
     await connectDatabase()
     await initializeDataDirectory()

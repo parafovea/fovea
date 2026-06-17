@@ -256,6 +256,23 @@ function resolveTimeoutMs(endpoint: ModelServiceTimeoutEndpoint): number {
   return ms
 }
 
+/** Resolved authentication model for this deployment. */
+export type AuthMode = 'single-user' | 'multi-user'
+
+/** Resolved demo posture: `off`, `on` (seeded demo), or `public` (demo plus anonymous sessions). */
+export type DemoMode = 'off' | 'on' | 'public'
+
+function resolveAuthMode(): AuthMode {
+  return readStringWithDefault('FOVEA_MODE', DEFAULT_MODE) === 'single-user'
+    ? 'single-user'
+    : 'multi-user'
+}
+
+function resolveDemoMode(): DemoMode {
+  if (!readBooleanTrueOrOne('FOVEA_DEMO_MODE')) return 'off'
+  return readBooleanTrueOrOne('FOVEA_DEMO_ALLOW_ANONYMOUS_AUTH') ? 'public' : 'on'
+}
+
 const config = Object.freeze({
   server: Object.freeze({
     get port(): number {
@@ -424,6 +441,24 @@ const config = Object.freeze({
     },
     get isSingleUser(): boolean {
       return readStringWithDefault('FOVEA_MODE', DEFAULT_MODE) === 'single-user'
+    },
+  }),
+
+  /**
+   * One derived object resolving every mode/demo flag into the deployment's
+   * posture, so an admin can read "what kind of deployment is this" from one
+   * place instead of cross-referencing scattered flags. Logged once at startup.
+   */
+  deploymentMode: Object.freeze({
+    get auth(): AuthMode {
+      return resolveAuthMode()
+    },
+    get demo(): DemoMode {
+      return resolveDemoMode()
+    },
+    /** Compact human-readable summary, e.g. `auth=multi-user demo=off`. */
+    get summary(): string {
+      return `auth=${resolveAuthMode()} demo=${resolveDemoMode()}`
     },
   }),
 

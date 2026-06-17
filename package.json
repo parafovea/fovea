@@ -18,6 +18,7 @@
     "test:backend": "pnpm run --filter @fovea/server test",
     "lint": "pnpm run --filter @fovea/annotation-tool lint && pnpm run --filter @fovea/server lint",
     "type-check": "pnpm run --filter @fovea/annotation-tool type-check",
+    "check:env": "node scripts/check-env-example.mjs",
     "stop": "docker compose -f server/docker-compose.dev.yml down",
     "clean": "docker compose -f server/docker-compose.dev.yml down -v"
   },
