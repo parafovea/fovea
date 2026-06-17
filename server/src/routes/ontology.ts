@@ -3,8 +3,10 @@ import { FastifyPluginAsync } from 'fastify'
 import { Prisma } from '@prisma/client'
 import { subject } from '@casl/ability'
 import { requireAuth } from '../middleware/auth.js'
+import { config } from '../config.js'
 import { buildAbilities } from '../middleware/abilities.js'
 import { NotFoundError, UnauthorizedError, InternalError, ForbiddenError, AppError } from '../lib/errors.js'
+import { isSingleUserMode } from '../services/user-service.js'
 import {
   fetchModelService,
   MODEL_SERVICE_TIMEOUTS,
@@ -83,16 +85,14 @@ const ontologyRoute: FastifyPluginAsync = async (fastify) => {
       }
     }
   }, async (request, reply) => {
-    const mode = process.env.FOVEA_MODE || 'multi-user'
-
     // Get user ID: use authenticated user or find default user in single-user mode
     let userId: string
     if (request.user) {
       userId = request.user.id
-    } else if (mode === 'single-user') {
+    } else if (isSingleUserMode()) {
       // Find default user
       const defaultUser = await fastify.prisma.user.findFirst({
-        where: { username: process.env.DEFAULT_USER_USERNAME || 'default-user' }
+        where: { username: config.defaultUser.username }
       })
       if (!defaultUser) {
         throw new InternalError('Default user not found in single-user mode')
@@ -197,16 +197,14 @@ const ontologyRoute: FastifyPluginAsync = async (fastify) => {
       }
     }
   }, async (request, reply) => {
-    const mode = process.env.FOVEA_MODE || 'multi-user'
-
     // Get user ID: use authenticated user or find default user in single-user mode
     let userId: string
     if (request.user) {
       userId = request.user.id
-    } else if (mode === 'single-user') {
+    } else if (isSingleUserMode()) {
       // Find default user
       const defaultUser = await fastify.prisma.user.findFirst({
-        where: { username: process.env.DEFAULT_USER_USERNAME || 'default-user' }
+        where: { username: config.defaultUser.username }
       })
       if (!defaultUser) {
         throw new InternalError('Default user not found in single-user mode')
@@ -467,7 +465,7 @@ const ontologyRoute: FastifyPluginAsync = async (fastify) => {
       }
 
       // Call model service
-      const modelServiceUrl = process.env.MODEL_SERVICE_URL || 'http://localhost:8000'
+      const modelServiceUrl = config.modelService.url
       const response = await fetchModelService(`${modelServiceUrl}/api/ontology/augment`, {
         method: 'POST',
         timeoutMs: MODEL_SERVICE_TIMEOUTS.ontologyAugment,

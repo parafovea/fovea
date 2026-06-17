@@ -23,6 +23,7 @@
 // their existing import path. The implementation lives in lib/ so
 // product code can also import it without violating the demo->product
 // layering rule enforced by eslint no-restricted-imports.
+import { config } from '../config.js'
 import { isDemoModeEnabled } from '../lib/demo-flags.js'
 export { isDemoModeEnabled }
 
@@ -35,11 +36,7 @@ export { isDemoModeEnabled }
  * unauthenticated access on a production deployment.
  */
 export function isAnonymousAuthAllowed(): boolean {
-  return (
-    isDemoModeEnabled() &&
-    (process.env.FOVEA_DEMO_ALLOW_ANONYMOUS_AUTH === 'true' ||
-      process.env.FOVEA_DEMO_ALLOW_ANONYMOUS_AUTH === '1')
-  )
+  return isDemoModeEnabled() && config.demo.allowAnonymousAuth
 }
 
 /**
@@ -48,7 +45,5 @@ export function isAnonymousAuthAllowed(): boolean {
  * is checked via `X-Demo-Seed-Token` header — a 32+ char random secret.
  */
 export function getSeedToken(): string | null {
-  const t = process.env.FOVEA_DEMO_SEED_TOKEN
-  if (!t || t.length < 32) return null
-  return t
+  return config.demo.seedToken
 }

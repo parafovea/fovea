@@ -1,22 +1,21 @@
-// Initialize OpenTelemetry tracing FIRST, before any other imports
-// This allows auto-instrumentation to hook into libraries as they load
+// Load and validate configuration FIRST, before any other import.
+// `config` reads process.env once, fails fast on invalid/missing required
+// values, and must throw before OTEL, Fastify, or Prisma initialize.
+import { config } from './config.js'
+// Initialize OpenTelemetry tracing before the remaining imports so
+// auto-instrumentation can hook into libraries as they load.
 import './tracing.js'
 
-import { fileURLToPath } from 'url'
-import { dirname, join } from 'path'
 import fs from 'fs/promises'
 import { buildApp } from './app.js'
 import { ensureDefaultUser, isSingleUserMode } from './services/user-service.js'
-
-const __filename = fileURLToPath(import.meta.url)
-const __dirname = dirname(__filename)
 
 /**
  * Initializes the data directory for video storage.
  * Checks if the data directory exists and logs the result.
  */
 async function initializeDataDirectory() {
-  const dataDir = process.env.STORAGE_PATH || join(dirname(__dirname), '..', 'videos')
+  const dataDir = config.storage.path
   try {
     await fs.access(dataDir)
     console.log(`Data directory found at: ${dataDir}`)
@@ -45,10 +44,8 @@ async function initializeSingleUserMode() {
  * Production deployments should use manual sync via API.
  */
 async function initializeVideoSync(app: Awaited<ReturnType<typeof buildApp>>) {
-  const nodeEnv = process.env.NODE_ENV || 'development'
-
   // Only auto-sync in dev/test - production should sync manually
-  if (nodeEnv !== 'production') {
+  if (!config.server.isProduction) {
     try {
       // Import storage modules
       const { loadStorageConfig, createVideoStorageProvider } = await import('./services/videoStorage.js')
@@ -140,7 +137,7 @@ async function initializeSystemConfigReplay(app: Awaited<ReturnType<typeof build
 
 async function start() {
   const app = await buildApp()
-  const PORT = parseInt(process.env.PORT || '3001', 10)
+  const PORT = config.server.port
 
   try {
     await connectDatabase()

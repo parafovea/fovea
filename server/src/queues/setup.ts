@@ -8,6 +8,7 @@ import {
   modelServiceCounter,
   modelServiceDuration,
 } from "../metrics.js";
+import { config as appConfig } from "../config.js";
 import { buildPersonaPrompts } from "../utils/queryBuilder.js";
 import {
   fetchModelService,
@@ -73,8 +74,8 @@ interface ModelSummarizeRequest {
  * Uses environment variables with localhost defaults for development.
  */
 const connection = new Redis({
-  host: process.env.REDIS_HOST || "localhost",
-  port: parseInt(process.env.REDIS_PORT || "6379"),
+  host: appConfig.redis.host,
+  port: appConfig.redis.port,
   maxRetriesPerRequest: null,
 });
 
@@ -251,8 +252,7 @@ export const videoWorker = new Worker<
     const modelVideoPath = video.path.replace('/data/', '/videos/');
 
     // Call model service with metrics tracking
-    const modelServiceUrl =
-      process.env.MODEL_SERVICE_URL || "http://localhost:8000";
+    const modelServiceUrl = appConfig.modelService.url;
     const modelStartTime = Date.now();
 
     const camelCaseRequest = {
@@ -582,8 +582,7 @@ export const claimWorker = new Worker<
     }
 
     // Call model service
-    const modelServiceUrl =
-      process.env.MODEL_SERVICE_URL || "http://localhost:8000";
+    const modelServiceUrl = appConfig.modelService.url;
     const modelStartTime = Date.now();
 
     await job.updateProgress(30);
@@ -936,8 +935,7 @@ export const synthesisWorker = new Worker<
     const requestBody = snakecaseKeys(camelCaseRequestBody, { deep: true });
 
     // Call model service
-    const modelServiceUrl =
-      process.env.MODEL_SERVICE_URL || "http://localhost:8000";
+    const modelServiceUrl = appConfig.modelService.url;
     const modelStartTime = Date.now();
 
     await job.updateProgress(30);

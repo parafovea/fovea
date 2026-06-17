@@ -25,6 +25,7 @@ import crypto from 'node:crypto'
 import type { FastifyInstance, FastifyPluginAsync } from 'fastify'
 import { prisma } from '../lib/prisma.js'
 import { authService } from '../services/auth-service.js'
+import { config } from '../config.js'
 import { isAnonymousAuthAllowed } from './config.js'
 
 interface AnonymousSessionResponse {
@@ -109,7 +110,7 @@ const anonymousSessionPlugin: FastifyPluginAsync = async (app: FastifyInstance) 
 
       reply.setCookie('session_token', token, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
+        secure: config.server.isProduction,
         sameSite: 'lax',
         expires: expiresAt,
         path: '/',

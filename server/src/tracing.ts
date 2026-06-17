@@ -13,6 +13,8 @@ import { PeriodicExportingMetricReader } from '@opentelemetry/sdk-metrics'
 import { resourceFromAttributes, defaultResource } from '@opentelemetry/resources'
 import { ATTR_SERVICE_NAME, ATTR_SERVICE_VERSION } from '@opentelemetry/semantic-conventions'
 
+import { config } from './config.js'
+
 /**
  * Initializes OpenTelemetry SDK with trace and metric exporters.
  *
@@ -30,7 +32,7 @@ function initializeOpenTelemetry(): NodeSDK {
   );
 
   // Build full OTLP endpoint URLs
-  const otlpEndpoint = process.env.OTEL_EXPORTER_OTLP_ENDPOINT || 'http://localhost:4318';
+  const otlpEndpoint = config.otel.exporterEndpoint;
   const traceUrl = `${otlpEndpoint}/v1/traces`;
   const metricUrl = `${otlpEndpoint}/v1/metrics`;
 

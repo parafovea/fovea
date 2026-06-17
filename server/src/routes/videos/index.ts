@@ -1,4 +1,5 @@
 import { FastifyPluginAsync, FastifyRequest, FastifyReply } from 'fastify'
+import { config } from '../../config.js'
 import { createVideoStorageProvider, loadStorageConfig } from '../../services/videoStorage.js'
 import { VideoRepository } from '../../repositories/VideoRepository.js'
 import { VideoAccessService } from '../../services/video-access-service.js'
@@ -26,7 +27,7 @@ import { urlRoutes } from './url.js'
  * - Get video URLs
  */
 const videosRoute: FastifyPluginAsync = async (fastify) => {
-  const STORAGE_PATH = process.env.STORAGE_PATH || '/videos'
+  const STORAGE_PATH = config.storage.path
 
   // Initialize storage provider
   const storageConfig = loadStorageConfig()

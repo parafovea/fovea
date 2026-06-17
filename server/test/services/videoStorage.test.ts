@@ -162,7 +162,9 @@ describe('Video Storage Providers', () => {
       const config = loadStorageConfig()
 
       expect(config.type).toBe('local')
-      expect(config.localPath).toBe('/videos')
+      // STORAGE_PATH unset falls back to the unified repo-relative default
+      // (<repo>/videos), an absolute path ending in `videos`.
+      expect(config.localPath).toMatch(/[/\\]videos$/)
       expect(config.baseUrl).toBe('/api/videos')
     })
 

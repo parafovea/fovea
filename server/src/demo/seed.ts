@@ -24,6 +24,7 @@ import { readFile } from 'node:fs/promises'
 import { resolve, join } from 'node:path'
 import { timingSafeEqual } from 'node:crypto'
 import type { FastifyInstance, FastifyPluginAsync } from 'fastify'
+import { config } from '../config.js'
 import { prisma } from '../lib/prisma.js'
 import { getSeedToken, isDemoModeEnabled } from './config.js'
 import {
@@ -59,7 +60,7 @@ interface ClipManifest {
  * from the server cwd to the monorepo location.
  */
 function manifestPath(): string {
-  const overridden = process.env.FOVEA_DEMO_CLIPS_MANIFEST
+  const overridden = config.demo.clipsManifestPath
   if (overridden && overridden.length > 0) return overridden
   return resolve(
     process.cwd(),
@@ -102,7 +103,7 @@ interface SeedSuccess {
  * pattern for custom tours).
  */
 function fixturesDir(): string {
-  const overridden = process.env.FOVEA_DEMO_FIXTURES_DIR
+  const overridden = config.demo.fixturesDir
   if (overridden && overridden.length > 0) return overridden
   return resolve(process.cwd(), '..', 'annotation-tool', 'demo', 'fixtures')
 }
