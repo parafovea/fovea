@@ -100,14 +100,28 @@ def _vad_factory(model_config: ModelConfig) -> Any:
 
 
 def _object_detection_factory(model_config: ModelConfig) -> Any:
-    """Build a detection loader from config based on the ``framework`` hint.
+    """Build a detection loader, preferring SAM 3.1 when ``framework`` selects it.
 
-    Dispatch is purely architecture-keyed: the architecture Pydantic
-    model parsed from the YAML's ``architecture:`` block selects the
-    loader class via the registry, and the ``framework`` enum on
-    :class:`DetectionConfig` selects between the pytorch and ONNX
-    registries. No code on this path inspects ``model_id`` strings.
+    The SAM 3.1 path is a framework-level pre-dispatch: the SAM3 adapter lives
+    in its own module with its own loading conventions and is selected by the
+    ``framework: "sam3"`` YAML hint before the architecture-keyed registry is
+    consulted. Every other detection entry is architecture-keyed: the
+    architecture Pydantic model parsed from the YAML's ``architecture:`` block
+    selects the loader class via the registry, and the ``framework`` enum on
+    :class:`DetectionConfig` selects between the pytorch and ONNX registries.
+    No code on the architecture-keyed path inspects ``model_id`` strings.
     """
+    if model_config.framework == "sam3":
+        from src.infrastructure.adapters.outbound.models.sam3 import (  # noqa: PLC0415
+            SAM3DetectionAdapter,
+            SAM3Loader,
+        )
+
+        sam3_loader = SAM3Loader(model_id=model_config.model_id, device=_device())
+        sam3_loader.load()
+        logger.info(f"SAM 3.1 detection loaded: {model_config.model_id}")
+        return SAM3DetectionAdapter(sam3_loader)
+
     from src.infrastructure.adapters.outbound.models.detection.loader import (  # noqa: PLC0415
         DetectionConfig,
         DetectionFramework,
