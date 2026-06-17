@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 
-import { Info } from 'lucide-react'
+import { Info, Clock, Crosshair, X } from 'lucide-react'
 
 import {
   Accordion,
@@ -29,12 +29,20 @@ import {
 import { Slider } from '@/components/ui/slider'
 import { Textarea } from '@/components/ui/textarea'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { Claim, GlossItem, ClaimerType } from '@models/types'
+import { Claim, GlossItem, ClaimerType, ClaimTimeSpan } from '@models/types'
+import { getAnnotationTimeBounds } from '@models/annotation'
 import GlossEditor from '@components/ontology/GlossEditor'
-import { useClaims, useEvents, useTimes, useEntities, usePersonaOntology } from '@store/queries'
+import { useClaims, useEvents, useTimes, useEntities, usePersonaOntology, useAnnotations, useVideos } from '@store/queries'
 import { glossToText } from '@/utils/glossUtils'
 import { logWarning } from '@services/errorLogging'
 import { useClaimsUiStore } from '@store/zustand/claimsUiStore'
+
+/** Format seconds as m:ss.t for time-span chips. */
+function formatTimeSpanSeconds(seconds: number): string {
+  const m = Math.floor(seconds / 60)
+  const s = seconds - m * 60
+  return `${m}:${s.toFixed(1).padStart(4, '0')}`
+}
 
 interface ClaimEditorProps {
   open: boolean
@@ -78,6 +86,19 @@ export function ClaimEditor({
   const [gloss, setGloss] = useState<GlossItem[]>([])
   const [confidence, setConfidence] = useState(0.9)
 
+  // Video time spans the claim is grounded in (discontiguous).
+  const [timeSpans, setTimeSpans] = useState<ClaimTimeSpan[]>([])
+
+  // The video's object annotations (for deriving time spans) and its fps.
+  const { data: annotations = [] } = useAnnotations(videoId)
+  const { data: videos = [] } = useVideos()
+  const videoFps = videos.find((v) => v.id === videoId)?.fps ?? 30
+  const objectAnnotations = annotations.filter((a) => a.annotationType === 'object')
+
+  // Scrub-capture: hide this dialog, let the user scrub the video, capture the
+  // playhead, then re-open with the span appended (see claimsUiStore).
+  const startTimestampCapture = useClaimsUiStore((state) => state.startTimestampCapture)
+
   // Claimer fields
   const [claimerType, setClaimerType] = useState<ClaimerType | null>(null)
   const [claimerGloss, setClaimerGloss] = useState<GlossItem[]>([])
@@ -103,16 +124,16 @@ export function ClaimEditor({
   // Ref to track current form state without triggering effect re-runs
   const formStateRef = useRef({
     gloss, confidence, claimerType, claimerGloss, claimRelation,
-    claimEventId, claimTimeId, claimLocationId, audio, video, metadata, comment,
+    claimEventId, claimTimeId, claimLocationId, audio, video, metadata, comment, timeSpans,
   })
 
   useEffect(() => {
     formStateRef.current = {
       gloss, confidence, claimerType, claimerGloss, claimRelation,
-      claimEventId, claimTimeId, claimLocationId, audio, video, metadata, comment,
+      claimEventId, claimTimeId, claimLocationId, audio, video, metadata, comment, timeSpans,
     }
   }, [gloss, confidence, claimerType, claimerGloss, claimRelation,
-      claimEventId, claimTimeId, claimLocationId, audio, video, metadata, comment])
+      claimEventId, claimTimeId, claimLocationId, audio, video, metadata, comment, timeSpans])
 
   // Initialize form when dialog opens or claim changes
   useEffect(() => {
@@ -132,6 +153,7 @@ export function ClaimEditor({
         setVideo(draft.video)
         setMetadata(draft.metadata)
         setComment(draft.comment)
+        setTimeSpans(draft.timeSpans ?? [])
         useClaimsUiStore.getState().clearDraftClaim()
       } else if (claim) {
         // Edit mode
@@ -147,6 +169,7 @@ export function ClaimEditor({
         setVideo(claim.video ?? [])
         setMetadata(claim.metadata ?? [])
         setComment(claim.comment || '')
+        setTimeSpans(claim.timeSpans ?? [])
       } else {
         // Create mode
         setGloss([])
@@ -161,6 +184,7 @@ export function ClaimEditor({
         setVideo([])
         setMetadata([])
         setComment('')
+        setTimeSpans([])
       }
     }
   }, [open, claim])
@@ -196,6 +220,50 @@ export function ClaimEditor({
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
   }, [open, videoId, personaId, summaryId, claim?.id, parentClaimId, navigate, saveDraftClaim])
+
+  // Begin a scrub capture: persist the in-progress form (including the spans
+  // collected so far) so it survives the dialog hiding, signal the workspace
+  // to enter capture mode, and close this dialog so the player is reachable.
+  const beginScrubCapture = () => {
+    const state = formStateRef.current
+    saveDraftClaim({
+      ...state,
+      timeSpans,
+      videoId: videoId || '',
+      personaId: personaId || '',
+      summaryId,
+      editingClaimId: claim?.id,
+      parentClaimId,
+    })
+    startTimestampCapture()
+    onClose()
+  }
+
+  // Derive a span from an object annotation's keyframe time bounds.
+  const addSpanFromAnnotation = (annotationId: string) => {
+    const annotation = objectAnnotations.find((a) => a.id === annotationId)
+    if (!annotation) return
+    const bounds = getAnnotationTimeBounds(annotation, videoFps)
+    if (!bounds) return
+    setTimeSpans((prev) => [
+      ...prev,
+      { start: bounds.startTime, end: bounds.endTime, source: 'annotation', annotationIds: [annotation.id] },
+    ])
+  }
+
+  const removeTimeSpan = (index: number) => {
+    setTimeSpans((prev) => prev.filter((_, i) => i !== index))
+  }
+
+  // Human-readable label for an object annotation in the span picker.
+  const annotationLabel = (annotationId: string): string => {
+    const annotation = objectAnnotations.find((a) => a.id === annotationId)
+    if (annotation?.linkedEntityId) {
+      const entity = entities.find((e) => e.id === annotation.linkedEntityId)
+      if (entity?.name) return entity.name
+    }
+    return `Object ${annotationId.slice(0, 6)}`
+  }
 
   const handleSave = () => {
     // Convert gloss to plain text for the text field, resolving typeRef /
@@ -249,6 +317,9 @@ export function ClaimEditor({
     if (parentClaimId) {
       claimData.parentClaimId = parentClaimId
     }
+
+    // Always send timeSpans so removals persist (empty clears them).
+    claimData.timeSpans = timeSpans
 
     onSave(claimData)
     onClose()
@@ -324,6 +395,71 @@ export function ClaimEditor({
               claims={existingClaims}
               label="Claim text with references"
             />
+          </div>
+
+          {/* Video time spans (discontiguous) */}
+          <div>
+            <p className="mb-1 text-sm font-medium">Video time spans</p>
+            <p className="mb-2 block text-xs text-muted-foreground">
+              Mark the video segment(s) this claim is grounded in. Add spans by scrubbing the video or from an object&apos;s annotation; you can add several discontiguous spans.
+            </p>
+            {timeSpans.length > 0 && (
+              <div className="mb-2 flex flex-wrap gap-2" data-testid="claim-time-spans">
+                {timeSpans.map((span, index) => (
+                  <span
+                    key={index}
+                    className="inline-flex items-center gap-1 rounded-md border bg-muted px-2 py-1 text-xs"
+                    data-testid="claim-time-span-chip"
+                  >
+                    <Clock className="size-3" />
+                    {formatTimeSpanSeconds(span.start)}&ndash;{formatTimeSpanSeconds(span.end)}
+                    {span.source === 'annotation' && (
+                      <span className="text-muted-foreground">(object)</span>
+                    )}
+                    <button
+                      type="button"
+                      aria-label="Remove time span"
+                      className="ml-1 text-muted-foreground hover:text-foreground"
+                      onClick={() => removeTimeSpan(index)}
+                    >
+                      <X className="size-3" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={beginScrubCapture}
+                data-testid="claim-scrub-capture-button"
+              >
+                <Crosshair className="size-4 mr-1" />
+                Set span by scrubbing
+              </Button>
+              {objectAnnotations.length > 0 && (
+                <Select value="" onValueChange={(value) => { if (value) addSpanFromAnnotation(value) }}>
+                  <SelectTrigger className="h-8 w-[220px]" data-testid="claim-span-from-object">
+                    <SelectValue placeholder="Add span from object…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {objectAnnotations.map((a) => {
+                      const bounds = getAnnotationTimeBounds(a, videoFps)
+                      return (
+                        <SelectItem key={a.id} value={a.id}>
+                          {annotationLabel(a.id)}
+                          {bounds
+                            ? ` (${formatTimeSpanSeconds(bounds.startTime)}–${formatTimeSpanSeconds(bounds.endTime)})`
+                            : ''}
+                        </SelectItem>
+                      )
+                    })}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
           </div>
 
           {/* Confidence Slider */}

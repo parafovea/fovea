@@ -129,3 +129,47 @@ hybrid   metadata in postgres, video bytes on S3
 S3 mode reads `S3_BUCKET`, `S3_REGION`, `S3_ENDPOINT` (for
 non-AWS S3-compatible stores), and AWS credentials. See
 [Reference > Environment variables](../reference/environment-variables.md).
+
+### Organizing videos in folders
+
+Local storage discovers videos recursively, so you can keep your
+videos in subdirectories instead of a single flat folder. A file at
+`team/qc/clip.mp4` is discovered with the storage key `team/qc/clip.mp4`;
+its sidecar metadata (`team/qc/clip.info.json`) is picked up the same way.
+Hidden files and directories (names starting with a dot) are skipped.
+
+### Corpus manifest (`fovea.manifest.json`)
+
+Drop an optional `fovea.manifest.json` at the root of the videos storage to
+declare projects and user groups and have a sync assign videos to projects by
+folder. The sync (`POST /api/videos/sync`, admin-only) applies it after
+discovery:
+
+```json
+{
+  "groups": [
+    {
+      "slug": "scale",
+      "name": "SCALE Team",
+      "members": [{ "username": "wgantt", "role": "group_admin" }]
+    }
+  ],
+  "projects": [
+    { "slug": "scale-team", "name": "SCALE Team", "ownerGroup": "scale", "paths": ["team/**"] },
+    { "slug": "scale-qc", "name": "SCALE QC", "ownerGroup": "scale", "paths": ["team/qc/**"] }
+  ]
+}
+```
+
+- **Globs** support `**` (across directories), `*` (within one path
+  segment), and `?`. When several project globs match a video, the most
+  specific one wins (longest literal prefix), so `team/qc/**` beats
+  `team/**` for a clip under `team/qc/`.
+- **Projects** and **groups** are upserted by `slug`. `ownerGroup` /
+  `ownerUser` reference an existing group slug / username.
+- **Memberships** are reconciled additively: listed members are added and
+  their roles updated; existing members are never removed by a sync.
+- Assignments created from the manifest carry `source: "folder"`. Re-running
+  the sync is idempotent (no duplicate assignments or members).
+- A missing manifest is a no-op; a malformed one is logged and skipped so
+  video discovery still completes.

@@ -1,7 +1,7 @@
 {
   "name": "fovea",
   "private": true,
-  "version": "0.4.2",
+  "version": "0.4.3",
   "description": "FOVEA - Flexible Ontology Visual Event Analyzer",
   "scripts": {
     "dev": "pnpm run dev:infra && pnpm run dev:services",

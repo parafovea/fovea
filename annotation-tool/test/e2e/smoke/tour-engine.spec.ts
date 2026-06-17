@@ -16,7 +16,7 @@
  *   - Navigation buttons + keyboard navigation including the editable-
  *     target guard on arrow keys
  *   - Cursor persistence + restoration + clamping for shrunk scripts
- *   - Missing-anchor 3 s ceiling + skip affordance
+ *   - Missing-anchor 8 s ceiling + skip affordance
  *   - Telemetry events (started, step_viewed, completed, abandoned,
  *     abandoned-with-error from onBeforeLaunch throw)
  *   - Focus management (auto-focus on primary action, restore on exit)
@@ -264,7 +264,7 @@ test.describe('Tour engine: menu', () => {
       timeout: 5000,
     })
     const tiles = page.locator('[data-tour-id^="tour-menu-tile-"]')
-    await expect(tiles).toHaveCount(10)
+    await expect(tiles).toHaveCount(12)
   })
 
   test('clicking Start on a tile launches the tour and dismisses the menu', async ({
@@ -312,7 +312,7 @@ test.describe('Tour engine: StepCard', () => {
     await expect(card.getByText('First annotation in 90 seconds')).toBeVisible()
     await expect(
       card.getByText(
-        /Fovea organizes annotation around personas — perspectives on the same video/,
+        /Fovea organizes annotation around personas\. Perspectives on the same video/,
       ),
     ).toBeVisible()
     const counter = await stepCounter(page)
@@ -461,18 +461,23 @@ test.describe('Tour engine: SpotlightOverlay', () => {
     )
   })
 
-  test('overlay clears when the active step has no resolvable anchor', async ({
+  test('overlay shows a full-page backdrop with no element cutout when the active step has no resolvable anchor', async ({
     page,
   }) => {
     await page.goto('/')
     await waitForHandle(page)
     await launchTour(page, 'first-annotation')
-    // Step 1 anchor is video-browser-card-first; on the worker user's
-    // empty workspace there's no card so the anchor never resolves.
-    // After the 3 s ceiling, the spotlight should be empty.
+    // Step 2 anchor is video-browser-root; on the unauthenticated /login
+    // page (no testUser fixture) the workspace shelf never mounts, so the
+    // anchor never resolves. With no element to spotlight, the overlay
+    // renders a full-page dim backdrop rather than a dashed cutout — assert
+    // the element-outline rect (the only rect carrying stroke-dasharray) is
+    // absent, proving the spotlight is not stranded on a stale element.
     await pressNext(page)
     await page.waitForTimeout(3500)
-    await expect(page.locator('[data-fovea-tour-spotlight]')).toHaveCount(0)
+    await expect(
+      page.locator('[data-fovea-tour-spotlight] rect[stroke-dasharray]'),
+    ).toHaveCount(0)
     await abandon(page)
   })
 })
@@ -724,23 +729,24 @@ test.describe('Tour engine: sessionStorage cursor', () => {
 })
 
 // ===========================================================================
-// 8. Missing-anchor 3 s ceiling + skip affordance
+// 8. Missing-anchor 8 s ceiling + skip affordance
 // ===========================================================================
 
 test.describe('Tour engine: missing anchor', () => {
-  test('step with an unresolvable anchor surfaces the Skip button after the 3 s ceiling', async ({
+  test('step with an unresolvable anchor surfaces the Skip button after the 8 s ceiling', async ({
     page,
   }) => {
     await page.goto('/')
     await waitForHandle(page)
     await launchTour(page, 'first-annotation')
-    // step 1 anchor video-browser-card-first is absent on the worker
-    // user's empty workspace.
+    // step 2 anchor video-browser-root is absent on the unauthenticated
+    // /login page, so it never resolves within the 8 s waitForAnchor
+    // ceiling and the missing-anchor banner + Skip affordance appears.
     await pressNext(page)
     const card = page.locator('[data-fovea-tour-step-card]')
     await expect(
       card.getByText("Couldn't find this UI element"),
-    ).toBeVisible({ timeout: 4000 })
+    ).toBeVisible({ timeout: 10000 })
     await expect(card.getByRole('button', { name: 'Skip' })).toBeVisible()
     await abandon(page)
   })
@@ -879,11 +885,13 @@ test.describe('Tour engine: auto-advance on click', () => {
   }) => {
     await page.goto('/')
     await waitForHandle(page)
-    // Stage a synthetic clickable anchor matching Tour 1 step 1 so the
-    // engine resolves it instantly and we can test the click pathway.
+    // Stage a synthetic clickable anchor matching Tour 1 step 2
+    // (video-browser-root, expectAction='click') so the engine resolves it
+    // instantly — even on the unauthenticated /login page where the real
+    // shelf never mounts — and we can test the click pathway.
     await page.evaluate(() => {
       const btn = document.createElement('button')
-      btn.setAttribute('data-tour-id', 'video-browser-card-first')
+      btn.setAttribute('data-tour-id', 'video-browser-root')
       btn.id = 'e2e-click-target'
       btn.textContent = 'click me'
       Object.assign(btn.style, {
@@ -895,7 +903,7 @@ test.describe('Tour engine: auto-advance on click', () => {
       document.body.appendChild(btn)
     })
     await launchTour(page, 'first-annotation')
-    // Walk to step 1 (anchor video-browser-card-first, expectAction='click').
+    // Walk to step 2 (anchor video-browser-root, expectAction='click').
     await pressNext(page)
     await page.waitForTimeout(150)
     expect((await stepCounter(page)).current).toBe(2)
@@ -1299,13 +1307,13 @@ test.describe('Tour engine: pause + resume', () => {
     await page.goto('/')
     await waitForHandle(page)
     await launchTour(page, 'first-annotation')
-    // Step 2 anchor (video-browser-card-first) is absent on the worker
-    // user's empty workspace — wait for the Skip affordance, then
-    // confirm Pause is still reachable on the card.
+    // Step 2 anchor (video-browser-root) is absent on the unauthenticated
+    // /login page — wait out the 8 s waitForAnchor ceiling for the Skip
+    // affordance, then confirm Pause is still reachable on the card.
     await pressNext(page)
     const card = page.locator('[data-fovea-tour-step-card]')
     await expect(card.getByText("Couldn't find this UI element")).toBeVisible({
-      timeout: 4500,
+      timeout: 10000,
     })
     await card.getByRole('button', { name: 'Pause tour' }).click()
     await expect(
@@ -1345,7 +1353,7 @@ test.describe('Tour engine: pause + resume', () => {
 // ===========================================================================
 
 test.describe('Tour engine: runtime DOM mutations', () => {
-  test('Spotlight clears within a few rAF ticks when the anchor goes display:none mid-step', async ({
+  test('Spotlight stops outlining the anchor within a few rAF ticks when it is removed mid-step', async ({
     page,
   }) => {
     await page.goto('/')
@@ -1366,18 +1374,23 @@ test.describe('Tour engine: runtime DOM mutations', () => {
       document.body.appendChild(el)
     })
     await launchTour(page, 'first-annotation')
-    await expect(page.locator('[data-fovea-tour-spotlight]')).toHaveCount(1)
-    // Hide the anchor — the rAF measurement loop should detect that
-    // either the element is detached (it's not, we used display:none)
-    // or its rect has zero size; in the zero-size case the overlay
-    // keeps its last rect rather than snap to zero, so we instead
-    // REMOVE the element which definitely triggers the
-    // !document.contains branch and clears the spotlight.
+    // The synthetic app-shell anchor is small, so the overlay draws an
+    // element cutout — the dashed outline rect (the only rect carrying
+    // stroke-dasharray) is present.
+    await expect(
+      page.locator('[data-fovea-tour-spotlight] rect[stroke-dasharray]'),
+    ).toHaveCount(1)
+    // Remove the anchor — the rAF measurement loop hits the
+    // !document.contains branch and clears the rect. The overlay stays
+    // mounted (it falls back to a full-page backdrop), but it stops
+    // outlining the now-removed element, so the dashed cutout disappears.
     await page.evaluate(() =>
       document.getElementById('e2e-disappearing-anchor')?.remove(),
     )
     await page.waitForTimeout(200)
-    await expect(page.locator('[data-fovea-tour-spotlight]')).toHaveCount(0)
+    await expect(
+      page.locator('[data-fovea-tour-spotlight] rect[stroke-dasharray]'),
+    ).toHaveCount(0)
     await abandon(page)
   })
 

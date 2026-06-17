@@ -28,6 +28,7 @@ export {
 export {
   useVideoSummaries,
   useVideoSummary,
+  useVideoSummariesLookup,
   useGenerateSummary,
   useSaveSummary,
   useDeleteSummary,

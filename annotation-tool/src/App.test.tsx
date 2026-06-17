@@ -19,6 +19,30 @@ vi.mock('./utils/seedTestData', () => ({
   isTestDataEnabled: () => false,
 }))
 
+/**
+ * Build a full AppConfig for tests that render protected routes. ProtectedRoute
+ * now holds the loading screen until appConfig is non-null, so a test that wants
+ * to reach the protected Layout or the login redirect must seed config, not just
+ * the legacy top-level mode.
+ */
+function appConfig(overrides: Partial<{ mode: 'single-user' | 'multi-user'; allowRegistration: boolean }> = {}) {
+  return {
+    mode: 'multi-user' as 'single-user' | 'multi-user',
+    allowRegistration: true,
+    wikidata: {
+      mode: 'online' as const,
+      url: 'https://www.wikidata.org/w/api.php',
+      idMapping: null,
+      allowExternalLinks: true,
+    },
+    externalLinks: {
+      wikidata: true,
+      videoSources: true,
+    },
+    ...overrides,
+  }
+}
+
 function renderApp(initialEntries: string[] = ['/']) {
   const queryClient = new QueryClient({
     defaultOptions: {
@@ -57,9 +81,10 @@ describe('App', () => {
   })
 
   it('redirects to login when accessing protected route while unauthenticated', async () => {
-    // Set loading to false, not authenticated
+    // Set loading to false, not authenticated; seed config so the appConfig
+    // gate does not hold the loading screen.
     useAuthStore.getState().setLoading(false)
-    useAuthStore.getState().setMode('multi-user')
+    useAuthStore.getState().setConfig(appConfig({ mode: 'multi-user' }))
 
     server.use(
       http.get('/api/config', () => {
@@ -91,7 +116,7 @@ describe('App', () => {
     }
 
     useAuthStore.getState().loginSuccess(mockUser)
-    useAuthStore.getState().setMode('multi-user')
+    useAuthStore.getState().setConfig(appConfig({ mode: 'multi-user' }))
 
     server.use(
       http.get('/api/config', () => {
@@ -204,7 +229,7 @@ describe('App', () => {
 
   it('allows access to protected routes in single-user mode without authentication', async () => {
     useAuthStore.getState().setLoading(false)
-    useAuthStore.getState().setMode('single-user')
+    useAuthStore.getState().setConfig(appConfig({ mode: 'single-user', allowRegistration: false }))
 
     server.use(
       http.get('/api/config', () => {
@@ -226,6 +251,31 @@ describe('App', () => {
     })
 
     // Should not show login form in single-user mode
+    expect(screen.queryByLabelText(/username/i)).not.toBeInTheDocument()
+  })
+
+  it('holds the loading screen on a protected route when appConfig is null even after loading clears', async () => {
+    // The auth-race repro: under load /api/config 5xx leaves appConfig null
+    // while mode sits at the 'single-user' default, then /api/auth/me 401
+    // clears isLoading. Before the fix, ProtectedRoute fell through to the
+    // protected Layout because mode !== 'multi-user'. With the gate, a null
+    // appConfig must keep the loading screen up and never render protected
+    // content or the login form. useSession is mocked here, so appConfig stays
+    // null exactly as it would mid-outage.
+    useAuthStore.getState().setLoading(false)
+    // appConfig is null after reset(); mode is the 'single-user' default.
+    expect(useAuthStore.getState().appConfig).toBeNull()
+
+    server.use(
+      http.get('/api/videos', () => {
+        return HttpResponse.json([])
+      })
+    )
+
+    renderApp(['/'])
+
+    // Loading screen is held; no protected content, no login form.
+    expect(screen.getByText('Loading...')).toBeInTheDocument()
     expect(screen.queryByLabelText(/username/i)).not.toBeInTheDocument()
   })
 })

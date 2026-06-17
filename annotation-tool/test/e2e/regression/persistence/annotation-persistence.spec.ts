@@ -39,7 +39,7 @@ test.describe('Annotation Auto-Save Persistence', () => {
     const personaSelect = page.getByRole('combobox', { name: /select persona/i })
     await personaSelect.click()
     const personaOption = page.getByRole('option').filter({
-      hasText: new RegExp('^' + testPersona.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ' -'),
+      hasText: new RegExp('^' + testPersona.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ' \\('),
     }).first()
     await personaOption.click()
     await page.waitForTimeout(1000)
@@ -92,7 +92,7 @@ test.describe('Annotation Auto-Save Persistence', () => {
     const personaSelect = page.getByRole('combobox', { name: /select persona/i })
     await personaSelect.click()
     const personaOption = page.getByRole('option').filter({
-      hasText: new RegExp('^' + testPersona.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ' -'),
+      hasText: new RegExp('^' + testPersona.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ' \\('),
     }).first()
     await personaOption.click()
     await page.waitForTimeout(1000)
@@ -125,7 +125,7 @@ test.describe('Annotation Auto-Save Persistence', () => {
     const personaSelect = page.getByRole('combobox', { name: /select persona/i })
     await personaSelect.click()
     const personaOption = page.getByRole('option').filter({
-      hasText: new RegExp('^' + testPersona.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ' -'),
+      hasText: new RegExp('^' + testPersona.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ' \\('),
     }).first()
     await personaOption.click()
     await page.waitForTimeout(1000)
@@ -161,7 +161,7 @@ test.describe('Annotation Auto-Save Persistence', () => {
     const personaSelect2 = page.getByRole('combobox', { name: /select persona/i })
     await personaSelect2.click()
     const personaOption2 = page.getByRole('option').filter({
-      hasText: new RegExp('^' + testPersona.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ' -'),
+      hasText: new RegExp('^' + testPersona.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ' \\('),
     }).first()
     await personaOption2.click()
     await page.waitForTimeout(1000)

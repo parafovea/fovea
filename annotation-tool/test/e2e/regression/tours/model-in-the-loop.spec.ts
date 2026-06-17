@@ -10,6 +10,7 @@
  */
 
 import { test, expect } from '../../fixtures/test-context.js'
+import { skipUnlessRealVideoCorpus } from './_skip-unless-real-videos.js'
 import { microventContent } from '@/tours/content/microvent'
 
 const TOUR_ID = 'model-in-the-loop'
@@ -50,6 +51,10 @@ async function advanceTo(
 }
 
 test.describe('Tour 6: Model in the loop — end to end', () => {
+  test.beforeEach(async ({ page, workerSessionToken }) => {
+    await skipUnlessRealVideoCorpus(page, workerSessionToken)
+  })
+
   test('walks all seven steps through the model-driven annotation surfaces', async ({
     page,
     testUser,

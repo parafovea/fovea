@@ -110,6 +110,38 @@ describe('Video Storage Providers', () => {
     it('should handle missing video file', async () => {
       await expect(provider.getVideoStream('missing.mp4')).rejects.toThrow()
     })
+
+    it('discovers videos recursively in subdirectories with relative keys', async () => {
+      // Flat file already created in beforeEach: test-video.mp4
+      await fs.mkdir(path.join(tempDir, 'team', 'qc'), { recursive: true })
+      await fs.writeFile(path.join(tempDir, 'team', 'clip-a.mp4'), Buffer.from('a'))
+      await fs.writeFile(path.join(tempDir, 'team', 'qc', 'clip-b.webm'), Buffer.from('b'))
+      // A hidden directory and a non-video file must be ignored.
+      await fs.mkdir(path.join(tempDir, '.hidden'), { recursive: true })
+      await fs.writeFile(path.join(tempDir, '.hidden', 'secret.mp4'), Buffer.from('x'))
+      await fs.writeFile(path.join(tempDir, 'team', 'notes.txt'), Buffer.from('n'))
+
+      const result = await provider.listVideos()
+      const filenames = result.videos.map((v) => v.filename).sort()
+
+      expect(filenames).toEqual(['team/clip-a.mp4', 'team/qc/clip-b.webm', 'test-video.mp4'])
+      // The hidden-dir video and the .txt are excluded.
+      expect(filenames).not.toContain('.hidden/secret.mp4')
+      // Subdir keys resolve back to real files on disk.
+      const nested = result.videos.find((v) => v.filename === 'team/qc/clip-b.webm')
+      expect(nested?.size).toBe(1)
+    })
+
+    it('returns an empty list when the storage directory does not exist', async () => {
+      const missingProvider = createVideoStorageProvider({
+        type: 'local',
+        localPath: path.join(tempDir, 'does-not-exist'),
+        baseUrl: '/api/videos',
+      })
+      const result = await missingProvider.listVideos()
+      expect(result.videos).toEqual([])
+      expect(result.isTruncated).toBe(false)
+    })
   })
 
   // S3StorageProvider and HybridStorageProvider are tested in videoStorage.integration.test.ts

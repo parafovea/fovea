@@ -65,11 +65,17 @@ export async function buildApp() {
     }
   })
 
-  // Disable rate limiting in test environment to prevent E2E test failures
+  // Disable rate limiting in test environment to prevent E2E test failures.
+  // The cap and window are env-configurable so operators can size the limit to
+  // their corpus: a deployment with many videos x personas fans a hard refresh
+  // out into hundreds of per-persona / per-video requests, which trips a cap
+  // sized for a small instance. Defaults match the historical 1000 / 1 minute.
   if (process.env.NODE_ENV !== 'test') {
+    const rateLimitMax = Number(process.env.RATE_LIMIT_MAX) || 1000
+    const rateLimitWindow = process.env.RATE_LIMIT_WINDOW || '1 minute'
     await app.register(fastifyRateLimit, {
-      max: 1000,
-      timeWindow: '1 minute',
+      max: rateLimitMax,
+      timeWindow: rateLimitWindow,
       keyGenerator: (request) => {
         return request.ip
       }

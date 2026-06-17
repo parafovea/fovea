@@ -16,6 +16,47 @@ declare global {
  */
 export const server = setupServer(...handlers)
 
+/**
+ * Polyfill the Web Storage API for jsdom.
+ *
+ * This vitest jsdom configuration does not expose `localStorage` /
+ * `sessionStorage` (both are `undefined`), so any code that persists state —
+ * notably the zustand `persist` middleware backing the auth store — throws
+ * `Cannot read properties of undefined (reading 'setItem')` on its first
+ * write. A minimal in-memory Storage keeps persisted stores working in tests.
+ */
+class MemoryStorage implements Storage {
+  private store = new Map<string, string>()
+  get length(): number {
+    return this.store.size
+  }
+  clear(): void {
+    this.store.clear()
+  }
+  getItem(key: string): string | null {
+    return this.store.has(key) ? (this.store.get(key) as string) : null
+  }
+  key(index: number): string | null {
+    return Array.from(this.store.keys())[index] ?? null
+  }
+  removeItem(key: string): void {
+    this.store.delete(key)
+  }
+  setItem(key: string, value: string): void {
+    this.store.set(key, String(value))
+  }
+}
+
+for (const name of ['localStorage', 'sessionStorage'] as const) {
+  if (typeof (globalThis as Record<string, unknown>)[name] === 'undefined') {
+    const storage = new MemoryStorage()
+    Object.defineProperty(globalThis, name, { value: storage, configurable: true })
+    if (typeof window !== 'undefined') {
+      Object.defineProperty(window, name, { value: storage, configurable: true })
+    }
+  }
+}
+
 beforeAll(() => {
   server.listen({ onUnhandledRequest: 'warn' })
 })
@@ -23,6 +64,8 @@ beforeAll(() => {
 afterEach(() => {
   cleanup()
   server.resetHandlers()
+  globalThis.localStorage?.clear()
+  globalThis.sessionStorage?.clear()
 })
 
 afterAll(() => {

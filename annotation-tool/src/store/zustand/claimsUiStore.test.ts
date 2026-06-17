@@ -30,6 +30,7 @@ function createMockDraftClaim(overrides: Partial<DraftClaim> = {}): DraftClaim {
     video: ['text', 'non-text'],
     metadata: ['non-text'],
     comment: 'Test comment for draft',
+    timeSpans: [],
     videoId: 'video-123',
     personaId: 'persona-456',
     summaryId: 'summary-789',
@@ -277,6 +278,64 @@ describe('claimsUiStore', () => {
 
       expect(useClaimsUiStore.getState().draftClaim).not.toBeNull()
       expect(useClaimsUiStore.getState().selectedClaimId).toBe('other-claim')
+    })
+  })
+
+  describe('timestamp capture', () => {
+    it('captures start then end and appends an ordered span to the draft', () => {
+      const store = useClaimsUiStore.getState()
+      store.saveDraftClaim(createMockDraftClaim({ timeSpans: [] }))
+      store.startTimestampCapture()
+      expect(useClaimsUiStore.getState().timestampCapture).toEqual({ phase: 'start' })
+
+      store.captureTimestamp(3.0)
+      expect(useClaimsUiStore.getState().timestampCapture).toEqual({ phase: 'end', start: 3.0 })
+
+      // End captured before start in time: the stored span is ordered.
+      store.captureTimestamp(1.0)
+      const state = useClaimsUiStore.getState()
+      expect(state.timestampCapture).toBeNull()
+      expect(state.resumeClaimEditor).toBe(true)
+      expect(state.draftClaim?.timeSpans).toEqual([{ start: 1.0, end: 3.0, source: 'scrub' }])
+    })
+
+    it('appends multiple discontiguous spans across captures', () => {
+      const store = useClaimsUiStore.getState()
+      store.saveDraftClaim(createMockDraftClaim({ timeSpans: [] }))
+
+      store.startTimestampCapture()
+      store.captureTimestamp(1.0)
+      store.captureTimestamp(2.0)
+      store.consumeResume()
+
+      store.startTimestampCapture()
+      store.captureTimestamp(10.0)
+      store.captureTimestamp(12.0)
+
+      expect(useClaimsUiStore.getState().draftClaim?.timeSpans).toEqual([
+        { start: 1.0, end: 2.0, source: 'scrub' },
+        { start: 10.0, end: 12.0, source: 'scrub' },
+      ])
+    })
+
+    it('cancel clears capture and signals resume without adding a span', () => {
+      const store = useClaimsUiStore.getState()
+      store.saveDraftClaim(createMockDraftClaim({ timeSpans: [] }))
+      store.startTimestampCapture()
+      store.captureTimestamp(2.0)
+      store.cancelTimestampCapture()
+
+      const state = useClaimsUiStore.getState()
+      expect(state.timestampCapture).toBeNull()
+      expect(state.resumeClaimEditor).toBe(true)
+      expect(state.draftClaim?.timeSpans).toEqual([])
+    })
+
+    it('consumeResume clears the resume flag', () => {
+      useClaimsUiStore.getState().cancelTimestampCapture()
+      expect(useClaimsUiStore.getState().resumeClaimEditor).toBe(true)
+      useClaimsUiStore.getState().consumeResume()
+      expect(useClaimsUiStore.getState().resumeClaimEditor).toBe(false)
     })
   })
 })

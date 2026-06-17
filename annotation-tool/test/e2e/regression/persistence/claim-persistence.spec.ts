@@ -36,7 +36,7 @@ test.describe('Claim Persistence', () => {
       await personaSelect.click()
       const personaOption = page
         .getByRole('option')
-        .filter({ hasText: new RegExp('^' + testPersona.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ' -') })
+        .filter({ hasText: new RegExp('^' + testPersona.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ' \\(') })
         .first()
       await personaOption.click()
       await page.waitForTimeout(500)
@@ -106,7 +106,7 @@ test.describe('Claim Persistence', () => {
       await personaSelect2.click()
       const personaOption2 = page
         .getByRole('option')
-        .filter({ hasText: new RegExp('^' + testPersona.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ' -') })
+        .filter({ hasText: new RegExp('^' + testPersona.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ' \\(') })
         .first()
       await personaOption2.click()
       await page.waitForTimeout(500)
@@ -148,7 +148,7 @@ test.describe('Claim Persistence', () => {
       await personaSelect.click()
       const personaOption = page
         .getByRole('option')
-        .filter({ hasText: new RegExp('^' + testPersona.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ' -') })
+        .filter({ hasText: new RegExp('^' + testPersona.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ' \\(') })
         .first()
       await personaOption.click()
       await page.waitForTimeout(500)
@@ -207,7 +207,7 @@ test.describe('Claim Persistence', () => {
       await personaSelect2.click()
       const personaOption2 = page
         .getByRole('option')
-        .filter({ hasText: new RegExp('^' + testPersona.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ' -') })
+        .filter({ hasText: new RegExp('^' + testPersona.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ' \\(') })
         .first()
       await personaOption2.click()
       await page.waitForTimeout(500)
@@ -244,7 +244,7 @@ test.describe('Claim Persistence', () => {
       await personaSelect.click()
       const personaOption = page
         .getByRole('option')
-        .filter({ hasText: new RegExp('^' + testPersona.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ' -') })
+        .filter({ hasText: new RegExp('^' + testPersona.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ' \\(') })
         .first()
       await personaOption.click()
       await page.waitForTimeout(500)
@@ -303,7 +303,7 @@ test.describe('Claim Persistence', () => {
       await personaSelect2.click()
       const personaOption2 = page
         .getByRole('option')
-        .filter({ hasText: new RegExp('^' + testPersona.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ' -') })
+        .filter({ hasText: new RegExp('^' + testPersona.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ' \\(') })
         .first()
       await personaOption2.click()
       await page.waitForTimeout(500)

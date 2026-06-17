@@ -22,6 +22,7 @@ import {
 } from '@/components/ui/select'
 import VideoSummaryEditor, { VideoSummaryEditorRef } from './VideoSummaryEditor'
 import { usePersonas } from '@store/queries'
+import { useClaimsUiStore } from '@store/zustand/claimsUiStore'
 
 interface VideoSummaryDialogProps {
   open: boolean
@@ -36,7 +37,24 @@ export default function VideoSummaryDialog({
   videoId,
   initialPersonaId,
 }: VideoSummaryDialogProps) {
-  const [selectedPersonaId, setSelectedPersonaId] = useState<string | null>(initialPersonaId)
+  // When the dialog is being re-opened to resume a scrub timestamp capture, a
+  // pending draft for this video exists; restore the persona it was authored
+  // under so the in-progress claim re-opens under the right persona (the dialog
+  // remounts during capture, which would otherwise reset to the workspace
+  // default and lose a persona that was picked here).
+  const draftPersonaIdForVideo = (): string | null => {
+    const draft = useClaimsUiStore.getState().draftClaim
+    return draft && draft.videoId === videoId ? draft.personaId : null
+  }
+  const [selectedPersonaId, setSelectedPersonaId] = useState<string | null>(
+    draftPersonaIdForVideo() ?? initialPersonaId
+  )
+  // While a scrub timestamp capture is active, force this dialog closed so its
+  // modal overlay does not intercept clicks on the capture banner and so the
+  // user can scrub the player underneath. It re-opens automatically when the
+  // capture finishes (timestampCapture returns to null) because `open` stays
+  // true throughout.
+  const timestampCapture = useClaimsUiStore((state) => state.timestampCapture)
   const { data: personas = [] } = usePersonas()
   const editorRef = useRef<VideoSummaryEditorRef>(null)
 
@@ -48,15 +66,18 @@ export default function VideoSummaryDialog({
     onClose()
   }
 
-  // Update selected persona when initial persona changes (e.g., when dialog opens)
+  // Update selected persona when initial persona changes (e.g., when dialog
+  // opens). On a scrub-capture resume, prefer the draft's persona so the
+  // in-progress claim re-opens under the persona it was authored with.
   useEffect(() => {
-    if (open) {
-      setSelectedPersonaId(initialPersonaId)
+    if (open && !timestampCapture) {
+      setSelectedPersonaId(draftPersonaIdForVideo() ?? initialPersonaId)
     }
-  }, [open, initialPersonaId])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, initialPersonaId, videoId, timestampCapture])
 
   return (
-    <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) onClose() }}>
+    <Dialog open={open && !timestampCapture} onOpenChange={(isOpen) => { if (!isOpen && !timestampCapture) onClose() }}>
       <DialogContent className="sm:max-w-2xl min-h-[60vh] max-h-[80vh]">
         <DialogHeader>
           <DialogTitle>Edit Video Summary</DialogTitle>
