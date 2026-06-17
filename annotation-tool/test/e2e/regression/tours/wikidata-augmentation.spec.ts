@@ -14,6 +14,7 @@
  */
 
 import { test, expect } from '../../fixtures/test-context.js'
+import { skipUnlessRealVideoCorpus } from './_skip-unless-real-videos.js'
 import { mockWikidata } from '../../fixtures/mock-wikidata.js'
 
 const TOUR_ID = 'wikidata-augmentation'
@@ -52,6 +53,10 @@ async function advanceTo(
 }
 
 test.describe('Tour 3: Grow your ontology from Wikidata — end to end', () => {
+  test.beforeEach(async ({ page, workerSessionToken }) => {
+    await skipUnlessRealVideoCorpus(page, workerSessionToken)
+  })
+
   test('walks all six steps surfacing the Wikidata search + import flow', async ({
     page,
     testUser,

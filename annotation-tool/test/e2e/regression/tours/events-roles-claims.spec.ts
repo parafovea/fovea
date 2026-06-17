@@ -18,6 +18,7 @@
  */
 
 import { test, expect } from '../../fixtures/test-context.js'
+import { skipUnlessRealVideoCorpus } from './_skip-unless-real-videos.js'
 import { microventContent } from '@/tours/content/microvent'
 
 const TOUR_ID = 'events-roles-claims'
@@ -76,6 +77,10 @@ async function drawBoxAt(
 }
 
 test.describe('Tour 4: Events, roles, claims — end to end', () => {
+  test.beforeEach(async ({ page, workerSessionToken }) => {
+    await skipUnlessRealVideoCorpus(page, workerSessionToken)
+  })
+
   test('walks all seven steps building two bboxes plus role / claim surfaces', async ({
     page,
     testUser,

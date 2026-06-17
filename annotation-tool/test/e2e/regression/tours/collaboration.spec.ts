@@ -6,6 +6,7 @@
  */
 
 import { test, expect } from '../../fixtures/test-context.js'
+import { skipUnlessRealVideoCorpus } from './_skip-unless-real-videos.js'
 
 const TOUR_ID = 'collaboration'
 
@@ -54,6 +55,10 @@ async function softNavigate(
 }
 
 test.describe('Tour 8: Collaboration — end to end', () => {
+  test.beforeEach(async ({ page, workerSessionToken }) => {
+    await skipUnlessRealVideoCorpus(page, workerSessionToken)
+  })
+
   test('walks all six steps across projects / groups / shared routes', async ({
     page,
     testUser,

@@ -17,6 +17,7 @@
  */
 
 import { test, expect } from '../../fixtures/test-context.js'
+import { skipUnlessRealVideoCorpus } from './_skip-unless-real-videos.js'
 import { microventContent } from '@/tours/content/microvent'
 
 const TOUR_ID = 'summaries-and-claims'
@@ -58,6 +59,10 @@ async function advanceTo(
 }
 
 test.describe('Tour 7: Summaries, transcripts, claims — end to end', () => {
+  test.beforeEach(async ({ page, workerSessionToken }) => {
+    await skipUnlessRealVideoCorpus(page, workerSessionToken)
+  })
+
   test('walks all seven steps through the summary + claims surfaces', async ({
     page,
     testUser,

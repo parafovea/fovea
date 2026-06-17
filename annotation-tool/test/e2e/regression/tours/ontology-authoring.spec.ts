@@ -31,6 +31,7 @@
  */
 
 import { test, expect } from '../../fixtures/test-context.js'
+import { skipUnlessRealVideoCorpus } from './_skip-unless-real-videos.js'
 
 const TOUR_ID = 'ontology-authoring'
 
@@ -45,6 +46,10 @@ declare global {
 }
 
 test.describe('Tour 2: Building a persona\'s ontology — end to end', () => {
+  test.beforeEach(async ({ page, workerSessionToken }) => {
+    await skipUnlessRealVideoCorpus(page, workerSessionToken)
+  })
+
   test('walks all seven steps and builds a four-layer ontology via the UI', async ({
     page,
     testUser,
