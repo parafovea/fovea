@@ -267,7 +267,24 @@ test.describe('Bounding Box Window Resize', () => {
     // persona (which owns testEntityType) so a type is selectable and the draw
     // actually persists an annotation; the default picks the first global
     // persona, which under parallel workers can be a type-less one.
-    await annotationWorkspace.drawSimpleBoundingBox({ personaName: testPersona.name })
+    //
+    // Center the draw inside the canvas rather than using the default
+    // top-left offset: at 1024x768 the 4:3 viewport letterboxes the 16:9
+    // video top and bottom, so a fixed (50,50) origin lands in the dead
+    // margin above the video frame and no annotation is created. The canvas
+    // center always falls inside the video content regardless of how the
+    // letterbox shifts with the viewport aspect ratio.
+    const canvasBox = await annotationWorkspace.videoCanvas.boundingBox()
+    if (!canvasBox) throw new Error('video canvas not measurable after resize')
+    await annotationWorkspace.drawSimpleBoundingBox({
+      personaName: testPersona.name,
+      box: {
+        x: canvasBox.width / 2 - 60,
+        y: canvasBox.height / 2 - 60,
+        width: 120,
+        height: 120,
+      },
+    })
     await annotationWorkspace.expectBoundingBoxVisible()
 
     // Verify the box was created successfully
