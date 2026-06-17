@@ -23,6 +23,12 @@ The 0.5.0 cycle delivers the architecture-modularization roadmap (`notes/archite
 - Configuration is now validated once at startup and fails fast: `config.ts` is imported first in `server/src/index.ts` (before tracing), validates numeric env vars through a TypeBox schema, requires `API_KEY_ENCRYPTION_KEY` to hex-decode to 32 bytes at boot (previously validated lazily at first key use), and refuses an unset or dev-default `SESSION_SECRET` in production.
 - Four environment defaults that previously disagreed across read sites are unified to one value each: `STORAGE_PATH` (the repo-relative `videos` path), `FOVEA_MODE` (`multi-user`), `MODEL_SERVICE_URL` (`http://localhost:8000`), and `OTEL_EXPORTER_OTLP_ENDPOINT` (`http://localhost:4318`). These defaults only apply when the variable is unset; every docker/production deployment sets them explicitly, so deployed behavior is unchanged. Single-user and demo-mode branching now route through the single `isSingleUserMode()` / `isDemoModeEnabled()` predicates (reading from `config`) instead of inline per-handler `process.env` comparisons.
 
+### Fixed
+
+#### Release Workflow Now Publishes GitHub Releases
+
+- `release.yml` gains a `create-release` job that, on every `v*.*.*` tag push, extracts the matching `CHANGELOG.md` section and creates or updates the GitHub Release. Previously the workflow only built and pushed Docker images, so a tag published no GitHub Release unless one was made by hand (which is how v0.4.3's Release came to be missing). The job is deliberately independent of the image build, so a Release is published even when the heavy `model-service-gpu` image hits the 90-minute job timeout.
+
 ## [0.4.4] - 2026-06-17
 
 The first installment of the architecture-modularization roadmap (`notes/architecture-review.md`, Phase 0): reversible cleanups with no user-facing behavior change — dead dependencies removed, a configuration template de-duplicated, and one latent model-loader gap closed with a regression guard.
