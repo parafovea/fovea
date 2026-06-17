@@ -128,6 +128,11 @@ services:
       - HF_TOKEN=${HF_TOKEN:-}
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
       - MODEL_CONFIG_PATH=/config/models-cpu.yaml
+      # Write thumbnails into the shared /videos mount where the backend reads
+      # them (follows the backend's THUMBNAIL_PATH). Without this the model-service
+      # defaults to its container-local /tmp/thumbnails and the backend never
+      # finds them.
+      - THUMBNAIL_OUTPUT_ROOT=${THUMBNAIL_PATH:-/videos/thumbnails}
     volumes:
       - model-cache:/models
       - ./videos:/videos
@@ -172,6 +177,8 @@ services:
       - MODEL_CONFIG_PATH=/config/models.yaml
       - CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-0}
       - PYTORCH_CUDA_ALLOC_CONF=${PYTORCH_CUDA_ALLOC_CONF:-max_split_size_mb:512}
+      # Shared thumbnail output root (see the CPU model-service above).
+      - THUMBNAIL_OUTPUT_ROOT=${THUMBNAIL_PATH:-/videos/thumbnails}
     networks:
       fovea-network:
         aliases:

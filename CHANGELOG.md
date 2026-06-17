@@ -36,11 +36,19 @@ The 0.5.0 cycle delivers the architecture-modularization roadmap (`notes/archite
 
 - Node and pnpm versions are now pinned in exactly one place. A root `.nvmrc` (Node `22`) and the root `package.json` `packageManager` field (`pnpm@10.15.0`, plus `engines.node >=22`) are the single sources: every Dockerfile takes `ARG NODE_VERSION` and every CI workflow reads `node-version-file: .nvmrc` and resolves pnpm from `packageManager` (the per-workflow `pnpm/action-setup` `version` pins and the `NODE_VERSION` env vars are removed). This closes the prior split where the production images ran Node 20 + pnpm 10.15.0 while every CI workflow ran Node 22 + pnpm 9, and fixes a stray Node 20 in the deploy workflow. The converged Node 22 images were validated by building them locally (the backend image runs Node 22 with its native modules and Prisma client intact).
 
+#### CI Validates All Compose Configurations
+
+- A new `verify-compose` CI job validates all ten docker compose configurations (each with its documented `-f` override chain and profile) on every relevant PR, replacing the prior check that covered only two of them. It catches structural drift, such as an overlay referencing a service its base does not define, before it reaches a deploy.
+
 ### Fixed
 
 #### Release Workflow Now Publishes GitHub Releases
 
 - `release.yml` gains a `create-release` job that, on every `v*.*.*` tag push, extracts the matching `CHANGELOG.md` section and creates or updates the GitHub Release. Previously the workflow only built and pushed Docker images, so a tag published no GitHub Release unless one was made by hand (which is how v0.4.3's Release came to be missing). The job is deliberately independent of the image build, so a Release is published even when the heavy `model-service-gpu` image hits the 90-minute job timeout.
+
+#### Model-Service Thumbnails Written to a Container-Local Path
+
+- The `model-service` and `model-service-gpu` services in `docker-compose.yml` now set `THUMBNAIL_OUTPUT_ROOT` (following the backend's `THUMBNAIL_PATH`, default `/videos/thumbnails`) into the shared `/videos` mount. Previously the model-service defaulted to its container-local `/tmp/thumbnails`, so generated thumbnails landed where the backend could never read them.
 
 ## [0.4.4] - 2026-06-17
 

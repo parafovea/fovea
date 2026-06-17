@@ -430,6 +430,28 @@ jobs:
           retention-days: 30
 
   # Quality gate - all checks must pass
+  verify-compose:
+    name: Compose / Validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate every docker compose configuration
+        run: |
+          set -euo pipefail
+          echo "Validating all compose files with their documented -f override chains..."
+          docker compose -f docker-compose.yml config --quiet
+          docker compose -f docker-compose.yml -f docker-compose.dev.yml config --quiet
+          docker compose -f docker-compose.yml -f docker-compose.tour-demo.yml config --quiet
+          docker compose -f docker-compose.yml -f docker-compose.tour-demo.yml -f docker-compose.demo.yml config --quiet
+          docker compose -f docker-compose.yml -f docker-compose.local-full.yml config --quiet
+          docker compose -f docker-compose.e2e.yml config --quiet
+          docker compose -f docker-compose.e2e.yml -f docker-compose.e2e.real-models.yml --profile with-models config --quiet
+          docker compose -f docker-compose.wikibase.yml config --quiet
+          docker compose -f server/docker-compose.dev.yml config --quiet
+          docker compose -f server/docker-compose.test.yml config --quiet
+          echo "All 10 compose configurations are valid."
+
   quality-gate:
     name: Quality Gate
     runs-on: ubuntu-latest
@@ -443,6 +465,7 @@ jobs:
       - lint-model-service
       - lint-wikibase
       - test-wikibase
+      - verify-compose
       # - test-e2e  # disabled (job has if: false; gate must not require it)
       # test-model-service disabled due to disk space constraints
     if: always()
@@ -470,6 +493,9 @@ jobs:
             echo "- Lint: ${{ needs.lint-wikibase.result }}"
             echo "- Tests: ${{ needs.test-wikibase.result }}"
             echo ""
+            echo "### Compose"
+            echo "- Validate: ${{ needs.verify-compose.result }}"
+            echo ""
             echo "### Integration"
             # echo "- E2E Tests: ${{ needs.test-e2e.result }}" — disabled
           } >> "$GITHUB_STEP_SUMMARY"
@@ -484,6 +510,7 @@ jobs:
           LINT_MODEL="${{ needs.lint-model-service.result }}"
           LINT_WIKIBASE="${{ needs.lint-wikibase.result }}"
           TEST_WIKIBASE="${{ needs.test-wikibase.result }}"
+          VERIFY_COMPOSE="${{ needs.verify-compose.result }}"
           # TEST_E2E="${{ needs.test-e2e.result }}"  # disabled
 
           if [ "$LINT_FRONTEND" != "success" ] || \
@@ -494,7 +521,8 @@ jobs:
              [ "$BUILD_BACKEND" != "success" ] || \
              [ "$LINT_MODEL" != "success" ] || \
              [ "$LINT_WIKIBASE" != "success" ] || \
-             [ "$TEST_WIKIBASE" != "success" ]; then  # E2E disabled
+             [ "$TEST_WIKIBASE" != "success" ] || \
+             [ "$VERIFY_COMPOSE" != "success" ]; then  # E2E disabled
             {
               echo ""
               echo "❌ Quality gate FAILED"
