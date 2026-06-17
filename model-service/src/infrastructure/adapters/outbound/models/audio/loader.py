@@ -522,9 +522,9 @@ class PyannoteLoader:
             # download without code changes; deployments without a
             # token surface a useful error instead of pyannote's
             # generic "could not download model" message.
-            import os
+            from src.infrastructure.config.settings import get_settings
 
-            hf_token = os.environ.get("HUGGING_FACE_HUB_TOKEN") or os.environ.get("HF_TOKEN")
+            hf_token = get_settings().hf_token
             # huggingface_hub 1.x renamed `use_auth_token` → `token`.
             # pyannote.audio 3.4 forwards the kwarg verbatim, so passing
             # the legacy name now raises "got an unexpected keyword
