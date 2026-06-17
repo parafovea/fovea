@@ -4,10 +4,15 @@
 # Build context: repo root. docker-compose.yml sets context: . and routes
 # here via dockerfile: annotation-tool/Dockerfile.
 
-# Build stage
-FROM node:20-alpine AS builder
+# Node version is pinned once at the repo root (.nvmrc / package.json engines);
+# override with --build-arg NODE_VERSION. pnpm is pinned by the root
+# package.json "packageManager" field; the corepack line below mirrors it.
+ARG NODE_VERSION=22
 
-# Install pnpm
+# Build stage
+FROM node:${NODE_VERSION}-alpine AS builder
+
+# Install pnpm (version mirrors the root package.json "packageManager" field)
 RUN corepack enable && corepack prepare pnpm@10.15.0 --activate
 
 WORKDIR /repo

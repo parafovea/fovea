@@ -3,6 +3,10 @@
   "private": true,
   "version": "0.5.0",
   "description": "FOVEA - Flexible Ontology Visual Event Analyzer",
+  "packageManager": "pnpm@10.15.0",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "dev": "pnpm run dev:infra && pnpm run dev:services",
     "dev:services": "pnpm --parallel --filter @fovea/server --filter @fovea/annotation-tool run dev",

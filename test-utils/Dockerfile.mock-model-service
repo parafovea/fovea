@@ -1,4 +1,6 @@
-FROM node:20-alpine
+# Node version pinned once at the repo root (.nvmrc); override with --build-arg.
+ARG NODE_VERSION=22
+FROM node:${NODE_VERSION}-alpine
 WORKDIR /app
 COPY mock-model-service.js .
 EXPOSE 8000
