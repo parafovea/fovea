@@ -73,28 +73,35 @@ test.describe('Model service: every frontend-triggered call is wired end-to-end'
     const body = (await res.json()) as {
       videoId: string
       query: string
-      frameResults: Array<{
+      frames: Array<{
         frameNumber: number
-        detections: Array<{ x: number; y: number; width: number; height: number; confidence: number; label: string }>
+        timestamp: number
+        detections: Array<{
+          label: string
+          boundingBox: { x: number; y: number; width: number; height: number }
+          confidence: number
+          trackId?: string | null
+        }>
       }>
     }
     // Shape contract: DetectionResponse in src/api/client.ts. The backend
-    // re-shapes the model-service `frames` field into `frameResults` and
-    // flattens each bounding box (`x/y/width/height` at top level of the
-    // detection) before sending to the frontend.
+    // passes the model-service response through verbatim (snake→camel only,
+    // see server/src/routes/videos/detect.ts) — it does NOT re-shape, so the
+    // frontend contract is `frames` (each with `frameNumber`/`timestamp`/
+    // `detections`) and a nested `boundingBox` per detection.
     expect(body.videoId).toBe(testVideo.id)
     expect(typeof body.query).toBe('string')
     expect(body.query.length).toBeGreaterThan(0)
-    expect(Array.isArray(body.frameResults)).toBe(true)
-    expect(body.frameResults.length).toBeGreaterThan(0)
-    for (const frame of body.frameResults) {
+    expect(Array.isArray(body.frames)).toBe(true)
+    expect(body.frames.length).toBeGreaterThan(0)
+    for (const frame of body.frames) {
       expect(typeof frame.frameNumber).toBe('number')
       expect(Array.isArray(frame.detections)).toBe(true)
       for (const det of frame.detections) {
-        expect(typeof det.x).toBe('number')
-        expect(typeof det.y).toBe('number')
-        expect(typeof det.width).toBe('number')
-        expect(typeof det.height).toBe('number')
+        expect(typeof det.boundingBox.x).toBe('number')
+        expect(typeof det.boundingBox.y).toBe('number')
+        expect(typeof det.boundingBox.width).toBe('number')
+        expect(typeof det.boundingBox.height).toBe('number')
         expect(typeof det.confidence).toBe('number')
         expect(det.confidence).toBeGreaterThanOrEqual(0)
         expect(det.confidence).toBeLessThanOrEqual(1)
@@ -261,10 +268,10 @@ test.describe('Model service: every frontend-triggered call is wired end-to-end'
 
     test('GET /api/models/task-ready/:taskType returns 200 + TaskReadyResponse', async ({ page, testUser }) => {
       void testUser
-      const res = await page.request.get('/api/models/task-ready/detection')
+      const res = await page.request.get('/api/models/task-ready/object_detection')
       expect(res.status()).toBe(200)
       const body = (await res.json()) as { taskType: string; ready: boolean }
-      expect(body.taskType).toBe('detection')
+      expect(body.taskType).toBe('object_detection')
       expect(typeof body.ready).toBe('boolean')
     })
 
@@ -292,23 +299,23 @@ test.describe('Model service: every frontend-triggered call is wired end-to-end'
       // The backend's models/select route reads taskType + modelName from
       // the QUERYSTRING (see server/src/routes/models.ts:204 - the schema
       // declares them as querystring, not body), so encode there.
-      const res = await page.request.post('/api/models/select?taskType=detection&modelName=yolov8n')
+      const res = await page.request.post('/api/models/select?taskType=object_detection&modelName=yolov8n')
       expect(
         res.status(),
         `models/select must return 200 (got ${res.status()}: ${await res.text().catch(() => '<no body>')})`,
       ).toBe(200)
       const body = (await res.json()) as { taskType: string; modelName: string; status: string }
-      expect(body.taskType).toBe('detection')
+      expect(body.taskType).toBe('object_detection')
       expect(body.modelName).toBe('yolov8n')
       expect(body.status).toBe('selected')
     })
 
     test('POST /api/models/load/:taskType returns 200 + load confirmation', async ({ page, testUser }) => {
       void testUser
-      const res = await page.request.post('/api/models/load/detection', { data: {} })
+      const res = await page.request.post('/api/models/load/object_detection', { data: {} })
       expect(res.status()).toBe(200)
       const body = (await res.json()) as { taskType: string; status: string }
-      expect(body.taskType).toBe('detection')
+      expect(body.taskType).toBe('object_detection')
       expect(body.status).toBe('loaded')
     })
   })
@@ -452,13 +459,21 @@ test.describe('Model service: every frontend-triggered call is wired end-to-end'
       data: {
         key: 'runtime',
         value: {
-          // RuntimeValueSchema in server/src/routes/admin-config.ts:30
-          // requires all five fields below.
+          // RuntimeValueSchema in server/src/routes/admin-config.ts:30 requires
+          // every field below — the runtime config now also carries the VLM
+          // frame budget and the per-path output-token caps, so a partial value
+          // is rejected by the route's anyOf body schema (400 VALIDATION_ERROR).
           cudaDevice: 'cuda',
           warmupOnStartup: false,
           defaultBatchSize: 1,
           maxBatchSize: 4,
           offloadThreshold: 0.8,
+          maxVideoFrames: 30,
+          frameSampleRate: 1,
+          vlmMaxSummaryTokens: 1024,
+          llmMaxClaimsTokens: 1024,
+          llmMaxSynthesisTokens: 2048,
+          llmMaxOntologyTokens: 1024,
         },
       },
     })

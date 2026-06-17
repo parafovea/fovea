@@ -244,6 +244,61 @@ const summariesRoute: FastifyPluginAsync = async (fastify) => {
   )
 
   /**
+   * Batch lookup of summaries for many videos under a single persona.
+   *
+   * The VideoBrowser checks, for the selected persona, which of the listed
+   * videos already have a summary. Doing that one video at a time (GET
+   * /api/videos/:videoId/summaries/:personaId per video) fans a single page
+   * load out into one request per video — most of them 404 — which on a large
+   * deployment trips the rate limit and floods the logs. This endpoint takes a
+   * list of video ids plus one persona id and returns only the summaries that
+   * exist and that the caller may read (a sparse result: videos with no summary
+   * are simply absent). Each row carries its `videoId` so the client can index
+   * the result.
+   */
+  fastify.post<{ Body: { videoIds: string[]; personaId: string } }>(
+    '/api/videos/summaries/lookup',
+    {
+      onRequest: [requireAuth, buildAbilities],
+      schema: {
+        body: Type.Object({
+          videoIds: Type.Array(Type.String(), { maxItems: 100000 }),
+          personaId: Type.String(),
+        }),
+        response: {
+          200: Type.Array(VideoSummarySchema),
+        },
+      },
+    },
+    async (request, reply) => {
+      if (!request.ability) throw new ForbiddenError('No abilities defined')
+
+      const { videoIds, personaId } = request.body
+      if (videoIds.length === 0) {
+        return reply.send([])
+      }
+
+      const summaries = await fastify.prisma.videoSummary.findMany({
+        where: {
+          personaId,
+          videoId: { in: videoIds },
+        },
+      })
+
+      // Mirror the single-record read semantics, including the demo-mode
+      // override, rather than filtering in the query, so behaviour matches
+      // GET /api/videos/:videoId/summaries/:personaId exactly.
+      const readable = summaries.filter(
+        (summary) =>
+          request.ability!.can('read', subject('VideoSummary', summary)) ||
+          isDemoModeEnabled()
+      )
+
+      return reply.send(readable)
+    }
+  )
+
+  /**
    * Queue a video summarization job. Since this job produces (and upserts)
    * a VideoSummary row scoped to the persona's project, we pre-authorize
    * the caller with `can('update', ...)` on the candidate summary shape.

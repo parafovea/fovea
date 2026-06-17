@@ -3,6 +3,7 @@ import { useState, useMemo, memo, useCallback } from 'react'
 import {
   ChevronDown,
   ChevronRight,
+  Clock,
   GitBranch,
   Pencil,
   Plus,
@@ -32,6 +33,13 @@ import { GlossRenderer } from '@components/ontology/GlossRenderer'
 import { ClaimRelationsViewer } from './ClaimRelationsViewer'
 import { ClaimRelationEditor } from './ClaimRelationEditor'
 import { useCreateClaimRelation, usePersonaOntology } from '@store/queries'
+
+/** Format seconds as m:ss.t for read-only time-span badges. */
+function formatClaimTimeSpan(seconds: number): string {
+  const m = Math.floor(seconds / 60)
+  const s = seconds - m * 60
+  return `${m}:${s.toFixed(1).padStart(4, '0')}`
+}
 
 interface ClaimsViewerProps {
   claims: Claim[]
@@ -181,6 +189,12 @@ const ClaimTreeNode = memo(function ClaimTreeNode({
                   {claim.subclaims!.length} subclaim{claim.subclaims!.length > 1 ? 's' : ''}
                 </Badge>
               )}
+              {claim.timeSpans?.map((span, index) => (
+                <Badge key={index} variant="outline" className="h-5 gap-1" data-testid="claim-viewer-time-span">
+                  <Clock className="size-3" />
+                  {formatClaimTimeSpan(span.start)}&ndash;{formatClaimTimeSpan(span.end)}
+                </Badge>
+              ))}
             </div>
           </div>
 

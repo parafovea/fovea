@@ -104,7 +104,11 @@ test.describe('Persona Creation Auto-Save', () => {
     const personaPosts: Array<{ url: string; status: number }> = []
     page.on('response', (resp) => {
       const url = resp.url()
-      if (resp.request().method() === 'POST' && /\/api\/personas(\b|\?)/.test(url)) {
+      // Count only persona-CREATE POSTs (pathname exactly /api/personas), not
+      // sub-resource POSTs like /api/personas/ontologies (the batched ontology
+      // lookup the workspace fires on load), which would otherwise be miscounted
+      // as a persona save fired "while typing".
+      if (resp.request().method() === 'POST' && new URL(url).pathname === '/api/personas') {
         personaPosts.push({ url, status: resp.status() })
       }
     })

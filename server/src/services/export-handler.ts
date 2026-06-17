@@ -851,6 +851,7 @@ export class AnnotationExporter {
         gloss: claim.gloss || [],
         parentClaimId: claim.parentClaimId || undefined,
         textSpans: claim.textSpans || undefined,
+        timeSpans: claim.timeSpans || undefined,
         claimerType: claim.claimerType || undefined,
         claimerGloss: claim.claimerGloss || undefined,
         claimRelation: claim.claimRelation || undefined,

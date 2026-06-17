@@ -237,7 +237,12 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
    * claims / world state matching the grist's records — exactly the
    * way a CVPR booth visitor would build their workspace from scratch.
    */
-  microventGrist: [async (_unused, use) => {
+  // Playwright requires a fixture's first argument to be an object
+  // destructuring pattern so it can statically detect fixture dependencies;
+  // this fixture consumes none, hence the empty pattern (eslint's
+  // no-empty-pattern is disabled here for that reason).
+  // eslint-disable-next-line no-empty-pattern
+  microventGrist: [async ({}, use) => {
     const jsonlPath = resolve(
       dirname(fileURLToPath(import.meta.url)),
       'microvent-seed.jsonl',

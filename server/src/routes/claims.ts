@@ -59,6 +59,19 @@ const ClaimTextSpanSchema = Type.Object({
 })
 
 /**
+ * Video time span (seconds) a claim is grounded in. A claim may carry several
+ * (discontiguous) spans. Each records its provenance: `scrub` for spans set by
+ * scrubbing the video, `annotation` for spans derived from object annotations
+ * (with the contributing annotation ids).
+ */
+const ClaimTimeSpanSchema = Type.Object({
+  start: Type.Number({ minimum: 0 }),
+  end: Type.Number({ minimum: 0 }),
+  source: Type.Union([Type.Literal('scrub'), Type.Literal('annotation')]),
+  annotationIds: Type.Optional(Type.Array(Type.String()))
+})
+
+/**
  * Nullable type helpers for fast-json-stringify compatibility.
  *
  * TypeBox's Type.Union([Type.String(), Type.Null()]) generates anyOf in JSON Schema,
@@ -83,6 +96,7 @@ const ClaimSchema: any = Type.Recursive(This => Type.Object({
   gloss: Type.Array(GlossItemSchema),
   parentClaimId: Type.Optional(NullableString),
   textSpans: Type.Optional(Type.Array(ClaimTextSpanSchema)),
+  timeSpans: Type.Optional(Type.Array(ClaimTimeSpanSchema)),
   claimerType: Type.Optional(NullableString),
   claimerGloss: Type.Optional(Type.Array(GlossItemSchema)),
   claimRelation: Type.Optional(Type.Array(GlossItemSchema)),
@@ -120,6 +134,7 @@ const CreateClaimSchema = Type.Object({
   gloss: Type.Optional(Type.Array(GlossItemSchema)),
   parentClaimId: Type.Optional(Type.String({ format: 'uuid' })),
   textSpans: Type.Optional(Type.Array(ClaimTextSpanSchema)),
+  timeSpans: Type.Optional(Type.Array(ClaimTimeSpanSchema)),
   claimerType: Type.Optional(NullableString),
   claimerGloss: Type.Optional(Type.Array(GlossItemSchema)),
   claimRelation: Type.Optional(Type.Array(GlossItemSchema)),
@@ -149,6 +164,7 @@ const UpdateClaimSchema = Type.Object({
   text: Type.Optional(Type.String({ minLength: 1 })),
   gloss: Type.Optional(Type.Array(GlossItemSchema)),
   textSpans: Type.Optional(Type.Array(ClaimTextSpanSchema)),
+  timeSpans: Type.Optional(Type.Array(ClaimTimeSpanSchema)),
   claimerType: Type.Optional(Type.Union([Type.String(), Type.Null()])),
   claimerGloss: Type.Optional(Type.Array(GlossItemSchema)),
   claimRelation: Type.Optional(Type.Array(GlossItemSchema)),

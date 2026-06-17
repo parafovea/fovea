@@ -10,6 +10,7 @@
  */
 
 import { test, expect } from '../../fixtures/test-context.js'
+import { skipUnlessRealVideoCorpus } from './_skip-unless-real-videos.js'
 import { resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -49,6 +50,10 @@ async function advanceTo(
 }
 
 test.describe('Tour 10: Import & Export — end to end', () => {
+  test.beforeEach(async ({ page, workerSessionToken }) => {
+    await skipUnlessRealVideoCorpus(page, workerSessionToken)
+  })
+
   test('uploads the microvent JSONL via the import dialog and walks the export surface', async ({
     page,
     testUser,

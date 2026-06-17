@@ -116,6 +116,16 @@ export default function AnnotationWorkspace() {
   const [transcriptError, setTranscriptError] = useState<string | null>(null)
   const [diarizationRequested, setDiarizationRequested] = useState(true)
 
+  // Scrub timestamp capture (claim time spans). The VideoSummaryDialog gates
+  // its own `open` on this state so it closes while a capture is active (the
+  // player becomes reachable and the capture banner is clickable) and re-opens
+  // automatically when the capture finishes — no summaryDialogOpen toggling
+  // here, which previously raced and left the modal overlay intercepting the
+  // banner. The banner below reads the capture phase and drives capture/cancel.
+  const timestampCapture = useClaimsUiStore((state) => state.timestampCapture)
+  const captureTimestamp = useClaimsUiStore((state) => state.captureTimestamp)
+  const cancelTimestampCapture = useClaimsUiStore((state) => state.cancelTimestampCapture)
+
   // Timeline UI state from Zustand store
   const timelineExpanded = useAnnotationUiStore(state => state.timelineExpanded)
   const setTimelineExpanded = useAnnotationUiStore(state => state.setTimelineExpanded)
@@ -649,6 +659,27 @@ export default function AnnotationWorkspace() {
 
   return (
     <div className="flex h-full">
+      {timestampCapture && (
+        <div
+          className="fixed inset-x-0 top-0 z-50 flex items-center justify-center gap-3 bg-primary px-4 py-2 text-primary-foreground shadow-md"
+          data-testid="timestamp-capture-banner"
+        >
+          <span className="text-sm font-medium">
+            Scrub the video to the {timestampCapture.phase} of the span, then capture.
+          </span>
+          <Button
+            variant="secondary"
+            size="sm"
+            data-testid="timestamp-capture-confirm"
+            onClick={() => captureTimestamp(videoPlayerRef.current?.currentTime ?? currentTime)}
+          >
+            Capture {timestampCapture.phase} ({(videoPlayerRef.current?.currentTime ?? currentTime).toFixed(1)}s)
+          </Button>
+          <Button variant="ghost" size="sm" onClick={cancelTimestampCapture} data-testid="timestamp-capture-cancel">
+            Cancel
+          </Button>
+        </div>
+      )}
       <div className="flex-1 flex flex-col">
         <div className="rounded-lg ring-1 ring-foreground/10 bg-card p-4 mb-4 shadow-sm">
           <div className="flex flex-col gap-2">

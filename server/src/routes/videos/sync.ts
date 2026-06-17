@@ -33,24 +33,34 @@ export const syncRoutes: FastifyPluginAsync<{
         200: Type.Object({
           added: Type.Number(),
           updated: Type.Number(),
+          deleted: Type.Number(),
           errors: Type.Number(),
           total: Type.Number(),
+          manifest: Type.Optional(Type.Object({
+            groupsUpserted: Type.Number(),
+            projectsUpserted: Type.Number(),
+            membersReconciled: Type.Number(),
+            videosAssigned: Type.Number(),
+          })),
         }),
         500: Type.Object({
           error: Type.String()
         })
       }
     }
-  }, async (_request, reply) => {
+  }, async (request, reply) => {
     try {
       fastify.log.info('Manual video sync requested')
 
-      // Use the storage-aware sync function
+      // Use the storage-aware sync function. Thread the requesting admin as the
+      // actor so any manifest-provisioned projects/groups/assignments are
+      // attributed to them.
       const result = await syncVideosFromStorage(
         prisma,
         fastify.log,
         storageProvider,
-        { type: storageConfig.type, localPath: storageConfig.localPath }
+        { type: storageConfig.type, localPath: storageConfig.localPath },
+        { syncUserId: request.user?.id }
       )
 
       fastify.log.info(
@@ -69,6 +79,7 @@ export const syncRoutes: FastifyPluginAsync<{
         deleted: result.deleted,
         errors: result.errors,
         total: result.total,
+        ...(result.manifest ? { manifest: result.manifest } : {}),
       })
     } catch (error) {
       fastify.log.error({ error }, 'Video sync failed')

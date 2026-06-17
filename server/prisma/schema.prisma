@@ -455,6 +455,10 @@ model Claim {
   /// JSON structure: Array of {sentenceIndex?: number, charStart: number, charEnd: number}
   textSpans       Json?
 
+  // Video time spans (seconds) the claim is grounded in - supports discontiguous spans
+  /// JSON structure: Array of {start: number, end: number, source: "scrub" | "annotation", annotationIds?: string[]}
+  timeSpans       Json?
+
   // Claim source/claimer (who makes this claim)
   /// null = standalone claim for reference only (not asserted by anyone)
   /// "author" = video creator explicitly asserts this claim

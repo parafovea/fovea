@@ -31,7 +31,7 @@ test.describe('Summary Persistence', () => {
     const personaSelect = dialog.getByLabel(/select persona/i)
     if (await personaSelect.isVisible()) {
       await personaSelect.click()
-      const personaOption = page.getByRole('option').filter({ hasText: new RegExp('^' + testPersona.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ' -') })
+      const personaOption = page.getByRole('option').filter({ hasText: new RegExp('^' + testPersona.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ' \\(') })
       await personaOption.click()
     }
 
@@ -92,7 +92,7 @@ test.describe('Summary Persistence', () => {
     const personaSelect2 = dialog2.getByLabel(/select persona/i)
     if (await personaSelect2.isVisible()) {
       await personaSelect2.click()
-      const personaOption2 = page.getByRole('option').filter({ hasText: new RegExp('^' + testPersona.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ' -') })
+      const personaOption2 = page.getByRole('option').filter({ hasText: new RegExp('^' + testPersona.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ' \\(') })
       await personaOption2.click()
       await page.waitForTimeout(500)
     }
@@ -135,7 +135,7 @@ test.describe('Summary Persistence', () => {
     const personaSelect = dialog.getByLabel(/select persona/i)
     if (await personaSelect.isVisible()) {
       await personaSelect.click()
-      const personaOption = page.getByRole('option').filter({ hasText: new RegExp('^' + testPersona.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ' -') })
+      const personaOption = page.getByRole('option').filter({ hasText: new RegExp('^' + testPersona.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ' \\(') })
       await personaOption.click()
       await page.waitForTimeout(500)
     }
@@ -193,7 +193,7 @@ test.describe('Summary Persistence', () => {
     const personaSelect2 = dialog2.getByLabel(/select persona/i)
     if (await personaSelect2.isVisible()) {
       await personaSelect2.click()
-      const personaOption2 = page.getByRole('option').filter({ hasText: new RegExp('^' + testPersona.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ' -') })
+      const personaOption2 = page.getByRole('option').filter({ hasText: new RegExp('^' + testPersona.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ' \\(') })
       await personaOption2.click()
       await page.waitForTimeout(500)
     }

@@ -85,9 +85,18 @@ export function SpotlightOverlay({
         return
       }
       const r = target.getBoundingClientRect()
-      // Skip zero-size measurements — anchor is mid-animation. We'll catch
-      // the next rAF tick once the layout settles.
-      if (r.width === 0 && r.height === 0) return
+      // A zero-size measurement is ambiguous: either the anchor is hidden
+      // (display:none — it generates no layout boxes) and the spotlight must
+      // clear, or it is mid-animation and we should ignore this tick and
+      // re-measure on the next one. `getClientRects().length === 0` is true
+      // only for the former (display:none / not laid out), so use it to
+      // distinguish: clear when hidden, skip when merely transiently zero-size.
+      if (r.width === 0 && r.height === 0) {
+        if (target.getClientRects().length === 0) {
+          if (rectRef.current !== null) setRect(null)
+        }
+        return
+      }
       const next: Rect = {
         x: r.left - PADDING,
         y: r.top - PADDING,

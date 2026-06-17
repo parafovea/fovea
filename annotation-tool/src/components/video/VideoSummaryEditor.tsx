@@ -307,19 +307,23 @@ const VideoSummaryEditor = forwardRef<VideoSummaryEditorRef, VideoSummaryEditorP
     }
   }, [jobStatus, summaryId, queryClient, updateExtractionProgress, clearExtractionState, setExtractionError])
 
-  // Restore draft claim when returning from another workspace
+  // Restore draft claim when returning from another workspace or from a scrub
+  // timestamp capture. Hold off while a capture is still active so the editor
+  // does not flicker back open before the workspace has revealed the player.
+  const timestampCapture = useClaimsUiStore((state) => state.timestampCapture)
   useEffect(() => {
     if (
       draftClaim &&
       draftClaim.videoId === videoId &&
       draftClaim.personaId === personaId &&
+      !timestampCapture &&
       !draftRestoredRef.current
     ) {
       draftRestoredRef.current = true
       setActiveTab('claims')
       setEditorDialogOpen(true)
     }
-  }, [draftClaim, videoId, personaId])
+  }, [draftClaim, videoId, personaId, timestampCapture])
 
   // Simple handler - useAutoSave handles the debounced saving
   const handleSummaryChange = (summary: GlossItem[]) => {
