@@ -4,6 +4,7 @@ import { Spinner } from '@/components/ui/spinner'
 import Layout from '@components/layout/Layout'
 import VideoBrowser from '@components/video/VideoBrowser'
 import { TourCataloguePage } from '@/pages/TourCataloguePage'
+import { config } from '@/config'
 
 /**
  * On demo.fovea.video the SPA is built with VITE_DEMO_PUBLIC=1. The
@@ -22,7 +23,7 @@ import { TourCataloguePage } from '@/pages/TourCataloguePage'
  * first paint; the perf cost of the larger initial download is
  * the right trade-off for the demo's reliability.
  */
-const DEMO_PUBLIC = import.meta.env.VITE_DEMO_PUBLIC === '1'
+const DEMO_PUBLIC = config.deploymentMode.publicBooth
 import AnnotationWorkspace from '@components/annotation/AnnotationWorkspace'
 import OntologyWorkspace from './components/workspaces/OntologyWorkspace'
 import ObjectWorkspace from './components/workspaces/ObjectWorkspace'
@@ -183,7 +184,7 @@ function App() {
   // correct persona were already on the wire.
   useEffect(() => {
     if (personas.length === 0 || selectedPersonaId) return
-    const isDemoPublic = import.meta.env.VITE_DEMO_PUBLIC === '1'
+    const isDemoPublic = config.deploymentMode.publicBooth
     const preferred = isDemoPublic
       ? personas.find((p) => p.name === 'Automated') ?? personas[0]
       : personas[0]

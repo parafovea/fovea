@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useAuth } from '@hooks/auth'
 import { useAuthStore } from '@store/zustand/authStore'
+import { config } from '@/config'
 
 /**
  * Login page component.
@@ -48,7 +49,7 @@ export function LoginPage(): JSX.Element {
     try {
       await login(username, password, rememberMe)
       const params = new URLSearchParams(location.search)
-      const defaultDest = import.meta.env.VITE_DEMO_PUBLIC === '1' ? '/app' : '/'
+      const defaultDest = config.deploymentMode.publicBooth ? '/app' : '/'
       const from = params.get('redirect') || defaultDest
       navigate(from, { replace: true })
     } catch (err) {

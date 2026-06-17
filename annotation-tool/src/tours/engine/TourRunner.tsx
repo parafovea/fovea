@@ -34,6 +34,7 @@ import { StepCard } from './StepCard'
 import { waitForAnchor } from './waitForAnchor'
 import { simulateAction } from './simulateAction'
 import type { TourScript, TourStep } from './types'
+import { config } from '@/config'
 
 /**
  * Resolve a route template like `/app/annotate/:videoId` against a
@@ -278,7 +279,7 @@ export function TourRunner({
     // value) is real and the NEXT step's anchor mounts against
     // it. Stock builds skip simulation entirely — production
     // tours preserve the visitor-performs-the-action shape.
-    const demoPublic = import.meta.env.VITE_DEMO_PUBLIC === '1'
+    const demoPublic = config.deploymentMode.publicBooth
     // Resolve the anchor with up to one retry of the revealBy chain.
     // The first pass clicks the openers and waits for the target
     // anchor; if waitForAnchor times out (deep-stacked dialogs,

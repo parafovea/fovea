@@ -3,8 +3,6 @@
 interface ImportMetaEnv {
   /** Backend API URL */
   readonly VITE_API_URL?: string
-  /** Model service URL */
-  readonly VITE_MODEL_SERVICE_URL?: string
   /** Enable test data mode */
   readonly VITE_ENABLE_TEST_DATA?: string
   /** Wikidata/Wikibase API endpoint URL */

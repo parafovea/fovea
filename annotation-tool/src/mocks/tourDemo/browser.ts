@@ -34,10 +34,15 @@ import { setupWorker } from 'msw/browser'
 import type { SetupWorker } from 'msw/browser'
 import { createTourDemoHandlers } from './handlers'
 import { loadTourContentBundle } from '@/tours/content/loader'
+import { config } from '@/config'
 
 let activeWorker: SetupWorker | null = null
 
 export async function startTourDemoWorker(): Promise<void> {
+  // Kept INLINE (not routed through config): this literal comparison is what
+  // lets Rollup tree-shake the entire `src/mocks/tourDemo` subtree out of
+  // normal production builds. See src/config.ts for the rationale.
+  // eslint-disable-next-line no-restricted-syntax
   if (import.meta.env.VITE_TOUR_DEMO !== '1') return
   // Load the bundle eagerly. If this fails we still want the tour
   // page to mount and emit a banner via the existing TourProvider
@@ -58,7 +63,7 @@ export async function startTourDemoWorker(): Promise<void> {
   await activeWorker.start({
     onUnhandledRequest: 'bypass',
     serviceWorker: {
-      url: `${import.meta.env.BASE_URL}mockServiceWorker.js`,
+      url: `${config.env.baseUrl}mockServiceWorker.js`,
     },
   })
   console.info('[tour-demo] MSW worker active; model-service calls are mocked.')

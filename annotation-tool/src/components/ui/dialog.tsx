@@ -3,6 +3,7 @@ import { Dialog as DialogPrimitive } from "@base-ui/react/dialog"
 
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
+import { config } from "@/config"
 import { XIcon } from "lucide-react"
 
 function Dialog({ onOpenChange, ...props }: DialogPrimitive.Root.Props) {
@@ -18,7 +19,7 @@ function Dialog({ onOpenChange, ...props }: DialogPrimitive.Root.Props) {
   // button (closePress) or Escape key (escapeKey); the imperative
   // setOpen(false) calls from the workspace (closePress / imperative)
   // continue to work.
-  const demoPublic = import.meta.env.VITE_DEMO_PUBLIC === '1'
+  const demoPublic = config.deploymentMode.publicBooth
   const handleOpenChange: DialogPrimitive.Root.Props['onOpenChange'] = (open, details) => {
     if (demoPublic && open === false) {
       const reason = details?.reason

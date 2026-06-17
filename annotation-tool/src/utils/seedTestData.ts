@@ -15,6 +15,7 @@
 import { fetchWorldState, saveWorldState, WorldState } from '@store/queries/useWorld'
 import { Entity, EntityType, RoleType, EventType, GlossItem } from '@models/types'
 import { generateId } from './uuid'
+import { config } from '@/config'
 
 interface SeedPersonaInput {
   name: string
@@ -272,5 +273,5 @@ export async function seedTestData(): Promise<void> {
  * Requires VITE_ENABLE_TEST_DATA to be explicitly set to 'true'.
  */
 export function isTestDataEnabled(): boolean {
-  return import.meta.env.VITE_ENABLE_TEST_DATA === 'true'
+  return config.testData.enabled
 }
