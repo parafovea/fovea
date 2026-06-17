@@ -44,7 +44,11 @@ The 0.5.0 cycle delivers the architecture-modularization roadmap (`notes/archite
 
 #### CI Validates All Compose Configurations
 
-- A new `verify-compose` CI job validates all ten docker compose configurations (each with its documented `-f` override chain and profile) on every relevant PR, replacing the prior check that covered only two of them. It catches structural drift, such as an overlay referencing a service its base does not define, before it reaches a deploy.
+- A new `verify-compose` CI job validates every committed docker compose configuration (each with its documented `-f` override chain and profile) on every relevant PR, replacing the prior check that covered only two of them. It catches structural drift, such as an overlay referencing a service its base does not define, before it reaches a deploy.
+
+#### Dev Infrastructure Consolidated onto the Root Compose Stack
+
+- Deleted the duplicate `server/docker-compose.dev.yml`, which redefined Postgres, Redis, and the full observability stack with conflicting credentials (`user`/`password` versus the root stack's `fovea`/`fovea_password`) and a separate volume. The `dev:infra`, `dev:infra:full`, `stop`, and `clean` scripts now drive the root `docker-compose.yml` (plus its `dev` overlay for the observability services), so local development and the full stack share one Postgres definition and one set of credentials. Local dev databases that relied on the old `user`/`password` credentials must point their `DATABASE_URL` at the canonical `fovea`/`fovea_password` (matching `.env.example`).
 
 ### Fixed
 
