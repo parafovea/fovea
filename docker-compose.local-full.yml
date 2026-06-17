@@ -15,7 +15,18 @@ services:
       context: ./model-service
       dockerfile: Dockerfile
       args:
-        BUILD_MODE: minimal
+        # recommended = base + bitsandbytes (no vllm / sglang / sam-2).
+        # The CVPR booth backup laptop exercises VLM summarization,
+        # LLM ontology + claim extraction, ONNX object detection,
+        # faster-whisper transcription, and pyannote speaker
+        # diarization — every one of which runs cleanly on the
+        # recommended set. full pulls sam-2 from a github clone +
+        # vllm + sglang which inflate the image past 8 GB and
+        # silently fail the Dockerfile retry block on macOS arm64
+        # (sam-2's CUDA-flavoured build script). ENABLE_AUDIO=1
+        # still pins CPU-only torch wheels before pyannote so
+        # libcudart.so is never linked.
+        BUILD_MODE: recommended
         DEVICE: cpu
         ENABLE_AUDIO: 1
         PRELOAD_MODELS: false
