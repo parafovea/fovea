@@ -54,6 +54,10 @@ The 0.5.0 cycle delivers the architecture-modularization roadmap (`notes/archite
 
 - A root `Makefile` is now the single source for the install/lint/typecheck/test/build recipe across all four components (Node via pnpm, Python via uv): `make lint`, `make typecheck`, `make test`, `make build`, plus per-suite targets such as `make test-model-service` (run `make help` to list them). The README and CONTRIBUTING guides point at it, replacing their previously-divergent per-package instructions, which had drifted between `npm` and `pnpm` and between bare `pytest` and `uv run pytest`.
 
+#### CI Reconciled with Reality
+
+- Rewrote `.github/workflows/README.md` to match what the workflows actually do; it had claimed an in-CI e2e gate, a GPU docker-image matrix, and multi-arch release images, none of which happen. Removed the permanently-disabled (`if: false`) `test-e2e` job from `ci.yml` (end-to-end tests run in the dedicated `e2e-mock.yml` / `e2e-real-models.yml` workflows). The `test-model-service` job is now listed in the quality gate as **advisory** (its result is reported but does not block, since its full ML-stack install is disk-sensitive on shared runners), replacing the summary's inaccurate "skipped (disk space constraints)". Corrected `DOCKER_QUICK_REFERENCE.md` to reference `SESSION_SECRET` (the variable the stack uses) instead of the non-existent `COOKIE_SECRET`.
+
 ### Fixed
 
 #### Release Workflow Now Publishes GitHub Releases

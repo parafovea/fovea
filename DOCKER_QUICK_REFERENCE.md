@@ -228,7 +228,7 @@ Key variables to configure in `.env`:
 
 - `FOVEA_MODE`: Authentication mode - `single-user` (default) or `multi-user`
 - `ALLOW_REGISTRATION`: Allow user self-registration - `true` or `false`
-- `COOKIE_SECRET`: Secret for session cookie signing (min 32 characters, required in multi-user mode)
+- `SESSION_SECRET`: Secret for session cookie signing (min 32 characters, required in multi-user mode)
 - `SESSION_TIMEOUT_DAYS`: Session expiration in days (default: 7)
 - `API_KEY_ENCRYPTION_KEY`: 32-byte hex key for API key encryption at rest
 
