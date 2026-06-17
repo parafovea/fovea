@@ -12,6 +12,9 @@ jobs:
   build-and-push-images:
     name: Build Release Images
     runs-on: ubuntu-latest
+    # Backstop so a wedged build (historically the disk-starved GPU image)
+    # fails fast instead of burning the full 6 h GitHub Actions job ceiling.
+    timeout-minutes: 90
     permissions:
       contents: read
       packages: write
@@ -27,14 +30,20 @@ jobs:
           # the package directory the COPY annotation-tool/... line
           # resolves to <context>/annotation-tool which does not
           # exist (it would be /annotation-tool/annotation-tool).
+          # amd64 only: the prior linux/amd64,linux/arm64 matrix built the
+          # arm64 variant under QEMU emulation (10-50x slower), pushing the
+          # frontend/backend jobs toward the 6 h ceiling. docker.yml (the dev
+          # image workflow) ships amd64-only and these release images match it.
+          # If arm64 images are ever required, build them on native
+          # ubuntu-*-arm runners and merge manifests rather than emulating.
           - name: frontend
             context: .
             file: annotation-tool/Dockerfile
-            platforms: linux/amd64,linux/arm64
+            platforms: linux/amd64
           - name: backend
             context: .
             file: server/Dockerfile
-            platforms: linux/amd64,linux/arm64
+            platforms: linux/amd64
           # model-service entries keep their context at ./model-service
           # because the Dockerfile COPYs `pyproject.toml`, `src`, `config`,
           # `scripts` from paths relative to the package, not the repo
@@ -55,8 +64,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+      # The model-service "full" GPU image (CUDA + the entire ML stack) is
+      # multi-GB and exhausts the stock runner's ~14 GB free disk mid-build,
+      # which is what stalled the prior release runs to the 6 h ceiling.
+      # Reclaim ~25 GB of preinstalled toolchains first, matching docker.yml.
+      # (QEMU is gone: every image now builds amd64-native, no emulation.)
+      - name: Free up disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          docker system prune -af --volumes
+          df -h
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
