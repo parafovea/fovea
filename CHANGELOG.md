@@ -5,7 +5,7 @@ All notable changes to the Fovea project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.4.3] - 2026-06-16
+## [0.4.3] - 2026-06-17
 
 This release works through the open issue backlog: it closes three issues that were already resolved on `main` (verified by running their tests) and fixes four that were still outstanding.
 
