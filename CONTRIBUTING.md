@@ -140,19 +140,15 @@ Before contributing, ensure you have:
    uvicorn src.main:app --reload --port 8000
    ```
 
-7. **Verify your setup** by running tests:
+7. **Verify your setup** by running tests through the root `Makefile` (the
+   single source for every build/lint/test recipe; run `make help` to list
+   targets):
    ```bash
-   # Frontend tests
-   cd annotation-tool
-   npm run test
-
-   # Backend tests
-   cd server
-   npm run test
-
-   # Model service tests
-   cd model-service
-   pytest
+   make test                 # every suite, or:
+   make test-frontend
+   make test-backend         # needs Postgres + Redis: make dev-infra
+   make test-model-service
+   make test-wikibase
    ```
 
 For detailed setup instructions, see the [Manual Setup Guide](docs/docs/getting-started/manual-setup.md).
@@ -294,27 +290,13 @@ git rebase --continue
 
 1. **Ensure all tests pass**:
    ```bash
-   # Run all test suites
-   cd annotation-tool && npm run test && npm run test:e2e
-   cd server && npm run test
-   cd model-service && pytest
+   make test
    ```
 
 2. **Check code quality**:
    ```bash
-   # Frontend
-   cd annotation-tool
-   npm run lint
-   npm run type-check
-
-   # Backend
-   cd server
-   npm run lint
-
-   # Model service
-   cd model-service
-   ruff check .
-   mypy src/
+   make lint
+   make typecheck
    ```
 
 3. **Update documentation** if you've changed APIs or added features

@@ -140,3 +140,6 @@ notes/
 model-service/uv.lock
 .demo-local/
 .demo-local-bringup.log
+
+# wikibase uses pip in CI; its uv.lock is a local `uv run` artifact, not committed
+wikibase/uv.lock
