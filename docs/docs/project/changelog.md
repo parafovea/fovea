@@ -11,6 +11,30 @@ All notable changes to the Fovea project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.4] - 2026-06-17
+
+The first installment of the architecture-modularization roadmap (`notes/architecture-review.md`, Phase 0): reversible cleanups with no user-facing behavior change — dead dependencies removed, a configuration template de-duplicated, and one latent model-loader gap closed with a regression guard.
+
+### Removed
+
+#### Unused Backend Dependencies
+
+- Dropped `cors`, `express`, and `multer` (and their `@types/cors`, `@types/express`, `@types/multer` type packages) from `server/package.json`. The backend is entirely Fastify and imports `@fastify/cors`; these three packages had zero import sites in `server/src`. `pnpm-lock.yaml` was regenerated, removing them and their now-orphaned transitive dependencies.
+
+### Fixed
+
+#### SAM 3.1 Object Detection Had No Loader Path
+
+- `_object_detection_factory` (`model-service/src/infrastructure/config/task_factories.py`) was missing the `framework == "sam3"` pre-dispatch that `_object_tracking_factory` already had, so an `object_detection` model selecting SAM 3.1 (`config/models.yaml`, `selected: "sam-3-1"`) routed to the architecture-keyed detection registry — which registers no SAM3 loader — and would raise `UnknownArchitectureError` at load time. The factory now pre-dispatches `framework == "sam3"` to the existing, contract-tested `SAM3DetectionAdapter` via `SAM3Loader`, matching the tracking path. The `SAM3Detection`/`SAM3Tracking` architecture classes are deliberately registry-less (SAM3 loads through framework pre-dispatch, and the classes exist so SAM3 YAML entries carry a schema-valid `architecture:` block), so nothing was removed.
+- Added `model-service/test/config/test_catalog_dispatch_invariant.py`, a bidirectional architecture-to-loader invariant test: every `architecture.kind` across `models.yaml` and `models-cpu.yaml` must resolve to a registered loader, a documented framework pre-dispatch (`sam3`, `external_api`), or a dedicated task factory (speaker diarization, voice-activity detection), and every registered loader must target a valid architecture-family union member. Reverting the SAM3 detection fix makes this suite fail, so a future un-wired architecture is caught in CI rather than at model load.
+
+### Changed
+
+#### Configuration Template De-duplication
+
+- Removed the duplicate `REDIS_PORT` declaration from `.env.example` (it appeared in both the Redis-configuration and host-ports sections; duplicate dotenv keys are silently last-wins). The key is now defined once, in the Redis-configuration section, with a pointer comment where the host-ports list previously repeated it.
+- Synchronized the two package manifests that had drifted behind the release version (`model-service/package.json` and `wikibase/pyproject.toml` were still at `0.4.0`); all seven package manifests now report `0.4.4`.
+
 ## [0.4.3] - 2026-06-17
 
 This release works through the open issue backlog: it closes three issues that were already resolved on `main` (verified by running their tests) and fixes four that were still outstanding.
