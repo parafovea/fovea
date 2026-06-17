@@ -5,8 +5,12 @@
 # workspace package.json is visible). docker-compose.yml sets context: . and
 # routes to this Dockerfile via dockerfile: server/Dockerfile.
 
+# Node version pinned once at the repo root (.nvmrc / package.json engines);
+# override with --build-arg NODE_VERSION. This global ARG feeds every stage.
+ARG NODE_VERSION=22
+
 # Build stage
-FROM node:20-alpine AS builder
+FROM node:${NODE_VERSION}-alpine AS builder
 
 # Install pnpm
 RUN corepack enable && corepack prepare pnpm@10.15.0 --activate
@@ -37,7 +41,7 @@ RUN cd server && pnpm exec tsc prisma/seed.ts --outDir prisma --module commonjs 
     mv prisma/seed.js prisma/seed.cjs
 
 # Production dependencies stage
-FROM node:20-alpine AS deps
+FROM node:${NODE_VERSION}-alpine AS deps
 
 RUN corepack enable && corepack prepare pnpm@10.15.0 --activate
 
@@ -57,7 +61,7 @@ COPY --link server/prisma ./server/prisma
 RUN pnpm --filter @fovea/server exec prisma generate
 
 # Production stage
-FROM node:20-alpine AS production
+FROM node:${NODE_VERSION}-alpine AS production
 
 RUN corepack enable && corepack prepare pnpm@10.15.0 --activate
 

@@ -38,6 +38,10 @@ The 0.5.0 cycle delivers the architecture-modularization roadmap (`notes/archite
 - A CI guard (`pnpm check:env`, run in the backend lint job) fails the build when `.env.example` declares a duplicate key or omits any variable the backend config module reads, so the committed template cannot silently drift from the code. `.env.example` is brought into sync: the previously-undocumented `SESSION_IDLE_TIMEOUT_MINUTES`, `ALLOW_TEST_ADMIN_BYPASS`, `DEFAULT_USER_USERNAME`/`DEFAULT_USER_DISPLAY_NAME`, `MODEL_SERVICE_ADMIN_TOKEN`, `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`, and the demo/tours variables are now documented (as commented optional entries).
 - The backend resolves its mode and demo flags into one derived `config.deploymentMode` object (typed `auth` and `demo`) and logs a one-line summary at startup (for example `[config] deployment mode: auth=multi-user demo=off`). A new operations guide (`docs/docs/operations/configuration.md`) documents the configuration model, fail-fast startup, and the deployment-mode taxonomy across all three services.
 
+#### Node and pnpm Version Single-Source-of-Truth
+
+- Node and pnpm versions are now pinned in exactly one place. A root `.nvmrc` (Node `22`) and the root `package.json` `packageManager` field (`pnpm@10.15.0`, plus `engines.node >=22`) are the single sources: every Dockerfile takes `ARG NODE_VERSION` and every CI workflow reads `node-version-file: .nvmrc` and resolves pnpm from `packageManager` (the per-workflow `pnpm/action-setup` `version` pins and the `NODE_VERSION` env vars are removed). This closes the prior split where the production images ran Node 20 + pnpm 10.15.0 while every CI workflow ran Node 22 + pnpm 9, and fixes a stray Node 20 in the deploy workflow. The converged Node 22 images were validated by building them locally (the backend image runs Node 22 with its native modules and Prisma client intact).
+
 ### Fixed
 
 #### Release Workflow Now Publishes GitHub Releases
