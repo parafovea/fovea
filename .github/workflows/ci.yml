@@ -343,93 +343,6 @@ jobs:
           path: wikibase/coverage/
           retention-days: 30
 
-  # E2E tests are skipped in CI: the full Playwright suite takes ~90 minutes
-  # under docker compose and is run locally instead. Set `if:` back to `always()`
-  # (or remove it) to re-enable when the runtime budget allows.
-  test-e2e:
-    name: E2E Tests
-    runs-on: ubuntu-latest
-    needs: [test-frontend, test-backend]
-    if: false
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: pnpm/action-setup@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version-file: '.nvmrc'
-          cache: 'pnpm'
-
-      - name: Install workspace dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Install Playwright browsers
-        run: pnpm --filter @fovea/annotation-tool exec playwright install --with-deps chromium
-
-      - name: Start Docker Compose services
-        run: |
-          docker compose -f docker-compose.e2e.yml up -d --build
-          echo "Waiting for services to be healthy..."
-          for i in $(seq 1 60); do
-            if docker compose -f docker-compose.e2e.yml ps backend | grep -q "(healthy)" \
-              && docker compose -f docker-compose.e2e.yml ps frontend | grep -q "(healthy)"; then
-              echo "All services healthy"
-              break
-            fi
-            if [ $i -eq 60 ]; then
-              echo "Timeout waiting for services"
-              docker compose -f docker-compose.e2e.yml ps
-              docker compose -f docker-compose.e2e.yml logs --tail=200 backend
-              docker compose -f docker-compose.e2e.yml logs --tail=100 frontend
-              exit 1
-            fi
-            sleep 5
-          done
-          docker compose -f docker-compose.e2e.yml ps
-
-      - name: Run E2E tests (smoke + functional + regression + accessibility)
-        env:
-          E2E_BASE_URL: http://localhost:3000
-          CI: 'true'
-        # 90-minute budget covers the full 4-project suite (~379 tests at 2
-        # workers under docker compose). Reporter list is added so the job log
-        # records per-test pass/fail, which the default html-only reporter omits.
-        run: pnpm --filter @fovea/annotation-tool exec playwright test --project=smoke --project=functional --project=regression --project=accessibility --reporter=list,html,json,junit
-        timeout-minutes: 90
-
-      - name: Dump service logs on failure
-        if: failure()
-        run: |
-          echo "=== Backend Logs ==="
-          docker compose -f docker-compose.e2e.yml logs --tail=300 backend
-          echo "=== Frontend Logs ==="
-          docker compose -f docker-compose.e2e.yml logs --tail=200 frontend
-          echo "=== Mock Model Service Logs ==="
-          docker compose -f docker-compose.e2e.yml logs --tail=100 mock-model-service
-
-      - name: Stop Docker Compose services
-        if: always()
-        run: docker compose -f docker-compose.e2e.yml down -v
-
-      - name: Upload Playwright report
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: playwright-report
-          path: annotation-tool/playwright-report/
-          retention-days: 30
-
-      - name: Upload test results
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: e2e-test-results
-          path: annotation-tool/test-results/
-          retention-days: 30
-
-  # Quality gate - all checks must pass
   verify-compose:
     name: Compose / Validate
     runs-on: ubuntu-latest
@@ -465,8 +378,11 @@ jobs:
       - lint-wikibase
       - test-wikibase
       - verify-compose
-      # - test-e2e  # disabled (job has if: false; gate must not require it)
-      # test-model-service disabled due to disk space constraints
+      # test-model-service is listed so its result shows in the summary, but it is
+      # advisory (not enforced below): its full ML-stack install is disk-sensitive
+      # on shared runners. End-to-end tests run in the dedicated e2e-mock.yml /
+      # e2e-real-models.yml workflows, not in this gate.
+      - test-model-service
     if: always()
     steps:
       - name: Check all jobs passed
@@ -486,7 +402,7 @@ jobs:
             echo ""
             echo "### Model Service"
             echo "- Lint: ${{ needs.lint-model-service.result }}"
-            echo "- Tests: skipped (disk space constraints)"
+            echo "- Tests: ${{ needs.test-model-service.result }} (advisory, not required)"
             echo ""
             echo "### Wikibase Loader"
             echo "- Lint: ${{ needs.lint-wikibase.result }}"
@@ -494,9 +410,6 @@ jobs:
             echo ""
             echo "### Compose"
             echo "- Validate: ${{ needs.verify-compose.result }}"
-            echo ""
-            echo "### Integration"
-            # echo "- E2E Tests: ${{ needs.test-e2e.result }}" — disabled
           } >> "$GITHUB_STEP_SUMMARY"
 
           # Fail if any required job failed
@@ -510,7 +423,6 @@ jobs:
           LINT_WIKIBASE="${{ needs.lint-wikibase.result }}"
           TEST_WIKIBASE="${{ needs.test-wikibase.result }}"
           VERIFY_COMPOSE="${{ needs.verify-compose.result }}"
-          # TEST_E2E="${{ needs.test-e2e.result }}"  # disabled
 
           if [ "$LINT_FRONTEND" != "success" ] || \
              [ "$TEST_FRONTEND" != "success" ] || \
@@ -521,7 +433,7 @@ jobs:
              [ "$LINT_MODEL" != "success" ] || \
              [ "$LINT_WIKIBASE" != "success" ] || \
              [ "$TEST_WIKIBASE" != "success" ] || \
-             [ "$VERIFY_COMPOSE" != "success" ]; then  # E2E disabled
+             [ "$VERIFY_COMPOSE" != "success" ]; then
             {
               echo ""
               echo "❌ Quality gate FAILED"
