@@ -42,7 +42,8 @@ import {
   useSavePersonaOntology,
   useWorld,
 } from '@store/queries'
-import { OntologyAugmenter, OntologyCategory } from '@components/ontology/OntologyAugmenter'
+import { OntologyAugmenter } from '@components/ontology/OntologyAugmenter'
+import type { OntologyCategory } from '@api/client'
 import { useModelConfig } from '@store/queries/useModelConfig'
 import { EntityType, RoleType, EventType, RelationType, GlossItem } from '@models/types'
 import { generateId } from '@utils/uuid'

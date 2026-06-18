@@ -343,6 +343,80 @@ jobs:
           path: wikibase/coverage/
           retention-days: 30
 
+  contract-drift:
+    name: Contracts / Drift Check
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: fovea_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm --filter @fovea/server exec prisma generate
+
+      - name: Run migrations
+        env:
+          DATABASE_URL: postgresql://test:test@localhost:5432/fovea_test
+        run: pnpm --filter @fovea/server exec prisma migrate deploy
+
+      - name: Regenerate OpenAPI spec from server route schemas
+        env:
+          DATABASE_URL: postgresql://test:test@localhost:5432/fovea_test
+          REDIS_HOST: localhost
+          REDIS_PORT: 6379
+          NODE_ENV: test
+        run: pnpm --filter @fovea/server gen:openapi
+
+      - name: Regenerate frontend API types from the spec
+        run: pnpm --filter @fovea/annotation-tool gen:api-types
+
+      - name: Fail if the committed spec or generated types are stale
+        run: |
+          if ! git diff --exit-code -- server/openapi.json annotation-tool/src/api/generated/openapi.ts; then
+            {
+              echo "## Contract drift detected"
+              echo ""
+              echo "server/openapi.json or annotation-tool/src/api/generated/openapi.ts is stale."
+              echo "Run \`pnpm --filter @fovea/server gen:openapi\` then"
+              echo "\`pnpm --filter @fovea/annotation-tool gen:api-types\` and commit the result."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
   verify-compose:
     name: Compose / Validate
     runs-on: ubuntu-latest
@@ -378,6 +452,7 @@ jobs:
       - lint-wikibase
       - test-wikibase
       - verify-compose
+      - contract-drift
       # test-model-service is listed so its result shows in the summary, but it is
       # advisory (not enforced below): its full ML-stack install is disk-sensitive
       # on shared runners. End-to-end tests run in the dedicated e2e-mock.yml /
@@ -410,6 +485,9 @@ jobs:
             echo ""
             echo "### Compose"
             echo "- Validate: ${{ needs.verify-compose.result }}"
+            echo ""
+            echo "### Contracts"
+            echo "- Drift Check: ${{ needs.contract-drift.result }}"
           } >> "$GITHUB_STEP_SUMMARY"
 
           # Fail if any required job failed
@@ -423,6 +501,7 @@ jobs:
           LINT_WIKIBASE="${{ needs.lint-wikibase.result }}"
           TEST_WIKIBASE="${{ needs.test-wikibase.result }}"
           VERIFY_COMPOSE="${{ needs.verify-compose.result }}"
+          CONTRACT_DRIFT="${{ needs.contract-drift.result }}"
 
           if [ "$LINT_FRONTEND" != "success" ] || \
              [ "$TEST_FRONTEND" != "success" ] || \
@@ -433,7 +512,8 @@ jobs:
              [ "$LINT_MODEL" != "success" ] || \
              [ "$LINT_WIKIBASE" != "success" ] || \
              [ "$TEST_WIKIBASE" != "success" ] || \
-             [ "$VERIFY_COMPOSE" != "success" ]; then
+             [ "$VERIFY_COMPOSE" != "success" ] || \
+             [ "$CONTRACT_DRIFT" != "success" ]; then
             {
               echo ""
               echo "❌ Quality gate FAILED"

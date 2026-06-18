@@ -7,8 +7,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { OntologyAugmenter, AugmentationResponse } from './OntologyAugmenter'
+import { OntologyAugmenter } from './OntologyAugmenter'
 import * as apiClient from '@api/client'
+import type { AugmentationResponse } from '@api/client'
 import { server } from '@test/setup'
 import { http, HttpResponse } from 'msw'
 
@@ -201,8 +202,8 @@ describe('OntologyAugmenter', () => {
       const user = userEvent.setup()
       const mockResponse: AugmentationResponse = {
         id: 'aug-1',
-        persona_id: 'persona-1',
-        target_category: 'entity',
+        personaId: 'persona-1',
+        targetCategory: 'entity',
         suggestions: [
           {
             name: 'Pitcher',
@@ -247,8 +248,8 @@ describe('OntologyAugmenter', () => {
       const user = userEvent.setup()
       const mockResponse: AugmentationResponse = {
         id: 'aug-2',
-        persona_id: 'persona-1',
-        target_category: 'entity',
+        personaId: 'persona-1',
+        targetCategory: 'entity',
         suggestions: [
           {
             name: 'Whale',
@@ -292,8 +293,8 @@ describe('OntologyAugmenter', () => {
       const user = userEvent.setup()
       const mockResponse: AugmentationResponse = {
         id: 'aug-3',
-        persona_id: 'persona-1',
-        target_category: 'event',
+        personaId: 'persona-1',
+        targetCategory: 'event',
         suggestions: [
           {
             name: 'ProductInteraction',
@@ -340,8 +341,8 @@ describe('OntologyAugmenter', () => {
       const user = userEvent.setup()
       const mockResponse: AugmentationResponse = {
         id: 'aug-4',
-        persona_id: 'persona-1',
-        target_category: 'entity',
+        personaId: 'persona-1',
+        targetCategory: 'entity',
         suggestions: [
           {
             name: 'SurgicalInstrument',
@@ -385,8 +386,8 @@ describe('OntologyAugmenter', () => {
       const user = userEvent.setup()
       const mockResponse: AugmentationResponse = {
         id: 'aug-5',
-        persona_id: 'persona-1',
-        target_category: 'entity',
+        personaId: 'persona-1',
+        targetCategory: 'entity',
         suggestions: [
           {
             name: 'Prop',
@@ -430,8 +431,8 @@ describe('OntologyAugmenter', () => {
       const user = userEvent.setup()
       const mockResponse: AugmentationResponse = {
         id: 'aug-1',
-        persona_id: 'persona-1',
-        target_category: 'entity',
+        personaId: 'persona-1',
+        targetCategory: 'entity',
         suggestions: [
           {
             name: 'Defender',
@@ -471,8 +472,8 @@ describe('OntologyAugmenter', () => {
       const user = userEvent.setup()
       const mockResponse: AugmentationResponse = {
         id: 'aug-1',
-        persona_id: 'persona-1',
-        target_category: 'entity',
+        personaId: 'persona-1',
+        targetCategory: 'entity',
         suggestions: [
           {
             name: 'Forward',
@@ -508,8 +509,8 @@ describe('OntologyAugmenter', () => {
       const user = userEvent.setup()
       const mockResponse: AugmentationResponse = {
         id: 'aug-1',
-        persona_id: 'persona-1',
-        target_category: 'entity',
+        personaId: 'persona-1',
+        targetCategory: 'entity',
         suggestions: [
           {
             name: 'Goalkeeper',
@@ -569,8 +570,8 @@ describe('OntologyAugmenter', () => {
       const user = userEvent.setup()
       const mockResponse: AugmentationResponse = {
         id: 'aug-1',
-        persona_id: 'persona-1',
-        target_category: 'entity',
+        personaId: 'persona-1',
+        targetCategory: 'entity',
         suggestions: [],
         reasoning: 'Unable to generate suggestions with provided context',
       }
@@ -596,8 +597,8 @@ describe('OntologyAugmenter', () => {
       const user = userEvent.setup()
       const mockResponse: AugmentationResponse = {
         id: 'aug-1',
-        persona_id: 'persona-1',
-        target_category: 'entity',
+        personaId: 'persona-1',
+        targetCategory: 'entity',
         suggestions: [
           {
             name: 'HighConfidence',
@@ -629,8 +630,8 @@ describe('OntologyAugmenter', () => {
       const user = userEvent.setup()
       const mockResponse: AugmentationResponse = {
         id: 'aug-1',
-        persona_id: 'persona-1',
-        target_category: 'entity',
+        personaId: 'persona-1',
+        targetCategory: 'entity',
         suggestions: [
           {
             name: 'MediumConfidence',
