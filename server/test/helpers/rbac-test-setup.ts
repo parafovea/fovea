@@ -29,6 +29,25 @@ export async function seedBaselinePermissions(prisma: PrismaClient): Promise<voi
   const nonDestructive = ['create', 'read', 'update', 'export', 'share']
   const destructive = ['delete']
 
+  // Project-scoped permissions on the Project subject itself. These mirror the
+  // production seed so the projects routes (governed by CASL) resolve role
+  // semantics correctly: managers and owners may update and manage members,
+  // owners may also delete, and every project role may read.
+  const projectSubjectPermissions = [
+    { scope: 'project' as const, role: 'project_owner', resourceType: 'project', action: 'read', ownOnly: false },
+    { scope: 'project' as const, role: 'project_owner', resourceType: 'project', action: 'update', ownOnly: false },
+    { scope: 'project' as const, role: 'project_owner', resourceType: 'project', action: 'delete', ownOnly: false },
+    { scope: 'project' as const, role: 'project_owner', resourceType: 'project', action: 'manage_members', ownOnly: false },
+    { scope: 'project' as const, role: 'project_manager', resourceType: 'project', action: 'read', ownOnly: false },
+    { scope: 'project' as const, role: 'project_manager', resourceType: 'project', action: 'update', ownOnly: false },
+    { scope: 'project' as const, role: 'project_manager', resourceType: 'project', action: 'manage_members', ownOnly: false },
+    { scope: 'project' as const, role: 'annotator', resourceType: 'project', action: 'read', ownOnly: false },
+    { scope: 'project' as const, role: 'reviewer', resourceType: 'project', action: 'read', ownOnly: false },
+    { scope: 'project' as const, role: 'viewer', resourceType: 'project', action: 'read', ownOnly: false },
+    { scope: 'group' as const, role: 'group_owner', resourceType: 'project', action: 'create', ownOnly: false },
+    { scope: 'group' as const, role: 'group_admin', resourceType: 'project', action: 'create', ownOnly: false },
+  ]
+
   const rows = [
     ...resources.flatMap(resourceType =>
       nonDestructive.map(action => ({
@@ -48,6 +67,7 @@ export async function seedBaselinePermissions(prisma: PrismaClient): Promise<voi
         ownOnly: true,
       }))
     ),
+    ...projectSubjectPermissions,
   ]
 
   await prisma.rolePermission.createMany({ data: rows, skipDuplicates: true })

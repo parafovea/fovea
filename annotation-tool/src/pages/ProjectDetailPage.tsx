@@ -53,6 +53,7 @@ import {
   useProject,
   useProjectMembers,
   useProjectPersonas,
+  useAssignableUsers,
   useAddProjectMember,
   useUpdateProjectMember,
   useRemoveProjectMember,
@@ -60,7 +61,6 @@ import {
   type ProjectMember,
   type ProjectPersona,
 } from '@store/queries/useProjects'
-import { useUsers } from '@store/queries/admin/useUsers'
 import { useProjectContextStore } from '@store/zustand/projectContextStore'
 import { useAuthStore } from '@store/zustand/authStore'
 
@@ -79,7 +79,7 @@ export default function ProjectDetailPage(): JSX.Element {
   const updateMember = useUpdateProjectMember()
   const removeMember = useRemoveProjectMember()
   const updateProject = useUpdateProject()
-  const { data: allUsers = [] } = useUsers()
+  const { data: assignableUsers = [] } = useAssignableUsers(projectId)
 
   const [addDialogOpen, setAddDialogOpen] = useState(false)
   const [newUserId, setNewUserId] = useState('')
@@ -301,8 +301,8 @@ export default function ProjectDetailPage(): JSX.Element {
                   className="flex h-8 w-full items-center justify-between rounded-lg border border-input bg-transparent px-2.5 text-sm"
                 >
                   {newUserId
-                    ? allUsers.find((u) => u.id === newUserId)
-                      ? `${allUsers.find((u) => u.id === newUserId)!.username} (${allUsers.find((u) => u.id === newUserId)!.displayName})`
+                    ? assignableUsers.find((u) => u.id === newUserId)
+                      ? `${assignableUsers.find((u) => u.id === newUserId)!.username} (${assignableUsers.find((u) => u.id === newUserId)!.displayName})`
                       : newUserId
                     : 'Select user...'}
                   <ChevronsUpDown className="ml-2 size-4 opacity-50" />
@@ -312,7 +312,7 @@ export default function ProjectDetailPage(): JSX.Element {
                     <CommandInput placeholder="Search users..." />
                     <CommandList>
                       <CommandEmpty>No users found.</CommandEmpty>
-                      {allUsers.map((user) => (
+                      {assignableUsers.map((user) => (
                         <CommandItem
                           key={user.id}
                           value={`${user.username} ${user.displayName}`}
