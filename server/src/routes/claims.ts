@@ -1,36 +1,22 @@
 /**
  * API routes for claims and subclaims operations.
  *
- * This module provides endpoints for creating, retrieving, updating, and deleting
- * atomic claims extracted from video summaries. Supports hierarchical subclaims.
+ * Routes perform HTTP concerns only: schema validation, request parsing, and
+ * dispatch to a per-request ClaimService that owns business rules and CASL
+ * authorization. The ClaimRepository owns all Prisma access.
+ *
+ * Endpoints for creating, retrieving, updating, and deleting atomic claims
+ * extracted from video summaries, queueing extraction and synthesis jobs, and
+ * managing typed relations between claims. Supports hierarchical subclaims.
  */
 
 import { Type, Static } from '@sinclair/typebox'
-import { FastifyPluginAsync } from 'fastify'
-import { PrismaClient, Prisma } from '@prisma/client'
-import { accessibleBy } from '@casl/prisma'
-import { subject } from '@casl/ability'
-import {
-  claimExtractionQueue,
-  ClaimExtractionJobData,
-  claimSynthesisQueue,
-  ClaimSynthesisJobData
-} from '../queues/setup.js'
-import { NotFoundError, ValidationError, ForbiddenError, ErrorResponseSchema } from '../lib/errors.js'
+import { FastifyPluginAsync, FastifyRequest } from 'fastify'
+import { ErrorResponseSchema } from '../lib/errors.js'
 import { requireAuth } from '../middleware/auth.js'
 import { buildAbilities } from '../middleware/abilities.js'
-
-/** Type guard for claim extraction job data. */
-function isClaimExtractionData(data: unknown): data is ClaimExtractionJobData {
-  if (typeof data !== 'object' || data === null) return false
-  return 'summaryId' in data && typeof data.summaryId === 'string'
-}
-
-/** Type guard for claim synthesis job data. */
-function isClaimSynthesisData(data: unknown): data is ClaimSynthesisJobData {
-  if (typeof data !== 'object' || data === null) return false
-  return 'summaryId' in data && typeof data.summaryId === 'string'
-}
+import { ClaimRepository } from '../repositories/ClaimRepository.js'
+import { ClaimService } from '../services/claim-service.js'
 
 /**
  * Gloss item schema
@@ -217,94 +203,52 @@ const ClaimExtractionConfigSchema = Type.Object({
 })
 
 /**
- * Helper: Update denormalized claimsJson field in summary
+ * Claim relation schemas
  */
-async function updateSummaryClaimsJson(
-  prisma: PrismaClient,
-  summaryId: string,
-  summaryType: string
-): Promise<void> {
-  // Fetch all root claims with nested subclaims (up to 3 levels deep)
-  const claims = await prisma.claim.findMany({
-    where: {
-      summaryId,
-      summaryType,
-      parentClaimId: null
-    },
-    include: {
-      subclaims: {
-        include: {
-          subclaims: {
-            include: {
-              subclaims: true
-            }
-          }
-        }
-      }
-    },
-    orderBy: [
-      { createdAt: 'asc' }
-    ]
-  })
+const ClaimSpanSchema = Type.Object({
+  charStart: Type.Number(),
+  charEnd: Type.Number()
+})
 
-  // Calculate metadata
-  const totalClaims = countAllClaims(claims)
-  const maxDepth = calculateMaxDepth(claims)
+const ClaimRelationSchema = Type.Object({
+  id: Type.String({ format: 'uuid' }),
+  sourceClaimId: Type.String({ format: 'uuid' }),
+  targetClaimId: Type.String({ format: 'uuid' }),
+  relationTypeId: Type.String(),
+  sourceSpans: Type.Optional(Type.Array(ClaimSpanSchema)),
+  targetSpans: Type.Optional(Type.Array(ClaimSpanSchema)),
+  confidence: Type.Optional(Type.Union([Type.Number(), Type.Null()])),
+  notes: Type.Optional(Type.Union([Type.String(), Type.Null()])),
+  createdBy: Type.Optional(Type.Union([Type.String(), Type.Null()])),
+  createdAt: Type.String({ format: 'date-time' }),
+  updatedAt: Type.String({ format: 'date-time' })
+})
 
-  const claimsJson = {
-    version: '1.0',
-    claims,
-    metadata: {
-      extractedAt: new Date().toISOString(),
-      totalClaims,
-      totalSubclaims: totalClaims - claims.length,
-      maxDepth
-    }
-  }
-
-  // Update summary based on type
-  if (summaryType === 'video') {
-    await prisma.videoSummary.update({
-      where: { id: summaryId },
-      data: {
-        claimsJson,
-        claimsExtractedAt: new Date()
-      }
-    })
-  }
-  // Future: Add collection summary support
-}
-
-/**
- * Helper: Count all claims recursively
- */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Recursive claim structure requires any
-function countAllClaims(claims: any[]): number {
-  let count = claims.length
-  for (const claim of claims) {
-    if (claim.subclaims && claim.subclaims.length > 0) {
-      count += countAllClaims(claim.subclaims)
-    }
-  }
-  return count
-}
-
-/**
- * Helper: Calculate maximum depth recursively
- */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Recursive claim structure requires any
-function calculateMaxDepth(claims: any[], currentDepth: number = 0): number {
-  let maxDepth = currentDepth
-  for (const claim of claims) {
-    if (claim.subclaims && claim.subclaims.length > 0) {
-      const depth = calculateMaxDepth(claim.subclaims, currentDepth + 1)
-      maxDepth = Math.max(maxDepth, depth)
-    }
-  }
-  return maxDepth
-}
+const CreateClaimRelationSchema = Type.Object({
+  targetClaimId: Type.String({ format: 'uuid' }),
+  relationTypeId: Type.String(),
+  sourceSpans: Type.Optional(Type.Array(ClaimSpanSchema)),
+  targetSpans: Type.Optional(Type.Array(ClaimSpanSchema)),
+  confidence: Type.Optional(Type.Number({ minimum: 0, maximum: 1 })),
+  notes: Type.Optional(Type.String())
+})
 
 const claimsRoute: FastifyPluginAsync = async (fastify) => {
+  // Request-independent: one repository for the plugin's lifetime.
+  const repository = new ClaimRepository(fastify.prisma)
+
+  /**
+   * Builds a per-request service from the request-scoped CASL ability and the
+   * authenticated user's id and system role.
+   */
+  const serviceFor = (request: FastifyRequest): ClaimService =>
+    new ClaimService(
+      repository,
+      request.ability ?? null,
+      request.user?.id,
+      request.user?.systemRole ?? undefined
+    )
+
   /**
    * Get all claims for a summary
    *
@@ -348,58 +292,8 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
     },
     async (request, reply) => {
       const { summaryId } = request.params
-      const { summaryType = 'video', includeSubclaims = true, minConfidence } = request.query
-      if (!request.ability) throw new ForbiddenError('No abilities defined')
-
-      // Verify summary exists
-      const summary = summaryType === 'video'
-        ? await fastify.prisma.videoSummary.findUnique({ where: { id: summaryId } })
-        : null // Future: Add collection summary support
-
-      if (!summary) {
-        throw new NotFoundError('Summary', summaryId)
-      }
-
-      // Defense in depth: even if a caller knows another user's
-      // summaryId, deny the claim listing. Without this, the summaries-
-      // list scoping is the only gate, and a known summaryId would
-      // unconditionally surface its claims.
-      if (!request.ability.can('read', subject('VideoSummary', summary))) {
-        throw new ForbiddenError('Cannot read claims under this Summary')
-      }
-
-      // Build include object for nested subclaims
-      const includeConfig = includeSubclaims ? {
-        subclaims: {
-          include: {
-            subclaims: {
-              include: {
-                subclaims: true  // Support up to 3 levels
-              }
-            }
-          }
-        }
-      } : undefined
-
-      // Query root claims filtered by caller's read ability on Claim.
-      const claims = await fastify.prisma.claim.findMany({
-        where: {
-          AND: [
-            {
-              summaryId,
-              summaryType,
-              parentClaimId: null,
-              ...(minConfidence && { confidence: { gte: minConfidence } })
-            },
-            accessibleBy(request.ability, 'read').Claim,
-          ],
-        },
-        include: includeConfig,
-        orderBy: [
-          { createdAt: 'asc' }
-        ]
-      })
-
+      const service = serviceFor(request)
+      const claims = await service.listClaims(summaryId, request.query)
       return reply.send(claims)
     }
   )
@@ -431,32 +325,8 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
     },
     async (request, reply) => {
       const { summaryId, claimId } = request.params
-      if (!request.ability) throw new ForbiddenError('No abilities defined')
-
-      const claim = await fastify.prisma.claim.findUnique({
-        where: { id: claimId },
-        include: {
-          subclaims: {
-            include: {
-              subclaims: {
-                include: {
-                  subclaims: true
-                }
-              }
-            }
-          },
-          parentClaim: true
-        }
-      })
-
-      if (!claim || claim.summaryId !== summaryId) {
-        throw new NotFoundError('Claim', claimId)
-      }
-
-      if (!request.ability.can('read', subject('Claim', claim))) {
-        throw new ForbiddenError('Cannot read this Claim')
-      }
-
+      const service = serviceFor(request)
+      const claim = await service.getClaim(summaryId, claimId)
       return reply.send(claim)
     }
   )
@@ -494,102 +364,8 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
     },
     async (request, reply) => {
       const { summaryId } = request.params
-      const { text, gloss, parentClaimId, summaryType, audio, video, metadata, comment, ...rest } = request.body
-      if (!request.ability) throw new ForbiddenError('No abilities defined')
-      const userId = request.user!.id
-
-      // Verify summary exists; resolve projectId for authorization scope.
-      const summary = summaryType === 'video'
-        ? await fastify.prisma.videoSummary.findUnique({
-            where: { id: summaryId },
-          })
-        : null
-
-      if (!summary) {
-        throw new NotFoundError('Summary', summaryId)
-      }
-
-      // The parent summary must be one the caller can read; otherwise A
-      // could attach claims under B's summary (the create candidate
-      // carries createdBy=A so the generic create rule passes even when
-      // the parent summary belongs to B).
-      if (!request.ability.can('read', subject('VideoSummary', summary))) {
-        throw new ForbiddenError('Cannot create a claim under this Summary')
-      }
-
-      // Pre-authorize create on a candidate Claim in the resolved scope. The
-      // candidate carries the final projectId and createdBy so CASL's
-      // MongoQuery conditions resolve against actual field values.
-      const candidate = subject('Claim', {
-        projectId: summary.projectId,
-        createdBy: userId,
-      })
-      if (!request.ability.can('create', candidate)) {
-        throw new ForbiddenError('Cannot create this Claim')
-      }
-
-      // If parentClaimId provided, verify it exists and belongs to same
-      // summary, and that the caller can update it (sub-claim attaches to it).
-      if (parentClaimId) {
-        const parentClaim = await fastify.prisma.claim.findUnique({
-          where: { id: parentClaimId }
-        })
-
-        if (!parentClaim || parentClaim.summaryId !== summaryId) {
-          throw new ValidationError('Invalid parent claim')
-        }
-        if (!request.ability.can('update', subject('Claim', parentClaim))) {
-          throw new ForbiddenError('Cannot update this Claim')
-        }
-      }
-
-      // Convert null JSON fields to Prisma.JsonNull. Never trust request body
-      // for createdBy; always stamp from authenticated session.
-      const claimData: Prisma.ClaimUncheckedCreateInput = {
-        summaryId,
-        summaryType,
-        text,
-        gloss: gloss || [],
-        parentClaimId: parentClaimId || undefined,
-        extractionStrategy: 'manual',
-        audio: audio === null ? Prisma.JsonNull : (audio ?? Prisma.JsonNull),
-        video: video === null ? Prisma.JsonNull : (video ?? Prisma.JsonNull),
-        metadata: metadata === null ? Prisma.JsonNull : (metadata ?? Prisma.JsonNull),
-        comment: comment || undefined,
-        projectId: summary.projectId ?? undefined,
-        ...rest,
-        createdBy: userId,
-      }
-
-      // Create claim
-      await fastify.prisma.claim.create({
-        data: claimData
-      })
-
-      // Update denormalized claimsJson
-      await updateSummaryClaimsJson(fastify.prisma, summaryId, summaryType)
-
-      // Fetch and return complete claims tree
-      const claims = await fastify.prisma.claim.findMany({
-        where: {
-          summaryId,
-          summaryType,
-          parentClaimId: null
-        },
-        include: {
-          subclaims: {
-            include: {
-              subclaims: {
-                include: {
-                  subclaims: true
-                }
-              }
-            }
-          }
-        },
-        orderBy: [{ createdAt: 'asc' }]
-      })
-
+      const service = serviceFor(request)
+      const claims = await service.createClaim(summaryId, request.body)
       return reply.status(201).send({ claims })
     }
   )
@@ -628,61 +404,8 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
     },
     async (request, reply) => {
       const { summaryId, claimId } = request.params
-      const { audio, video, metadata, comment, ...rest } = request.body
-      if (!request.ability) throw new ForbiddenError('No abilities defined')
-
-      // Verify claim exists and belongs to summary
-      const existingClaim = await fastify.prisma.claim.findUnique({
-        where: { id: claimId }
-      })
-
-      if (!existingClaim || existingClaim.summaryId !== summaryId) {
-        throw new NotFoundError('Claim', claimId)
-      }
-
-      if (!request.ability.can('update', subject('Claim', existingClaim))) {
-        throw new ForbiddenError('Cannot update this Claim')
-      }
-
-      // Convert null JSON fields to Prisma.JsonNull
-      const updateData: Prisma.ClaimUpdateInput = {
-        ...rest,
-        ...(audio !== undefined && { audio: audio === null ? Prisma.JsonNull : audio }),
-        ...(video !== undefined && { video: video === null ? Prisma.JsonNull : video }),
-        ...(metadata !== undefined && { metadata: metadata === null ? Prisma.JsonNull : metadata }),
-        ...(comment !== undefined && { comment })
-      }
-
-      // Update claim
-      await fastify.prisma.claim.update({
-        where: { id: claimId },
-        data: updateData
-      })
-
-      // Update denormalized claimsJson
-      await updateSummaryClaimsJson(fastify.prisma, summaryId, existingClaim.summaryType)
-
-      // Fetch and return complete claims tree
-      const claims = await fastify.prisma.claim.findMany({
-        where: {
-          summaryId,
-          summaryType: existingClaim.summaryType,
-          parentClaimId: null
-        },
-        include: {
-          subclaims: {
-            include: {
-              subclaims: {
-                include: {
-                  subclaims: true
-                }
-              }
-            }
-          }
-        },
-        orderBy: [{ createdAt: 'asc' }]
-      })
-
+      const service = serviceFor(request)
+      const claims = await service.updateClaim(summaryId, claimId, request.body)
       return reply.send({ claims })
     }
   )
@@ -714,29 +437,8 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
     },
     async (request, reply) => {
       const { summaryId, claimId } = request.params
-      if (!request.ability) throw new ForbiddenError('No abilities defined')
-
-      // Verify claim exists and belongs to summary
-      const claim = await fastify.prisma.claim.findUnique({
-        where: { id: claimId }
-      })
-
-      if (!claim || claim.summaryId !== summaryId) {
-        throw new NotFoundError('Claim', claimId)
-      }
-
-      if (!request.ability.can('delete', subject('Claim', claim))) {
-        throw new ForbiddenError('Cannot delete this Claim')
-      }
-
-      // Delete claim (cascades to subclaims via onDelete: Cascade)
-      await fastify.prisma.claim.delete({
-        where: { id: claimId }
-      })
-
-      // Update denormalized claimsJson
-      await updateSummaryClaimsJson(fastify.prisma, summaryId, claim.summaryType)
-
+      const service = serviceFor(request)
+      await service.deleteClaim(summaryId, claimId)
       return reply.send({ success: true })
     }
   )
@@ -776,55 +478,9 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
     },
     async (request, reply) => {
       const { summaryId } = request.params
-      const config = request.body
-
-      const summaryType = config.summaryType || 'video'
-      if (!request.ability) throw new ForbiddenError('No abilities defined')
-
-      // Verify summary exists
-      const summary = summaryType === 'video'
-        ? await fastify.prisma.videoSummary.findUnique({ where: { id: summaryId } })
-        : null
-
-      if (!summary) {
-        throw new NotFoundError('Summary', summaryId)
-      }
-
-      // Extraction writes claims and updates the parent summary's claimsJson;
-      // require update rights on the summary it targets.
-      if (!request.ability.can('update', subject('VideoSummary', summary))) {
-        throw new ForbiddenError('Cannot update this VideoSummary')
-      }
-
-      // Queue extraction job using BullMQ
-      const jobData: ClaimExtractionJobData = {
-        summaryId,
-        summaryType,
-        config: {
-          inputSources: config.inputSources,
-          extractionStrategy: config.extractionStrategy,
-          maxClaimsPerSummary: config.maxClaimsPerSummary,
-          maxSubclaimDepth: config.maxSubclaimDepth,
-          minConfidence: config.minConfidence,
-          modelId: config.modelId,
-          deduplicateClaims: config.deduplicateClaims,
-          mergeSimilarClaims: config.mergeSimilarClaims
-        }
-      }
-
-      const job = await claimExtractionQueue.add(
-        'extract-claims',
-        jobData,
-        {
-          jobId: `claims-${summaryId}-${Date.now()}`
-        }
-      )
-
-      return reply.status(202).send({
-        jobId: job.id ?? '',
-        status: 'queued',
-        summaryId
-      })
+      const service = serviceFor(request)
+      const result = await service.generateClaims(summaryId, request.body)
+      return reply.status(202).send(result)
     }
   )
 
@@ -859,60 +515,9 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
     },
     async (request, reply) => {
       const { jobId } = request.params
-      if (!request.ability) throw new ForbiddenError('No abilities defined')
-
-      // Get job from queue
-      const job = await claimExtractionQueue.getJob(jobId)
-
-      if (!job) {
-        throw new NotFoundError('Job', jobId)
-      }
-
-      // Authorize against the summary targeted by this job so job-status
-      // probing can't leak existence of other users' summaries.
-      const targetSummaryId = isClaimExtractionData(job.data) ? job.data.summaryId : undefined
-      if (targetSummaryId) {
-        const existing = await fastify.prisma.videoSummary.findUnique({
-          where: { id: targetSummaryId },
-        })
-        if (existing && !request.ability.can('read', subject('VideoSummary', existing))) {
-          throw new ForbiddenError('Cannot read this VideoSummary')
-        }
-      }
-
-      // Get job state
-      const state = await job.getState()
-      const progress = typeof job.progress === 'number' ? job.progress : null
-
-      // Map BullMQ states to API states
-      let status: string
-      if (state === 'completed') {
-        status = 'completed'
-      } else if (state === 'failed') {
-        status = 'failed'
-      } else if (state === 'active') {
-        status = 'processing'
-      } else {
-        status = 'queued'
-      }
-
-      // Get result or error
-      let result = null
-      let error = null
-
-      if (state === 'completed') {
-        result = job.returnvalue
-      } else if (state === 'failed') {
-        error = job.failedReason || 'Job failed'
-      }
-
-      return reply.send({
-        jobId: job.id ?? '',
-        status,
-        progress,
-        result,
-        error
-      })
+      const service = serviceFor(request)
+      const status = await service.getExtractionJobStatus(jobId)
+      return reply.send(status)
     }
   )
 
@@ -967,58 +572,9 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
     },
     async (request, reply) => {
       const { summaryId } = request.params
-      const config = request.body
-      if (!request.ability) throw new ForbiddenError('No abilities defined')
-
-      // Verify summary exists and has claims
-      const summary = await fastify.prisma.videoSummary.findUnique({
-        where: { id: summaryId },
-        include: {
-          claims: {
-            where: { parentClaimId: null },
-            take: 1
-          }
-        }
-      })
-
-      if (!summary) {
-        throw new NotFoundError('Summary', summaryId)
-      }
-
-      // Synthesis writes to the parent summary (updates its text/gloss);
-      // require update rights.
-      if (!request.ability.can('update', subject('VideoSummary', summary))) {
-        throw new ForbiddenError('Cannot update this VideoSummary')
-      }
-
-      if (!summary.claims || summary.claims.length === 0) {
-        throw new ValidationError('Summary has no claims to synthesize')
-      }
-
-      const jobData: ClaimSynthesisJobData = {
-        summaryId,
-        summaryType: 'video',
-        config: {
-          synthesisStrategy: config.synthesisStrategy || 'hierarchical',
-          maxLength: config.maxLength,
-          includeConflicts: config.includeConflicts,
-          includeCitations: config.includeCitations
-        }
-      }
-
-      const job = await claimSynthesisQueue.add(
-        'synthesize-summary',
-        jobData,
-        {
-          jobId: `synthesis-${summaryId}-${Date.now()}`
-        }
-      )
-
-      return reply.status(202).send({
-        jobId: job.id ?? '',
-        status: 'queued',
-        summaryId
-      })
+      const service = serviceFor(request)
+      const result = await service.synthesize(summaryId, request.body)
+      return reply.status(202).send(result)
     }
   )
 
@@ -1053,94 +609,13 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
     },
     async (request, reply) => {
       const { jobId } = request.params
-      if (!request.ability) throw new ForbiddenError('No abilities defined')
-
-      // Get job from queue
-      const job = await claimSynthesisQueue.getJob(jobId)
-
-      if (!job) {
-        throw new NotFoundError('Job', jobId)
-      }
-
-      // Authorize against the summary targeted by this job.
-      const targetSummaryId = isClaimSynthesisData(job.data) ? job.data.summaryId : undefined
-      if (targetSummaryId) {
-        const existing = await fastify.prisma.videoSummary.findUnique({
-          where: { id: targetSummaryId },
-        })
-        if (existing && !request.ability.can('read', subject('VideoSummary', existing))) {
-          throw new ForbiddenError('Cannot read this VideoSummary')
-        }
-      }
-
-      // Get job state
-      const state = await job.getState()
-      const progress = typeof job.progress === 'number' ? job.progress : null
-
-      // Map BullMQ states to API states
-      let status: string
-      if (state === 'completed') {
-        status = 'completed'
-      } else if (state === 'failed') {
-        status = 'failed'
-      } else if (state === 'active') {
-        status = 'processing'
-      } else {
-        status = 'queued'
-      }
-
-      // Get result or error
-      let result = null
-      let error = null
-
-      if (state === 'completed') {
-        result = job.returnvalue
-      } else if (state === 'failed') {
-        error = job.failedReason || 'Job failed'
-      }
-
-      return reply.send({
-        jobId: job.id ?? '',
-        status,
-        progress,
-        result,
-        error
-      })
+      const service = serviceFor(request)
+      const status = await service.getSynthesisJobStatus(jobId)
+      return reply.send(status)
     }
   )
 
   // Claim Relations Endpoints
-
-  /**
-   * Claim relation schema
-   */
-  const ClaimSpanSchema = Type.Object({
-    charStart: Type.Number(),
-    charEnd: Type.Number()
-  })
-
-  const ClaimRelationSchema = Type.Object({
-    id: Type.String({ format: 'uuid' }),
-    sourceClaimId: Type.String({ format: 'uuid' }),
-    targetClaimId: Type.String({ format: 'uuid' }),
-    relationTypeId: Type.String(),
-    sourceSpans: Type.Optional(Type.Array(ClaimSpanSchema)),
-    targetSpans: Type.Optional(Type.Array(ClaimSpanSchema)),
-    confidence: Type.Optional(Type.Union([Type.Number(), Type.Null()])),
-    notes: Type.Optional(Type.Union([Type.String(), Type.Null()])),
-    createdBy: Type.Optional(Type.Union([Type.String(), Type.Null()])),
-    createdAt: Type.String({ format: 'date-time' }),
-    updatedAt: Type.String({ format: 'date-time' })
-  })
-
-  const CreateClaimRelationSchema = Type.Object({
-    targetClaimId: Type.String({ format: 'uuid' }),
-    relationTypeId: Type.String(),
-    sourceSpans: Type.Optional(Type.Array(ClaimSpanSchema)),
-    targetSpans: Type.Optional(Type.Array(ClaimSpanSchema)),
-    confidence: Type.Optional(Type.Number({ minimum: 0, maximum: 1 })),
-    notes: Type.Optional(Type.String())
-  })
 
   /**
    * Create a relation between claims
@@ -1175,92 +650,8 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
     },
     async (request, reply) => {
       const { summaryId, claimId } = request.params
-      const { targetClaimId, relationTypeId, sourceSpans, targetSpans, confidence, notes } = request.body
-      if (!request.ability) throw new ForbiddenError('No abilities defined')
-      const userId = request.user!.id
-
-      // Verify source claim exists
-      const sourceClaim = await fastify.prisma.claim.findUnique({
-        where: { id: claimId }
-      })
-
-      if (!sourceClaim || sourceClaim.summaryId !== summaryId) {
-        throw new NotFoundError('Source claim', claimId)
-      }
-
-      // Verify target claim exists
-      const targetClaim = await fastify.prisma.claim.findUnique({
-        where: { id: targetClaimId }
-      })
-
-      if (!targetClaim) {
-        throw new NotFoundError('Target claim', targetClaimId)
-      }
-
-      // Relating two claims mutates both; require update on both endpoints.
-      if (!request.ability.can('update', subject('Claim', sourceClaim))) {
-        throw new ForbiddenError('Cannot update this Claim')
-      }
-      if (!request.ability.can('update', subject('Claim', targetClaim))) {
-        throw new ForbiddenError('Cannot update this Claim')
-      }
-
-      // Get summary to find persona and ontology
-      const summary = await fastify.prisma.videoSummary.findUnique({
-        where: { id: summaryId },
-        include: {
-          persona: {
-            include: {
-              ontology: true
-            }
-          }
-        }
-      })
-
-      if (!summary) {
-        throw new NotFoundError('Summary', summaryId)
-      }
-
-      // Validate relationTypeId against ontology
-      if (summary.persona.ontology) {
-        const rawRelationTypes = Array.isArray(summary.persona.ontology.relationTypes)
-          ? summary.persona.ontology.relationTypes
-          : []
-        const relationType = rawRelationTypes.find(
-          (rt): rt is Prisma.JsonObject =>
-            typeof rt === 'object' && rt !== null && !Array.isArray(rt) && 'id' in rt && rt.id === relationTypeId
-        )
-
-        if (!relationType) {
-          throw new ValidationError(`Invalid relation type: ${relationTypeId}. Must be defined in persona's ontology.`)
-        }
-
-        // Check that this relation type allows claim→claim relations
-        const rawSource = relationType.sourceTypes
-        const rawTarget = relationType.targetTypes
-        const sourceTypes = Array.isArray(rawSource) ? rawSource.filter((s): s is string => typeof s === 'string') : []
-        const targetTypes = Array.isArray(rawTarget) ? rawTarget.filter((t): t is string => typeof t === 'string') : []
-
-        const rtName = typeof relationType.name === 'string' ? relationType.name : relationTypeId
-        if (!sourceTypes.includes('claim') || !targetTypes.includes('claim')) {
-          throw new ValidationError(`Relation type '${rtName}' does not support claim-to-claim relations. Source types: [${sourceTypes.join(', ')}], Target types: [${targetTypes.join(', ')}]`)
-        }
-      }
-
-      // Create relation; stamp createdBy from the authenticated session.
-      const relation = await fastify.prisma.claimRelation.create({
-        data: {
-          sourceClaimId: claimId,
-          targetClaimId,
-          relationTypeId,
-          sourceSpans: sourceSpans || undefined,
-          targetSpans: targetSpans || undefined,
-          confidence,
-          notes,
-          createdBy: userId,
-        }
-      })
-
+      const service = serviceFor(request)
+      const relation = await service.createRelation(summaryId, claimId, request.body)
       return reply.status(201).send(relation)
     }
   )
@@ -1295,55 +686,9 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
     },
     async (request, reply) => {
       const { summaryId, claimId } = request.params
-      if (!request.ability) throw new ForbiddenError('No abilities defined')
-
-      // Verify claim exists
-      const claim = await fastify.prisma.claim.findUnique({
-        where: { id: claimId }
-      })
-
-      if (!claim || claim.summaryId !== summaryId) {
-        throw new NotFoundError('Claim', claimId)
-      }
-
-      if (!request.ability.can('read', subject('Claim', claim))) {
-        throw new ForbiddenError('Cannot read this Claim')
-      }
-
-      // Filter relations to those whose OTHER endpoint claim is also
-      // readable; otherwise we'd leak existence of claims the caller can't
-      // see via relation payloads.
-      const accessibleClaims = accessibleBy(request.ability, 'read').Claim
-
-      const asSource = await fastify.prisma.claimRelation.findMany({
-        where: {
-          AND: [
-            { sourceClaimId: claimId },
-            {
-              OR: [
-                { sourceClaim: accessibleClaims },
-                { targetClaim: accessibleClaims },
-              ],
-            },
-          ],
-        },
-      })
-
-      const asTarget = await fastify.prisma.claimRelation.findMany({
-        where: {
-          AND: [
-            { targetClaimId: claimId },
-            {
-              OR: [
-                { sourceClaim: accessibleClaims },
-                { targetClaim: accessibleClaims },
-              ],
-            },
-          ],
-        },
-      })
-
-      return reply.send({ asSource, asTarget })
+      const service = serviceFor(request)
+      const relations = await service.getRelations(summaryId, claimId)
+      return reply.send(relations)
     }
   )
 
@@ -1374,34 +719,8 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
     },
     async (request, reply) => {
       const { summaryId, relationId } = request.params
-      if (!request.ability) throw new ForbiddenError('No abilities defined')
-
-      // Verify relation exists; load both endpoint claims for auth.
-      const relation = await fastify.prisma.claimRelation.findUnique({
-        where: { id: relationId },
-        include: {
-          sourceClaim: true,
-          targetClaim: true,
-        }
-      })
-
-      if (!relation || relation.sourceClaim.summaryId !== summaryId) {
-        throw new NotFoundError('Relation', relationId)
-      }
-
-      // Deleting a relation mutates both endpoints; require update on both.
-      if (!request.ability.can('update', subject('Claim', relation.sourceClaim))) {
-        throw new ForbiddenError('Cannot update this Claim')
-      }
-      if (!request.ability.can('update', subject('Claim', relation.targetClaim))) {
-        throw new ForbiddenError('Cannot update this Claim')
-      }
-
-      // Delete relation
-      await fastify.prisma.claimRelation.delete({
-        where: { id: relationId }
-      })
-
+      const service = serviceFor(request)
+      await service.deleteRelation(summaryId, relationId)
       return reply.send({ success: true })
     }
   )
@@ -1454,104 +773,9 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
     },
     async (request, reply) => {
       const { videoId, personaId } = request.params
-      const { text, gloss, parentClaimId, audio, video: videoModality, metadata, comment, ...rest } = request.body
-      if (!request.ability) throw new ForbiddenError('No abilities defined')
-      const userId = request.user!.id
-
-      // Verify video exists
-      const video = await fastify.prisma.video.findUnique({
-        where: { id: videoId }
-      })
-      if (!video) {
-        throw new NotFoundError('Video', videoId)
-      }
-
-      // Verify persona exists; resolve project scope for authorization.
-      const persona = await fastify.prisma.persona.findUnique({
-        where: { id: personaId },
-        select: { id: true, projectId: true },
-      })
-      if (!persona) {
-        throw new NotFoundError('Persona', personaId)
-      }
-
-      // Pre-authorize claim creation in the resolved project scope before
-      // upserting a summary (which would otherwise leak persona-level state).
-      const candidate = subject('Claim', {
-        projectId: persona.projectId,
-        createdBy: userId,
-      })
-      if (!request.ability.can('create', candidate)) {
-        throw new ForbiddenError('Cannot create this Claim')
-      }
-
-      // If an existing summary is present, the caller must also be able to
-      // update it (we attach claims to it and auto-create it if missing).
-      const existingSummary = await fastify.prisma.videoSummary.findUnique({
-        where: { videoId_personaId: { videoId, personaId } },
-      })
-      if (existingSummary && !request.ability.can('update', subject('VideoSummary', existingSummary))) {
-        throw new ForbiddenError('Cannot update this VideoSummary')
-      }
-
-      // Find or create VideoSummary
-      const summary = await fastify.prisma.videoSummary.upsert({
-        where: {
-          videoId_personaId: {
-            videoId,
-            personaId
-          }
-        },
-        create: {
-          videoId,
-          personaId,
-          summary: [] // Empty summary initially
-        },
-        update: {} // No updates if exists
-      })
-
-      // If parentClaimId provided, verify it exists and belongs to same
-      // summary, and that the caller can update it.
-      if (parentClaimId) {
-        const parentClaim = await fastify.prisma.claim.findUnique({
-          where: { id: parentClaimId }
-        })
-
-        if (!parentClaim || parentClaim.summaryId !== summary.id) {
-          throw new ValidationError('Invalid parent claim')
-        }
-        if (!request.ability.can('update', subject('Claim', parentClaim))) {
-          throw new ForbiddenError('Cannot update this Claim')
-        }
-      }
-
-      // Convert null JSON fields to Prisma.JsonNull. Never trust request
-      // body for createdBy; always stamp from the authenticated session.
-      const claimData: Prisma.ClaimUncheckedCreateInput = {
-        summaryId: summary.id,
-        summaryType: 'video',
-        text,
-        gloss: gloss || [],
-        parentClaimId: parentClaimId || undefined,
-        extractionStrategy: 'manual',
-        audio: audio === null ? Prisma.JsonNull : (audio ?? Prisma.JsonNull),
-        video: videoModality === null ? Prisma.JsonNull : (videoModality ?? Prisma.JsonNull),
-        metadata: metadata === null ? Prisma.JsonNull : (metadata ?? Prisma.JsonNull),
-        comment: comment || undefined,
-        projectId: persona.projectId ?? undefined,
-        ...rest,
-        createdBy: userId,
-      }
-
-      // Create claim
-      const claim = await fastify.prisma.claim.create({
-        data: claimData
-      })
-
-      return reply.status(201).send({
-        claim,
-        summaryId: summary.id
-      })
+      const service = serviceFor(request)
+      const result = await service.createVideoPersonaClaim(videoId, personaId, request.body)
+      return reply.status(201).send(result)
     }
   )
 }
