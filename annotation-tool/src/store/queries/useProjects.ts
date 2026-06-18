@@ -15,6 +15,7 @@ export const projectKeys = {
   detail: (projectId: string) => [...projectKeys.all, 'detail', projectId] as const,
   members: (projectId: string) => [...projectKeys.all, 'members', projectId] as const,
   personas: (projectId: string) => [...projectKeys.all, 'personas', projectId] as const,
+  assignableUsers: (projectId: string) => [...projectKeys.all, 'assignable-users', projectId] as const,
 }
 
 /** Summary of a project as returned by the list endpoint. */
@@ -62,6 +63,14 @@ export interface ProjectPersona {
   role: string
 }
 
+/** A user who can be added as a project member (not already a member). */
+export interface AssignableUser {
+  id: string
+  username: string
+  displayName: string
+  email: string | null
+}
+
 // ============= Fetch Functions =============
 
 async function fetchMyProjects(scope?: string): Promise<ProjectSummary[]> {
@@ -93,6 +102,14 @@ async function fetchProjectPersonas(projectId: string): Promise<ProjectPersona[]
   const response = await fetch(`/api/projects/${projectId}/personas`, { credentials: 'include' })
   if (!response.ok) {
     throw new Error('Failed to fetch project personas')
+  }
+  return response.json()
+}
+
+async function fetchAssignableUsers(projectId: string): Promise<AssignableUser[]> {
+  const response = await fetch(`/api/projects/${projectId}/assignable-users`, { credentials: 'include' })
+  if (!response.ok) {
+    throw new Error('Failed to fetch assignable users')
   }
   return response.json()
 }
@@ -159,6 +176,23 @@ export function useProjectPersonas(projectId: string | undefined) {
   return useQuery({
     queryKey: projectKeys.personas(projectId || ''),
     queryFn: () => fetchProjectPersonas(projectId!),
+    enabled: !!projectId,
+    staleTime: 2 * 60 * 1000,
+  })
+}
+
+/**
+ * Hook to fetch the users who can be added as members of a project (those not
+ * already members). Authorized for project owners, managers, and system
+ * admins; non-managers receive a 403 and an empty result.
+ *
+ * @param projectId - the project ID whose assignable users to fetch
+ * @returns TanStack Query result with the assignable users array
+ */
+export function useAssignableUsers(projectId: string | undefined) {
+  return useQuery({
+    queryKey: projectKeys.assignableUsers(projectId || ''),
+    queryFn: () => fetchAssignableUsers(projectId!),
     enabled: !!projectId,
     staleTime: 2 * 60 * 1000,
   })
@@ -249,6 +283,7 @@ export function useDeleteProject() {
       queryClient.removeQueries({ queryKey: projectKeys.detail(projectId) })
       queryClient.removeQueries({ queryKey: projectKeys.members(projectId) })
       queryClient.removeQueries({ queryKey: projectKeys.personas(projectId) })
+      queryClient.removeQueries({ queryKey: projectKeys.assignableUsers(projectId) })
       queryClient.invalidateQueries({ queryKey: projectKeys.lists() })
     },
   })
@@ -278,6 +313,7 @@ export function useAddProjectMember() {
     onSuccess: (_, { projectId }) => {
       queryClient.invalidateQueries({ queryKey: projectKeys.detail(projectId) })
       queryClient.invalidateQueries({ queryKey: projectKeys.members(projectId) })
+      queryClient.invalidateQueries({ queryKey: projectKeys.assignableUsers(projectId) })
       queryClient.invalidateQueries({ queryKey: projectKeys.lists() })
     },
   })
@@ -332,6 +368,7 @@ export function useRemoveProjectMember() {
     onSuccess: (_, { projectId }) => {
       queryClient.invalidateQueries({ queryKey: projectKeys.detail(projectId) })
       queryClient.invalidateQueries({ queryKey: projectKeys.members(projectId) })
+      queryClient.invalidateQueries({ queryKey: projectKeys.assignableUsers(projectId) })
       queryClient.invalidateQueries({ queryKey: projectKeys.lists() })
     },
   })

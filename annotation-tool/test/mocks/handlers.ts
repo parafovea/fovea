@@ -2190,6 +2190,10 @@ export const handlers = [
     return HttpResponse.json([])
   }),
 
+  http.get('*/api/projects/:projectId/assignable-users', () => {
+    return HttpResponse.json([])
+  }),
+
   http.post('*/api/projects/:projectId/members', () => {
     return HttpResponse.json({ success: true }, { status: 201 })
   }),

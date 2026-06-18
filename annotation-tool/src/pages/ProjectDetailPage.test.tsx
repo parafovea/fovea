@@ -70,8 +70,20 @@ const membersResponse = [
   },
 ]
 
+const assignableUsersResponse = [
+  {
+    id: 'user-3',
+    username: 'carol',
+    displayName: 'Carol',
+    email: 'carol@example.com',
+  },
+]
+
 describe('ProjectDetailPage', () => {
   beforeEach(() => {
+    // jsdom does not implement scrollIntoView; the cmdk Command list in the
+    // add-member picker calls it on mount.
+    Element.prototype.scrollIntoView = vi.fn()
     useAuthStore.getState().reset()
     useAuthStore.getState().loginSuccess({
       id: 'user-1',
@@ -221,5 +233,28 @@ describe('ProjectDetailPage', () => {
     })
 
     expect(screen.getByText('No personas assigned to this project.')).toBeInTheDocument()
+  })
+
+  it('lists assignable users in the add-member picker', async () => {
+    const user = userEvent.setup()
+    server.use(
+      http.get('*/api/projects/:projectId', () => HttpResponse.json(projectResponse)),
+      http.get('*/api/projects/:projectId/members', () => HttpResponse.json(membersResponse)),
+      http.get('*/api/projects/:projectId/personas', () => HttpResponse.json([])),
+      http.get('*/api/projects/:projectId/assignable-users', () => HttpResponse.json(assignableUsersResponse))
+    )
+
+    renderWithRoute('proj-1')
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /add member/i })).toBeInTheDocument()
+    })
+
+    await user.click(screen.getByRole('button', { name: /add member/i }))
+    await user.click(screen.getByText('Select user...'))
+
+    await waitFor(() => {
+      expect(screen.getByText('carol (Carol)')).toBeInTheDocument()
+    })
   })
 })

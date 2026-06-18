@@ -82,6 +82,7 @@ describe('Projects API', () => {
         passwordHash: adminHash,
         displayName: 'Admin User',
         isAdmin: true,
+        systemRole: 'system_admin',
       },
     })
     adminUserId = admin.id
@@ -941,6 +942,191 @@ describe('Projects API', () => {
         url: '/api/projects/00000000-0000-0000-0000-000000000000/world',
         cookies: { session_token: testSessionToken },
         payload: { entities: [] },
+      })
+
+      expect(response.statusCode).toBe(404)
+    })
+  })
+
+  // =========================================================================
+  // CASL role outcomes for project_manager
+  // =========================================================================
+
+  describe('project_manager authorization', () => {
+    it('allows a manager to update a project they do not own', async () => {
+      const createRes = await app.inject({
+        method: 'POST',
+        url: '/api/projects',
+        cookies: { session_token: testSessionToken },
+        payload: { name: 'Manager Update', slug: 'manager-update' },
+      })
+      const projectId = createRes.json().id
+
+      await prisma.projectMembership.create({
+        data: { userId: otherUserId, projectId, role: 'project_manager' },
+      })
+
+      const response = await app.inject({
+        method: 'PUT',
+        url: `/api/projects/${projectId}`,
+        cookies: { session_token: otherSessionToken },
+        payload: { name: 'Renamed By Manager' },
+      })
+
+      expect(response.statusCode).toBe(200)
+      expect(response.json().name).toBe('Renamed By Manager')
+    })
+
+    it('allows a manager to add members', async () => {
+      const createRes = await app.inject({
+        method: 'POST',
+        url: '/api/projects',
+        cookies: { session_token: testSessionToken },
+        payload: { name: 'Manager Adds', slug: 'manager-adds' },
+      })
+      const projectId = createRes.json().id
+
+      await prisma.projectMembership.create({
+        data: { userId: otherUserId, projectId, role: 'project_manager' },
+      })
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/api/projects/${projectId}/members`,
+        cookies: { session_token: otherSessionToken },
+        payload: { userId: adminUserId, role: 'annotator' },
+      })
+
+      expect(response.statusCode).toBe(201)
+    })
+
+    it('denies a manager deleting a project they do not own', async () => {
+      const createRes = await app.inject({
+        method: 'POST',
+        url: '/api/projects',
+        cookies: { session_token: testSessionToken },
+        payload: { name: 'Manager No Delete', slug: 'manager-no-delete' },
+      })
+      const projectId = createRes.json().id
+
+      await prisma.projectMembership.create({
+        data: { userId: otherUserId, projectId, role: 'project_manager' },
+      })
+
+      const response = await app.inject({
+        method: 'DELETE',
+        url: `/api/projects/${projectId}`,
+        cookies: { session_token: otherSessionToken },
+      })
+
+      expect(response.statusCode).toBe(403)
+    })
+  })
+
+  // =========================================================================
+  // GET /api/projects/:projectId/assignable-users
+  // =========================================================================
+
+  describe('GET /api/projects/:projectId/assignable-users', () => {
+    it('returns users who are not yet members', async () => {
+      const createRes = await app.inject({
+        method: 'POST',
+        url: '/api/projects',
+        cookies: { session_token: testSessionToken },
+        payload: { name: 'Assignable', slug: 'assignable' },
+      })
+      const projectId = createRes.json().id
+
+      const response = await app.inject({
+        method: 'GET',
+        url: `/api/projects/${projectId}/assignable-users`,
+        cookies: { session_token: testSessionToken },
+      })
+
+      expect(response.statusCode).toBe(200)
+      const users = response.json()
+      const ids = users.map((u: { id: string }) => u.id)
+      // The owner (testUser) is already a member and must be excluded.
+      expect(ids).not.toContain(testUserId)
+      // Non-members are listed.
+      expect(ids).toContain(otherUserId)
+      expect(users[0]).toHaveProperty('username')
+      expect(users[0]).toHaveProperty('displayName')
+      expect(users[0]).not.toHaveProperty('passwordHash')
+    })
+
+    it('excludes a user once they become a member', async () => {
+      const createRes = await app.inject({
+        method: 'POST',
+        url: '/api/projects',
+        cookies: { session_token: testSessionToken },
+        payload: { name: 'Assignable Filter', slug: 'assignable-filter' },
+      })
+      const projectId = createRes.json().id
+
+      await app.inject({
+        method: 'POST',
+        url: `/api/projects/${projectId}/members`,
+        cookies: { session_token: testSessionToken },
+        payload: { userId: otherUserId, role: 'annotator' },
+      })
+
+      const response = await app.inject({
+        method: 'GET',
+        url: `/api/projects/${projectId}/assignable-users`,
+        cookies: { session_token: testSessionToken },
+      })
+
+      expect(response.statusCode).toBe(200)
+      const ids = response.json().map((u: { id: string }) => u.id)
+      expect(ids).not.toContain(otherUserId)
+    })
+
+    it('returns 403 for a viewer (cannot manage members)', async () => {
+      const createRes = await app.inject({
+        method: 'POST',
+        url: '/api/projects',
+        cookies: { session_token: testSessionToken },
+        payload: { name: 'Assignable Forbidden', slug: 'assignable-forbidden' },
+      })
+      const projectId = createRes.json().id
+
+      await prisma.projectMembership.create({
+        data: { userId: otherUserId, projectId, role: 'viewer' },
+      })
+
+      const response = await app.inject({
+        method: 'GET',
+        url: `/api/projects/${projectId}/assignable-users`,
+        cookies: { session_token: otherSessionToken },
+      })
+
+      expect(response.statusCode).toBe(403)
+    })
+
+    it('allows a system admin to list assignable users', async () => {
+      const createRes = await app.inject({
+        method: 'POST',
+        url: '/api/projects',
+        cookies: { session_token: testSessionToken },
+        payload: { name: 'Assignable Admin', slug: 'assignable-admin' },
+      })
+      const projectId = createRes.json().id
+
+      const response = await app.inject({
+        method: 'GET',
+        url: `/api/projects/${projectId}/assignable-users`,
+        cookies: { session_token: adminSessionToken },
+      })
+
+      expect(response.statusCode).toBe(200)
+    })
+
+    it('returns 404 for a non-existent project', async () => {
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/projects/00000000-0000-0000-0000-000000000000/assignable-users',
+        cookies: { session_token: testSessionToken },
       })
 
       expect(response.statusCode).toBe(404)

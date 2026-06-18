@@ -404,3 +404,130 @@ describe('serializeAbilities', () => {
     expect(serialized.length).toBeGreaterThan(0)
   })
 })
+
+/**
+ * Project subject authorization.
+ *
+ * Projects are governed through CASL like every other domain: the Project
+ * model itself is a CASL subject, so project-scoped role permissions
+ * (read / update / delete / manage_members) and the personal-owner baseline
+ * resolve against a subject('Project', row). These cover the policy that the
+ * projects routes previously enforced with inline role-string checks.
+ */
+describe('defineAbilitiesFor — Project subject', () => {
+  const projectPermissions: RolePermissionRow[] = [
+    // project_owner: read/update/delete/manage_members on their projects
+    { scope: 'project', role: 'project_owner', resourceType: 'project', action: 'read', ownOnly: false },
+    { scope: 'project', role: 'project_owner', resourceType: 'project', action: 'update', ownOnly: false },
+    { scope: 'project', role: 'project_owner', resourceType: 'project', action: 'delete', ownOnly: false },
+    { scope: 'project', role: 'project_owner', resourceType: 'project', action: 'manage_members', ownOnly: false },
+    // project_manager: read/update/manage_members (no delete)
+    { scope: 'project', role: 'project_manager', resourceType: 'project', action: 'read', ownOnly: false },
+    { scope: 'project', role: 'project_manager', resourceType: 'project', action: 'update', ownOnly: false },
+    { scope: 'project', role: 'project_manager', resourceType: 'project', action: 'manage_members', ownOnly: false },
+    // annotator / reviewer / viewer: read only
+    { scope: 'project', role: 'annotator', resourceType: 'project', action: 'read', ownOnly: false },
+    { scope: 'project', role: 'reviewer', resourceType: 'project', action: 'read', ownOnly: false },
+    { scope: 'project', role: 'viewer', resourceType: 'project', action: 'read', ownOnly: false },
+    // group_owner / group_admin: create projects for their group
+    { scope: 'group', role: 'group_owner', resourceType: 'project', action: 'create', ownOnly: false },
+    { scope: 'group', role: 'group_admin', resourceType: 'project', action: 'create', ownOnly: false },
+  ]
+
+  const projectRow = (overrides: Partial<{ id: string; ownerUserId: string | null; ownerGroupId: string | null }> = {}) =>
+    subject('Project', { id: 'proj-1', ownerUserId: null, ownerGroupId: null, ...overrides })
+
+  it('project_owner can read/update/delete/manage_members their own project only', () => {
+    const ability = defineAbilitiesFor('user-1', {
+      systemRole: 'user', groupRoles: [], projectRoles: [{ projectId: 'proj-1', role: 'project_owner' }],
+    }, projectPermissions)
+
+    const mine = projectRow({ id: 'proj-1', ownerUserId: 'user-1' })
+    expect(ability.can('read', mine)).toBe(true)
+    expect(ability.can('update', mine)).toBe(true)
+    expect(ability.can('delete', mine)).toBe(true)
+    expect(ability.can('manage_members', mine)).toBe(true)
+
+    // A different project the user has no membership in is off-limits.
+    const other = projectRow({ id: 'proj-2', ownerUserId: 'someone' })
+    expect(ability.can('read', other)).toBe(false)
+    expect(ability.can('update', other)).toBe(false)
+    expect(ability.can('delete', other)).toBe(false)
+    expect(ability.can('manage_members', other)).toBe(false)
+  })
+
+  it('project_manager can read/update/manage_members but not delete', () => {
+    const ability = defineAbilitiesFor('user-1', {
+      systemRole: 'user', groupRoles: [], projectRoles: [{ projectId: 'proj-1', role: 'project_manager' }],
+    }, projectPermissions)
+
+    // ownerUserId is someone else: a manager manages a project they don't own.
+    const proj = projectRow({ id: 'proj-1', ownerUserId: 'other' })
+    expect(ability.can('read', proj)).toBe(true)
+    expect(ability.can('update', proj)).toBe(true)
+    expect(ability.can('manage_members', proj)).toBe(true)
+    expect(ability.can('delete', proj)).toBe(false)
+  })
+
+  it('viewer/annotator/reviewer can read but not write or manage members', () => {
+    for (const role of ['viewer', 'annotator', 'reviewer']) {
+      const ability = defineAbilitiesFor('user-1', {
+        systemRole: 'user', groupRoles: [], projectRoles: [{ projectId: 'proj-1', role }],
+      }, projectPermissions)
+      const proj = projectRow({ id: 'proj-1', ownerUserId: 'other' })
+      expect(ability.can('read', proj)).toBe(true)
+      expect(ability.can('update', proj)).toBe(false)
+      expect(ability.can('delete', proj)).toBe(false)
+      expect(ability.can('manage_members', proj)).toBe(false)
+    }
+  })
+
+  it('a non-member cannot read a project', () => {
+    const ability = defineAbilitiesFor('user-1', {
+      systemRole: 'user', groupRoles: [], projectRoles: [],
+    }, projectPermissions)
+    const proj = projectRow({ id: 'proj-1', ownerUserId: 'other' })
+    expect(ability.can('read', proj)).toBe(false)
+    expect(ability.can('update', proj)).toBe(false)
+  })
+
+  it('baseline: a user can fully manage a personal project they own with no memberships', () => {
+    // No permissions and no roles at all — only the ownerUserId baseline.
+    const ability = defineAbilitiesFor('user-1', {
+      systemRole: 'user', groupRoles: [], projectRoles: [],
+    }, [])
+    const personal = projectRow({ id: 'new', ownerUserId: 'user-1' })
+    expect(ability.can('create', personal)).toBe(true)
+    expect(ability.can('read', personal)).toBe(true)
+    expect(ability.can('update', personal)).toBe(true)
+    expect(ability.can('delete', personal)).toBe(true)
+    expect(ability.can('manage_members', personal)).toBe(true)
+
+    // Cannot create a personal project owned by someone else (forged owner).
+    const forged = projectRow({ id: 'new', ownerUserId: 'other' })
+    expect(ability.can('create', forged)).toBe(false)
+  })
+
+  it('group create is scoped to groups the user administers', () => {
+    const ability = defineAbilitiesFor('user-1', {
+      systemRole: 'user', groupRoles: [{ groupId: 'group-1', role: 'group_admin' }], projectRoles: [],
+    }, projectPermissions)
+
+    const forGroup1 = projectRow({ id: 'x', ownerUserId: null, ownerGroupId: 'group-1' })
+    expect(ability.can('create', forGroup1)).toBe(true)
+
+    // A group the user does not administer is off-limits.
+    const forGroup2 = projectRow({ id: 'x', ownerUserId: null, ownerGroupId: 'group-2' })
+    expect(ability.can('create', forGroup2)).toBe(false)
+  })
+
+  it('system_admin can manage any project', () => {
+    const ability = defineAbilitiesFor('admin-1', {
+      systemRole: 'system_admin', groupRoles: [], projectRoles: [],
+    }, [])
+    const proj = projectRow({ id: 'p', ownerUserId: 'x', ownerGroupId: 'g' })
+    expect(ability.can('read', proj)).toBe(true)
+    expect(ability.can('delete', proj)).toBe(true)
+    expect(ability.can('manage_members', proj)).toBe(true)
+  })
+})
