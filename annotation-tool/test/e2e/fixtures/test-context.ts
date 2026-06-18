@@ -451,11 +451,17 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
    * worker's lifecycle (the test does NOT delete on teardown so
    * persisted-annotation data survives the reload assertion).
    */
-  // Name includes workerIndex + first 8 chars of testUser.id so admin
-  // sessions see globally-unique options even when previous test runs
-  // left orphans in the database.
+  // Name includes workerIndex + first 8 chars of testUser.id AND the per-test
+  // id so each option is globally unique. Without the per-test id, two tests
+  // on the same worker created two personas with the SAME name (workerIndex
+  // and userId are both worker-stable and the fixture does not delete on
+  // teardown), so the persona dropdown resolved to N same-named options and
+  // failed the strict-mode locator. A retry of the same test reuses its persona
+  // via findPersonaByName below (the testId is stable across retries). Worker
+  // cleanup deletes by userId, so the longer name does not affect teardown.
   testPersonaPersistent: async ({ db, testUser, workerSessionToken }, use, testInfo) => {
-    const personaName = `Test Analyst (Persistent W${testInfo.workerIndex}-${testUser.id.slice(0, 8)})`
+    const perTestId = testInfo.testId.replace(/[^a-zA-Z0-9]/g, '').slice(-12)
+    const personaName = `Test Analyst (Persistent W${testInfo.workerIndex}-${testUser.id.slice(0, 8)}-${perTestId})`
     const existing = await db.findPersonaByName(testUser.id, personaName, workerSessionToken)
     const persona = existing ?? await db.createPersona({
       userId: testUser.id,
