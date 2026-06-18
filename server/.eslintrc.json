@@ -51,6 +51,10 @@
       "rules": { "no-restricted-syntax": "off" }
     },
     {
+      "files": ["scripts/**/*"],
+      "rules": { "no-restricted-syntax": "off" }
+    },
+    {
       "files": ["test/**/*"],
       "rules": {
         "no-restricted-imports": "off",
