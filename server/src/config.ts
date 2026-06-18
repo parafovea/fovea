@@ -22,8 +22,8 @@
  *     surfacing as a `NaN` deep in a handler.
  *
  * Fail-fast: importing this module runs `assertStartupConfig()`, which
- * validates the typed env surface and the required
- * `API_KEY_ENCRYPTION_KEY`, and (in production) refuses an unset or
+ * validates the typed env surface, validates the `API_KEY_ENCRYPTION_KEY`
+ * format when it is set, and (in production) refuses an unset or
  * dev-default `SESSION_SECRET`. Import this module FIRST in `index.ts`,
  * before `./tracing.js`, so validation throws before any subsystem
  * (OTEL, Fastify, Prisma) initializes.
@@ -210,7 +210,8 @@ function resolveEncryptionKey(): Buffer {
  *
  * Runs at module load. Checks performed:
  *   - numeric env vars coerce cleanly (TypeBox `Value.Errors`)
- *   - `API_KEY_ENCRYPTION_KEY` is set and hex-decodes to 32 bytes
+ *   - `API_KEY_ENCRYPTION_KEY`, when set, hex-decodes to 32 bytes (an unset
+ *     key is allowed; the API-key feature validates it lazily at use-time)
  *   - in production, `SESSION_SECRET` is set and is not the dev default
  *
  * @throws {Error} listing every offending key when validation fails
@@ -226,8 +227,21 @@ function assertStartupConfig(): void {
     )
   }
 
-  // Required: API key encryption key (fail fast before any subsystem boots).
-  resolveEncryptionKey()
+  // Validate the API key encryption key's FORMAT at startup only when it is
+  // set, so a misconfigured (wrong-length) key fails fast before it can corrupt
+  // data. An unset key is allowed at boot: API-key management is an optional
+  // feature, and `config.auth.encryptionKey()` throws at use-time if a caller
+  // needs the key and it is missing. (Requiring it at boot broke every stack
+  // whose compose file does not set the key.)
+  const encryptionKey = process.env.API_KEY_ENCRYPTION_KEY
+  if (encryptionKey !== undefined && encryptionKey !== '') {
+    const keyBuffer = Buffer.from(encryptionKey, 'hex')
+    if (keyBuffer.length !== ENCRYPTION_KEY_BYTES) {
+      throw new Error(
+        `API_KEY_ENCRYPTION_KEY must be ${ENCRYPTION_KEY_BYTES} bytes (${ENCRYPTION_KEY_BYTES * 2} hex characters)`,
+      )
+    }
+  }
 
   // Production guard: refuse an unset or dev-default session secret.
   if (process.env.NODE_ENV === 'production') {
