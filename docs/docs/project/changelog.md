@@ -58,6 +58,11 @@ The 0.5.0 cycle delivers the architecture-modularization roadmap (`notes/archite
 
 - Rewrote `.github/workflows/README.md` to match what the workflows actually do; it had claimed an in-CI e2e gate, a GPU docker-image matrix, and multi-arch release images, none of which happen. Removed the permanently-disabled (`if: false`) `test-e2e` job from `ci.yml` (end-to-end tests run in the dedicated `e2e-mock.yml` / `e2e-real-models.yml` workflows). The `test-model-service` job is now listed in the quality gate as **advisory** (its result is reported but does not block, since its full ML-stack install is disk-sensitive on shared runners), replacing the summary's inaccurate "skipped (disk space constraints)". Corrected `DOCKER_QUICK_REFERENCE.md` to reference `SESSION_SECRET` (the variable the stack uses) instead of the non-existent `COOKIE_SECRET`.
 
+#### Backend Modularization: Service/Repository Layer
+
+- Extracted the **personas** domain into a `PersonaRepository` (pure Prisma data access) and a `PersonaService` (orchestration, RBAC, and response mapping), reducing `server/src/routes/personas.ts` from 1641 lines with 44 direct `prisma.*` calls to 640 thin lines with zero. Routes now validate input and dispatch to the service; the service owns the CASL ability checks, the list-mode branching, the `isSystemGenerated` coercion, and the ontology type-deletion / world-state-cleanup orchestration; the repository owns every query. RBAC decisions, response shapes, and behavior are unchanged (the full personas route-test suite and the local E2E suite pass). This establishes the pattern for the remaining domain extractions.
+- The persona API response and the frontend `Persona` type now expose `projectId`, which had been silently stripped by the response schema, enabling project-scoped persona browsing.
+
 ### Fixed
 
 #### Release Workflow Now Publishes GitHub Releases

@@ -39,6 +39,8 @@ export interface Persona {
   details: string
   /** ID of the user who owns this persona (optional) */
   userId?: string
+  /** ID of the project this persona is scoped to, or null for the personal workspace */
+  projectId?: string | null
   /** Whether this persona was system-generated (e.g., Automated persona) */
   isSystemGenerated?: boolean
   /** Whether this persona should be hidden from the UI */
