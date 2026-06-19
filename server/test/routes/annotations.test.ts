@@ -3,7 +3,7 @@ import { buildApp } from '../../src/app.js'
 import { hashPassword } from '../../src/lib/password.js'
 import { seedBaselinePermissions } from '../helpers/rbac-test-setup.js'
 import { FastifyInstance } from 'fastify'
-import { PrismaClient } from '@prisma/client'
+import { PrismaClient, Prisma } from '@prisma/client'
 
 /**
  * Integration tests for the Annotations API.
@@ -31,6 +31,7 @@ describe('Annotations API', () => {
     await prisma.annotation.deleteMany()
     await prisma.videoSummary.deleteMany()
     await prisma.ontology.deleteMany()
+    await prisma.worldState.deleteMany()
     await prisma.persona.deleteMany()
     await prisma.video.deleteMany()
     await prisma.session.deleteMany()
@@ -319,6 +320,155 @@ describe('Annotations API', () => {
       })
 
       expect(response.statusCode).toBe(404)
+    })
+  })
+
+  describe('GET /api/annotations/:videoId linkedObjectName', () => {
+    /**
+     * A reviewer reading another annotator's object annotation should see the
+     * linked world object's name resolved from the annotation owner's world,
+     * even though that world is private to its owner.
+     */
+    it('resolves linkedObjectName from the annotation owner world for a cross-user reviewer', async () => {
+      // Owner (user A) authors the world objects and the annotations.
+      const ownerHash = await hashPassword('ownerpass123')
+      const owner = await prisma.user.create({
+        data: {
+          username: 'annotation-owner',
+          email: 'owner@example.com',
+          passwordHash: ownerHash,
+          displayName: 'Annotation Owner',
+          isAdmin: false,
+          systemRole: 'user',
+        }
+      })
+
+      // Owner's private world: an entity, an event, and a location entity.
+      await prisma.worldState.create({
+        data: {
+          userId: owner.id,
+          projectId: null,
+          entities: [
+            { id: 'entity-1', name: 'Red Car' },
+            { id: 'location-1', name: 'Town Square', locationType: 'point' },
+          ] as unknown as Prisma.InputJsonValue,
+          events: [{ id: 'event-1', name: 'Collision' }] as unknown as Prisma.InputJsonValue,
+          times: [] as unknown as Prisma.InputJsonValue,
+        }
+      })
+
+      // Owner's annotations: an entity-linked, an event-linked, a location-
+      // linked object annotation, plus a type annotation and an object
+      // annotation whose label is absent from the owner's world.
+      await prisma.annotation.create({
+        data: {
+          videoId: testVideoId,
+          personaId: null,
+          userId: owner.id,
+          createdByUserId: owner.id,
+          type: 'object',
+          label: 'entity-1',
+          linkType: 'entity',
+          frames: { boxes: [] }
+        }
+      })
+      await prisma.annotation.create({
+        data: {
+          videoId: testVideoId,
+          personaId: null,
+          userId: owner.id,
+          createdByUserId: owner.id,
+          type: 'object',
+          label: 'event-1',
+          linkType: 'event',
+          frames: { boxes: [] }
+        }
+      })
+      await prisma.annotation.create({
+        data: {
+          videoId: testVideoId,
+          personaId: null,
+          userId: owner.id,
+          createdByUserId: owner.id,
+          type: 'object',
+          label: 'location-1',
+          linkType: 'location',
+          frames: { boxes: [] }
+        }
+      })
+      await prisma.annotation.create({
+        data: {
+          videoId: testVideoId,
+          personaId: testPersonaId,
+          userId: owner.id,
+          createdByUserId: owner.id,
+          type: 'type',
+          label: 'entity-type-1',
+          frames: { boxes: [] }
+        }
+      })
+      await prisma.annotation.create({
+        data: {
+          videoId: testVideoId,
+          personaId: null,
+          userId: owner.id,
+          createdByUserId: owner.id,
+          type: 'object',
+          label: 'missing-object',
+          linkType: 'entity',
+          frames: { boxes: [] }
+        }
+      })
+
+      // Reviewer (user B) is a system admin, so the CASL read filter grants
+      // read on the owner's annotations. The reviewer has no world of their
+      // own, so any name they see must come from the owner's world.
+      const reviewerHash = await hashPassword('reviewerpass123')
+      const reviewer = await prisma.user.create({
+        data: {
+          username: 'annotation-reviewer',
+          email: 'reviewer@example.com',
+          passwordHash: reviewerHash,
+          displayName: 'Annotation Reviewer',
+          isAdmin: true,
+          systemRole: 'system_admin',
+        }
+      })
+      const reviewerSession = await prisma.session.create({
+        data: {
+          userId: reviewer.id,
+          token: `test-session-${reviewer.id}`,
+          expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+        }
+      })
+
+      const response = await app.inject({
+        method: 'GET',
+        url: `/api/annotations/${testVideoId}`,
+        cookies: { session_token: reviewerSession.token }
+      })
+
+      expect(response.statusCode).toBe(200)
+      const annotations = response.json() as Array<{
+        type: string
+        label: string
+        linkType: string | null
+        linkedObjectName: string | null
+      }>
+
+      const byLabel = (label: string) => annotations.find(a => a.label === label)!
+
+      // Entity, event, and location names resolve from the owner's world.
+      expect(byLabel('entity-1').linkedObjectName).toBe('Red Car')
+      expect(byLabel('event-1').linkedObjectName).toBe('Collision')
+      expect(byLabel('location-1').linkedObjectName).toBe('Town Square')
+
+      // Type annotations carry no linked object name.
+      expect(byLabel('entity-type-1').linkedObjectName).toBeNull()
+
+      // Object annotations whose label is absent from the owner world resolve
+      // to null rather than a stale or fabricated name.
+      expect(byLabel('missing-object').linkedObjectName).toBeNull()
     })
   })
 })

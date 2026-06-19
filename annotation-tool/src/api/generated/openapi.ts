@@ -7085,6 +7085,7 @@ export interface paths {
                             frames: unknown;
                             confidence: null | number;
                             source: string;
+                            linkedObjectName?: null | string;
                             createdAt: string;
                             updatedAt: string;
                         }[];
@@ -7148,6 +7149,7 @@ export interface paths {
                             frames: unknown;
                             confidence: null | number;
                             source: string;
+                            linkedObjectName?: null | string;
                             createdAt: string;
                             updatedAt: string;
                         };
@@ -7208,6 +7210,7 @@ export interface paths {
                             frames: unknown;
                             confidence: null | number;
                             source: string;
+                            linkedObjectName?: null | string;
                             createdAt: string;
                             updatedAt: string;
                         };

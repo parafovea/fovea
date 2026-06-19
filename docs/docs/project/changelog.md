@@ -86,6 +86,10 @@ The 0.5.0 cycle delivers the architecture-modularization roadmap (`notes/archite
 
 ### Fixed
 
+#### Reviewers Can Resolve Cross-User Object Names
+
+- The annotations list endpoint (`GET /api/annotations/:videoId`) now returns an optional server-resolved `linkedObjectName`, and `AnnotationOverlay` uses it as a fallback badge label. World objects (entities/events/times/locations) are per-user, so a reviewer reading another annotator's object annotation previously saw a generic "Entity" badge — their own world could not resolve the other annotator's object id. The server now resolves the linked object's display name from the **owner's** world (batched: one `worldState.findMany` over the distinct owners on the page), gated implicitly by the existing `accessibleBy(read)` filter so only annotations the caller may already read are resolved and only the name is exposed. The frontend still prefers the live local object when the caller shares the world; `linkedObjectName` is the fallback when it cannot.
+
 #### Release Workflow Now Publishes GitHub Releases
 
 - `release.yml` gains a `create-release` job that, on every `v*.*.*` tag push, extracts the matching `CHANGELOG.md` section and creates or updates the GitHub Release. Previously the workflow only built and pushed Docker images, so a tag published no GitHub Release unless one was made by hand (which is how v0.4.3's Release came to be missing). The job is deliberately independent of the image build, so a Release is published even when the heavy `model-service-gpu` image hits the 90-minute job timeout.
