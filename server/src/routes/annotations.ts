@@ -6,7 +6,7 @@ import { subject } from '@casl/ability'
 import { NotFoundError, ForbiddenError } from '../lib/errors.js'
 import { requireAuth } from '../middleware/auth.js'
 import { buildAbilities } from '../middleware/abilities.js'
-import { isDemoModeEnabled } from '../lib/demo-flags.js'
+import { demoAnnotationListWhere } from '../lib/demo-rbac.js'
 
 /**
  * TypeBox schema for Annotation response.
@@ -118,32 +118,15 @@ const annotationsRoute: FastifyPluginAsync = async (fastify) => {
     if (!request.ability) throw new ForbiddenError('No abilities defined')
     const userId = request.user!.id
 
-    // FOVEA_DEMO_MODE override: demo deployments seed system-
-    // generated annotations on the curated tour videos that are
-    // not authored by the visitor, so the CASL accessibleBy
-    // filter would hide them. In demo mode we also surface every
-    // annotation whose source flag marks it a fixture row — the
-    // demo seeder writes `source: 'demo-fixture'` for every
-    // hand-authored or model-service-produced tour annotation,
-    // so a self-hoster with no demo seed sees zero extra rows.
-    const baseWhere = isDemoModeEnabled()
-      ? {
-          videoId,
-          OR: [
-            accessibleBy(request.ability, 'read').Annotation,
-            // The demo seeder writes `source: 'demo-fixture:<stableId>'`
-            // so each hand-authored track persists as its own row.
-            // startsWith matches the whole family without coupling
-            // the read path to the per-track stable IDs.
-            { source: { startsWith: 'demo-fixture' } },
-          ],
-        }
-      : {
-          AND: [
-            { videoId },
-            accessibleBy(request.ability, 'read').Annotation,
-          ],
-        }
+    // Demo deployments seed system-generated annotations on the curated tour
+    // videos that the visitor did not author, so the CASL accessibleBy filter
+    // alone would hide them. demoAnnotationListWhere widens the read to demo
+    // fixtures when demo mode is on and returns the plain per-user filter when
+    // it is off (see lib/demo-rbac.ts).
+    const baseWhere = demoAnnotationListWhere(
+      videoId,
+      accessibleBy(request.ability, 'read').Annotation
+    )
     const annotations = await fastify.prisma.annotation.findMany({
       where: baseWhere,
       orderBy: { createdAt: 'asc' },

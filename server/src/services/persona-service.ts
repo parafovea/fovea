@@ -3,7 +3,7 @@ import { accessibleBy } from '@casl/prisma'
 import { subject } from '@casl/ability'
 import type { AppAbility } from '../lib/abilities.js'
 import { NotFoundError, ForbiddenError } from '../lib/errors.js'
-import { isDemoModeEnabled } from '../lib/demo-flags.js'
+import { demoPersonaListWhere, demoPermitsSystemPersonaRead } from '../lib/demo-rbac.js'
 import { isSingleUserMode } from './user-service.js'
 import {
   PersonaRepository,
@@ -148,8 +148,12 @@ export class PersonaService {
       return this.repository.findManyForList({ isSystemGenerated: true, hidden: false })
     }
 
-    if (isDemoModeEnabled()) {
-      return this.repository.findManyForList({ isSystemGenerated: true })
+    // Demo mode exposes every system persona (hidden or not) to the public
+    // tour catalogue; demoPersonaListWhere returns that filter in demo mode
+    // and null otherwise (see lib/demo-rbac.ts).
+    const demoWhere = demoPersonaListWhere()
+    if (demoWhere) {
+      return this.repository.findManyForList(demoWhere)
     }
 
     return this.repository.findManyForList({
@@ -437,8 +441,8 @@ export class PersonaService {
       }
     } else if (!this.ability.can('read', subject('Persona', persona))) {
       // Demo mode widens read access to seeded system personas so the public
-      // tour catalogue can fetch their ontologies.
-      if (!isDemoModeEnabled() || !persona.isSystemGenerated) {
+      // tour catalogue can fetch their ontologies (see lib/demo-rbac.ts).
+      if (!demoPermitsSystemPersonaRead(persona.isSystemGenerated)) {
         throw new ForbiddenError('Access denied')
       }
     }
@@ -468,7 +472,9 @@ export class PersonaService {
       if (!this.userId || !this.ability) {
         if (!persona.isSystemGenerated || persona.hidden) continue
       } else if (!this.ability.can('read', subject('Persona', persona))) {
-        if (!isDemoModeEnabled() || !persona.isSystemGenerated) continue
+        // Demo mode widens read access to seeded system personas (see
+        // lib/demo-rbac.ts).
+        if (!demoPermitsSystemPersonaRead(persona.isSystemGenerated)) continue
       }
 
       result.push(this.mapOntologyResponse(persona.ontology))
