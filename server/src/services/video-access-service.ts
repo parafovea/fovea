@@ -7,7 +7,7 @@
 import { PrismaClient } from '@prisma/client'
 import { trace } from '@opentelemetry/api'
 
-import { isDemoModeEnabled } from '../lib/demo-flags.js'
+import { demoGrantsAllVideos } from '../lib/demo-rbac.js'
 
 const tracer = trace.getTracer('fovea-rbac')
 
@@ -65,21 +65,15 @@ export class VideoAccessService {
       return 'all'
     }
 
-    // 1b. Demo deployment override: when FOVEA_DEMO_MODE=true the
-    // operator has explicitly opted into the booth flow where every
-    // visitor — including auto-issued demo-anonymous-* sessions — must
-    // see the same curated demo corpus the tours are anchored to
-    // (the Phillies-Karen / cargo-spill clips synced from the demo S3
-    // bucket). Without this override the per-user sharing/group/
-    // project chain returns the empty set for every booth visitor
-    // (anonymous users have no projects, no group memberships, no
-    // shares), the VideoBrowser renders "No videos found", and every
-    // tour that targets a video card or the annotation workspace
-    // shows the missing-anchor banner because the anchor never
-    // mounts. This is gated on FOVEA_DEMO_MODE so a self-hosted
-    // production deployment with the same code keeps its per-user
-    // RBAC intact.
-    if (isDemoModeEnabled()) {
+    // 1b. Demo deployment override: in the booth flow every visitor (including
+    // auto-issued demo-anonymous-* sessions) must see the same curated demo
+    // corpus the tours are anchored to. The per-user sharing/group/project
+    // chain returns the empty set for anonymous visitors (no projects, no group
+    // memberships, no shares), so the VideoBrowser would render "No videos
+    // found" and every tour anchor would be missing. demoGrantsAllVideos is
+    // true only in demo mode, so a self-hosted deployment keeps its per-user
+    // RBAC intact (see lib/demo-rbac.ts).
+    if (demoGrantsAllVideos()) {
       span.setAttribute('video_access.result_count', -1)
       span.setAttribute('video_access.demo_mode_override', true)
       span.end()

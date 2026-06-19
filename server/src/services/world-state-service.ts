@@ -3,7 +3,7 @@ import { subject } from '@casl/ability'
 import { accessibleBy } from '@casl/prisma'
 import type { AppAbility } from '../lib/abilities.js'
 import { NotFoundError, UnauthorizedError, InternalError, ForbiddenError } from '../lib/errors.js'
-import { isDemoModeEnabled } from '../lib/demo-flags.js'
+import { demoWidensWorldState } from '../lib/demo-rbac.js'
 import { isSingleUserMode } from './user-service.js'
 import { config } from '../config.js'
 import { convertObjectRefsToText, countObjectRefsInGlosses } from '../lib/reference-cleanup.js'
@@ -170,7 +170,10 @@ export class WorldStateService {
     // future rule tightening cannot be bypassed.
     let worldState = await this.repository.findPersonalWorldState(userId)
 
-    const inDemoMode = isDemoModeEnabled()
+    // Demo mode widens both the personal world-state read and the lazy create
+    // for anonymous sessions; the local drives the read/create branching below
+    // (see lib/demo-rbac.ts).
+    const inDemoMode = demoWidensWorldState()
 
     if (worldState) {
       if (

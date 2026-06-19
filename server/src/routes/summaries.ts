@@ -16,7 +16,7 @@ import { videoSummarizationQueue } from '../queues/setup.js'
 import { NotFoundError, ForbiddenError } from '../lib/errors.js'
 import { requireAuth } from '../middleware/auth.js'
 import { buildAbilities } from '../middleware/abilities.js'
-import { isDemoModeEnabled } from '../lib/demo-flags.js'
+import { demoPermitsSummaryRead, demoPermitsSummaryReclaim } from '../lib/demo-rbac.js'
 
 /**
  * Job data for video summarization queue.
@@ -229,12 +229,12 @@ const summariesRoute: FastifyPluginAsync = async (fastify) => {
       }
 
       if (!request.ability.can('read', subject('VideoSummary', summary))) {
-        // FOVEA_DEMO_MODE override — callers whose CASL ability
-        // is scoped to their own data (anonymous demo sessions,
-        // non-admin users opening a tour) still need to read
-        // summaries that the seeded persona produced over the
-        // shared demo corpus.
-        if (!isDemoModeEnabled()) {
+        // Callers whose CASL ability is scoped to their own data (anonymous
+        // demo sessions, non-admin users opening a tour) still need to read
+        // summaries the seeded persona produced over the shared demo corpus.
+        // demoPermitsSummaryRead is true only in demo mode (see
+        // lib/demo-rbac.ts).
+        if (!demoPermitsSummaryRead()) {
           throw new ForbiddenError('Cannot read this VideoSummary')
         }
       }
@@ -291,7 +291,7 @@ const summariesRoute: FastifyPluginAsync = async (fastify) => {
       const readable = summaries.filter(
         (summary) =>
           request.ability!.can('read', subject('VideoSummary', summary)) ||
-          isDemoModeEnabled()
+          demoPermitsSummaryRead()
       )
 
       return reply.send(readable)
@@ -368,21 +368,16 @@ const summariesRoute: FastifyPluginAsync = async (fastify) => {
         where: { videoId_personaId: { videoId, personaId } },
       })
       if (existing && !request.ability.can('update', subject('VideoSummary', existing))) {
-        // FOVEA_DEMO_MODE override: VideoSummary rows in the demo
-        // deployment are routinely orphaned when the idle-reset
-        // sweeper deletes a stale demo-anonymous-* user but leaves
-        // the row behind with a now-dangling createdBy. Without
-        // this branch the next demo visitor hits "Cannot update this
-        // VideoSummary" on every video that any prior demo session
-        // touched. In demo mode we reclaim the row by overwriting
-        // createdBy to the current demo user before the update goes
-        // through (the row is still scoped to the same persona +
-        // video so no cross-user content leaks, and the existing
-        // row's content will be replaced by the new summarize job).
-        if (
-          isDemoModeEnabled() &&
-          request.user?.username?.startsWith('demo-anonymous-')
-        ) {
+        // VideoSummary rows in the demo deployment are routinely orphaned when
+        // the idle-reset sweeper deletes a stale demo-anonymous-* user but
+        // leaves the row behind with a now-dangling createdBy. Without reclaim,
+        // the next demo visitor hits "Cannot update this VideoSummary" on every
+        // video any prior demo session touched. demoPermitsSummaryReclaim gates
+        // the reclaim on demo mode AND a demo-anonymous-* username (see
+        // lib/demo-rbac.ts); we overwrite createdBy to the current demo user
+        // before the update, keeping the row scoped to the same persona + video
+        // so no cross-user content leaks.
+        if (demoPermitsSummaryReclaim(request.user?.username)) {
           await fastify.prisma.videoSummary.update({
             where: { videoId_personaId: { videoId, personaId } },
             data: { createdBy: userId },
@@ -618,13 +613,11 @@ const summariesRoute: FastifyPluginAsync = async (fastify) => {
 
       if (existing) {
         if (!request.ability.can('update', subject('VideoSummary', existing))) {
-          // FOVEA_DEMO_MODE override (same rationale as the
-          // queue-summarize route): reclaim orphan summaries left
-          // behind by the idle-reset sweeper instead of 403-ing.
-          if (
-            isDemoModeEnabled() &&
-            request.user?.username?.startsWith('demo-anonymous-')
-          ) {
+          // Same rationale as the queue-summarize route: reclaim orphan
+          // summaries left behind by the idle-reset sweeper instead of 403-ing.
+          // demoPermitsSummaryReclaim gates this on demo mode AND a
+          // demo-anonymous-* username (see lib/demo-rbac.ts).
+          if (demoPermitsSummaryReclaim(request.user?.username)) {
             await fastify.prisma.videoSummary.update({
               where: { videoId_personaId: { videoId, personaId } },
               data: { createdBy: userId },
