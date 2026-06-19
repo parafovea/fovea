@@ -24,9 +24,68 @@ const AnnotationResponseSchema = Type.Object({
   frames: Type.Unknown(),
   confidence: Type.Union([Type.Null(), Type.Number()]),
   source: Type.String(),
+  /// Display name of the linked world object, resolved server-side from the
+  /// annotation owner's WorldState. Lets a reviewer reading another
+  /// annotator's object annotation see the object's name even though the
+  /// object lives in the owner's private world (not the reviewer's). Absent
+  /// for type annotations and null when the object cannot be resolved.
+  linkedObjectName: Type.Optional(Type.Union([Type.Null(), Type.String()])),
   createdAt: Type.String(),
   updatedAt: Type.String()
 })
+
+/**
+ * Kinds of world object an object annotation may link to via its `label`.
+ */
+const RESOLVABLE_LINK_TYPES = new Set(['entity', 'event', 'time', 'location'])
+
+/**
+ * A world object as stored in a WorldState JSON array. Only the fields the
+ * name resolver needs are typed; arrays hold richer shapes than this.
+ */
+interface WorldObjectRecord {
+  id?: unknown
+  name?: unknown
+  label?: unknown
+}
+
+/**
+ * Builds an id -> display-name index over a single owner's WorldState.
+ *
+ * `linkType` determines which JSON array the object lives in:
+ * - entity, location -> `entities` (locations are entities carrying a
+ *   `locationType` field, so they share the entities array)
+ * - event -> `events`
+ * - time -> `times`
+ *
+ * The display name is the object's `name`; times carry a `label` instead of a
+ * `name`, so `label` is used as a fallback. Objects missing both are skipped.
+ *
+ * @param worldState - the owner's WorldState row (entities/events/times JSON)
+ * @returns map from world-object id to its display name
+ */
+function indexWorldObjectNames(worldState: {
+  entities: unknown
+  events: unknown
+  times: unknown
+}): Map<string, string> {
+  const index = new Map<string, string>()
+  const arrays: unknown[] = [worldState.entities, worldState.events, worldState.times]
+  for (const arr of arrays) {
+    if (!Array.isArray(arr)) continue
+    for (const raw of arr) {
+      const obj = raw as WorldObjectRecord
+      if (typeof obj?.id !== 'string') continue
+      const name = typeof obj.name === 'string'
+        ? obj.name
+        : typeof obj.label === 'string'
+          ? obj.label
+          : null
+      if (name !== null) index.set(obj.id, name)
+    }
+  }
+  return index
+}
 
 /**
  * Fastify plugin for annotation-related routes.
@@ -57,6 +116,7 @@ const annotationsRoute: FastifyPluginAsync = async (fastify) => {
   }, async (request, reply) => {
     const { videoId } = request.params as { videoId: string }
     if (!request.ability) throw new ForbiddenError('No abilities defined')
+    const userId = request.user!.id
 
     // FOVEA_DEMO_MODE override: demo deployments seed system-
     // generated annotations on the curated tour videos that are
@@ -89,6 +149,46 @@ const annotationsRoute: FastifyPluginAsync = async (fastify) => {
       orderBy: { createdAt: 'asc' },
     })
 
+    // Resolve linkedObjectName for object annotations from each annotation
+    // owner's WorldState. World objects (entities/events/times/locations) are
+    // per-user JSON private to their owner, so a reviewer reading another
+    // annotator's object annotation cannot resolve the linked object's name
+    // from their own world. This privileged read exposes only the object's
+    // name and only for annotations the caller already passed the CASL read
+    // filter above. Batch the owners into one query, then index per owner.
+    const ownerIds = new Set<string>()
+    for (const a of annotations) {
+      if (a.linkType && RESOLVABLE_LINK_TYPES.has(a.linkType) && a.label) {
+        ownerIds.add(a.createdByUserId ?? userId)
+      }
+    }
+
+    const nameIndexByOwner = new Map<string, Map<string, string>>()
+    if (ownerIds.size > 0) {
+      const worldStates = await fastify.prisma.worldState.findMany({
+        where: { userId: { in: [...ownerIds] }, projectId: null },
+        select: { userId: true, entities: true, events: true, times: true },
+      })
+      for (const ws of worldStates) {
+        nameIndexByOwner.set(ws.userId, indexWorldObjectNames(ws))
+      }
+    }
+
+    /**
+     * Resolves the display name of an annotation's linked world object.
+     *
+     * @param a - the annotation row
+     * @returns the object's name, or null when it is a type annotation or the
+     *   object cannot be found in the owner's world
+     */
+    const resolveLinkedObjectName = (a: typeof annotations[number]): string | null => {
+      if (!a.linkType || !RESOLVABLE_LINK_TYPES.has(a.linkType) || !a.label) {
+        return null
+      }
+      const ownerId = a.createdByUserId ?? userId
+      return nameIndexByOwner.get(ownerId)?.get(a.label) ?? null
+    }
+
     return reply.send(annotations.map(a => ({
       id: a.id,
       videoId: a.videoId,
@@ -99,6 +199,7 @@ const annotationsRoute: FastifyPluginAsync = async (fastify) => {
       frames: a.frames,
       confidence: a.confidence,
       source: a.source,
+      linkedObjectName: resolveLinkedObjectName(a),
       createdAt: a.createdAt.toISOString(),
       updatedAt: a.updatedAt.toISOString()
     })))

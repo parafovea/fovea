@@ -40,6 +40,10 @@ export interface BackendAnnotation {
   frames: BoundingBoxSequence
   confidence: number | null
   source: string
+  /// Display name of the linked world object, resolved server-side from the
+  /// annotation owner's world. Present only on object annotations the server
+  /// could resolve; absent or null otherwise.
+  linkedObjectName?: string | null
   createdAt: string
   updatedAt: string
 }
@@ -58,6 +62,10 @@ export function transformBackendToFrontend(backendAnnotation: BackendAnnotation)
     videoId: backendAnnotation.videoId,
     boundingBoxSequence: backendAnnotation.frames,
     confidence: backendAnnotation.confidence ?? undefined,
+    // Carry the server-resolved linked object name through so the overlay can
+    // fall back to it when the local world lacks the linked object (a reviewer
+    // reading another annotator's annotation).
+    linkedObjectName: backendAnnotation.linkedObjectName ?? null,
     createdAt: backendAnnotation.createdAt,
     updatedAt: backendAnnotation.updatedAt,
     // Forward the server's source flag through the metadata bag so

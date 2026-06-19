@@ -16280,6 +16280,16 @@
                       "source": {
                         "type": "string"
                       },
+                      "linkedObjectName": {
+                        "anyOf": [
+                          {
+                            "type": "null"
+                          },
+                          {
+                            "type": "string"
+                          }
+                        ]
+                      },
                       "createdAt": {
                         "type": "string"
                       },
@@ -16443,6 +16453,16 @@
                     "source": {
                       "type": "string"
                     },
+                    "linkedObjectName": {
+                      "anyOf": [
+                        {
+                          "type": "null"
+                        },
+                        {
+                          "type": "string"
+                        }
+                      ]
+                    },
                     "createdAt": {
                       "type": "string"
                     },
@@ -16595,6 +16615,16 @@
                     },
                     "source": {
                       "type": "string"
+                    },
+                    "linkedObjectName": {
+                      "anyOf": [
+                        {
+                          "type": "null"
+                        },
+                        {
+                          "type": "string"
+                        }
+                      ]
                     },
                     "createdAt": {
                       "type": "string"
