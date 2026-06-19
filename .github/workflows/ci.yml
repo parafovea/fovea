@@ -417,6 +417,62 @@ jobs:
             exit 1
           fi
 
+  contract-drift-model-service:
+    name: Contracts / Model Service Drift Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # The contract spec is emitted WITHOUT importing the ML stack, so this job
+      # installs the model-service the same lint-only way as lint-model-service
+      # (pip install -e ".[dev]"); it never needs the multi-gigabyte inference
+      # extras.
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+          cache-dependency-path: model-service/pyproject.toml
+
+      - name: Install model-service (dev extra only, no ML extras)
+        working-directory: model-service
+        run: |
+          pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Regenerate the model-service contract spec from the Pydantic models
+        working-directory: model-service
+        run: python scripts/gen_contract_spec.py
+
+      - name: Regenerate the server's generated contract types from the spec
+        run: pnpm --filter @fovea/server gen:model-service-types
+
+      - name: Fail if the committed spec or generated types are stale
+        run: |
+          if ! git diff --exit-code -- model-service/openapi.json server/src/lib/model-service/contract.ts; then
+            {
+              echo "## Model-service contract drift detected"
+              echo ""
+              echo "model-service/openapi.json or server/src/lib/model-service/contract.ts is stale"
+              echo "relative to the model-service Pydantic models."
+              echo "Run \`make gen-contract\` (or"
+              echo "\`cd model-service && python scripts/gen_contract_spec.py\` then"
+              echo "\`pnpm --filter @fovea/server gen:model-service-types\`) and commit the result."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
   verify-compose:
     name: Compose / Validate
     runs-on: ubuntu-latest
@@ -453,6 +509,7 @@ jobs:
       - test-wikibase
       - verify-compose
       - contract-drift
+      - contract-drift-model-service
       # test-model-service is listed so its result shows in the summary, but it is
       # advisory (not enforced below): its full ML-stack install is disk-sensitive
       # on shared runners. End-to-end tests run in the dedicated e2e-mock.yml /
@@ -487,7 +544,8 @@ jobs:
             echo "- Validate: ${{ needs.verify-compose.result }}"
             echo ""
             echo "### Contracts"
-            echo "- Drift Check: ${{ needs.contract-drift.result }}"
+            echo "- Server -> Frontend Drift Check: ${{ needs.contract-drift.result }}"
+            echo "- Model Service -> Server Drift Check: ${{ needs.contract-drift-model-service.result }}"
           } >> "$GITHUB_STEP_SUMMARY"
 
           # Fail if any required job failed
@@ -502,6 +560,7 @@ jobs:
           TEST_WIKIBASE="${{ needs.test-wikibase.result }}"
           VERIFY_COMPOSE="${{ needs.verify-compose.result }}"
           CONTRACT_DRIFT="${{ needs.contract-drift.result }}"
+          CONTRACT_DRIFT_MODEL="${{ needs.contract-drift-model-service.result }}"
 
           if [ "$LINT_FRONTEND" != "success" ] || \
              [ "$TEST_FRONTEND" != "success" ] || \
@@ -513,7 +572,8 @@ jobs:
              [ "$LINT_WIKIBASE" != "success" ] || \
              [ "$TEST_WIKIBASE" != "success" ] || \
              [ "$VERIFY_COMPOSE" != "success" ] || \
-             [ "$CONTRACT_DRIFT" != "success" ]; then
+             [ "$CONTRACT_DRIFT" != "success" ] || \
+             [ "$CONTRACT_DRIFT_MODEL" != "success" ]; then
             {
               echo ""
               echo "❌ Quality gate FAILED"

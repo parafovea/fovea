@@ -18,11 +18,18 @@ import {
 /**
  * Response type from model service /api/summarize endpoint.
  */
-interface ModelSummarizeResponse {
+export interface ModelSummarizeResponse {
   summary: string;
   visual_analysis: string;
   audio_transcript: string;
-  key_frames: number[];
+  // Mirrors the model-service `KeyFrame` shape (the producer sends objects,
+  // not frame indices). Persisted verbatim into the `keyFrames` JSON column.
+  key_frames: Array<{
+    frame_number: number;
+    timestamp: number;
+    description: string;
+    confidence: number;
+  }>;
   confidence: number;
   transcript_json?: Record<string, unknown>;
   audio_language?: string;
@@ -38,13 +45,13 @@ interface ModelSummarizeResponse {
 /**
  * Request type for model service /api/summarize endpoint.
  */
-interface ModelGenerationOverrides {
+export interface ModelGenerationOverrides {
   temperature?: number;
   top_p?: number;
   max_tokens?: number;
 }
 
-interface ModelAudioOverrides {
+export interface ModelAudioOverrides {
   beam_size?: number;
   compute_type?: 'float16' | 'float32' | 'int8' | 'int8_float16';
   num_speakers?: number;
@@ -53,7 +60,7 @@ interface ModelAudioOverrides {
   vad_threshold?: number;
 }
 
-interface ModelSummarizeRequest {
+export interface ModelSummarizeRequest {
   video_id: string;
   video_path?: string;
   persona_id: string;
@@ -482,7 +489,7 @@ export interface ClaimExtractionResult {
 /**
  * Response type from model service /api/extract-claims endpoint.
  */
-interface ModelClaimExtractionResponse {
+export interface ModelClaimExtractionResponse {
   summary_id: string;
   claims: Array<{
     text: string;
@@ -835,7 +842,7 @@ export interface ClaimSynthesisResult {
 /**
  * Response type from model service /api/synthesize-summary endpoint.
  */
-interface ModelSynthesisResponse {
+export interface ModelSynthesisResponse {
   summary_id: string;
   summary_gloss: unknown[];
   model_used: string;

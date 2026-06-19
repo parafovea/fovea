@@ -62,5 +62,5 @@
       }
     }
   ],
-  "ignorePatterns": ["dist", "node_modules", "coverage"]
+  "ignorePatterns": ["dist", "node_modules", "coverage", "src/lib/model-service/"]
 }

@@ -100,6 +100,14 @@ const sidebars: SidebarsConfig = {
     },
     {
       type: 'category',
+      label: 'Development',
+      link: {type: 'doc', id: 'development/index'},
+      items: [
+        'development/cross-service-contracts',
+      ],
+    },
+    {
+      type: 'category',
       label: 'Project',
       link: {type: 'doc', id: 'project/index'},
       items: [

@@ -1,0 +1,1702 @@
+{
+  "components": {
+    "schemas": {
+      "AudioOverrides": {
+        "additionalProperties": false,
+        "description": "Per-request overrides for transcription and diarization.",
+        "properties": {
+          "beam_size": {
+            "anyOf": [
+              {
+                "maximum": 10,
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Decoder beam width",
+            "title": "Beam Size"
+          },
+          "compute_type": {
+            "anyOf": [
+              {
+                "enum": [
+                  "float16",
+                  "float32",
+                  "int8",
+                  "int8_float16"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Transcriber compute precision",
+            "title": "Compute Type"
+          },
+          "max_speakers": {
+            "anyOf": [
+              {
+                "maximum": 20,
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Max Speakers"
+          },
+          "min_speakers": {
+            "anyOf": [
+              {
+                "maximum": 20,
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Min Speakers"
+          },
+          "num_speakers": {
+            "anyOf": [
+              {
+                "maximum": 20,
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Exact speaker count (skips auto-detect)",
+            "title": "Num Speakers"
+          },
+          "vad_threshold": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Voice-activity detection probability threshold",
+            "title": "Vad Threshold"
+          }
+        },
+        "title": "AudioOverrides",
+        "type": "object"
+      },
+      "AugmentRequest": {
+        "additionalProperties": false,
+        "description": "Request model for ontology augmentation endpoint.\n\nAttributes\n----------\npersona_id : str\n    Unique identifier for the persona.\ndomain : str\n    Domain description for context.\nexisting_types : list[str]\n    Existing type names.\ntarget_category : str\n    Category to augment (entity, event, role, relation).\nmax_suggestions : int\n    Maximum suggestions to return.",
+        "properties": {
+          "domain": {
+            "description": "Domain description for context",
+            "minLength": 1,
+            "title": "Domain",
+            "type": "string"
+          },
+          "existing_types": {
+            "description": "Existing type names",
+            "items": {
+              "type": "string"
+            },
+            "title": "Existing Types",
+            "type": "array"
+          },
+          "max_suggestions": {
+            "default": 10,
+            "description": "Maximum suggestions to return",
+            "maximum": 50,
+            "minimum": 1,
+            "title": "Max Suggestions",
+            "type": "integer"
+          },
+          "persona_id": {
+            "description": "Unique identifier for the persona",
+            "minLength": 1,
+            "title": "Persona Id",
+            "type": "string"
+          },
+          "target_category": {
+            "description": "Category to augment",
+            "enum": [
+              "entity",
+              "event",
+              "role",
+              "relation"
+            ],
+            "title": "Target Category",
+            "type": "string"
+          }
+        },
+        "required": [
+          "persona_id",
+          "domain",
+          "target_category"
+        ],
+        "title": "AugmentRequest",
+        "type": "object"
+      },
+      "AugmentResponse": {
+        "additionalProperties": false,
+        "description": "Response model for ontology augmentation endpoint.\n\nAttributes\n----------\nid : str\n    Unique identifier for this augmentation.\npersona_id : str\n    Persona identifier.\ntarget_category : str\n    Category that was augmented.\nsuggestions : list[OntologyType]\n    Suggested types.\nreasoning : str\n    Explanation of why these types were suggested.",
+        "properties": {
+          "id": {
+            "description": "Unique identifier for this augmentation",
+            "minLength": 1,
+            "title": "Id",
+            "type": "string"
+          },
+          "persona_id": {
+            "description": "Persona identifier",
+            "minLength": 1,
+            "title": "Persona Id",
+            "type": "string"
+          },
+          "reasoning": {
+            "description": "Explanation of why these types were suggested",
+            "title": "Reasoning",
+            "type": "string"
+          },
+          "suggestions": {
+            "description": "Suggested types",
+            "items": {
+              "$ref": "#/components/schemas/OntologyType"
+            },
+            "title": "Suggestions",
+            "type": "array"
+          },
+          "target_category": {
+            "description": "Category that was augmented",
+            "title": "Target Category",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "persona_id",
+          "target_category",
+          "suggestions",
+          "reasoning"
+        ],
+        "title": "AugmentResponse",
+        "type": "object"
+      },
+      "BoundingBox": {
+        "additionalProperties": false,
+        "description": "Bounding box coordinates for object detection.\n\nAll coordinates are normalized to [0, 1] range.\n\nAttributes\n----------\nx : float\n    X coordinate (normalized).\ny : float\n    Y coordinate (normalized).\nwidth : float\n    Box width (normalized).\nheight : float\n    Box height (normalized).",
+        "properties": {
+          "height": {
+            "description": "Box height (normalized)",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Height",
+            "type": "number"
+          },
+          "width": {
+            "description": "Box width (normalized)",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Width",
+            "type": "number"
+          },
+          "x": {
+            "description": "X coordinate (normalized)",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "X",
+            "type": "number"
+          },
+          "y": {
+            "description": "Y coordinate (normalized)",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Y",
+            "type": "number"
+          }
+        },
+        "required": [
+          "x",
+          "y",
+          "width",
+          "height"
+        ],
+        "title": "BoundingBox",
+        "type": "object"
+      },
+      "ClaimExtractionRequest": {
+        "additionalProperties": false,
+        "description": "Request model for claim extraction endpoint.\n\nAttributes\n----------\nsummary_id : str\n    Unique identifier for the summary.\nsummary_text : str\n    Full summary text to extract claims from.\nsentences : list[str] | None\n    Pre-split sentences (optional).\nannotations : list[dict[str, Any]] | None\n    Annotation data for context.\nontology_types : list[dict[str, Any]] | None\n    Ontology type definitions for context.\nontology_glosses : dict[str, str] | None\n    Map of type ID to gloss text.\nextraction_strategy : str\n    Strategy for extracting claims.\nmax_claims : int\n    Maximum number of claims to extract.\nmin_confidence : float\n    Minimum confidence threshold for claims.",
+        "properties": {
+          "annotations": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Annotation data for context (object names, times, etc.)",
+            "title": "Annotations"
+          },
+          "extraction_strategy": {
+            "default": "sentence-based",
+            "description": "Strategy for extracting claims",
+            "enum": [
+              "sentence-based",
+              "semantic-units",
+              "hierarchical"
+            ],
+            "title": "Extraction Strategy",
+            "type": "string"
+          },
+          "max_claims": {
+            "default": 50,
+            "description": "Maximum number of claims to extract",
+            "maximum": 200,
+            "minimum": 1,
+            "title": "Max Claims",
+            "type": "integer"
+          },
+          "min_confidence": {
+            "default": 0.5,
+            "description": "Minimum confidence threshold for claims",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Min Confidence",
+            "type": "number"
+          },
+          "ontology_glosses": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Map of type ID to gloss text",
+            "title": "Ontology Glosses"
+          },
+          "ontology_types": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Ontology type definitions for context",
+            "title": "Ontology Types"
+          },
+          "sentences": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Pre-split sentences (optional, will split if not provided)",
+            "title": "Sentences"
+          },
+          "summary_id": {
+            "description": "Unique identifier for the summary",
+            "minLength": 1,
+            "title": "Summary Id",
+            "type": "string"
+          },
+          "summary_text": {
+            "description": "Full summary text to extract claims from",
+            "minLength": 1,
+            "title": "Summary Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "summary_id",
+          "summary_text"
+        ],
+        "title": "ClaimExtractionRequest",
+        "type": "object"
+      },
+      "ClaimExtractionResponse": {
+        "additionalProperties": false,
+        "description": "Response model for claim extraction endpoint.\n\nAttributes\n----------\nsummary_id : str\n    Summary identifier.\nclaims : list[ExtractedClaim]\n    Extracted claims.\nmodel_used : str\n    LLM model used for extraction.\nprocessing_time : float\n    Processing time in seconds.",
+        "properties": {
+          "claims": {
+            "description": "Extracted claims",
+            "items": {
+              "$ref": "#/components/schemas/ExtractedClaim"
+            },
+            "title": "Claims",
+            "type": "array"
+          },
+          "model_used": {
+            "description": "LLM model used for extraction",
+            "minLength": 1,
+            "title": "Model Used",
+            "type": "string"
+          },
+          "processing_time": {
+            "description": "Processing time in seconds",
+            "minimum": 0.0,
+            "title": "Processing Time",
+            "type": "number"
+          },
+          "summary_id": {
+            "description": "Summary identifier",
+            "minLength": 1,
+            "title": "Summary Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "summary_id",
+          "claims",
+          "model_used",
+          "processing_time"
+        ],
+        "title": "ClaimExtractionResponse",
+        "type": "object"
+      },
+      "ClaimRelationship": {
+        "additionalProperties": false,
+        "description": "Relationship between claims across sources.\n\nAttributes\n----------\nsource_claim_id : str\n    Source claim ID.\ntarget_claim_id : str\n    Target claim ID.\nrelation_type : str\n    Type of relationship.\nconfidence : float\n    Confidence score.\nnotes : str | None\n    Optional notes.",
+        "properties": {
+          "confidence": {
+            "default": 0.8,
+            "description": "Confidence score",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Confidence",
+            "type": "number"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Optional notes",
+            "title": "Notes"
+          },
+          "relation_type": {
+            "description": "Type of relationship",
+            "enum": [
+              "supports",
+              "conflicts_with",
+              "contradicts",
+              "refines",
+              "generalizes",
+              "duplicates"
+            ],
+            "title": "Relation Type",
+            "type": "string"
+          },
+          "source_claim_id": {
+            "description": "Source claim ID",
+            "minLength": 1,
+            "title": "Source Claim Id",
+            "type": "string"
+          },
+          "target_claim_id": {
+            "description": "Target claim ID",
+            "minLength": 1,
+            "title": "Target Claim Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_claim_id",
+          "target_claim_id",
+          "relation_type"
+        ],
+        "title": "ClaimRelationship",
+        "type": "object"
+      },
+      "ClaimSource": {
+        "additionalProperties": false,
+        "description": "Source of claims for synthesis (single video or collection).\n\nAttributes\n----------\nsource_id : str\n    Video ID or collection ID.\nsource_type : str\n    Type of source (video or collection).\nclaims : list[dict[str, Any]]\n    Hierarchical claim structure.\nmetadata : dict[str, Any] | None\n    Source metadata (video title, date, etc.).",
+        "properties": {
+          "claims": {
+            "description": "Hierarchical claim structure",
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Claims",
+            "type": "array"
+          },
+          "metadata": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Source metadata (video title, date, etc.)",
+            "title": "Metadata"
+          },
+          "source_id": {
+            "description": "Video ID or collection ID",
+            "minLength": 1,
+            "title": "Source Id",
+            "type": "string"
+          },
+          "source_type": {
+            "description": "Type of source",
+            "enum": [
+              "video",
+              "collection"
+            ],
+            "title": "Source Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_id",
+          "source_type",
+          "claims"
+        ],
+        "title": "ClaimSource",
+        "type": "object"
+      },
+      "Detection": {
+        "additionalProperties": false,
+        "description": "Single object detection result.\n\nAttributes\n----------\nlabel : str\n    Detected object label.\nbounding_box : BoundingBox\n    Bounding box coordinates.\nconfidence : float\n    Detection confidence score.\ntrack_id : str | None\n    Tracking ID across frames.",
+        "properties": {
+          "bounding_box": {
+            "$ref": "#/components/schemas/BoundingBox",
+            "description": "Bounding box coordinates"
+          },
+          "confidence": {
+            "description": "Detection confidence score",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Confidence",
+            "type": "number"
+          },
+          "label": {
+            "description": "Detected object label",
+            "minLength": 1,
+            "title": "Label",
+            "type": "string"
+          },
+          "track_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Tracking ID across frames",
+            "title": "Track Id"
+          }
+        },
+        "required": [
+          "label",
+          "bounding_box",
+          "confidence"
+        ],
+        "title": "Detection",
+        "type": "object"
+      },
+      "DetectionRequest": {
+        "additionalProperties": false,
+        "description": "Request model for object detection endpoint.\n\nAttributes\n----------\nvideo_id : str\n    Unique identifier for the video.\nquery : str\n    Text query describing objects to detect.\nvideo_path : str | None\n    Optional full path to video file.\nframe_numbers : list[int]\n    Specific frames to process.\nconfidence_threshold : float\n    Minimum confidence for detections.\nenable_tracking : bool\n    Whether to enable object tracking.",
+        "properties": {
+          "confidence_threshold": {
+            "default": 0.3,
+            "description": "Minimum confidence for detections",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Confidence Threshold",
+            "type": "number"
+          },
+          "enable_tracking": {
+            "default": true,
+            "description": "Whether to enable object tracking",
+            "title": "Enable Tracking",
+            "type": "boolean"
+          },
+          "frame_numbers": {
+            "description": "Specific frames to process",
+            "items": {
+              "type": "integer"
+            },
+            "title": "Frame Numbers",
+            "type": "array"
+          },
+          "query": {
+            "description": "Text query describing objects to detect",
+            "minLength": 1,
+            "title": "Query",
+            "type": "string"
+          },
+          "video_id": {
+            "description": "Unique identifier for the video",
+            "minLength": 1,
+            "title": "Video Id",
+            "type": "string"
+          },
+          "video_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Optional full path to video file",
+            "title": "Video Path"
+          }
+        },
+        "required": [
+          "video_id",
+          "query"
+        ],
+        "title": "DetectionRequest",
+        "type": "object"
+      },
+      "DetectionResponse": {
+        "additionalProperties": false,
+        "description": "Response model for object detection endpoint.\n\nAttributes\n----------\nid : str\n    Unique identifier for this detection job.\nvideo_id : str\n    Video identifier.\nquery : str\n    Query that was used.\nframes : list[FrameDetections]\n    Frames with detections.\ntotal_detections : int\n    Total detections across all frames.\nprocessing_time : float\n    Processing time in seconds.",
+        "properties": {
+          "frames": {
+            "description": "Frames with detections",
+            "items": {
+              "$ref": "#/components/schemas/FrameDetections"
+            },
+            "title": "Frames",
+            "type": "array"
+          },
+          "id": {
+            "description": "Unique identifier for this detection job",
+            "minLength": 1,
+            "title": "Id",
+            "type": "string"
+          },
+          "processing_time": {
+            "description": "Processing time in seconds",
+            "minimum": 0.0,
+            "title": "Processing Time",
+            "type": "number"
+          },
+          "query": {
+            "description": "Query that was used",
+            "minLength": 1,
+            "title": "Query",
+            "type": "string"
+          },
+          "total_detections": {
+            "description": "Total detections across all frames",
+            "minimum": 0,
+            "title": "Total Detections",
+            "type": "integer"
+          },
+          "video_id": {
+            "description": "Video identifier",
+            "minLength": 1,
+            "title": "Video Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "video_id",
+          "query",
+          "frames",
+          "total_detections",
+          "processing_time"
+        ],
+        "title": "DetectionResponse",
+        "type": "object"
+      },
+      "ExtractedClaim": {
+        "additionalProperties": false,
+        "description": "Single extracted claim with metadata.\n\nAttributes\n----------\ntext : str\n    Claim text.\nsentence_index : int | None\n    Index of source sentence (if sentence-based).\nchar_start : int | None\n    Character offset in summary text.\nchar_end : int | None\n    Character offset end in summary text.\nsubclaims : list[ExtractedClaim]\n    Nested subclaims.\nconfidence : float\n    Model confidence in claim extraction.\nclaim_type : str | None\n    Semantic type of claim.",
+        "properties": {
+          "char_end": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Character offset end in summary text",
+            "title": "Char End"
+          },
+          "char_start": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Character offset in summary text",
+            "title": "Char Start"
+          },
+          "claim_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Semantic type of claim",
+            "title": "Claim Type"
+          },
+          "confidence": {
+            "description": "Model confidence in claim extraction",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Confidence",
+            "type": "number"
+          },
+          "sentence_index": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Index of source sentence (if sentence-based)",
+            "title": "Sentence Index"
+          },
+          "subclaims": {
+            "description": "Nested subclaims",
+            "items": {
+              "$ref": "#/components/schemas/ExtractedClaim"
+            },
+            "title": "Subclaims",
+            "type": "array"
+          },
+          "text": {
+            "description": "Claim text",
+            "minLength": 1,
+            "title": "Text",
+            "type": "string"
+          },
+          "thinking": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ThinkingTraceSchema"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Optional reasoning trace from a thinking-capable model"
+          }
+        },
+        "required": [
+          "text",
+          "confidence"
+        ],
+        "title": "ExtractedClaim",
+        "type": "object"
+      },
+      "FrameDetections": {
+        "additionalProperties": false,
+        "description": "Detections for a single video frame.\n\nAttributes\n----------\nframe_number : int\n    Frame number in the video.\ntimestamp : float\n    Time in seconds from video start.\ndetections : list[Detection]\n    Detections in this frame.",
+        "properties": {
+          "detections": {
+            "description": "Detections in this frame",
+            "items": {
+              "$ref": "#/components/schemas/Detection"
+            },
+            "title": "Detections",
+            "type": "array"
+          },
+          "frame_number": {
+            "description": "Frame number in the video",
+            "minimum": 0,
+            "title": "Frame Number",
+            "type": "integer"
+          },
+          "timestamp": {
+            "description": "Time in seconds from video start",
+            "minimum": 0.0,
+            "title": "Timestamp",
+            "type": "number"
+          }
+        },
+        "required": [
+          "frame_number",
+          "timestamp",
+          "detections"
+        ],
+        "title": "FrameDetections",
+        "type": "object"
+      },
+      "GenerationOverrides": {
+        "additionalProperties": false,
+        "description": "Per-request overrides for LLM/VLM sampling parameters.\n\nEach field defaults to ``None``; a ``None`` field means \"use the backend\ndefault\" (see ``GET /api/models/defaults``). Non-null values are passed\nthrough to the inference call site unchanged.",
+        "properties": {
+          "max_tokens": {
+            "anyOf": [
+              {
+                "maximum": 32768,
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Maximum tokens to generate",
+            "title": "Max Tokens"
+          },
+          "temperature": {
+            "anyOf": [
+              {
+                "maximum": 2.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Sampling temperature override",
+            "title": "Temperature"
+          },
+          "top_p": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Nucleus sampling probability mass",
+            "title": "Top P"
+          }
+        },
+        "title": "GenerationOverrides",
+        "type": "object"
+      },
+      "KeyFrame": {
+        "additionalProperties": false,
+        "description": "Key frame information from video analysis.\n\nAttributes\n----------\nframe_number : int\n    Frame number in the video.\ntimestamp : float\n    Time in seconds from video start.\ndescription : str\n    Frame description.\nconfidence : float\n    Model confidence score (0-1).",
+        "properties": {
+          "confidence": {
+            "default": 0.0,
+            "description": "Model confidence score",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Confidence",
+            "type": "number"
+          },
+          "description": {
+            "description": "Frame description",
+            "title": "Description",
+            "type": "string"
+          },
+          "frame_number": {
+            "description": "Frame number in the video",
+            "title": "Frame Number",
+            "type": "integer"
+          },
+          "timestamp": {
+            "description": "Time in seconds from video start",
+            "minimum": 0.0,
+            "title": "Timestamp",
+            "type": "number"
+          }
+        },
+        "required": [
+          "frame_number",
+          "timestamp",
+          "description"
+        ],
+        "title": "KeyFrame",
+        "type": "object"
+      },
+      "OntologyType": {
+        "additionalProperties": false,
+        "description": "Suggested ontology type from augmentation.\n\nAttributes\n----------\nname : str\n    Type name.\ndescription : str\n    Type description.\nparent : str | None\n    Parent type name.\nconfidence : float\n    Confidence score.\nexamples : list[str]\n    Example instances.",
+        "properties": {
+          "confidence": {
+            "default": 0.0,
+            "description": "Confidence score",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Confidence",
+            "type": "number"
+          },
+          "description": {
+            "description": "Type description",
+            "title": "Description",
+            "type": "string"
+          },
+          "examples": {
+            "description": "Example instances",
+            "items": {
+              "type": "string"
+            },
+            "title": "Examples",
+            "type": "array"
+          },
+          "name": {
+            "description": "Type name",
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "parent": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Parent type name",
+            "title": "Parent"
+          },
+          "thinking": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ThinkingTraceSchema"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Optional reasoning trace from a thinking-capable model"
+          }
+        },
+        "required": [
+          "name",
+          "description"
+        ],
+        "title": "OntologyType",
+        "type": "object"
+      },
+      "SummarizeRequest": {
+        "additionalProperties": false,
+        "description": "Request model for video summarization endpoint.\n\nAttributes\n----------\nvideo_id : str\n    Unique identifier for the video.\npersona_id : str\n    Unique identifier for the persona.\nvideo_path : str | None\n    Optional full path to video file.\npersona_role : str | None\n    Optional persona role for context.\ninformation_need : str | None\n    Optional information need for context.\nframe_sample_rate : int\n    Frames to sample per second (1-10).\nmax_frames : int\n    Maximum frames to process (1-100).\nenable_audio : bool\n    Enable audio transcription.\naudio_language : str | None\n    Audio language code (e.g., 'en').\nenable_speaker_diarization : bool\n    Enable speaker identification.\nfusion_strategy : str | None\n    Audio-visual fusion strategy.\ngeneration_overrides : GenerationOverrides | None\n    Optional per-request VLM sampling overrides.\naudio_overrides : AudioOverrides | None\n    Optional per-request transcription/diarization overrides.",
+        "properties": {
+          "audio_language": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Audio language code (e.g., 'en')",
+            "title": "Audio Language"
+          },
+          "audio_overrides": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AudioOverrides"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Per-request transcription/diarization overrides"
+          },
+          "enable_audio": {
+            "default": false,
+            "description": "Enable audio transcription",
+            "title": "Enable Audio",
+            "type": "boolean"
+          },
+          "enable_speaker_diarization": {
+            "default": false,
+            "description": "Enable speaker identification",
+            "title": "Enable Speaker Diarization",
+            "type": "boolean"
+          },
+          "frame_sample_rate": {
+            "default": 1,
+            "description": "Frames to sample per second",
+            "maximum": 10,
+            "minimum": 1,
+            "title": "Frame Sample Rate",
+            "type": "integer"
+          },
+          "fusion_strategy": {
+            "anyOf": [
+              {
+                "enum": [
+                  "sequential",
+                  "timestamp_aligned",
+                  "native_multimodal",
+                  "hybrid"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": "sequential",
+            "description": "Audio-visual fusion strategy",
+            "title": "Fusion Strategy"
+          },
+          "generation_overrides": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GenerationOverrides"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Per-request VLM sampling overrides"
+          },
+          "information_need": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Optional information need for context",
+            "title": "Information Need"
+          },
+          "max_frames": {
+            "default": 30,
+            "description": "Maximum frames to process",
+            "maximum": 100,
+            "minimum": 1,
+            "title": "Max Frames",
+            "type": "integer"
+          },
+          "persona_id": {
+            "description": "Unique identifier for the persona",
+            "minLength": 1,
+            "title": "Persona Id",
+            "type": "string"
+          },
+          "persona_role": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Optional persona role for context",
+            "title": "Persona Role"
+          },
+          "video_id": {
+            "description": "Unique identifier for the video",
+            "minLength": 1,
+            "title": "Video Id",
+            "type": "string"
+          },
+          "video_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Optional full path to video file",
+            "title": "Video Path"
+          }
+        },
+        "required": [
+          "video_id",
+          "persona_id"
+        ],
+        "title": "SummarizeRequest",
+        "type": "object"
+      },
+      "SummarizeResponse": {
+        "additionalProperties": false,
+        "description": "Response model for video summarization endpoint.\n\nAttributes\n----------\nid : str\n    Unique identifier for this summary.\nvideo_id : str\n    Video identifier.\npersona_id : str\n    Persona identifier.\nsummary : str\n    Text summary of video content.\nvisual_analysis : str | None\n    Detailed visual content analysis.\naudio_transcript : str | None\n    Transcribed audio content.\nkey_frames : list[KeyFrame]\n    Key frames with descriptions.\nconfidence : float\n    Overall confidence score.",
+        "properties": {
+          "audio_language": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Detected audio language code",
+            "title": "Audio Language"
+          },
+          "audio_model_used": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Audio transcription model name",
+            "title": "Audio Model Used"
+          },
+          "audio_transcript": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Transcribed audio content",
+            "title": "Audio Transcript"
+          },
+          "confidence": {
+            "default": 0.0,
+            "description": "Overall confidence score",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Confidence",
+            "type": "number"
+          },
+          "fusion_strategy": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Fusion strategy used",
+            "title": "Fusion Strategy"
+          },
+          "id": {
+            "description": "Unique identifier for this summary",
+            "minLength": 1,
+            "title": "Id",
+            "type": "string"
+          },
+          "key_frames": {
+            "description": "Key frames with descriptions",
+            "items": {
+              "$ref": "#/components/schemas/KeyFrame"
+            },
+            "title": "Key Frames",
+            "type": "array"
+          },
+          "persona_id": {
+            "description": "Persona identifier",
+            "minLength": 1,
+            "title": "Persona Id",
+            "type": "string"
+          },
+          "processing_time_audio": {
+            "anyOf": [
+              {
+                "description": "Processing time in seconds",
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Audio processing time in seconds",
+            "title": "Processing Time Audio"
+          },
+          "processing_time_fusion": {
+            "anyOf": [
+              {
+                "description": "Processing time in seconds",
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Fusion processing time in seconds",
+            "title": "Processing Time Fusion"
+          },
+          "processing_time_visual": {
+            "anyOf": [
+              {
+                "description": "Processing time in seconds",
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Visual processing time in seconds",
+            "title": "Processing Time Visual"
+          },
+          "speaker_count": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Number of distinct speakers",
+            "title": "Speaker Count"
+          },
+          "summary": {
+            "description": "Text summary of video content",
+            "title": "Summary",
+            "type": "string"
+          },
+          "thinking": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ThinkingTraceSchema"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Optional reasoning trace from a thinking-capable model"
+          },
+          "transcript_json": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Structured transcript with segments",
+            "title": "Transcript Json"
+          },
+          "video_id": {
+            "description": "Video identifier",
+            "minLength": 1,
+            "title": "Video Id",
+            "type": "string"
+          },
+          "visual_analysis": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Detailed visual content analysis",
+            "title": "Visual Analysis"
+          },
+          "visual_model_used": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Visual analysis model name",
+            "title": "Visual Model Used"
+          }
+        },
+        "required": [
+          "id",
+          "video_id",
+          "persona_id",
+          "summary"
+        ],
+        "title": "SummarizeResponse",
+        "type": "object"
+      },
+      "SummarySynthesisRequest": {
+        "additionalProperties": false,
+        "description": "Request model for summary synthesis endpoint.\n\nAttributes\n----------\nsummary_id : str\n    Target summary identifier.\nclaim_sources : list[ClaimSource]\n    Claim hierarchies from one or more sources.\nclaim_relations : list[ClaimRelationship] | None\n    Relationships between claims.\nontology_context : dict[str, Any] | None\n    Ontology types and glosses for references.\npersona_context : dict[str, Any] | None\n    Persona information for perspective.\nsynthesis_strategy : str\n    Strategy for organizing summary.\nmax_length : int\n    Maximum summary length in words.\ninclude_conflicts : bool\n    Explicitly mention informational conflicts.\ninclude_citations : bool\n    Include inline citations to source claims.",
+        "properties": {
+          "claim_relations": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ClaimRelationship"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Relationships between claims (conflicts, support, etc.)",
+            "title": "Claim Relations"
+          },
+          "claim_sources": {
+            "description": "Claim hierarchies from one or more sources",
+            "items": {
+              "$ref": "#/components/schemas/ClaimSource"
+            },
+            "minItems": 1,
+            "title": "Claim Sources",
+            "type": "array"
+          },
+          "include_citations": {
+            "default": false,
+            "description": "Include inline citations to source claims",
+            "title": "Include Citations",
+            "type": "boolean"
+          },
+          "include_conflicts": {
+            "default": true,
+            "description": "Explicitly mention informational conflicts",
+            "title": "Include Conflicts",
+            "type": "boolean"
+          },
+          "max_length": {
+            "default": 500,
+            "description": "Maximum summary length in words",
+            "maximum": 2000,
+            "minimum": 100,
+            "title": "Max Length",
+            "type": "integer"
+          },
+          "ontology_context": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Ontology types and glosses for # references",
+            "title": "Ontology Context"
+          },
+          "persona_context": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Persona information for perspective",
+            "title": "Persona Context"
+          },
+          "summary_id": {
+            "description": "Target summary identifier",
+            "minLength": 1,
+            "title": "Summary Id",
+            "type": "string"
+          },
+          "synthesis_strategy": {
+            "default": "hierarchical",
+            "description": "Strategy for organizing summary",
+            "enum": [
+              "hierarchical",
+              "chronological",
+              "narrative",
+              "analytical"
+            ],
+            "title": "Synthesis Strategy",
+            "type": "string"
+          }
+        },
+        "required": [
+          "summary_id",
+          "claim_sources"
+        ],
+        "title": "SummarySynthesisRequest",
+        "type": "object"
+      },
+      "SummarySynthesisResponse": {
+        "additionalProperties": false,
+        "description": "Response model for summary synthesis endpoint.\n\nAttributes\n----------\nsummary_id : str\n    Summary identifier.\nsummary_gloss : list[dict[str, Any]]\n    Generated summary as GlossItem array with references.\nmodel_used : str\n    LLM model used for synthesis.\nprocessing_time : float\n    Processing time in seconds.\nclaims_used : int\n    Total claims synthesized.\nsynthesis_metadata : dict[str, Any]\n    Metadata about synthesis.",
+        "properties": {
+          "claims_used": {
+            "description": "Total claims synthesized",
+            "minimum": 0,
+            "title": "Claims Used",
+            "type": "integer"
+          },
+          "model_used": {
+            "description": "LLM model used for synthesis",
+            "minLength": 1,
+            "title": "Model Used",
+            "type": "string"
+          },
+          "processing_time": {
+            "description": "Processing time in seconds",
+            "minimum": 0.0,
+            "title": "Processing Time",
+            "type": "number"
+          },
+          "summary_gloss": {
+            "description": "Generated summary as GlossItem array with # and @ references",
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Summary Gloss",
+            "type": "array"
+          },
+          "summary_id": {
+            "description": "Summary identifier",
+            "minLength": 1,
+            "title": "Summary Id",
+            "type": "string"
+          },
+          "synthesis_metadata": {
+            "additionalProperties": true,
+            "description": "Metadata about synthesis (strategy, conflicts, etc.)",
+            "title": "Synthesis Metadata",
+            "type": "object"
+          },
+          "thinking": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ThinkingTraceSchema"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Optional reasoning trace from a thinking-capable model"
+          }
+        },
+        "required": [
+          "summary_id",
+          "summary_gloss",
+          "model_used",
+          "processing_time",
+          "claims_used",
+          "synthesis_metadata"
+        ],
+        "title": "SummarySynthesisResponse",
+        "type": "object"
+      },
+      "ThinkingStepSchema": {
+        "additionalProperties": false,
+        "description": "One step of a chain-of-thought trace.",
+        "properties": {
+          "content": {
+            "description": "Reasoning step text",
+            "title": "Content",
+            "type": "string"
+          },
+          "tokens_used": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Optional token count",
+            "title": "Tokens Used"
+          }
+        },
+        "required": [
+          "content"
+        ],
+        "title": "ThinkingStepSchema",
+        "type": "object"
+      },
+      "ThinkingTraceSchema": {
+        "additionalProperties": false,
+        "description": "Captured reasoning trace from a thinking-capable model.",
+        "properties": {
+          "model_id": {
+            "default": "",
+            "description": "Producing model identifier",
+            "title": "Model Id",
+            "type": "string"
+          },
+          "steps": {
+            "description": "Reasoning steps in order",
+            "items": {
+              "$ref": "#/components/schemas/ThinkingStepSchema"
+            },
+            "title": "Steps",
+            "type": "array"
+          },
+          "total_tokens": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Optional total tokens across steps",
+            "title": "Total Tokens"
+          }
+        },
+        "title": "ThinkingTraceSchema",
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "description": "Cross-service contract for the request/response shapes the FOVEA model-service produces and the server consumes. Generated without importing the ML stack by scripts/gen_contract_spec.py; do not edit by hand.",
+    "title": "FOVEA Model Service Contract",
+    "version": "0.5.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/api/detection/detect": {
+      "post": {
+        "operationId": "post_/api/detection/detect",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DetectionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetectionResponse"
+                }
+              }
+            },
+            "description": "Successful response."
+          }
+        },
+        "summary": "Detect objects in video frames."
+      }
+    },
+    "/api/extract-claims": {
+      "post": {
+        "operationId": "post_/api/extract-claims",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClaimExtractionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClaimExtractionResponse"
+                }
+              }
+            },
+            "description": "Successful response."
+          }
+        },
+        "summary": "Extract claims from a generated summary."
+      }
+    },
+    "/api/ontology/augment": {
+      "post": {
+        "operationId": "post_/api/ontology/augment",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AugmentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AugmentResponse"
+                }
+              }
+            },
+            "description": "Successful response."
+          }
+        },
+        "summary": "Suggest ontology types for a persona domain."
+      }
+    },
+    "/api/summarize": {
+      "post": {
+        "operationId": "post_/api/summarize",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SummarizeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SummarizeResponse"
+                }
+              }
+            },
+            "description": "Successful response."
+          }
+        },
+        "summary": "Summarize a video for a persona."
+      }
+    },
+    "/api/synthesize-summary": {
+      "post": {
+        "operationId": "post_/api/synthesize-summary",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SummarySynthesisRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SummarySynthesisResponse"
+                }
+              }
+            },
+            "description": "Successful response."
+          }
+        },
+        "summary": "Synthesize a summary gloss from claim sources."
+      }
+    }
+  }
+}
