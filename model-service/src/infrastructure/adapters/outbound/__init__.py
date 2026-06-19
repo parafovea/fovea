@@ -14,18 +14,11 @@ video
     Video processing adapters (OpenCV, FFmpeg).
 persistence
     Persistence adapters (YAML config repository).
+
+Subpackages are imported by their concrete paths rather than re-exported
+here, so importing one outbound subpackage does not force-load its siblings.
+This keeps a pure-data import (for example a Pydantic schema) from dragging in
+the video processor and its `cv2` dependency.
 """
 
-from src.infrastructure.adapters.outbound import (
-    external_apis,
-    models,
-    persistence,
-    video,
-)
-
-__all__ = [
-    "external_apis",
-    "models",
-    "persistence",
-    "video",
-]
+__all__: list[str] = []

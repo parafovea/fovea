@@ -8,10 +8,10 @@ Subpackages
 -----------
 fastapi
     FastAPI HTTP adapter for REST API endpoints.
+
+The fastapi subpackage is imported by its concrete path rather than
+re-exported here, so importing a schema module does not force-load the
+adapter package eagerly.
 """
 
-from src.infrastructure.adapters.inbound import fastapi
-
-__all__ = [
-    "fastapi",
-]
+__all__: list[str] = []

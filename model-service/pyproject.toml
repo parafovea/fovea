@@ -39,7 +39,7 @@ dependencies = [
     "opentelemetry-instrumentation-fastapi==0.63b1",
     "opentelemetry-instrumentation-redis==0.63b1",
     "redis>=5.0.0",
-    "opencv-python>=4.9",
+    "opencv-python>=4.10",
     "numpy>=1.26,<3",
     "pyyaml>=6",
     "torch>=2.5",
