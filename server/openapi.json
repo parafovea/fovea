@@ -16310,7 +16310,7 @@
         "tags": [
           "annotations"
         ],
-        "description": "Create a new annotation",
+        "description": "Create an annotation, or update it in place when a client-supplied id already exists (idempotent create)",
         "requestBody": {
           "required": true,
           "content": {
@@ -16324,6 +16324,10 @@
                   "frames"
                 ],
                 "properties": {
+                  "id": {
+                    "format": "uuid",
+                    "type": "string"
+                  },
                   "videoId": {
                     "type": "string"
                   },
@@ -16387,6 +16391,93 @@
           }
         },
         "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "id",
+                    "videoId",
+                    "personaId",
+                    "type",
+                    "label",
+                    "linkType",
+                    "frames",
+                    "confidence",
+                    "source",
+                    "createdAt",
+                    "updatedAt"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "videoId": {
+                      "type": "string"
+                    },
+                    "personaId": {
+                      "anyOf": [
+                        {
+                          "type": "null"
+                        },
+                        {
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "type": {
+                      "type": "string"
+                    },
+                    "label": {
+                      "type": "string"
+                    },
+                    "linkType": {
+                      "anyOf": [
+                        {
+                          "type": "null"
+                        },
+                        {
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "frames": {},
+                    "confidence": {
+                      "anyOf": [
+                        {
+                          "type": "null"
+                        },
+                        {
+                          "type": "number"
+                        }
+                      ]
+                    },
+                    "source": {
+                      "type": "string"
+                    },
+                    "linkedObjectName": {
+                      "anyOf": [
+                        {
+                          "type": "null"
+                        },
+                        {
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "updatedAt": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
           "201": {
             "description": "Default Response",
             "content": {
