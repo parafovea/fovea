@@ -114,7 +114,7 @@ describe('useAutoSave', () => {
       expect(result.current.pendingChanges).toBe(false)
     })
 
-    it('does not save if data unchanged since last save', async () => {
+    it('forceSave saves even when data is unchanged since the last save', async () => {
       const onSave = vi.fn().mockResolvedValue(undefined)
 
       const { result } = renderHook(() =>
@@ -133,13 +133,92 @@ describe('useAutoSave', () => {
 
       expect(onSave).toHaveBeenCalledTimes(1)
 
-      // Try to save again with same data
+      // forceSave is the explicit "save now" path: it bypasses change
+      // detection and fires again even when the comparison snapshot is
+      // unchanged. This matters for discrete edits (e.g. adding a keyframe)
+      // whose mutation has not yet reached the data ref when the caller
+      // forces the save — the change-detection debounce alone would skip it.
       await act(async () => {
         await result.current.forceSave()
       })
 
-      // Should not call onSave again
+      expect(onSave).toHaveBeenCalledTimes(2)
+    })
+
+    it('forceSave(dataOverride) persists the override, not the render-time data', async () => {
+      // The annotation workspace adds a keyframe by mutating the query cache,
+      // then forces a save in the SAME tick — before the cache update has
+      // propagated back into the `data` prop. Without an override the hook
+      // would read the stale (pre-keyframe) data and silently drop the edit.
+      // Passing the freshly-mutated array as dataOverride persists it exactly.
+      const onSave = vi.fn().mockResolvedValue(undefined)
+
+      const { result } = renderHook(() =>
+        useAutoSave({
+          data: { boxes: ['kf@0'] },
+          isEnabled: true,
+          onSave,
+          debounceMs: 100000, // never debounce-fire on its own
+          periodicMs: 0,
+          entityType: 'annotation',
+        })
+      )
+
+      const edited = { boxes: ['kf@0', 'kf@20'] }
+      await act(async () => {
+        await result.current.forceSave(edited)
+      })
+
+      // onSave received the override, not the render-time { boxes: ['kf@0'] }.
       expect(onSave).toHaveBeenCalledTimes(1)
+      expect(onSave).toHaveBeenCalledWith(edited)
+    })
+
+    it('forceSave(dataOverride) updates the change baseline so a later identical render does not re-save', async () => {
+      // After a forced override save, a subsequent render whose data now equals
+      // the override (the cache update finally propagating) must NOT look like a
+      // fresh change and fire a second save — that would be the idle loop.
+      vi.useFakeTimers()
+      try {
+        const onSave = vi.fn().mockResolvedValue(undefined)
+        const edited = { boxes: ['kf@0', 'kf@20'] }
+
+        const { result, rerender } = renderHook(
+          ({ data }) =>
+            useAutoSave({
+              data,
+              isEnabled: true,
+              onSave,
+              debounceMs: 100,
+              periodicMs: 0,
+              entityType: 'annotation',
+            }),
+          { initialProps: { data: { boxes: ['kf@0'] } as { boxes: string[] } } },
+        )
+
+        // Flush the initial save of the starting data.
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(150)
+        })
+        onSave.mockClear()
+
+        // Force the override save (the keyframe edit).
+        await act(async () => {
+          await result.current.forceSave(edited)
+        })
+        expect(onSave).toHaveBeenCalledTimes(1)
+        onSave.mockClear()
+
+        // The cache update now reaches `data`. Its serialized snapshot equals
+        // the override already persisted, so no additional save fires.
+        rerender({ data: edited })
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(500)
+        })
+        expect(onSave).toHaveBeenCalledTimes(0)
+      } finally {
+        vi.useRealTimers()
+      }
     })
   })
 
@@ -280,6 +359,135 @@ describe('useAutoSave', () => {
       ).toBe(true)
       expect(typeof result.current.retryCount).toBe('number')
       expect(typeof result.current.forceSave).toBe('function')
+    })
+  })
+
+  describe('getComparisonSnapshot — ignores server-managed fields', () => {
+    // Change detection runs through getComparisonSnapshot when provided. The
+    // annotation workspace passes a snapshot that strips server-managed
+    // timestamps so a post-save refetch echoing a fresh updatedAt into the
+    // cache does not read as a real edit and re-fire a save (the idle loop).
+
+    it('does not save when only a stripped server field changes', async () => {
+      vi.useFakeTimers()
+      try {
+        const onSave = vi.fn().mockResolvedValue(undefined)
+        const getComparisonSnapshot = (d: { value: string; updatedAt: string }) => ({
+          value: d.value,
+        })
+        const { rerender } = renderHook(
+          ({ data }) =>
+            useAutoSave({
+              data,
+              isEnabled: true,
+              onSave,
+              debounceMs: 100,
+              periodicMs: 0,
+              entityType: 'annotation',
+              getComparisonSnapshot,
+            }),
+          { initialProps: { data: { value: 'box', updatedAt: '2025-01-01T00:00:00Z' } } },
+        )
+
+        // Flush the initial save (data differs from the empty baseline).
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(150)
+        })
+        expect(onSave).toHaveBeenCalledTimes(1)
+        onSave.mockClear()
+
+        // Simulate the post-save refetch: a new object identity whose only
+        // difference is the server-managed updatedAt. The stripped snapshot
+        // is unchanged, so no save should fire.
+        rerender({ data: { value: 'box', updatedAt: '2025-06-19T12:00:00Z' } })
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(500)
+        })
+        expect(onSave).toHaveBeenCalledTimes(0)
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('saves when a content field changes even if a stripped field also changes', async () => {
+      vi.useFakeTimers()
+      try {
+        const onSave = vi.fn().mockResolvedValue(undefined)
+        const getComparisonSnapshot = (d: { value: string; updatedAt: string }) => ({
+          value: d.value,
+        })
+        const { rerender } = renderHook(
+          ({ data }) =>
+            useAutoSave({
+              data,
+              isEnabled: true,
+              onSave,
+              debounceMs: 100,
+              periodicMs: 0,
+              entityType: 'annotation',
+              getComparisonSnapshot,
+            }),
+          { initialProps: { data: { value: 'box', updatedAt: '2025-01-01T00:00:00Z' } } },
+        )
+
+        // Flush the initial save.
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(150)
+        })
+        expect(onSave).toHaveBeenCalledTimes(1)
+        onSave.mockClear()
+
+        // A real edit: the content field changes (updatedAt also bumps, as it
+        // would in practice). Exactly one save should fire, and onSave still
+        // receives the full data, not the stripped snapshot.
+        rerender({ data: { value: 'edited box', updatedAt: '2025-06-19T12:00:00Z' } })
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(150)
+        })
+        expect(onSave).toHaveBeenCalledTimes(1)
+        expect(onSave).toHaveBeenCalledWith({
+          value: 'edited box',
+          updatedAt: '2025-06-19T12:00:00Z',
+        })
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('falls back to comparing whole data when no snapshot is provided', async () => {
+      vi.useFakeTimers()
+      try {
+        const onSave = vi.fn().mockResolvedValue(undefined)
+        const { rerender } = renderHook(
+          ({ data }) =>
+            useAutoSave({
+              data,
+              isEnabled: true,
+              onSave,
+              debounceMs: 100,
+              periodicMs: 0,
+              entityType: 'annotation',
+            }),
+          { initialProps: { data: { value: 'box', updatedAt: '2025-01-01T00:00:00Z' } } },
+        )
+
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(150)
+        })
+        expect(onSave).toHaveBeenCalledTimes(1)
+        onSave.mockClear()
+
+        // Without a snapshot, the timestamp change is part of the compared
+        // value, so it does count as a change and a save fires. This pins the
+        // default (back-compatible) behavior other callers rely on.
+        rerender({ data: { value: 'box', updatedAt: '2025-06-19T12:00:00Z' } })
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(150)
+        })
+        expect(onSave).toHaveBeenCalledTimes(1)
+      } finally {
+        vi.useRealTimers()
+      }
     })
   })
 
