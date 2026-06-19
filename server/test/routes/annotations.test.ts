@@ -166,6 +166,108 @@ describe('Annotations API', () => {
       expect(response.statusCode).toBe(201)
       expect(response.json().confidence).toBe(0.95)
     })
+
+    it('creates with a client-supplied id', async () => {
+      const clientId = crypto.randomUUID()
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/annotations',
+        cookies: { session_token: testSessionToken },
+        payload: {
+          id: clientId,
+          videoId: testVideoId,
+          personaId: null,
+          type: 'object',
+          label: 'entity-1',
+          frames: [{ frameNumber: 0, x: 0.1, y: 0.1, width: 0.2, height: 0.2 }]
+        }
+      })
+
+      expect(response.statusCode).toBe(201)
+      expect(response.json().id).toBe(clientId)
+      const row = await prisma.annotation.findUnique({ where: { id: clientId } })
+      expect(row).not.toBeNull()
+    })
+
+    it('updates in place on re-POST with the same id instead of duplicating', async () => {
+      const clientId = crypto.randomUUID()
+      const base = {
+        id: clientId,
+        videoId: testVideoId,
+        personaId: null,
+        type: 'object',
+        label: 'entity-1',
+        frames: [{ frameNumber: 0, x: 0.1, y: 0.1, width: 0.2, height: 0.2 }]
+      }
+      const first = await app.inject({
+        method: 'POST', url: '/api/annotations',
+        cookies: { session_token: testSessionToken }, payload: base
+      })
+      expect(first.statusCode).toBe(201)
+
+      // Re-POST the same id with edited frames (the autosave re-send).
+      const second = await app.inject({
+        method: 'POST', url: '/api/annotations',
+        cookies: { session_token: testSessionToken },
+        payload: { ...base, frames: [{ frameNumber: 0, x: 0.5, y: 0.5, width: 0.3, height: 0.3 }] }
+      })
+      expect(second.statusCode).toBe(200)
+      expect(second.json().id).toBe(clientId)
+
+      // Exactly one row, with the edited frames — no duplicate.
+      const rows = await prisma.annotation.findMany({ where: { videoId: testVideoId, id: clientId } })
+      expect(rows).toHaveLength(1)
+      expect((rows[0].frames as Array<{ x: number }>)[0].x).toBe(0.5)
+    })
+
+    it('authorizes the idempotent update against the existing row, not the create candidate', async () => {
+      // The existing-id path goes through `can('update', subject('Annotation',
+      // existing))` — the same instance-level gate as PUT /api/annotations/:id.
+      // Under the broad test seed every user may update any annotation, so a
+      // second user's re-POST updates in place (a properly project-scoped
+      // production model would instead 403 a non-owner without project update
+      // rights — same gate, different rules). The security property under test
+      // is that the create's identity columns are preserved: an update by id
+      // never repoints videoId / createdByUserId.
+      const clientId = crypto.randomUUID()
+      const created = await app.inject({
+        method: 'POST', url: '/api/annotations',
+        cookies: { session_token: testSessionToken },
+        payload: {
+          id: clientId, videoId: testVideoId, personaId: null, type: 'object',
+          label: 'entity-owned-by-A',
+          frames: [{ frameNumber: 0, x: 0.1, y: 0.1, width: 0.2, height: 0.2 }]
+        }
+      })
+      expect(created.statusCode).toBe(201)
+
+      const bHash = await hashPassword('reviserpass123')
+      const userB = await prisma.user.create({
+        data: { username: 'annotation-reviser', email: 'reviser@example.com', passwordHash: bHash, displayName: 'Reviser' }
+      })
+      const bSession = await prisma.session.create({
+        data: { userId: userB.id, token: `test-session-${userB.id}`, expiresAt: new Date(Date.now() + 3600_000) }
+      })
+
+      const rePost = await app.inject({
+        method: 'POST', url: '/api/annotations',
+        cookies: { session_token: bSession.token },
+        payload: {
+          id: clientId, videoId: 'some-other-video', personaId: null, type: 'object',
+          label: 'revised-label',
+          frames: [{ frameNumber: 0, x: 0.9, y: 0.9, width: 0.1, height: 0.1 }]
+        }
+      })
+      expect(rePost.statusCode).toBe(200)
+
+      // Identity columns are immutable through the idempotent path: the row is
+      // still A's and still on the original video, even though B sent a
+      // different videoId; only the mutable fields changed.
+      const row = await prisma.annotation.findUnique({ where: { id: clientId } })
+      expect(row?.createdByUserId).toBe(testUserId)
+      expect(row?.videoId).toBe(testVideoId)
+      expect(row?.label).toBe('revised-label')
+    })
   })
 
   describe('GET /api/annotations/:videoId', () => {

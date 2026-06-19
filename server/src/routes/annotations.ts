@@ -1,6 +1,6 @@
 import { Type } from '@sinclair/typebox'
 import { FastifyPluginAsync } from 'fastify'
-import { Prisma } from '@prisma/client'
+import { Prisma, Annotation } from '@prisma/client'
 import { accessibleBy } from '@casl/prisma'
 import { subject } from '@casl/ability'
 import { NotFoundError, ForbiddenError } from '../lib/errors.js'
@@ -213,9 +213,14 @@ const annotationsRoute: FastifyPluginAsync = async (fastify) => {
   fastify.post('/api/annotations', {
     onRequest: [requireAuth, buildAbilities],
     schema: {
-      description: 'Create a new annotation',
+      description: 'Create an annotation, or update it in place when a client-supplied id already exists (idempotent create)',
       tags: ['annotations'],
       body: Type.Object({
+        // Optional client-generated id. When supplied and already present, the
+        // create is idempotent (the existing annotation is updated in place
+        // instead of a duplicate being minted), which is what stops autosave
+        // from re-creating already-persisted boxes.
+        id: Type.Optional(Type.String({ format: 'uuid' })),
         videoId: Type.String(),
         personaId: Type.Optional(Type.Union([Type.Null(), Type.String()])),
         type: Type.String(),
@@ -232,11 +237,13 @@ const annotationsRoute: FastifyPluginAsync = async (fastify) => {
         source: Type.Optional(Type.String())
       }),
       response: {
+        200: AnnotationResponseSchema,
         201: AnnotationResponseSchema
       }
     }
   }, async (request, reply) => {
     const data = request.body as {
+      id?: string
       videoId: string
       personaId?: string | null
       type: string
@@ -268,6 +275,51 @@ const annotationsRoute: FastifyPluginAsync = async (fastify) => {
       projectId = persona.projectId
     }
 
+    const toResponse = (a: Annotation) => ({
+      id: a.id,
+      videoId: a.videoId,
+      personaId: a.personaId,
+      type: a.type,
+      label: a.label,
+      linkType: a.linkType,
+      frames: a.frames,
+      confidence: a.confidence,
+      source: a.source,
+      createdAt: a.createdAt.toISOString(),
+      updatedAt: a.updatedAt.toISOString()
+    })
+
+    // Idempotent update of an existing annotation by its client id. Authorizes
+    // against the EXISTING row's `update` permission (not the generic `create`
+    // candidate), so a caller cannot hijack another user's annotation by
+    // supplying its id; identity columns (videoId / persona / owner) are left
+    // untouched, only the mutable fields are written.
+    const updateExisting = async (existing: Annotation) => {
+      if (!request.ability!.can('update', subject('Annotation', existing))) {
+        throw new ForbiddenError('Cannot update this Annotation')
+      }
+      const updated = await fastify.prisma.annotation.update({
+        where: { id: existing.id },
+        data: {
+          label: data.label,
+          linkType: existing.type === 'object' ? (data.linkType ?? null) : null,
+          frames: data.frames,
+          confidence: data.confidence,
+          source: data.source || existing.source
+        }
+      })
+      return reply.code(200).send(toResponse(updated))
+    }
+
+    // Idempotent create: when the client supplies a stable id that already
+    // exists, update that annotation in place instead of minting a duplicate.
+    // Autosave re-sends each box with its client id, so without this a lagged
+    // re-POST of an already-persisted box would create a second row.
+    if (data.id) {
+      const existing = await fastify.prisma.annotation.findUnique({ where: { id: data.id } })
+      if (existing) return updateExisting(existing)
+    }
+
     // Pre-authorize the create in the resolved scope. Build a candidate
     // shape carrying the final projectId and createdByUserId so CASL's
     // MongoQuery conditions ({ projectId: { $in: memberProjects } } or
@@ -280,35 +332,39 @@ const annotationsRoute: FastifyPluginAsync = async (fastify) => {
       throw new ForbiddenError('Cannot create Annotation in this scope')
     }
 
-    const annotation = await fastify.prisma.annotation.create({
-      data: {
-        videoId: data.videoId,
-        personaId: data.personaId ?? null,
-        userId,
-        createdByUserId: userId,
-        projectId,
-        type: data.type,
-        label: data.label,
-        linkType: data.type === 'object' ? (data.linkType ?? null) : null,
-        frames: data.frames,
-        confidence: data.confidence,
-        source: data.source || 'manual'
+    try {
+      const annotation = await fastify.prisma.annotation.create({
+        data: {
+          id: data.id,
+          videoId: data.videoId,
+          personaId: data.personaId ?? null,
+          userId,
+          createdByUserId: userId,
+          projectId,
+          type: data.type,
+          label: data.label,
+          linkType: data.type === 'object' ? (data.linkType ?? null) : null,
+          frames: data.frames,
+          confidence: data.confidence,
+          source: data.source || 'manual'
+        }
+      })
+      return reply.code(201).send(toResponse(annotation))
+    } catch (error) {
+      // Concurrent-create race: a parallel request with the same client id won
+      // the insert between our findUnique and create. Fall back to the
+      // idempotent update path (re-authorizing against the now-existing row)
+      // so the duplicate the loop would otherwise produce never materializes.
+      if (
+        data.id &&
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        const existing = await fastify.prisma.annotation.findUnique({ where: { id: data.id } })
+        if (existing) return updateExisting(existing)
       }
-    })
-
-    return reply.code(201).send({
-      id: annotation.id,
-      videoId: annotation.videoId,
-      personaId: annotation.personaId,
-      type: annotation.type,
-      label: annotation.label,
-      linkType: annotation.linkType,
-      frames: annotation.frames,
-      confidence: annotation.confidence,
-      source: annotation.source,
-      createdAt: annotation.createdAt.toISOString(),
-      updatedAt: annotation.updatedAt.toISOString()
-    })
+      throw error
+    }
   })
 
   /**

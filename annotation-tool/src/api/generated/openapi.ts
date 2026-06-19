@@ -7110,7 +7110,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Create a new annotation */
+        /** @description Create an annotation, or update it in place when a client-supplied id already exists (idempotent create) */
         post: {
             parameters: {
                 query?: never;
@@ -7121,6 +7121,8 @@ export interface paths {
             requestBody: {
                 content: {
                     "application/json": {
+                        /** Format: uuid */
+                        id?: string;
                         videoId: string;
                         personaId?: null | string;
                         type: string;
@@ -7133,6 +7135,28 @@ export interface paths {
                 };
             };
             responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            videoId: string;
+                            personaId: null | string;
+                            type: string;
+                            label: string;
+                            linkType: null | string;
+                            frames: unknown;
+                            confidence: null | number;
+                            source: string;
+                            linkedObjectName?: null | string;
+                            createdAt: string;
+                            updatedAt: string;
+                        };
+                    };
+                };
                 /** @description Default Response */
                 201: {
                     headers: {
