@@ -7,7 +7,7 @@
 # Run `make` or `make help` to list targets.
 
 .DEFAULT_GOAL := help
-.PHONY: help install generate \
+.PHONY: help install generate gen-contract \
 	lint lint-frontend lint-backend lint-model-service lint-wikibase \
 	typecheck test test-frontend test-backend test-model-service test-wikibase \
 	build dev-infra stop
@@ -23,6 +23,10 @@ install: ## Install all dependencies (pnpm workspace + uv for the Python service
 
 generate: ## Generate the Prisma client (needed before backend typecheck/test)
 	pnpm --filter @fovea/server exec prisma generate
+
+gen-contract: ## Regenerate the model-service contract spec (model-service/openapi.json, ML-free)
+	cd model-service && uv run python scripts/gen_contract_spec.py
+	pnpm --filter @fovea/server gen:model-service-types
 
 ## --- Lint -----------------------------------------------------------------
 
