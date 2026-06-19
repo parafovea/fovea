@@ -41,8 +41,15 @@ interface InteractiveBoundingBoxProps {
   mode: 'keyframe' | 'interpolated' | 'ghost'
   /** Optional callback fired when bounding box is updated */
   onUpdate?: (box: Partial<BoundingBox>) => void
-  /** Optional callback fired when edit is complete (drag/resize finished) */
-  onEditComplete?: () => void
+  /**
+   * Optional callback fired when edit is complete (drag/resize finished).
+   *
+   * When a keyframe mutation produced a fresh annotations array, it is passed
+   * so the parent can persist that exact value rather than a render-lagged
+   * copy. Bare drag/resize completions (which update the cache via a mutation
+   * whose result is awaited by the parent) call it with no argument.
+   */
+  onEditComplete?: (updatedAnnotations?: Annotation[]) => void
   /** Resolved type name from ontology (for type annotations) */
   typeName?: string
   /** Resolved linked object with name (for object annotations) */
@@ -97,6 +104,10 @@ export default function InteractiveBoundingBox({
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 })
   const svgRef = useRef<SVGSVGElement | null>(null)
   const rectRef = useRef<SVGRectElement | null>(null)
+  // Holds the latest annotations array produced by a keyframe mutation during
+  // an in-progress drag/resize. Passed to onEditComplete so the parent
+  // persists the exact edited value rather than a render-lagged copy.
+  const latestEditedAnnotationsRef = useRef<Annotation[] | null>(null)
 
   // Create lazy interpolator for on-demand frame lookup with caching
   // This is more efficient than pre-generating all frames
@@ -217,15 +228,17 @@ export default function InteractiveBoundingBox({
 
     // If interpolated mode, convert to keyframe on handle click
     if (mode === 'interpolated') {
-      addKeyframe({
+      const updated = addKeyframe({
         videoId: annotation.videoId,
         annotationId: annotation.id,
         frameNumber: currentFrame,
         box: currentBox,
       })
-      // Save immediately after adding keyframe
+      // Save immediately after adding keyframe, persisting the exact value the
+      // mutation just wrote (the cache update has not propagated to the parent
+      // for this render yet).
       if (onEditComplete) {
-        onEditComplete()
+        onEditComplete(updated)
       }
       return
     }
@@ -394,8 +407,9 @@ export default function InteractiveBoundingBox({
     if (onUpdate) {
       onUpdate(newBox)
     } else if (mode === 'keyframe') {
-      // Update keyframe directly
-      updateKeyframe({
+      // Update keyframe directly. Track the resulting array so the
+      // edit-complete save (on mouse up) carries the final box.
+      latestEditedAnnotationsRef.current = updateKeyframe({
         videoId: annotation.videoId,
         annotationId: annotation.id,
         frameNumber: currentFrame,
@@ -422,10 +436,13 @@ export default function InteractiveBoundingBox({
     const wasEditing = interactionMode !== 'none'
     setInteractionMode('none')
     setActiveHandle(null)
-    // Notify parent that edit is complete so it can save immediately
+    // Notify parent that edit is complete so it can save immediately. Hand over
+    // the latest array a keyframe mutation produced during the drag so the save
+    // persists the final box rather than a render-lagged copy.
     if (wasEditing && onEditComplete) {
-      onEditComplete()
+      onEditComplete(latestEditedAnnotationsRef.current ?? undefined)
     }
+    latestEditedAnnotationsRef.current = null
   }, [interactionMode, onEditComplete])
 
   // Add/remove event listeners
@@ -452,7 +469,7 @@ export default function InteractiveBoundingBox({
       if (onUpdate) {
         onUpdate(patch)
       } else if (mode === 'keyframe' && currentBox) {
-        updateKeyframe({
+        latestEditedAnnotationsRef.current = updateKeyframe({
           videoId: annotation.videoId,
           annotationId: annotation.id,
           frameNumber: currentFrame,
@@ -461,7 +478,8 @@ export default function InteractiveBoundingBox({
       }
     },
     onCommit: () => {
-      onEditComplete?.()
+      onEditComplete?.(latestEditedAnnotationsRef.current ?? undefined)
+      latestEditedAnnotationsRef.current = null
     },
   })
 

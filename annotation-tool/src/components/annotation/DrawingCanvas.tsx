@@ -34,8 +34,12 @@ interface DrawingCanvasProps {
   detectionResults?: DetectionResponse | null
   /** Callback when annotation is selected */
   onAnnotationSelect: (annotation: Annotation) => void
-  /** Optional callback when annotation edit is complete (drag/resize finished) */
-  onAnnotationEditComplete?: () => void
+  /**
+   * Optional callback when annotation edit is complete (drag/resize finished).
+   * Receives the annotations array the edit produced when available so the
+   * save can persist the exact edited value.
+   */
+  onAnnotationEditComplete?: (updatedAnnotations?: Annotation[]) => void
 }
 
 /**

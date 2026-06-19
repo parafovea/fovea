@@ -115,6 +115,7 @@ export function transformBackendToFrontend(backendAnnotation: BackendAnnotation)
  * @returns Backend-formatted payload
  */
 export function transformFrontendToBackend(annotation: Annotation): {
+  id: string
   videoId: string
   personaId: string | null
   type: string
@@ -155,6 +156,11 @@ export function transformFrontendToBackend(annotation: Annotation): {
   }
 
   return {
+    // Forward the client's stable local id so the create POST keeps it.
+    // The backend create is idempotent on this id: a first create returns
+    // 201 with the same id, and a lagged re-POST of an already-persisted
+    // box updates it in place (200) instead of minting a duplicate row.
+    id: annotation.id,
     videoId: annotation.videoId,
     personaId,
     type: annotation.annotationType,

@@ -313,13 +313,29 @@ export default function AnnotationWorkspace() {
     saveAnnotationsMutation({ videoId: videoId!, annotations })
   }, [saveAnnotationsMutation, videoId])
 
-  // Auto-save annotations to database using useAutoSave hook
+  // Auto-save annotations to database using useAutoSave hook.
+  //
+  // Change detection strips the server-managed timestamps from each
+  // annotation before serializing. The editor never writes createdAt or
+  // updatedAt; the server bumps updatedAt on every save and the post-save
+  // refetch echoes the new value into the query cache. Comparing the raw
+  // annotations would treat that echoed timestamp as a fresh edit and fire
+  // another save, which bumps the timestamp again — an idle save loop. By
+  // comparing only the fields the editor can actually change, an idle
+  // workspace produces no saves while a real edit still produces exactly one.
   const { saveStatus, lastSavedAt, errorMessage, retryCount, forceSave } = useAutoSave({
     data: videoAnnotations,
     isEnabled: !!videoId && videoAnnotations.length > 0,
     onSave: handleAutoSave,
     entityType: 'annotation',
     entityId: videoId,
+    getComparisonSnapshot: (annotations) =>
+      annotations.map((annotation) => {
+        const { createdAt, updatedAt, ...editableFields } = annotation
+        void createdAt
+        void updatedAt
+        return editableFields
+      }),
   })
 
   // Helper function to get type name from typeId (for displaying human-readable names)
@@ -405,7 +421,12 @@ export default function AnnotationWorkspace() {
       }
     }
 
-    addKeyframe({
+    // The mutation returns the updated annotations array it wrote to the
+    // cache. Persist that array directly via forceSave: the cache update has
+    // not yet propagated back into `videoAnnotations` for this render, so a
+    // bare forceSave would read the pre-keyframe data and silently drop the
+    // new keyframe.
+    const updated = addKeyframe({
       videoId: selectedAnnotation.videoId,
       annotationId: selectedAnnotation.id,
       frameNumber: currentFrame,
@@ -413,20 +434,20 @@ export default function AnnotationWorkspace() {
       fps: currentVideo?.fps || 30,
     })
     // Save immediately after keyframe operation
-    await forceSave()
+    await forceSave(updated)
   }, [selectedAnnotation, currentFrame, currentVideo, addKeyframe, forceSave])
 
   const handleDeleteKeyframe = useCallback(async () => {
     if (!selectedAnnotation) return
 
-    removeKeyframe({
+    const updated = removeKeyframe({
       videoId: selectedAnnotation.videoId,
       annotationId: selectedAnnotation.id,
       frameNumber: currentFrame,
       fps: currentVideo?.fps || 30,
     })
     // Save immediately after keyframe operation
-    await forceSave()
+    await forceSave(updated)
   }, [selectedAnnotation, currentFrame, currentVideo, removeKeyframe, forceSave])
 
   const handleCopyPreviousFrame = useCallback(async () => {
@@ -445,31 +466,29 @@ export default function AnnotationWorkspace() {
 
     const isCurrentKeyframe = keyframes.some(k => k.frameNumber === currentFrame)
 
-    if (isCurrentKeyframe) {
-      updateKeyframe({
-        videoId: selectedAnnotation.videoId,
-        annotationId: selectedAnnotation.id,
-        frameNumber: currentFrame,
-        box: { ...prevBox, frameNumber: currentFrame },
-      })
-    } else {
-      addKeyframe({
-        videoId: selectedAnnotation.videoId,
-        annotationId: selectedAnnotation.id,
-        frameNumber: currentFrame,
-        box: { ...prevBox, frameNumber: currentFrame },
-        fps: currentVideo?.fps || 30,
-      })
-    }
+    const updated = isCurrentKeyframe
+      ? updateKeyframe({
+          videoId: selectedAnnotation.videoId,
+          annotationId: selectedAnnotation.id,
+          frameNumber: currentFrame,
+          box: { ...prevBox, frameNumber: currentFrame },
+        })
+      : addKeyframe({
+          videoId: selectedAnnotation.videoId,
+          annotationId: selectedAnnotation.id,
+          frameNumber: currentFrame,
+          box: { ...prevBox, frameNumber: currentFrame },
+          fps: currentVideo?.fps || 30,
+        })
     // Save immediately after keyframe operation
-    await forceSave()
+    await forceSave(updated)
   }, [selectedAnnotation, currentFrame, currentVideo, addKeyframe, updateKeyframe, forceSave])
 
   const handleUpdateInterpolationSegment = useCallback(
     async (segmentIndex: number, type: InterpolationType, controlPoints?: InterpolationSegment['controlPoints']) => {
       if (!selectedAnnotation) return
 
-      updateInterpolationSegmentHook({
+      const updated = updateInterpolationSegmentHook({
         videoId: selectedAnnotation.videoId,
         annotationId: selectedAnnotation.id,
         segmentIndex,
@@ -477,7 +496,7 @@ export default function AnnotationWorkspace() {
         controlPoints,
       })
       // Save immediately after interpolation change
-      await forceSave()
+      await forceSave(updated)
     },
     [selectedAnnotation, updateInterpolationSegmentHook, forceSave]
   )

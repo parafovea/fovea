@@ -50,8 +50,12 @@ interface AnnotationOverlayProps {
   videoFps?: number
   /** Optional AI detection results to display as read-only overlays */
   detectionResults?: DetectionResponse | null
-  /** Optional callback when annotation edit is complete (drag/resize finished) */
-  onAnnotationEditComplete?: () => void
+  /**
+   * Optional callback when annotation edit is complete (drag/resize finished).
+   * Receives the annotations array the edit produced when available so the
+   * save can persist the exact edited value.
+   */
+  onAnnotationEditComplete?: (updatedAnnotations?: Annotation[]) => void
 }
 
 /**
