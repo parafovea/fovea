@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useMemo, useCallback } from 'react'
+import { useEffect, useMemo, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -38,22 +38,16 @@ import {
   Mic,
 } from 'lucide-react'
 import './AnnotationWorkspace.css'
-import { VideoPlayer, VideoPlayerHandle } from './VideoPlayer'
+import { VideoPlayer } from './VideoPlayer'
 import { useExternalLinksConfig } from '@hooks/config'
 import {
   useVideo,
   useWorld,
   useAnnotations,
-  useSaveAnnotations,
-  useDeleteAnnotation,
-  useAddKeyframe,
-  useRemoveKeyframe,
-  useUpdateKeyframe,
-  useUpdateInterpolationSegment,
   usePersonas,
   useAllPersonaOntologies,
 } from '@store/queries'
-import { useVideoUiStore, useAnnotationUiStore, useClaimsUiStore } from '@store/zustand'
+import { useVideoUiStore, useAnnotationUiStore } from '@store/zustand'
 import AnnotationOverlay from './AnnotationOverlay'
 import AnnotationEditor from './AnnotationEditor'
 import AnnotationAutocomplete from './AnnotationAutocomplete'
@@ -62,16 +56,17 @@ import { AnnotationCandidatesList } from './AnnotationCandidatesList'
 import { DetectionDialog } from '@components/dialogs/DetectionDialog'
 import type { DetectionRequest } from '@components/dialogs/DetectionDialog'
 import { formatTimestamp } from '@utils/formatters'
-import { Annotation, TypeAnnotation, ObjectAnnotation, InterpolationType, InterpolationSegment, getAnnotationTimeBounds } from '@models/types'
+import { Annotation, TypeAnnotation, ObjectAnnotation, getAnnotationTimeBounds } from '@models/types'
 import { useDetectObjects } from '@store/queries/useDetection'
-import { useTranscribeVideo } from '@store/queries/useTranscribe'
 import { TranscriptPanel } from '@components/video/TranscriptPanel'
-import type { TranscribeResponse } from '@api/client'
 import { useModelConfig } from '@store/queries/useModelConfig'
 import { TimelineComponent } from './TimelineComponent'
 import { useCommands, useCommandContext } from '@hooks/commands'
-import { useAutoSave, SaveStatusIndicator } from '@hooks/data'
+import { SaveStatusIndicator } from '@hooks/data'
 import { config } from '@/config'
+import { useAnnotationDialogs } from './hooks/useAnnotationDialogs'
+import { useSummaryFlow } from './hooks/useSummaryFlow'
+import { useAnnotationState } from './hooks/useAnnotationState'
 
 const DRAWER_WIDTH = 300
 
@@ -90,42 +85,8 @@ export default function AnnotationWorkspace() {
   const { videoId } = useParams()
   const navigate = useNavigate()
 
-  // TanStack Query hooks for keyframe manipulation
-  const addKeyframe = useAddKeyframe()
-  const removeKeyframe = useRemoveKeyframe()
-  const updateKeyframe = useUpdateKeyframe()
-  const updateInterpolationSegmentHook = useUpdateInterpolationSegment()
-
   const { data: modelConfig } = useModelConfig()
   const modelsDisabled = !modelConfig?.cudaAvailable && !modelConfig?.cpuModelsAvailable
-  const videoPlayerRef = useRef<VideoPlayerHandle>(null)
-  // Track the underlying <video> DOM node in state so AnnotationOverlay
-  // re-renders when it mounts (refs don't trigger re-renders, so a
-  // condition like `videoPlayerRef.current?.videoRef.current && <Overlay/>`
-  // would only flip in if some unrelated state update happened to fire
-  // afterwards — which under headless Chromium it often doesn't).
-  const [videoElement, setVideoElement] = useState<HTMLVideoElement | null>(null)
-  const [currentTime, setCurrentTime] = useState(0)
-  const [currentFrame, setCurrentFrame] = useState(0)
-  const [duration, setDuration] = useState(0)
-  const [editorOpen, setEditorOpen] = useState(false)
-  const [editingAnnotation, setEditingAnnotation] = useState<Annotation | null>(null)
-  const [summaryDialogOpen, setSummaryDialogOpen] = useState(false)
-  const [detectionDialogOpen, setDetectionDialogOpen] = useState(false)
-  const [transcriptDialogOpen, setTranscriptDialogOpen] = useState(false)
-  const [transcriptResult, setTranscriptResult] = useState<TranscribeResponse | null>(null)
-  const [transcriptError, setTranscriptError] = useState<string | null>(null)
-  const [diarizationRequested, setDiarizationRequested] = useState(true)
-
-  // Scrub timestamp capture (claim time spans). The VideoSummaryDialog gates
-  // its own `open` on this state so it closes while a capture is active (the
-  // player becomes reachable and the capture banner is clickable) and re-opens
-  // automatically when the capture finishes — no summaryDialogOpen toggling
-  // here, which previously raced and left the modal overlay intercepting the
-  // banner. The banner below reads the capture phase and drives capture/cancel.
-  const timestampCapture = useClaimsUiStore((state) => state.timestampCapture)
-  const captureTimestamp = useClaimsUiStore((state) => state.captureTimestamp)
-  const cancelTimestampCapture = useClaimsUiStore((state) => state.cancelTimestampCapture)
 
   // Timeline UI state from Zustand store
   const timelineExpanded = useAnnotationUiStore(state => state.timelineExpanded)
@@ -152,8 +113,6 @@ export default function AnnotationWorkspace() {
 
   // TanStack Query for annotations (server state)
   const { data: videoAnnotations = [] } = useAnnotations(videoId)
-  const { mutate: saveAnnotationsMutation } = useSaveAnnotations()
-  const { mutate: deleteAnnotationMutation } = useDeleteAnnotation()
 
   // Zustand for video UI state
   const setLastAnnotation = useVideoUiStore((state) => state.setLastAnnotation)
@@ -162,7 +121,6 @@ export default function AnnotationWorkspace() {
   const selectedPersonaId = useAnnotationUiStore((state) => state.selectedPersonaId)
   const annotationMode = useAnnotationUiStore((state) => state.annotationMode)
   const drawingMode = useAnnotationUiStore((state) => state.drawingMode)
-  const selectedAnnotation = useAnnotationUiStore((state) => state.selectedAnnotation)
   const detectionResults = useAnnotationUiStore((state) => state.detectionResults)
   const detectionConfidenceThreshold = useAnnotationUiStore((state) => state.detectionConfidenceThreshold)
   const showDetectionCandidates = useAnnotationUiStore((state) => state.showDetectionCandidates)
@@ -175,8 +133,57 @@ export default function AnnotationWorkspace() {
   const setShowDetectionCandidates = useAnnotationUiStore((state) => state.setShowDetectionCandidates)
   const clearDetectionState = useAnnotationUiStore((state) => state.clearDetectionState)
 
-  // Claims UI state for draft restoration
-  const draftClaim = useClaimsUiStore((state) => state.draftClaim)
+  // Modal/dialog state and the transcript/diarization request flow.
+  const {
+    editorOpen,
+    setEditorOpen,
+    editingAnnotation,
+    setEditingAnnotation,
+    summaryDialogOpen,
+    setSummaryDialogOpen,
+    detectionDialogOpen,
+    setDetectionDialogOpen,
+    transcriptDialogOpen,
+    setTranscriptDialogOpen,
+    transcriptResult,
+    transcriptError,
+    setTranscriptError,
+    diarizationRequested,
+    setDiarizationRequested,
+    transcribeMutation,
+  } = useAnnotationDialogs()
+
+  // Summary dialog + claim timestamp-capture flow.
+  const { timestampCapture, captureTimestamp, cancelTimestampCapture } = useSummaryFlow({
+    videoId,
+    setSelectedPersonaId,
+    setSummaryDialogOpen,
+  })
+
+  // Core annotation/playback state: player ref, playback values, the selected
+  // annotation, keyframe handlers, save/delete mutations, and auto-save.
+  const {
+    videoPlayerRef,
+    videoElement,
+    setVideoElement,
+    currentTime,
+    setCurrentTime,
+    currentFrame,
+    setCurrentFrame,
+    duration,
+    setDuration,
+    selectedAnnotation,
+    deleteAnnotationMutation,
+    saveStatus,
+    lastSavedAt,
+    errorMessage,
+    retryCount,
+    forceSave,
+    handleAddKeyframe,
+    handleDeleteKeyframe,
+    handleCopyPreviousFrame,
+    handleUpdateInterpolationSegment,
+  } = useAnnotationState({ videoId, currentVideo }, videoAnnotations)
 
   // TanStack Query for persona data
   const { data: personas = [] } = usePersonas()
@@ -280,21 +287,6 @@ export default function AnnotationWorkspace() {
   const worldEvents = useMemo(() => worldData?.events ?? [], [worldData?.events])
   const worldTimes = useMemo(() => worldData?.times ?? [], [worldData?.times])
 
-  // Transcription mutation. The backend response already carries the
-  // optional diarization fields (speakers + per-segment speaker), so
-  // the result is forwarded to TranscriptPanel verbatim.
-  const transcribeMutation = useTranscribeVideo({
-    onSuccess: (data) => {
-      setTranscriptResult(data)
-      setTranscriptError(null)
-      setTranscriptDialogOpen(true)
-    },
-    onError: (error) => {
-      setTranscriptError(error.message)
-      setTranscriptDialogOpen(true)
-    },
-  })
-
   // Detection mutation
   const detectMutation = useDetectObjects({
     onSuccess: (data) => {
@@ -305,37 +297,6 @@ export default function AnnotationWorkspace() {
     onError: (error) => {
       console.error('Detection failed:', error)
     },
-  })
-
-  // Memoize the auto-save callback to prevent cascading effect resets
-  // that cause dropdown jitter when annotations exist
-  const handleAutoSave = useCallback(async (annotations: Annotation[]) => {
-    saveAnnotationsMutation({ videoId: videoId!, annotations })
-  }, [saveAnnotationsMutation, videoId])
-
-  // Auto-save annotations to database using useAutoSave hook.
-  //
-  // Change detection strips the server-managed timestamps from each
-  // annotation before serializing. The editor never writes createdAt or
-  // updatedAt; the server bumps updatedAt on every save and the post-save
-  // refetch echoes the new value into the query cache. Comparing the raw
-  // annotations would treat that echoed timestamp as a fresh edit and fire
-  // another save, which bumps the timestamp again — an idle save loop. By
-  // comparing only the fields the editor can actually change, an idle
-  // workspace produces no saves while a real edit still produces exactly one.
-  const { saveStatus, lastSavedAt, errorMessage, retryCount, forceSave } = useAutoSave({
-    data: videoAnnotations,
-    isEnabled: !!videoId && videoAnnotations.length > 0,
-    onSave: handleAutoSave,
-    entityType: 'annotation',
-    entityId: videoId,
-    getComparisonSnapshot: (annotations) =>
-      annotations.map((annotation) => {
-        const { createdAt, updatedAt, ...editableFields } = annotation
-        void createdAt
-        void updatedAt
-        return editableFields
-      }),
   })
 
   // Helper function to get type name from typeId (for displaying human-readable names)
@@ -382,139 +343,12 @@ export default function AnnotationWorkspace() {
     return 'object'
   }, [])
 
-  // Keyframe control callbacks
-  const handleAddKeyframe = useCallback(async () => {
-    if (!selectedAnnotation) return
-
-    // Get current box from annotation sequence (interpolated or existing)
-    const allBoxes = selectedAnnotation.boundingBoxSequence?.boxes || []
-    let currentBox = allBoxes.find(b => b.frameNumber === currentFrame)
-
-    // If no box exists at current frame, compute interpolated position
-    if (!currentBox) {
-      const keyframes = allBoxes.filter(b => b.isKeyframe || b.isKeyframe === undefined)
-      if (keyframes.length === 0) return
-
-      // Find surrounding keyframes
-      const prevKeyframes = keyframes.filter(k => k.frameNumber < currentFrame)
-      const nextKeyframes = keyframes.filter(k => k.frameNumber > currentFrame)
-
-      if (prevKeyframes.length === 0 && nextKeyframes.length === 0) return
-
-      // Use nearest keyframe or interpolate
-      if (prevKeyframes.length === 0) {
-        currentBox = { ...nextKeyframes[0], frameNumber: currentFrame }
-      } else if (nextKeyframes.length === 0) {
-        currentBox = { ...prevKeyframes[prevKeyframes.length - 1], frameNumber: currentFrame }
-      } else {
-        // Linear interpolation
-        const prev = prevKeyframes[prevKeyframes.length - 1]
-        const next = nextKeyframes[0]
-        const t = (currentFrame - prev.frameNumber) / (next.frameNumber - prev.frameNumber)
-        currentBox = {
-          x: prev.x + (next.x - prev.x) * t,
-          y: prev.y + (next.y - prev.y) * t,
-          width: prev.width + (next.width - prev.width) * t,
-          height: prev.height + (next.height - prev.height) * t,
-          frameNumber: currentFrame,
-        }
-      }
-    }
-
-    // The mutation returns the updated annotations array it wrote to the
-    // cache. Persist that array directly via forceSave: the cache update has
-    // not yet propagated back into `videoAnnotations` for this render, so a
-    // bare forceSave would read the pre-keyframe data and silently drop the
-    // new keyframe.
-    const updated = addKeyframe({
-      videoId: selectedAnnotation.videoId,
-      annotationId: selectedAnnotation.id,
-      frameNumber: currentFrame,
-      box: currentBox,
-      fps: currentVideo?.fps || 30,
-    })
-    // Save immediately after keyframe operation
-    await forceSave(updated)
-  }, [selectedAnnotation, currentFrame, currentVideo, addKeyframe, forceSave])
-
-  const handleDeleteKeyframe = useCallback(async () => {
-    if (!selectedAnnotation) return
-
-    const updated = removeKeyframe({
-      videoId: selectedAnnotation.videoId,
-      annotationId: selectedAnnotation.id,
-      frameNumber: currentFrame,
-      fps: currentVideo?.fps || 30,
-    })
-    // Save immediately after keyframe operation
-    await forceSave(updated)
-  }, [selectedAnnotation, currentFrame, currentVideo, removeKeyframe, forceSave])
-
-  const handleCopyPreviousFrame = useCallback(async () => {
-    if (!selectedAnnotation) return
-
-    const allBoxes = selectedAnnotation.boundingBoxSequence?.boxes || []
-    const keyframes = allBoxes.filter(b => b.isKeyframe || b.isKeyframe === undefined)
-
-    // Find nearest previous keyframe
-    const prevKeyframes = keyframes.filter(k => k.frameNumber < currentFrame)
-    if (prevKeyframes.length === 0) {
-      return
-    }
-
-    const prevBox = prevKeyframes[prevKeyframes.length - 1]
-
-    const isCurrentKeyframe = keyframes.some(k => k.frameNumber === currentFrame)
-
-    const updated = isCurrentKeyframe
-      ? updateKeyframe({
-          videoId: selectedAnnotation.videoId,
-          annotationId: selectedAnnotation.id,
-          frameNumber: currentFrame,
-          box: { ...prevBox, frameNumber: currentFrame },
-        })
-      : addKeyframe({
-          videoId: selectedAnnotation.videoId,
-          annotationId: selectedAnnotation.id,
-          frameNumber: currentFrame,
-          box: { ...prevBox, frameNumber: currentFrame },
-          fps: currentVideo?.fps || 30,
-        })
-    // Save immediately after keyframe operation
-    await forceSave(updated)
-  }, [selectedAnnotation, currentFrame, currentVideo, addKeyframe, updateKeyframe, forceSave])
-
-  const handleUpdateInterpolationSegment = useCallback(
-    async (segmentIndex: number, type: InterpolationType, controlPoints?: InterpolationSegment['controlPoints']) => {
-      if (!selectedAnnotation) return
-
-      const updated = updateInterpolationSegmentHook({
-        videoId: selectedAnnotation.videoId,
-        annotationId: selectedAnnotation.id,
-        segmentIndex,
-        interpolationType: type,
-        controlPoints,
-      })
-      // Save immediately after interpolation change
-      await forceSave(updated)
-    },
-    [selectedAnnotation, updateInterpolationSegmentHook, forceSave]
-  )
-
   // Track this as the last annotation when we load the component
   useEffect(() => {
     if (videoId) {
       setLastAnnotation(videoId, Date.now())
     }
   }, [videoId, setLastAnnotation])
-
-  // Auto-open summary dialog when returning with a draft claim
-  useEffect(() => {
-    if (draftClaim && draftClaim.videoId === videoId) {
-      setSelectedPersonaId(draftClaim.personaId)
-      setSummaryDialogOpen(true)
-    }
-  }, [draftClaim, videoId, setSelectedPersonaId])
 
   // Note: Annotations are automatically loaded via useAnnotations() TanStack Query hook
 
