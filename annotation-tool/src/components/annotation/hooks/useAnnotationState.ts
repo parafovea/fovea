@@ -48,9 +48,9 @@ export interface UseAnnotationStateOptions {
 export interface UseAnnotationStateResult {
   /** Ref to the imperative video player handle */
   videoPlayerRef: React.RefObject<VideoPlayerHandle>
-  /** The underlying <video> DOM node, tracked in state for overlay re-renders */
+  /** The underlying `<video>` DOM node, tracked in state for overlay re-renders */
   videoElement: HTMLVideoElement | null
-  /** Setter for the tracked <video> DOM node */
+  /** Setter for the tracked `<video>` DOM node */
   setVideoElement: (element: HTMLVideoElement | null) => void
   /** Current playback time in seconds */
   currentTime: number
