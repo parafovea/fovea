@@ -5,9 +5,9 @@ All notable changes to the Fovea project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.5.0] - 2026-06-17
+## [0.5.0] - 2026-06-19
 
-The 0.5.0 cycle delivers the architecture-modularization roadmap (`notes/architecture-review.md`): single sources of truth for configuration, containerization, the build/test surface, and cross-service contracts. Changes land incrementally on `release/0.5.x`; this section accumulates them.
+The 0.5.0 cycle delivers the architecture-modularization roadmap (`notes/architecture-review.md`): single sources of truth for configuration, containerization, the build/test surface, and cross-service contracts, plus a service/repository layer for the backend domains and a handful of folded-in bug fixes.
 
 ### Changed
 
