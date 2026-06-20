@@ -138,7 +138,7 @@ export function buildDependencyGraph(lines: ImportLine[]): DependencyGraph {
  * Determine whether an id is owned by the importing user.
  *
  * @param id - candidate id from an import line
- * @param type - import line type the id belongs to
+ * @param type - the import line type the id belongs to
  * @param existingData - existing database data with ownership sets
  * @returns true when the id is owned by the importing user
  */

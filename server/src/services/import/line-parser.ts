@@ -45,7 +45,7 @@ export function parseLine(line: string, lineNumber: number): ImportLine {
 /**
  * Validate a parsed import line.
  *
- * @param line - import line to validate
+ * @param line - the import line to validate
  * @param validator - sequence validator used for annotation bounding boxes
  * @returns the validation result with errors and warnings
  */

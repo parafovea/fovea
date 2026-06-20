@@ -31,8 +31,8 @@ import {
  * Build a case-insensitive matcher whose alternations are the literal
  * keys of `idMap`. The remap is structure-agnostic: rather than gate on
  * field names (the previous remap walked an allowlist of `id` / `*Id` /
- * `*Ids` / GlossItem `content`, which had to be extended every time the
- * export schema gained a new id-bearing field and silently missed every
+ * `*Ids` / GlossItem `content`, which had to be extended whenever the
+ * exported schema gained a new id-bearing field and silently missed every
  * free-form string that namedropped a referenced record), every string
  * value in the payload is scanned for substrings that are themselves
  * keys in `idMap` and rewritten to the importer's regenerated value.
@@ -69,7 +69,7 @@ function remapInlineIds(text: string, pattern: RegExp, idMap: Map<string, string
 /**
  * Detect conflicts between import data and existing database data.
  *
- * @param lines - import lines
+ * @param lines - the import lines
  * @param existingData - existing data in the database
  * @param userId - the importing user's id
  * @returns array of detected conflicts
@@ -364,7 +364,7 @@ export function detectConflicts(lines: ImportLine[], existingData: ExistingData,
  * Resolve conflicts based on import options.
  *
  * @param conflicts - detected conflicts
- * @param options - import options with resolution strategies
+ * @param options - the import options with resolution strategies
  * @returns array of resolutions, one per conflict
  */
 export function resolveConflicts(conflicts: Conflict[], options: ImportOptions): Resolution[] {
@@ -532,7 +532,7 @@ function remapObjectIds(obj: unknown, idMap: Map<string, string>, pattern: RegEx
 /**
  * Remap IDs based on conflict resolutions.
  *
- * @param lines - import lines
+ * @param lines - the import lines
  * @param resolutions - conflict resolutions
  * @returns updated import lines with remapped IDs
  */
@@ -575,7 +575,7 @@ export function remapIds(lines: ImportLine[], resolutions: Resolution[]): Import
  * annotations (i.e. a legacy export), we return `false` to preserve
  * the existing same-user re-import UX.
  *
- * @param lines - import lines
+ * @param lines - the import lines
  * @param userId - the importing user's id
  * @returns true when the import originated from a different user
  */
@@ -607,7 +607,7 @@ export function isCrossUserImport(lines: ImportLine[], userId: string): boolean 
  * a conflict resolution. Used for cross-user imports where ALL IDs must
  * be regenerated regardless of whether they collide with existing data.
  *
- * @param lines - import lines
+ * @param lines - the import lines
  * @param existingResolutions - resolutions already produced for this batch
  * @returns additional create-new resolutions for unresolved id-bearing lines
  */

@@ -69,8 +69,8 @@ export class ImportHandler {
   /**
    * Validate a parsed import line.
    *
-   * @param line - import line to validate
-   * @returns validation result
+   * @param line - the import line to validate
+   * @returns the validation result
    */
   validateLine(line: ImportLine): ValidationResult {
     return validateLine(line, this.validator)
@@ -89,7 +89,7 @@ export class ImportHandler {
   /**
    * Detect conflicts between import data and existing database data.
    *
-   * @param lines - import lines
+   * @param lines - the import lines
    * @param existingData - existing data in database
    * @returns array of conflicts
    */
@@ -101,7 +101,7 @@ export class ImportHandler {
    * Resolve conflicts based on import options.
    *
    * @param conflicts - detected conflicts
-   * @param options - import options with resolution strategies
+   * @param options - the import options with resolution strategies
    * @returns array of resolutions
    */
   resolveConflicts(conflicts: Conflict[], options: ImportOptions): Resolution[] {
@@ -111,7 +111,7 @@ export class ImportHandler {
   /**
    * Remap IDs based on conflict resolutions.
    *
-   * @param lines - import lines
+   * @param lines - the import lines
    * @param resolutions - conflict resolutions
    * @returns updated import lines with remapped IDs
    */
@@ -122,7 +122,7 @@ export class ImportHandler {
   /**
    * Detect whether the import contains data from a different user.
    *
-   * @param lines - import lines
+   * @param lines - the import lines
    * @returns true when the import originated from a different user
    */
   isCrossUserImport(lines: ImportLine[]): boolean {
@@ -134,7 +134,7 @@ export class ImportHandler {
    * a conflict resolution. Used for cross-user imports where ALL IDs must
    * be regenerated regardless of whether they collide with existing data.
    *
-   * @param lines - import lines
+   * @param lines - the import lines
    * @param existingResolutions - resolutions already produced for this batch
    * @returns additional create-new resolutions for unresolved id-bearing lines
    */
@@ -267,9 +267,9 @@ export class ImportHandler {
   /**
    * Execute import with all lines and options.
    *
-   * @param lines - import lines
-   * @param options - import options
-   * @returns import result
+   * @param lines - the import lines
+   * @param options - the import options
+   * @returns the import result
    */
   async executeImport(lines: ImportLine[], options: ImportOptions): Promise<ImportResult> {
     const result: ImportResult = {
