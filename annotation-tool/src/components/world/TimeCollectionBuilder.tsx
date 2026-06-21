@@ -771,7 +771,11 @@ export default function TimeCollectionBuilder({
                         <Label>Anchor Event</Label>
                         <Select value={anchorReference} onValueChange={(v) => setAnchorReference(v ?? '')}>
                           <SelectTrigger className="w-full">
-                            <SelectValue placeholder="Select an event" />
+                            <SelectValue placeholder="Select an event">
+                              {anchorReference
+                                ? events.find((event) => event.id === anchorReference)?.name ?? null
+                                : null}
+                            </SelectValue>
                           </SelectTrigger>
                           <SelectContent>
                             {events.map(event => (

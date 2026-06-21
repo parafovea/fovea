@@ -700,7 +700,11 @@ export default function TimeBuilder({
                           <Label>Video</Label>
                           <Select value={selectedVideoId} onValueChange={(v) => setSelectedVideoId(v ?? '')}>
                             <SelectTrigger className="w-full">
-                              <SelectValue placeholder="Select a video" />
+                              <SelectValue placeholder="Select a video">
+                                {selectedVideoId
+                                  ? videos.find((video) => video.id === selectedVideoId)?.title ?? null
+                                  : null}
+                              </SelectValue>
                             </SelectTrigger>
                             <SelectContent>
                               {videos.map(video => (
@@ -857,7 +861,11 @@ export default function TimeBuilder({
                             <Label>Anchor Event</Label>
                             <Select value={deicticAnchorTime} onValueChange={(v) => setDeicticAnchorTime(v ?? '')}>
                               <SelectTrigger className="w-full">
-                                <SelectValue placeholder="Select an event" />
+                                <SelectValue placeholder="Select an event">
+                                  {deicticAnchorTime
+                                    ? events.find((event) => event.id === deicticAnchorTime)?.name ?? null
+                                    : null}
+                                </SelectValue>
                               </SelectTrigger>
                               <SelectContent>
                                 {events.map(event => (

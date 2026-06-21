@@ -239,7 +239,11 @@ export default function PersonaEditor({ open, onClose, persona }: PersonaEditorP
                 <Label className="text-sm font-medium">Project Assignment</Label>
                 <Select value={projectId} onValueChange={(v) => setProjectId(v ?? '')}>
                   <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Personal Workspace" />
+                    <SelectValue placeholder="Personal Workspace">
+                      {projectId
+                        ? myProjects.find((project) => project.id === projectId)?.name ?? null
+                        : null}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="">Personal Workspace</SelectItem>
