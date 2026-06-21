@@ -10,8 +10,10 @@ import {
 } from '@/components/ui/tooltip'
 import { usePersonas, useDeletePersona, usePersonaDeletionPreview } from '@store/queries'
 import { useAnnotationUiStore } from '@store/zustand'
+import { useProjectContextStore } from '@store/zustand/projectContextStore'
 import { Persona } from '@models/types'
 import { ConfirmDialog } from '@components/shared/ConfirmDialog'
+import { ExpandableText } from '@/components/ui/ExpandableText'
 
 interface PersonaBrowserProps {
   onSelectPersona: (personaId: string) => void
@@ -26,6 +28,7 @@ export default function PersonaBrowser({
 }: PersonaBrowserProps) {
   const { data: personas = [] } = usePersonas()
   const setSelectedPersonaId = useAnnotationUiStore((state) => state.setSelectedPersonaId)
+  const activeProjectId = useProjectContextStore((state) => state.activeProjectId)
   const [searchTerm, setSearchTerm] = useState('')
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [personaToDelete, setPersonaToDelete] = useState<Persona | null>(null)
@@ -36,10 +39,18 @@ export default function PersonaBrowser({
     deleteDialogOpen
   )
 
-  // Filter out hidden personas (defense-in-depth, backend also filters)
-  // and apply search term
+  // Filter out hidden personas (defense-in-depth, backend also filters),
+  // scope to the active project (or the personal workspace when none is
+  // active), and apply the search term. The personal workspace shows personas
+  // with no project assignment, matching how new personas inherit the active
+  // project in PersonaEditor.
   const filteredPersonas = personas
     .filter(persona => !persona.hidden)
+    .filter(persona =>
+      activeProjectId
+        ? persona.projectId === activeProjectId
+        : persona.projectId == null
+    )
     .filter(persona =>
       persona.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       persona.role.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -140,18 +151,18 @@ export default function PersonaBrowser({
                     </div>
                   </div>
 
-                  <p className="mb-4 min-h-[2.5em] text-sm">
-                    {persona.informationNeed.length > 100
-                      ? persona.informationNeed.substring(0, 100) + '...'
-                      : persona.informationNeed}
-                  </p>
+                  <ExpandableText
+                    text={persona.informationNeed}
+                    collapsedChars={100}
+                    className="mb-4 min-h-[2.5em] text-sm"
+                  />
 
                   {persona.details && (
-                    <p className="mt-2 text-xs italic text-muted-foreground">
-                      {persona.details.length > 80
-                        ? persona.details.substring(0, 80) + '...'
-                        : persona.details}
-                    </p>
+                    <ExpandableText
+                      text={persona.details}
+                      collapsedChars={80}
+                      className="mt-2 text-xs italic text-muted-foreground"
+                    />
                   )}
                 </CardContent>
 
