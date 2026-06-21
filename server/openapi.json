@@ -23352,7 +23352,7 @@
                         "type": "string"
                       },
                       "videoId": {
-                        "format": "uuid",
+                        "minLength": 1,
                         "type": "string"
                       },
                       "assignedUserId": {
@@ -23399,7 +23399,7 @@
                 ],
                 "properties": {
                   "videoId": {
-                    "format": "uuid",
+                    "minLength": 1,
                     "type": "string"
                   },
                   "assignedUserId": {
@@ -23448,7 +23448,7 @@
                       "type": "string"
                     },
                     "videoId": {
-                      "format": "uuid",
+                      "minLength": 1,
                       "type": "string"
                     },
                     "assignedUserId": {
@@ -23497,7 +23497,7 @@
           },
           {
             "schema": {
-              "format": "uuid",
+              "minLength": 1,
               "type": "string"
             },
             "in": "path",
@@ -23549,7 +23549,7 @@
                     "minItems": 1,
                     "type": "array",
                     "items": {
-                      "format": "uuid",
+                      "minLength": 1,
                       "type": "string"
                     }
                   },
@@ -24256,7 +24256,7 @@
                     "matchingVideoIds": {
                       "type": "array",
                       "items": {
-                        "format": "uuid",
+                        "minLength": 1,
                         "type": "string"
                       }
                     }
