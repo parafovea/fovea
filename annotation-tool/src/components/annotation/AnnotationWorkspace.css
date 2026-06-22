@@ -53,4 +53,18 @@
   height: 100% !important;
   object-fit: contain !important;
   z-index: 0 !important;
+  /*
+   * Pin the video onto its own GPU compositing layer. WebKit composites the
+   * absolutely-positioned video underneath the interactive annotation SVG
+   * overlay; without a dedicated layer it stops repainting the last decoded
+   * frame the moment playback pauses and shows the container's black
+   * background instead (a Safari-only black-out on pause). Promoting the
+   * element keeps the frame painted while paused. translateZ(0) forces the
+   * layer; backface-visibility paired with it is the long-standing Safari
+   * incantation that keeps the promotion stable across repaints.
+   */
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
 }

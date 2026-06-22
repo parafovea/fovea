@@ -14,6 +14,73 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { readFile } from 'fs/promises';
 
 import { config as appConfig } from '../config.js';
+import { RangeNotSatisfiableError } from '../lib/errors.js';
+
+/**
+ * Resolved inclusive byte range (both bounds are byte offsets the client
+ * will receive, `end` included).
+ */
+export interface ResolvedByteRange {
+  start: number;
+  end: number;
+}
+
+/**
+ * Parse a single HTTP `Range` request header against a known resource size,
+ * following RFC 7233 §2.1/§3.1. Handles the three forms media clients send:
+ *
+ * - `bytes=START-END`  fully bounded range
+ * - `bytes=START-`     open-ended range (to the last byte)
+ * - `bytes=-SUFFIX`    suffix range (the last SUFFIX bytes)
+ *
+ * Safari issues suffix and open-ended ranges (e.g. to read the trailing
+ * `moov` atom and to re-buffer on pause/resume) far more readily than Chrome,
+ * so mishandling them surfaces as Safari-only black frames and seek jumps
+ * while Chrome plays fine.
+ *
+ * @param rangeHeader - The raw `Range` header value, or undefined.
+ * @param size - The total size of the resource in bytes.
+ * @returns the resolved range when satisfiable; `'unsatisfiable'` when the
+ *   range is well-formed but cannot be served (caller responds 416); or
+ *   `null` when no/malformed/multi-range header is present (caller serves the
+ *   full resource, since RFC 7233 says an unparseable Range is ignored).
+ */
+export function parseByteRange(
+  rangeHeader: string | undefined,
+  size: number
+): ResolvedByteRange | 'unsatisfiable' | null {
+  if (!rangeHeader) return null;
+
+  // Only a single `bytes=` range is supported; anything else (multi-range,
+  // non-bytes units, junk) is ignored so the full resource is served.
+  const match = /^bytes=(\d*)-(\d*)$/.exec(rangeHeader.trim());
+  if (!match) return null;
+
+  const [, startStr, endStr] = match;
+  // `bytes=-` carries neither bound and is malformed.
+  if (startStr === '' && endStr === '') return null;
+
+  // A zero-length resource cannot satisfy any positive range request.
+  if (size <= 0) return 'unsatisfiable';
+
+  let start: number;
+  let end: number;
+  if (startStr === '') {
+    // Suffix range: the last `suffixLength` bytes.
+    const suffixLength = parseInt(endStr, 10);
+    if (suffixLength <= 0) return 'unsatisfiable';
+    start = Math.max(0, size - suffixLength);
+    end = size - 1;
+  } else {
+    start = parseInt(startStr, 10);
+    // Open-ended ranges run to the last byte; a stated end past EOF clamps to
+    // it so the declared Content-Length always matches the bytes streamed.
+    end = endStr === '' ? size - 1 : Math.min(parseInt(endStr, 10), size - 1);
+  }
+
+  if (start > end || start >= size) return 'unsatisfiable';
+  return { start, end };
+}
 
 /**
  * Video Storage Provider Interface
@@ -228,10 +295,12 @@ class LocalStorageProvider implements VideoStorageProvider {
     const contentType = this.getContentType(fullPath);
 
     // Handle range requests
-    if (range) {
-      const parts = range.replace(/bytes=/, '').split('-');
-      const start = parseInt(parts[0], 10);
-      const end = parts[1] ? parseInt(parts[1], 10) : stats.size - 1;
+    const parsed = parseByteRange(range, stats.size);
+    if (parsed === 'unsatisfiable') {
+      throw new RangeNotSatisfiableError(stats.size);
+    }
+    if (parsed) {
+      const { start, end } = parsed;
       const chunkSize = end - start + 1;
 
       const stream = createReadStream(fullPath, { start, end });
@@ -248,7 +317,7 @@ class LocalStorageProvider implements VideoStorageProvider {
       };
     }
 
-    // Full file
+    // Full file (no range header, or one that could not be parsed)
     const stream = createReadStream(fullPath);
     return {
       stream,
