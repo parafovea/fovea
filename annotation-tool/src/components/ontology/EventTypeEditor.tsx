@@ -199,7 +199,11 @@ export default function EventTypeEditor({ open, onClose, event, personaId }: Eve
             onValueChange={(val) => val && setSelectedRoleId(val)}
           >
             <SelectTrigger className="w-full">
-              <SelectValue placeholder="Add Role" />
+              <SelectValue placeholder="Add Role">
+                {selectedRoleId
+                  ? ontology?.roles.find((role) => role.id === selectedRoleId)?.name ?? null
+                  : null}
+              </SelectValue>
             </SelectTrigger>
             <SelectContent>
               {ontology?.roles
@@ -293,7 +297,11 @@ export default function EventTypeEditor({ open, onClose, event, personaId }: Eve
           }}
         >
           <SelectTrigger className="w-full">
-            <SelectValue placeholder="Select source persona" />
+            <SelectValue placeholder="Select source persona">
+              {sourcePersonaId
+                ? personas.find((persona) => persona.id === sourcePersonaId)?.name ?? null
+                : null}
+            </SelectValue>
           </SelectTrigger>
           <SelectContent>
             {personas.filter(p => p.id !== personaId).map(persona => (
@@ -313,7 +321,11 @@ export default function EventTypeEditor({ open, onClose, event, personaId }: Eve
             onValueChange={(val) => val && setSourceEventId(val)}
           >
             <SelectTrigger className="w-full">
-              <SelectValue placeholder="Select source event type" />
+              <SelectValue placeholder="Select source event type">
+                {sourceEventId
+                  ? sourceOntology.events.find((event) => event.id === sourceEventId)?.name ?? null
+                  : null}
+              </SelectValue>
             </SelectTrigger>
             <SelectContent>
               {sourceOntology.events.map(event => (

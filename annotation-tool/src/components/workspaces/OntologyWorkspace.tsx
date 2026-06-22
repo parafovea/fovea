@@ -526,7 +526,7 @@ export default function OntologyWorkspace() {
           <h2 className="text-lg font-semibold truncate">
             {selectedPersona?.name}
           </h2>
-          <p className="text-xs text-muted-foreground truncate">
+          <p className="text-xs text-muted-foreground whitespace-pre-wrap break-words">
             {selectedPersona?.role} - {selectedPersona?.informationNeed}
           </p>
         </div>

@@ -535,7 +535,11 @@ export default function TimeEditor({ open, onClose, time }: TimeEditorProps) {
                 <div style={{ minWidth: 200 }}>
                   <Select value={ref.videoId || '_none'} onValueChange={(value) => handleUpdateVideoReference(index, { ...ref, videoId: !value || value === '_none' ? '' : value })}>
                     <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Video" />
+                      <SelectValue placeholder="Video">
+                        {ref.videoId
+                          ? videos.find((video) => video.id === ref.videoId)?.title ?? null
+                          : null}
+                      </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="_none">None</SelectItem>

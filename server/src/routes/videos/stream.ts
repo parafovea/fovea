@@ -23,6 +23,7 @@ export const streamRoutes: FastifyPluginAsync<{
    * @returns Video file stream (supports partial content)
    */
   fastify.get('/api/videos/:videoId/stream', {
+    config: { rateLimit: false },
     schema: {
       description: 'Stream video file',
       tags: ['videos'],

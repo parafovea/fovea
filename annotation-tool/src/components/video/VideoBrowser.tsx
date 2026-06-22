@@ -11,6 +11,7 @@
  */
 
 import { useEffect, useState, useRef } from 'react'
+import type { RefObject } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Search,
@@ -552,6 +553,43 @@ export default function VideoBrowser() {
 }
 
 /**
+ * Observe an element and report when it first scrolls into view.
+ *
+ * Loads once: the observer disconnects after the first intersection so the
+ * element is never re-evaluated. A generous root margin starts the work just
+ * before the element enters the viewport.
+ *
+ * @param rootMargin - margin around the viewport used to trigger early
+ * @returns a ref to attach to the observed element and whether it has entered view
+ */
+function useInView(rootMargin: string): {
+  ref: RefObject<HTMLDivElement>
+  inView: boolean
+} {
+  const ref = useRef<HTMLDivElement>(null)
+  const [inView, setInView] = useState(false)
+
+  useEffect(() => {
+    const element = ref.current
+    if (!element) return
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          setInView(true)
+          observer.disconnect()
+        }
+      },
+      { rootMargin }
+    )
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [rootMargin])
+
+  return { ref, inView }
+}
+
+/**
  * Props for VideoCard component.
  */
 interface VideoCardProps {
@@ -632,6 +670,19 @@ function VideoCard({
   const hasSummary = Boolean(activePersonaId && videoSummaries[video.id]?.includes(activePersonaId))
   const activePersona = personas.find((p) => p.id === activePersonaId)
 
+  // Lazy-load the thumbnail background image. Native loading="lazy" does not
+  // apply to CSS background-images, so observe the card and only request the
+  // image once it nears the viewport. With hundreds of videos this keeps the
+  // initial load from saturating the connection pool.
+  const { ref: thumbnailRef, inView: thumbnailInView } = useInView('300px')
+  const [thumbSrc, setThumbSrc] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (thumbnailInView && thumbnailUrl) {
+      setThumbSrc(thumbnailUrl)
+    }
+  }, [thumbnailInView, thumbnailUrl])
+
   const { data: summary, isLoading: summaryLoading } = useVideoSummary(
     video.id,
     activePersonaId || '',
@@ -667,9 +718,10 @@ function VideoCard({
     >
       {/* Thumbnail area */}
       <div
+        ref={thumbnailRef}
         className="relative pt-[56.25%] bg-muted"
         style={{
-          backgroundImage: thumbnailUrl ? `url(${thumbnailUrl})` : 'none',
+          backgroundImage: thumbSrc ? `url(${thumbSrc})` : 'none',
           backgroundSize: 'cover',
           backgroundPosition: 'center',
         }}

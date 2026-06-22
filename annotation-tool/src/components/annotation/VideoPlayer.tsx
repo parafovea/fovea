@@ -1,4 +1,4 @@
-import React, { forwardRef, useEffect, useImperativeHandle } from 'react'
+import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useState } from 'react'
 import type Player from 'video.js/dist/types/player'
 import 'video.js/dist/video-js.css'
 import { VideoMetadata } from '@models/types'
@@ -102,6 +102,27 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
       onPlayingChange,
     })
 
+    // Track whether the stream failed to load (e.g. a 429 rate limit or a
+    // network error) so we can offer a retry instead of leaving a black player.
+    const [hasError, setHasError] = useState(false)
+
+    const handleVideoError = useCallback(() => {
+      setHasError(true)
+    }, [])
+
+    // Reload the current source once. Prefer the video.js player's load()
+    // (which re-fetches the configured source); fall back to the native
+    // element's load() if the player has not initialized yet.
+    const handleRetry = useCallback(() => {
+      setHasError(false)
+      const player = playerRef.current
+      if (player) {
+        player.load()
+        return
+      }
+      videoRef.current?.load()
+    }, [playerRef, videoRef])
+
     // Notify the parent once the underlying <video> element is attached to
     // the DOM, so consumers can render overlays in response to a real state
     // change (refs don't trigger re-renders). Fires with null on unmount.
@@ -158,12 +179,28 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
             muted={false}
             preload="auto"
             aria-label="Video being annotated"
+            onError={handleVideoError}
           >
             <p className="vjs-no-js">
               To view this video please enable JavaScript, and consider upgrading to a web browser that supports HTML5 video
             </p>
           </video>
         </div>
+        {hasError && (
+          <div
+            role="alert"
+            className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-black/80 text-center text-white"
+          >
+            <p className="text-sm">The video stream failed to load.</p>
+            <button
+              type="button"
+              onClick={handleRetry}
+              className="rounded-md border border-white/40 px-4 py-2 text-sm font-medium hover:bg-white/10"
+            >
+              Retry
+            </button>
+          </div>
+        )}
         {children}
       </div>
     )

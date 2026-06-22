@@ -25,19 +25,24 @@ const NullableString = Type.Unsafe<string | null>({ type: ['string', 'null'] })
 // Shared TypeBox schemas
 // ---------------------------------------------------------------------------
 
+// Video IDs are free-form strings (imported videos use short hex such as
+// '49021047b9610ec8'); only the Prisma-generated default is a UUID, so the
+// schema must not constrain video IDs to UUID format.
+const VideoId = Type.String({ minLength: 1 })
+
 const ProjectIdParams = Type.Object({
   projectId: Type.String({ format: 'uuid' }),
 })
 
 const ProjectVideoParams = Type.Object({
   projectId: Type.String({ format: 'uuid' }),
-  videoId: Type.String({ format: 'uuid' }),
+  videoId: VideoId,
 })
 
 const AssignmentResponseSchema = Type.Object({
   id: Type.String({ format: 'uuid' }),
   projectId: Type.String({ format: 'uuid' }),
-  videoId: Type.String({ format: 'uuid' }),
+  videoId: VideoId,
   assignedUserId: NullableString,
   source: Type.String(),
   ruleDefinition: Type.Optional(Type.Unknown()),
@@ -46,12 +51,12 @@ const AssignmentResponseSchema = Type.Object({
 })
 
 const AssignVideoBody = Type.Object({
-  videoId: Type.String({ format: 'uuid' }),
+  videoId: VideoId,
   assignedUserId: Type.Optional(Type.String({ format: 'uuid' })),
 })
 
 const BulkAssignBody = Type.Object({
-  videoIds: Type.Array(Type.String({ format: 'uuid' }), { minItems: 1 }),
+  videoIds: Type.Array(VideoId, { minItems: 1 }),
   projectId: Type.String({ format: 'uuid' }),
   assignedUserId: Type.Optional(Type.String({ format: 'uuid' })),
 })
@@ -654,7 +659,7 @@ const videoAssignmentsRoute: FastifyPluginAsync = async (fastify) => {
           200: Type.Object({
             ruleId: Type.String({ format: 'uuid' }),
             matchingVideoCount: Type.Number(),
-            matchingVideoIds: Type.Array(Type.String({ format: 'uuid' })),
+            matchingVideoIds: Type.Array(VideoId),
           }),
         },
       },

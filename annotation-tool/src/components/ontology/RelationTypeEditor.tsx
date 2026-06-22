@@ -494,7 +494,11 @@ export default function RelationTypeEditor({
               onValueChange={(val) => val && setSourceId(val)}
             >
               <SelectTrigger className="w-full">
-                <SelectValue placeholder="Select source" />
+                <SelectValue placeholder="Select source">
+                  {sourceId
+                    ? getSourceOptions().find((item) => item.id === sourceId)?.name ?? null
+                    : null}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 {getSourceOptions().map(item => (
@@ -537,7 +541,11 @@ export default function RelationTypeEditor({
               onValueChange={(val) => val && setTargetId(val)}
             >
               <SelectTrigger className="w-full">
-                <SelectValue placeholder="Select target" />
+                <SelectValue placeholder="Select target">
+                  {targetId
+                    ? getTargetOptions().find((item) => item.id === targetId)?.name ?? null
+                    : null}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 {getTargetOptions().map(item => (

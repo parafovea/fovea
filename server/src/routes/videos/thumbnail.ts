@@ -36,6 +36,7 @@ export const thumbnailRoutes: FastifyPluginAsync<{
    * @returns Thumbnail image stream
    */
   fastify.get('/api/videos/:videoId/thumbnail', {
+    config: { rateLimit: false },
     schema: {
       description: 'Get or generate video thumbnail',
       tags: ['videos'],
