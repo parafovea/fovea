@@ -177,7 +177,11 @@ export function ClaimRelationEditor({
               disabled={claimRelationTypes.length === 0}
             >
               <SelectTrigger id="claim-relation-type" className="w-full" aria-label="Relation Type">
-                <SelectValue placeholder="Select relation type" />
+                <SelectValue placeholder="Select relation type">
+                  {relationTypeId
+                    ? claimRelationTypes.find((rt) => rt.id === relationTypeId)?.name ?? null
+                    : null}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 {claimRelationTypes.map((rt) => (
@@ -205,7 +209,16 @@ export function ClaimRelationEditor({
               disabled={flatClaims.length === 0}
             >
               <SelectTrigger id="claim-relation-target" className="w-full" aria-label="Target Claim">
-                <SelectValue placeholder="Select target claim" />
+                <SelectValue placeholder="Select target claim">
+                  {targetClaimId
+                    ? (() => {
+                        const claim = flatClaims.find((c) => c.id === targetClaimId)
+                        if (!claim) return null
+                        const text = getClaimText(claim)
+                        return `${text.substring(0, 100)}${text.length > 100 ? '...' : ''}`
+                      })()
+                    : null}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 {flatClaims.map((claim) => (

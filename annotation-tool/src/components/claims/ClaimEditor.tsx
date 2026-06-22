@@ -757,7 +757,11 @@ export function ClaimEditor({
                       onValueChange={(v) => setClaimEventId(v ?? '')}
                     >
                       <SelectTrigger className="w-full">
-                        <SelectValue placeholder="None" />
+                        <SelectValue placeholder="None">
+                          {claimEventId
+                            ? events.find((e) => e.id === claimEventId)?.name ?? null
+                            : null}
+                        </SelectValue>
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="">None</SelectItem>
@@ -775,7 +779,14 @@ export function ClaimEditor({
                       onValueChange={(v) => setClaimTimeId(v ?? '')}
                     >
                       <SelectTrigger className="w-full">
-                        <SelectValue placeholder="None" />
+                        <SelectValue placeholder="None">
+                          {claimTimeId
+                            ? (() => {
+                                const time = times.find((t) => t.id === claimTimeId)
+                                return time ? (time.label ?? time.id) : null
+                              })()
+                            : null}
+                        </SelectValue>
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="">None</SelectItem>
@@ -793,7 +804,11 @@ export function ClaimEditor({
                       onValueChange={(v) => setClaimLocationId(v ?? '')}
                     >
                       <SelectTrigger className="w-full">
-                        <SelectValue placeholder="None" />
+                        <SelectValue placeholder="None">
+                          {claimLocationId
+                            ? locations.find((l) => l.id === claimLocationId)?.name ?? null
+                            : null}
+                        </SelectValue>
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="">None</SelectItem>

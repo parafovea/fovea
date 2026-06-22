@@ -549,7 +549,9 @@ export default function AnnotationWorkspace() {
                 <ArrowLeft className="size-4" />
               </Button>
               <h2 className="text-xl font-semibold">
-                {currentVideo?.uploader || currentVideo?.uploaderId || 'Loading...'}
+                {!currentVideo
+                  ? 'Loading...'
+                  : currentVideo.uploader || currentVideo.uploaderId || currentVideo.title || currentVideo.filename || 'Untitled video'}
                 {currentVideo?.uploaderId && (
                   <>
                     {' '}(
@@ -575,7 +577,7 @@ export default function AnnotationWorkspace() {
 
             {/* Description */}
             {currentVideo?.description && (
-              <p className="text-sm">
+              <p className="text-sm max-h-28 overflow-y-auto whitespace-pre-wrap">
                 {currentVideo.description}
               </p>
             )}
@@ -818,13 +820,18 @@ export default function AnnotationWorkspace() {
                         {selectedPersonaLabel || 'Select Persona'}
                       </SelectValue>
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent
+                      alignItemWithTrigger={false}
+                      className="min-w-[320px]"
+                    >
                       <SelectItem value="">
                         <em>None</em>
                       </SelectItem>
                       {personas.map((persona) => (
                         <SelectItem key={persona.id} value={persona.id}>
-                          {persona.name} ({persona.role})
+                          <span className="whitespace-normal">
+                            {persona.name} ({persona.role})
+                          </span>
                         </SelectItem>
                       ))}
                     </SelectContent>

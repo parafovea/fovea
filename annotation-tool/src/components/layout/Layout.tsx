@@ -121,6 +121,20 @@ export default function Layout() {
     }
   }, [myProjects, setActiveProject, clearProject])
 
+  // Default a project member into their first project once on load. Without
+  // this, members land on an empty Personal Workspace. The guard fires a single
+  // time and only while the store is still at its initial null, so it never
+  // fights a later explicit switch back to the Personal Workspace.
+  const didDefaultProjectRef = useRef(false)
+  useEffect(() => {
+    if (didDefaultProjectRef.current) return
+    if (activeProjectId === null && myProjects.length > 0) {
+      didDefaultProjectRef.current = true
+      const first = myProjects[0]
+      setActiveProject(first.id, first.name, first.myRole ?? 'member')
+    }
+  }, [activeProjectId, myProjects, setActiveProject])
+
   // Note: unsavedChanges is no longer tracked; TanStack Query handles mutation state
   const unsavedChanges = false
 

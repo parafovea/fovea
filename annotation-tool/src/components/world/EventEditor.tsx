@@ -320,7 +320,17 @@ export default function EventEditor({ open, onClose, event }: EventEditorProps) 
               </Label>
               <Select value={selectedTimeId || '_none'} onValueChange={(value) => setSelectedTimeId(!value || value === '_none' ? '' : value)}>
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="None" />
+                  <SelectValue placeholder="None">
+                    {selectedTimeId
+                      ? (() => {
+                          const time = times.find((t) => t.id === selectedTimeId)
+                          if (!time) return null
+                          return time.label || (time.type === 'instant'
+                            ? `Instant: ${(time as TimeInstant).timestamp}`
+                            : `Interval: ${(time as TimeInterval).startTime || '?'} - ${(time as TimeInterval).endTime || '?'}`)
+                        })()
+                      : null}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="_none">None</SelectItem>
@@ -342,7 +352,11 @@ export default function EventEditor({ open, onClose, event }: EventEditorProps) 
               </Label>
               <Select value={selectedLocationId || '_none'} onValueChange={(value) => setSelectedLocationId(!value || value === '_none' ? '' : value)}>
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="None" />
+                  <SelectValue placeholder="None">
+                    {selectedLocationId
+                      ? locationEntities.find((location) => location.id === selectedLocationId)?.name ?? null
+                      : null}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="_none">None</SelectItem>
@@ -432,7 +446,11 @@ export default function EventEditor({ open, onClose, event }: EventEditorProps) 
                       setParticipants([])
                     }}>
                       <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Select Persona" />
+                        <SelectValue placeholder="Select Persona">
+                          {selectedPersonaId
+                            ? personas.find((persona) => persona.id === selectedPersonaId)?.name ?? null
+                            : null}
+                        </SelectValue>
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="_none">Select Persona</SelectItem>
@@ -448,7 +466,11 @@ export default function EventEditor({ open, onClose, event }: EventEditorProps) 
                       <>
                         <Select value={selectedEventTypeId || '_none'} onValueChange={(value) => setSelectedEventTypeId(!value || value === '_none' ? '' : value)}>
                           <SelectTrigger className="w-full">
-                            <SelectValue placeholder="Select Event Type" />
+                            <SelectValue placeholder="Select Event Type">
+                              {selectedEventTypeId
+                                ? availableEventTypes.find((type) => type.id === selectedEventTypeId)?.name ?? null
+                                : null}
+                            </SelectValue>
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="_none">Select Event Type</SelectItem>
@@ -466,7 +488,11 @@ export default function EventEditor({ open, onClose, event }: EventEditorProps) 
                             <div key={index} className="flex gap-2">
                               <Select value={participant.entityId || '_none'} onValueChange={(value) => handleUpdateParticipant(index, 'entityId', !value || value === '_none' ? '' : value)}>
                                 <SelectTrigger className="flex-1">
-                                  <SelectValue placeholder="Entity" />
+                                  <SelectValue placeholder="Entity">
+                                    {participant.entityId
+                                      ? entities.find((entity) => entity.id === participant.entityId)?.name ?? null
+                                      : null}
+                                  </SelectValue>
                                 </SelectTrigger>
                                 <SelectContent>
                                   <SelectItem value="_none">Select Entity</SelectItem>
@@ -479,7 +505,11 @@ export default function EventEditor({ open, onClose, event }: EventEditorProps) 
                               </Select>
                               <Select value={participant.roleTypeId || '_none'} onValueChange={(value) => handleUpdateParticipant(index, 'roleTypeId', !value || value === '_none' ? '' : value)}>
                                 <SelectTrigger className="flex-1">
-                                  <SelectValue placeholder="Role" />
+                                  <SelectValue placeholder="Role">
+                                    {participant.roleTypeId
+                                      ? availableRoleTypes.find((role) => role.id === participant.roleTypeId)?.name ?? null
+                                      : null}
+                                  </SelectValue>
                                 </SelectTrigger>
                                 <SelectContent>
                                   <SelectItem value="_none">Select Role</SelectItem>

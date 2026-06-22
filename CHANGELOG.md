@@ -5,6 +5,58 @@ All notable changes to the Fovea project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.1] - 2026-06-22
+
+The 0.5.1 patch resolves a batch of field-reported bugs surfaced on a self-hosted production deployment, spanning backend request validation and rate limiting, frontend request fan-out and resilience, and a set of annotation-workspace and persona-builder display fixes. No API shapes change and nothing is breaking; the cross-service contracts are unchanged.
+
+### Fixed
+
+#### Video Assignment Accepts Non-UUID Video IDs
+
+- The admin video-assignment endpoints (`server/src/routes/video-assignments.ts`) constrained every `videoId`/`videoIds` to `format: 'uuid'`, so they rejected any video whose id is not a UUID. FOVEA video ids are free-form strings — videos imported with externally-derived ids use a short hex form, and only Prisma-created videos are UUIDs — so the whole feature returned `400 must match format "uuid"` on those deployments. The video id fields now use a `VideoId = Type.String({ minLength: 1 })` schema; `projectId` and `assignedUserId`, which legitimately are UUIDs, stay format-constrained.
+
+#### Media Endpoints Exempt from the Global Rate Limit
+
+- The video stream and thumbnail routes (`server/src/routes/videos/stream.ts`, `thumbnail.ts`) now set `config: { rateLimit: false }`, removing them from the shared per-IP `@fastify/rate-limit` bucket. A grid that fanned out many per-card requests could exhaust the budget, after which `/stream` returned a 429 JSON body instead of video bytes (the player went black with `MEDIA_ERR_SRC_NOT_SUPPORTED`) and a 429 thumbnail re-fetched endlessly for lack of a cache header. Media bytes are no longer subject to the request limiter.
+
+#### Annotation Save Failures Are Surfaced
+
+- The annotation write mutations (`annotation-tool/src/store/queries/useAnnotations.ts`) defined only `onSuccess`, so a failed create/update/delete was swallowed — for a new box the drawing state reset and the box simply vanished, which read as "the tool is broken" rather than "the save failed." The three single-write mutations now route failures through an `onError` that toasts the backend-provided message (via the already-mounted `sonner` toaster), and the batch auto-save surfaces its collected per-annotation failures the same way.
+
+#### Ontology Requests No Longer Refetch on Every Navigation
+
+- `useAllPersonaOntologies` (`annotation-tool/src/store/queries/usePersonas.ts`) was configured with `staleTime: 0` and `refetchOnMount: 'always'`, so the (already-batched) ontology request re-fired on every navigation, including pages that do not need ontologies. It now uses a normal five-minute `staleTime` and the default mount behavior; mutations already invalidate the ontologies query key, so the data stays fresh without the per-navigation refetch.
+
+#### Id-Bound Select Triggers Show Names Instead of UUIDs
+
+- The shared Base UI Select renders a self-closing `<SelectValue/>`'s bound value verbatim, so id-bound dropdowns across the world, ontology, claims, project, and persona editors showed a raw UUID in the closed trigger (and briefly flashed it before the matching item mounted). Each id-bound call site now passes a children render function mapping the selected id to its label, with sentinel/empty values falling through to the placeholder; enum/label selects, whose value is already human-readable, are unchanged.
+
+#### Persona Select Wraps in the Open List
+
+- On the annotate page the persona Select clipped long "name (role)" labels in the open dropdown while overflowing its closed trigger. The closed-trigger truncation was already corrected; the open list now renders un-anchored at a wider width with wrapping item text, so the full persona label is readable while choosing. Scoped to that one call site; the shared Select component is unchanged.
+
+#### Long Video Descriptions No Longer Collapse the Player
+
+- On the annotate page a multi-thousand-character video description grew the header card unbounded and squeezed the flex-grow video player to near-zero height. The description block is now height-bounded and scrolls (`max-h-28 overflow-y-auto whitespace-pre-wrap`), so the player keeps the remaining column height.
+
+#### Annotate Header Title Falls Back to the Video Title
+
+- The annotate header showed "Loading..." indefinitely for videos with no uploader metadata (file-synced videos that carry a title but no `uploader`/`uploaderId`), because "Loading..." served as both the loading placeholder and the no-uploader fallback. It now shows "Loading..." only while the video is actually loading and otherwise falls back through `uploader`, `uploaderId`, `title`, `filename`, and finally "Untitled video".
+
+### Added
+
+#### Lazy Thumbnail Loading in the Video Grid
+
+- Each video-grid card now defers loading its thumbnail (a CSS background image, so the native `loading="lazy"` attribute does not apply) until the card nears the viewport, via an `IntersectionObserver` with a 300px margin that loads once. A large library no longer fires hundreds of concurrent thumbnail requests on first paint, which had saturated the browser's per-origin connection pool and competed with video streams.
+
+#### Video Stream Retry
+
+- When a video stream fails to load, the player now shows a "Retry" overlay that reloads the source once, instead of leaving a permanently black player. The global TanStack Query client also stops retrying 4xx/429 responses and no longer refetches on window focus, reducing the request fan-out that could trip the rate limiter in the first place.
+
+#### Persona Builder Readability
+
+- The persona/ontology builder gains several readability fixes: long persona descriptions in the list are expandable ("Show more"/"Show less") via a new reusable `ExpandableText`, the selected-persona detail header wraps its full description instead of clipping to one line, the persona list is scoped to the active project, and a user who belongs to a project now defaults into it on load rather than landing on an empty Personal Workspace. (The project dropdown's name-instead-of-UUID display shipped in 0.5.0.)
+
 ## [0.5.0] - 2026-06-22
 
 The 0.5.0 cycle delivers the architecture-modularization roadmap (`notes/architecture-review.md`): single sources of truth for configuration, containerization, the build/test surface, and cross-service contracts, plus a service/repository layer for the backend domains and a handful of folded-in bug fixes.

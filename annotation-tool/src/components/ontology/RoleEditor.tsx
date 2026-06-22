@@ -237,7 +237,11 @@ export default function RoleEditor({ open, onClose, role, personaId }: RoleEdito
           }}
         >
           <SelectTrigger className="w-full">
-            <SelectValue placeholder="Select source persona" />
+            <SelectValue placeholder="Select source persona">
+              {sourcePersonaId
+                ? personas.find((persona) => persona.id === sourcePersonaId)?.name ?? null
+                : null}
+            </SelectValue>
           </SelectTrigger>
           <SelectContent>
             {personas.filter(p => p.id !== personaId).map(persona => (
@@ -257,7 +261,11 @@ export default function RoleEditor({ open, onClose, role, personaId }: RoleEdito
             onValueChange={(val) => val && setSourceRoleId(val)}
           >
             <SelectTrigger className="w-full">
-              <SelectValue placeholder="Select source role type" />
+              <SelectValue placeholder="Select source role type">
+                {sourceRoleId
+                  ? sourceOntology.roles.find((role) => role.id === sourceRoleId)?.name ?? null
+                  : null}
+              </SelectValue>
             </SelectTrigger>
             <SelectContent>
               {sourceOntology.roles.map(role => (

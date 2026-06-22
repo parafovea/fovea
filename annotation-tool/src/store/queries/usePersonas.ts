@@ -166,8 +166,9 @@ export function useAllPersonaOntologies(personaIds: string[]) {
       return ontologies
     },
     enabled: personaIds.length > 0,
-    staleTime: 0, // Always refetch to get fresh data (needed for header Save button)
-    refetchOnMount: 'always', // Force refetch when component mounts
+    // Mutations already invalidate the ontologies query key, so a normal
+    // staleTime keeps the data fresh without refetching on every navigation.
+    staleTime: 5 * 60 * 1000,
   })
 }
 

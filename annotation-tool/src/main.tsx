@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
+import axios from 'axios'
 import { ThemeProvider } from 'next-themes'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { Toaster } from '@/components/ui/sonner'
@@ -204,8 +205,17 @@ async function maybeBootstrapDemoSession(): Promise<void> {
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      retry: 1,
-      refetchOnWindowFocus: true,
+      // Do not retry client errors (4xx, including 429 rate limits); a retry
+      // cannot fix a bad request and only amplifies request fan-out. For other
+      // failures (network, 5xx) allow a single retry.
+      retry: (failureCount, error) => {
+        const status = axios.isAxiosError(error) ? error.response?.status : undefined
+        if (status && status >= 400 && status < 500) return false
+        return failureCount < 1
+      },
+      // Refetching on window focus multiplies request volume across the app
+      // and is not needed given staleTime + explicit invalidation on mutations.
+      refetchOnWindowFocus: false,
       staleTime: 5 * 60 * 1000, // 5 minutes
     },
   },

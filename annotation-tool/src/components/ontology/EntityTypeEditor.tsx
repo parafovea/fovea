@@ -213,7 +213,11 @@ export default function EntityTypeEditor({ open, onClose, entity, personaId }: E
           }}
         >
           <SelectTrigger className="w-full">
-            <SelectValue placeholder="Select source persona" />
+            <SelectValue placeholder="Select source persona">
+              {sourcePersonaId
+                ? personas.find((persona) => persona.id === sourcePersonaId)?.name ?? null
+                : null}
+            </SelectValue>
           </SelectTrigger>
           <SelectContent>
             {personas.filter(p => p.id !== personaId).map(persona => (
@@ -233,7 +237,11 @@ export default function EntityTypeEditor({ open, onClose, entity, personaId }: E
             onValueChange={(val) => val && setSourceEntityId(val)}
           >
             <SelectTrigger className="w-full">
-              <SelectValue placeholder="Select source entity type" />
+              <SelectValue placeholder="Select source entity type">
+                {sourceEntityId
+                  ? sourceOntology.entities.find((entity) => entity.id === sourceEntityId)?.name ?? null
+                  : null}
+              </SelectValue>
             </SelectTrigger>
             <SelectContent>
               {sourceOntology.entities.map(entity => (

@@ -10931,7 +10931,6 @@ export interface paths {
                             id: string;
                             /** Format: uuid */
                             projectId: string;
-                            /** Format: uuid */
                             videoId: string;
                             assignedUserId: null | string;
                             source: string;
@@ -10958,7 +10957,6 @@ export interface paths {
             requestBody: {
                 content: {
                     "application/json": {
-                        /** Format: uuid */
                         videoId: string;
                         /** Format: uuid */
                         assignedUserId?: string;
@@ -10977,7 +10975,6 @@ export interface paths {
                             id: string;
                             /** Format: uuid */
                             projectId: string;
-                            /** Format: uuid */
                             videoId: string;
                             assignedUserId: null | string;
                             source: string;

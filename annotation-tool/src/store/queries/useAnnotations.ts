@@ -8,6 +8,8 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useRef } from 'react'
+import axios from 'axios'
+import { toast } from 'sonner'
 import { Annotation, BoundingBox, InterpolationType, InterpolationSegment } from '@models/types'
 import { api } from '@services/api'
 import { generateId } from '@utils/uuid'
@@ -15,6 +17,21 @@ import { BoundingBoxInterpolator } from '@utils/interpolation'
 
 // Shared interpolator instance
 const interpolator = new BoundingBoxInterpolator()
+
+/**
+ * Surface an annotation write failure to the user via a toast.
+ *
+ * Extracts the backend-provided message from an axios error when present,
+ * falling back to the error's own message and finally a generic string.
+ */
+function notifyAnnotationWriteError(error: unknown): void {
+  const message = axios.isAxiosError<{ message?: string }>(error)
+    ? (error.response?.data?.message ?? error.message)
+    : error instanceof Error
+      ? error.message
+      : 'Failed to save annotation'
+  toast.error(message)
+}
 
 /** Query keys for annotations */
 export const annotationKeys = {
@@ -83,6 +100,7 @@ export function useAddAnnotation() {
         (old = []) => [...old, savedAnnotation]
       )
     },
+    onError: notifyAnnotationWriteError,
   })
 }
 
@@ -113,6 +131,7 @@ export function useUpdateAnnotation() {
         (old = []) => old.map(a => a.id === annotation.id ? annotation : a)
       )
     },
+    onError: notifyAnnotationWriteError,
   })
 }
 
@@ -142,6 +161,7 @@ export function useDeleteAnnotation() {
         (old = []) => old.filter(a => a.id !== annotationId)
       )
     },
+    onError: notifyAnnotationWriteError,
   })
 }
 
@@ -210,6 +230,14 @@ export function useSaveAnnotations() {
       }
 
       return { videoId, annotations, results }
+    },
+    onSuccess: ({ results }) => {
+      // mutationFn collects per-annotation failures rather than rejecting,
+      // so a partial failure resolves here instead of hitting onError. Surface
+      // those collected failures to the user.
+      if (results.errors.length > 0) {
+        toast.error(`Failed to save ${results.errors.length} annotation change(s)`)
+      }
     },
     onMutate: async ({ videoId, annotations }) => {
       // Cancel any outgoing refetches to avoid overwriting optimistic update
