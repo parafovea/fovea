@@ -12,8 +12,8 @@ jobs:
   build-and-push-images:
     name: Build Release Images
     runs-on: ubuntu-latest
-    # Backstop so a wedged build (historically the disk-starved GPU image)
-    # fails fast instead of burning the full 6 h GitHub Actions job ceiling.
+    # Backstop so a wedged build fails fast instead of burning the full 6 h
+    # GitHub Actions job ceiling.
     timeout-minutes: 90
     permissions:
       contents: read
@@ -55,20 +55,12 @@ jobs:
             build-args: |
               DEVICE=cpu
               BUILD_MODE=minimal
-          - name: model-service-gpu
-            context: ./model-service
-            platforms: linux/amd64
-            build-args: |
-              DEVICE=gpu
-              BUILD_MODE=full
     steps:
       - uses: actions/checkout@v4
 
-      # The model-service "full" GPU image (CUDA + the entire ML stack) is
-      # multi-GB and exhausts the stock runner's ~14 GB free disk mid-build,
-      # which is what stalled the prior release runs to the 6 h ceiling.
-      # Reclaim ~25 GB of preinstalled toolchains first, matching docker.yml.
-      # (QEMU is gone: every image now builds amd64-native, no emulation.)
+      # Reclaim ~25 GB of preinstalled toolchains so the image builds have
+      # ample disk headroom, matching docker.yml. (QEMU is gone: every image
+      # builds amd64-native, no emulation.)
       - name: Free up disk space
         run: |
           sudo rm -rf /usr/share/dotnet
@@ -116,11 +108,10 @@ jobs:
     name: Create GitHub Release
     runs-on: ubuntu-latest
     # Deliberately independent of build-and-push-images (no `needs`): the
-    # GitHub Release and its notes do not depend on the images, and the
-    # heavy model-service-gpu image has historically hit the 90 min ceiling
-    # and been cancelled. Coupling the Release to that build is exactly how
-    # the v0.4.3 Release came to be missing. Keeping this job independent
-    # guarantees a tag always publishes a Release even if an image times out.
+    # GitHub Release and its notes do not depend on the images. Coupling the
+    # Release to the image builds is exactly how the v0.4.3 Release came to be
+    # missing, so keeping this job independent guarantees a tag always
+    # publishes a Release even if an image build fails.
     permissions:
       contents: write
     steps:
