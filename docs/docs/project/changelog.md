@@ -63,7 +63,7 @@ The 0.5.1 patch resolves a batch of field-reported bugs surfaced on a self-hoste
 
 - The persona/ontology builder gains several readability fixes: long persona descriptions in the list are expandable ("Show more"/"Show less") via a new reusable `ExpandableText`, the selected-persona detail header wraps its full description instead of clipping to one line, the persona list is scoped to the active project, and a user who belongs to a project now defaults into it on load rather than landing on an empty Personal Workspace. (The project dropdown's name-instead-of-UUID display shipped in 0.5.0.)
 
-## [0.5.0] - 2026-06-19
+## [0.5.0] - 2026-06-22
 
 The 0.5.0 cycle delivers the architecture-modularization roadmap (`notes/architecture-review.md`): single sources of truth for configuration, containerization, the build/test surface, and cross-service contracts, plus a service/repository layer for the backend domains and a handful of folded-in bug fixes.
 
