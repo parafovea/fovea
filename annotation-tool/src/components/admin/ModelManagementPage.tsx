@@ -41,6 +41,7 @@ import {
   useLoadModel,
 } from '@store/queries/useModelConfig'
 import type { ModelOption } from '@api/client'
+import { useTourAnchor } from '@/tours/engine/anchorRegistry'
 
 /**
  * Display name mapping for task types.
@@ -210,6 +211,8 @@ function TaskDownloadStatus({ taskType }: { taskType: string }): JSX.Element | n
  * VRAM budget visualization, download status, and save/reset/refresh controls.
  */
 export function ModelManagementPage(): JSX.Element {
+  const pageAnchor = useTourAnchor('model-management-page')
+  const memoryAnchor = useTourAnchor('model-memory-validation')
   const { data: config, isLoading, error, refetch } = useModelConfig()
   const { data: validation, refetch: refetchValidation } = useMemoryValidation({
     enabled: !!config,
@@ -362,14 +365,13 @@ export function ModelManagementPage(): JSX.Element {
 
   const hasGpuTask = Object.values(devicePreferences).some((d) => d === 'gpu')
 
-  // Loading state — keep the data-tour-id on the wrapper so the
-  // Admin tour can still anchor here while config is fetching or
-  // the model-service is unreachable (demo deployments skip the
-  // model-service container entirely, so the production fetch
-  // errors here and would otherwise hide the anchor).
+  // The loading wrapper carries the page anchor so the Admin tour can
+  // anchor here while config is fetching or the model-service is
+  // unreachable (demo deployments skip the model-service container, so
+  // the fetch errors and the anchor must still resolve).
   if (isLoading) {
     return (
-      <div className="p-6" data-tour-id="model-management-page">
+      <div className="p-6" ref={pageAnchor}>
         <Skeleton className="h-8 w-2/5 mb-2" />
         <Skeleton className="h-5 w-3/5 mb-6" />
         <Skeleton className="h-[120px] w-full mb-4" />
@@ -379,20 +381,19 @@ export function ModelManagementPage(): JSX.Element {
     )
   }
 
-  // Error state — preserve both the model-management-page anchor AND
-  // the model-memory-validation child anchor so the Admin tour can
-  // walk through Models → VRAM-validation even when the model-
-  // service is offline (e.g. in DEMO_PUBLIC builds that skip the
-  // model-service container entirely).
+  // The error wrapper carries both the page anchor and the
+  // memory-validation child anchor so the Admin tour can walk through
+  // Models then VRAM validation even when the model-service is offline
+  // (demo builds skip the model-service container).
   if (error) {
     return (
-      <div className="p-6" data-tour-id="model-management-page">
+      <div className="p-6" ref={pageAnchor}>
         <Alert variant="destructive">
           <AlertDescription>
             Failed to load model configuration: {error.message}
           </AlertDescription>
         </Alert>
-        <div className="sr-only" aria-hidden="true" data-tour-id="model-memory-validation" />
+        <div className="sr-only" aria-hidden="true" ref={memoryAnchor} />
       </div>
     )
   }
@@ -400,11 +401,11 @@ export function ModelManagementPage(): JSX.Element {
   // No config state
   if (!config) {
     return (
-      <div className="p-6" data-tour-id="model-management-page">
+      <div className="p-6" ref={pageAnchor}>
         <Alert>
           <AlertDescription>No model configuration available.</AlertDescription>
         </Alert>
-        <div className="sr-only" aria-hidden="true" data-tour-id="model-memory-validation" />
+        <div className="sr-only" aria-hidden="true" ref={memoryAnchor} />
       </div>
     )
   }
@@ -415,7 +416,7 @@ export function ModelManagementPage(): JSX.Element {
   const isVramError = vramCalculation != null && !vramCalculation.valid
 
   return (
-    <div className="p-6" data-tour-id="model-management-page">
+    <div className="p-6" ref={pageAnchor}>
       {/* Header */}
       <div className="mb-6">
         <h3 className="text-lg font-semibold">Model Configuration</h3>
@@ -451,20 +452,18 @@ export function ModelManagementPage(): JSX.Element {
       )}
 
       {/*
-       * VRAM Budget bar — present only when a GPU is detected and at
-       * least one task is assigned to it. When the deployment has no
-       * GPU (e.g. demo builds that skip the model-service container
-       * entirely, or any CPU-only host), the budget bar is suppressed
-       * but the Admin tour still needs the model-memory-validation
-       * anchor to resolve, so we emit a sr-only placeholder that
-       * matches the same anchor — paralleling the loading / error
-       * branches earlier in this component.
+       * VRAM Budget bar, present only when a GPU is detected and at
+       * least one task is assigned to it. On a host with no GPU (CPU-only
+       * or a demo build that skips the model-service container), the
+       * budget bar is suppressed and a sr-only placeholder carries the
+       * memory-validation anchor instead, so the Admin tour resolves it
+       * the same way the loading and error branches do.
        */}
       {!(config.cudaAvailable && hasGpuTask && vramCalculation && validation) && (
-        <div className="sr-only" aria-hidden="true" data-tour-id="model-memory-validation" />
+        <div className="sr-only" aria-hidden="true" ref={memoryAnchor} />
       )}
       {config.cudaAvailable && hasGpuTask && vramCalculation && validation && (
-        <div className="rounded-lg border bg-card p-4 mb-6" data-tour-id="model-memory-validation">
+        <div className="rounded-lg border bg-card p-4 mb-6" ref={memoryAnchor}>
           <div className="flex items-center mb-2">
             <MemoryStick className="mr-2 h-4 w-4" />
             <span className="font-medium">VRAM Budget</span>

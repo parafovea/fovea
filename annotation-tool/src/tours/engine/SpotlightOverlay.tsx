@@ -1,29 +1,23 @@
 /**
- * SpotlightOverlay — full-viewport SVG overlay that draws a dashed
- * bounding-box outline + four corner handles around the current tour
- * anchor, visually echoing Fovea's `InteractiveBoundingBox`.
+ * The full-viewport overlay that draws a dashed bounding-box outline with four
+ * corner handles around the current tour anchor, echoing the workspace's
+ * interactive bounding box.
  *
- * Robustness contract:
- *   - When `modal=true`, click-through is blocked OUTSIDE the spotlight
- *     region but allowed INSIDE — the user can still interact with the
- *     highlighted control. We achieve this with four backdrop rectangles
- *     (top / right / bottom / left of the spotlight) that absorb clicks,
- *     leaving the spotlight rect itself as a hole the user clicks through.
- *     A single SVG with a mask cutout would still receive pointer events
- *     on the cut-out region, which is why we don't use that approach.
- *   - Re-measures on resize / scroll / target ResizeObserver. We do NOT
- *     install a document-wide MutationObserver — it fires on every style
- *     or class change anywhere in the app and tanks performance during
- *     animations. Instead, we re-measure via requestAnimationFrame ticks
- *     while the spotlight is mounted; this catches anchor moves caused
- *     by Popover/Dialog animations without the global observer cost.
- *   - Detects anchor detachment (`!document.contains(target)`) and fades
- *     the spotlight to null rather than stranding it on a stale rect.
- *   - Smoothly animates position transitions between steps via CSS
- *     transitions on the inner <g> transform, unless the user prefers
- *     reduced motion.
- *   - Scrolls the anchor into view if it's outside the viewport when the
- *     overlay mounts — otherwise the visitor sees backdrop and nothing else.
+ * Behavior:
+ *   - When `modal`, click-through is blocked outside the spotlight but allowed
+ *     inside, so the visitor can still operate the highlighted control. Four
+ *     backdrop rectangles (above / below / left / right of the spotlight)
+ *     absorb clicks, leaving the spotlight rect as a hole. A single masked rect
+ *     would still receive pointer events on the cut-out region.
+ *   - Re-measures on resize, scroll, and the target's ResizeObserver, and on
+ *     each requestAnimationFrame tick while mounted, so the outline follows
+ *     dialog and popover animations without a document-wide MutationObserver.
+ *   - Clears to null when the anchor detaches, rather than stranding a stale
+ *     rect.
+ *   - Animates position transitions between steps via CSS transitions on the
+ *     rect geometry, unless the visitor prefers reduced motion.
+ *   - Scrolls the anchor into view when it mounts off-screen, so the visitor is
+ *     not left looking at backdrop alone.
  */
 
 import { useEffect, useRef, useState } from 'react'
@@ -34,12 +28,18 @@ const HANDLE_SIZE = 8
 const STROKE_WIDTH = 2
 const STROKE_DASH = '6 4'
 const PADDING = 4
+/**
+ * A spotlight covering most of the viewport reads the same as no spotlight at
+ * all (a page-level anchor has no visible contrast against its surround), so
+ * above this fraction the overlay dims the whole page instead.
+ */
+const FULL_BACKDROP_COVERAGE = 0.7
 
 interface SpotlightOverlayProps {
   target: HTMLElement | null
   /** When true, click-through is blocked outside the spotlight. */
   modal?: boolean
-  /** Tinted backdrop (rgba). Defaults to a subtle dim. */
+  /** Tinted backdrop color. Defaults to a subtle dim. */
   backdropColor?: string
 }
 
@@ -77,24 +77,20 @@ export function SpotlightOverlay({
     let cancelled = false
 
     function measure() {
-      if (cancelled) return
-      // Anchor was removed from the DOM (Dialog closed, etc.) — clear
-      // rather than stranding on a stale rect.
-      if (!target || !document.contains(target)) {
+      if (cancelled || !target) return
+      // The anchor left the DOM (a dialog closed, etc.): clear rather than
+      // stranding on a stale rect.
+      if (!document.contains(target)) {
         if (rectRef.current !== null) setRect(null)
         return
       }
       const r = target.getBoundingClientRect()
-      // A zero-size measurement is ambiguous: either the anchor is hidden
-      // (display:none — it generates no layout boxes) and the spotlight must
-      // clear, or it is mid-animation and we should ignore this tick and
-      // re-measure on the next one. `getClientRects().length === 0` is true
-      // only for the former (display:none / not laid out), so use it to
-      // distinguish: clear when hidden, skip when merely transiently zero-size.
+      // A zero-size measurement is ambiguous: the anchor is either hidden
+      // (display:none, no layout boxes, clear the spotlight) or mid-animation
+      // (skip this tick). `getClientRects().length === 0` is true only for the
+      // former, so it distinguishes the two.
       if (r.width === 0 && r.height === 0) {
-        if (target.getClientRects().length === 0) {
-          if (rectRef.current !== null) setRect(null)
-        }
+        if (target.getClientRects().length === 0 && rectRef.current !== null) setRect(null)
         return
       }
       const next: Rect = {
@@ -112,16 +108,12 @@ export function SpotlightOverlay({
       rafId = window.requestAnimationFrame(tick)
     }
 
-    // Scroll the anchor into view if it's off-screen at mount. Use
-    // 'nearest' so we don't yank the page around for anchors that are
-    // already visible.
+    // Scroll the anchor into view when it mounts off-screen. 'nearest' avoids
+    // yanking the page around for anchors already visible.
     try {
       const r = target.getBoundingClientRect()
       const offscreen =
-        r.bottom < 0 ||
-        r.top > window.innerHeight ||
-        r.right < 0 ||
-        r.left > window.innerWidth
+        r.bottom < 0 || r.top > window.innerHeight || r.right < 0 || r.left > window.innerWidth
       if (offscreen) {
         target.scrollIntoView({
           behavior: prefersReducedMotion() ? 'auto' : 'smooth',
@@ -155,29 +147,17 @@ export function SpotlightOverlay({
     }
   }, [target])
 
-  // Full-screen backdrop when there is no specific anchor to spotlight
-  // OR the spotlight would cover most of the viewport (anchors like
-  // 'app-shell' are page-level; spotlighting them is the same as
-  // spotlighting nothing because there's no visible contrast between
-  // the cutout and the surround). Render a single dimming layer over
-  // the whole page so the step card has the visitor's focus.
-  const FULL_BACKDROP_COVERAGE_THRESHOLD = 0.7
   const useFullBackdrop =
     !rect ||
-    rect.width * rect.height >
-      viewport.width * viewport.height * FULL_BACKDROP_COVERAGE_THRESHOLD
+    rect.width * rect.height > viewport.width * viewport.height * FULL_BACKDROP_COVERAGE
+
   if (useFullBackdrop) {
     return (
       <svg
         data-fovea-tour-spotlight=""
         width={viewport.width}
         height={viewport.height}
-        style={{
-          position: 'fixed',
-          inset: 0,
-          zIndex: 1000,
-          pointerEvents: 'none',
-        }}
+        style={{ position: 'fixed', inset: 0, zIndex: 1000, pointerEvents: 'none' }}
         aria-hidden="true"
       >
         <rect
@@ -192,9 +172,9 @@ export function SpotlightOverlay({
     )
   }
 
-  // Backdrop is built from four rectangles that surround the spotlight
-  // hole. The spotlight rect itself has NO backdrop fill above it, so
-  // clicks on the highlighted control pass through to the underlying UI.
+  // Four rectangles surround the spotlight hole. The spotlight rect itself has
+  // no backdrop fill above it, so clicks on the highlighted control pass
+  // through to the underlying UI.
   const bdAbove: Rect = { x: 0, y: 0, width: viewport.width, height: Math.max(0, rect.y) }
   const bdBelow: Rect = {
     x: 0,
@@ -202,12 +182,7 @@ export function SpotlightOverlay({
     width: viewport.width,
     height: Math.max(0, viewport.height - (rect.y + rect.height)),
   }
-  const bdLeft: Rect = {
-    x: 0,
-    y: rect.y,
-    width: Math.max(0, rect.x),
-    height: rect.height,
-  }
+  const bdLeft: Rect = { x: 0, y: rect.y, width: Math.max(0, rect.x), height: rect.height }
   const bdRight: Rect = {
     x: rect.x + rect.width,
     y: rect.y,
@@ -224,14 +199,7 @@ export function SpotlightOverlay({
       data-fovea-tour-spotlight=""
       width={viewport.width}
       height={viewport.height}
-      style={{
-        position: 'fixed',
-        inset: 0,
-        zIndex: 1000,
-        // The svg itself never blocks pointer events — only the backdrop
-        // rectangles do, which we toggle per-shape via pointerEvents.
-        pointerEvents: 'none',
-      }}
+      style={{ position: 'fixed', inset: 0, zIndex: 1000, pointerEvents: 'none' }}
       aria-hidden="true"
     >
       {[bdAbove, bdBelow, bdLeft, bdRight].map((r, i) => (
@@ -242,10 +210,7 @@ export function SpotlightOverlay({
           width={r.width}
           height={r.height}
           fill={backdropColor}
-          style={{
-            pointerEvents: modal ? 'auto' : 'none',
-            transition,
-          }}
+          style={{ pointerEvents: modal ? 'auto' : 'none', transition }}
         />
       ))}
       <rect

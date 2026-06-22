@@ -34,6 +34,7 @@ import { snapToKeyframe, xToFrame } from './viewport'
 import { useKeyframeDrag } from './useKeyframeDrag'
 import { useTimelineKeyboard } from './useTimelineKeyboard'
 import { useTimelineViewport } from './useTimelineViewport'
+import { useTourAnchor } from '@/tours/engine/anchorRegistry'
 import type { TimelineTrackModel } from './types'
 
 const TRACK_HEADER_WIDTH_PX = 180
@@ -147,6 +148,7 @@ export function TimelineRoot({
   const [isScrubbing, setIsScrubbing] = useState(false)
   const [selectedKeyframes, setSelectedKeyframes] = useState<ReadonlySet<number>>(new Set())
 
+  const timelineAnchor = useTourAnchor('timeline')
   const rulerTrackRef = useRef<HTMLDivElement>(null)
   // Synchronised vertical scrollers for the track-header column (left)
   // and the keyframe-surface column (right). Both halves carry one row
@@ -368,8 +370,8 @@ export function TimelineRoot({
 
   return (
     <div
+      ref={timelineAnchor}
       data-slot="timeline-root"
-      data-tour-id="timeline"
       aria-label="Video annotation timeline"
       className={cn(
         'relative flex w-full select-none flex-col overflow-hidden',

@@ -23,6 +23,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { useMyGroups, useCreateGroup } from '@store/queries/useGroups'
+import { useTourAnchor } from '@/tours/engine/anchorRegistry'
 
 function slugify(value: string): string {
   return value
@@ -35,6 +36,10 @@ export default function GroupsPage(): JSX.Element {
   const navigate = useNavigate()
   const { data: groups, isLoading, error } = useMyGroups()
   const createGroup = useCreateGroup()
+
+  const pageAnchor = useTourAnchor('groups-page')
+  const createButtonAnchor = useTourAnchor('groups-create-button')
+  const nameInputAnchor = useTourAnchor('group-name-input')
 
   const [dialogOpen, setDialogOpen] = useState(false)
   const [name, setName] = useState('')
@@ -74,10 +79,10 @@ export default function GroupsPage(): JSX.Element {
   }
 
   return (
-    <div className="mx-auto max-w-screen-lg px-4" data-tour-id="groups-page">
+    <div className="mx-auto max-w-screen-lg px-4" ref={pageAnchor}>
       <div className="flex items-center justify-between py-6">
         <h1 className="text-2xl font-bold">My Groups</h1>
-        <Button data-tour-id="groups-create-button" onClick={() => setDialogOpen(true)}>
+        <Button ref={createButtonAnchor} onClick={() => setDialogOpen(true)}>
           <Plus className="size-4" />
           Create Group
         </Button>
@@ -132,7 +137,7 @@ export default function GroupsPage(): JSX.Element {
               <Label htmlFor="group-name">Name</Label>
               <Input
                 id="group-name"
-                data-tour-id="group-name-input"
+                ref={nameInputAnchor}
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 autoFocus

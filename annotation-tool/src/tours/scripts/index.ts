@@ -1,20 +1,19 @@
 /**
- * Built-in tour registry — now a FUNCTION of the deployment's content
- * bundle. The default bundle (microvent — see ../content/microvent.ts)
- * gives every tour a coherent news-event running example. An admin
- * tailoring tours for their own users supplies a different
- * TourContentBundle and the tour narrations + suggested type names
- * update across the catalogue without touching the engine.
+ * Built-in tour registry: a function of the deployment's content bundle. The
+ * default bundle (microvent, see ../content/microvent.ts) gives every tour a
+ * coherent news-event running example. An admin tailoring tours for their own
+ * users supplies a different `TourContentBundle` and the tour narrations plus
+ * suggested type names update across the catalogue without touching the engine.
  *
- * Importers that need the static catalogue (the menu when no admin
- * override is in scope. The static-anchor smoke. The test handle's
- * findTour) read `defaultBuiltInTours`. Importers that need to render
- * tours against a specific admin's bundle call `getBuiltInTours(bundle)`.
+ * Importers that need the static catalogue (the menu when no admin override is
+ * in scope, the static-anchor smoke, the test handle's tour lookup) read
+ * `defaultBuiltInTours`. Importers that render tours against a specific admin's
+ * bundle call `getBuiltInTours(bundle)`.
  */
 
 import type { TourContentBundle } from '../content/types'
 import { microventContent } from '../content/microvent'
-import type { TourScript } from '../engine/types'
+import type { Tour } from '../engine'
 
 import { buildFirstAnnotationTour } from './first-annotation'
 import { buildOntologyAuthoringTour } from './ontology-authoring'
@@ -29,9 +28,7 @@ import { buildImportExportTour } from './import-export'
 import { buildWelcomeTour } from './welcome'
 import { buildKeyframesInterpolationTour } from './keyframes-interpolation'
 
-export function getBuiltInTours(
-  bundle: TourContentBundle,
-): readonly TourScript[] {
+export function getBuiltInTours(bundle: TourContentBundle): Tour[] {
   // Order matches the public tour catalogue's 4x3 grid: Welcome
   // first (orientation), followed by the four-layer arc (annotation,
   // ontology, world), then the model-assisted flows, then
@@ -54,23 +51,14 @@ export function getBuiltInTours(
 }
 
 /**
- * The default built-in tour list, baked against the microvent content
- * bundle. Use this when no admin-supplied bundle is in scope (the
- * static catalogue surfaces — menu defaults, tour-anchor smoke, the
- * window.__foveaTour test handle's findTour).
+ * The default built-in tour list, baked against the microvent content bundle.
+ * Use this when no admin-supplied bundle is in scope (the static catalogue
+ * surfaces: menu defaults, the tour-anchor smoke, the `window.__foveaTour` test
+ * handle's tour lookup).
  */
-export const defaultBuiltInTours: readonly TourScript[] = getBuiltInTours(
-  microventContent,
-)
+export const defaultBuiltInTours: Tour[] = getBuiltInTours(microventContent)
 
-/**
- * @deprecated Use `defaultBuiltInTours` or `getBuiltInTours(bundle)`.
- * Kept as an alias so the existing imports across the codebase keep
- * resolving; remove after the next sweep migrates them.
- */
-export const builtInTours = defaultBuiltInTours
-
-export function findTour(id: string): TourScript | undefined {
+export function findTour(id: string): Tour | undefined {
   return defaultBuiltInTours.find((t) => t.id === id)
 }
 

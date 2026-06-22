@@ -15,6 +15,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { ImportResult } from '@models/types'
+import { useTourAnchor } from '@/tours/engine/anchorRegistry'
 
 /**
  * Predicate for the orphan-skipped banner. Exported so it can be unit
@@ -53,6 +54,8 @@ interface ImportResultDialogProps {
  * @returns Import result dialog component
  */
 export function ImportResultDialog({ open, result, onClose }: ImportResultDialogProps): JSX.Element | null {
+  const importResultDialogRef = useTourAnchor('import-result-dialog')
+
   if (!result) return null
 
   return (
@@ -60,7 +63,7 @@ export function ImportResultDialog({ open, result, onClose }: ImportResultDialog
       open={open}
       onOpenChange={(isOpen) => { if (!isOpen) onClose() }}
     >
-      <DialogContent data-tour-id="import-result-dialog" className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
+      <DialogContent ref={importResultDialogRef} className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
             <span className="flex items-center gap-2">
