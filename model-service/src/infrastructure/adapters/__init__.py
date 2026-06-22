@@ -10,11 +10,10 @@ inbound
     Adapters that drive the application (e.g., FastAPI routes).
 outbound
     Adapters that the application drives (e.g., ML models, external APIs).
+
+Subpackages are imported by their concrete paths rather than re-exported
+here, so importing one adapter subpackage does not force-load its siblings
+(and the heavy ML dependencies they pull in).
 """
 
-from src.infrastructure.adapters import inbound, outbound
-
-__all__ = [
-    "inbound",
-    "outbound",
-]
+__all__: list[str] = []

@@ -3,6 +3,7 @@ import { Type } from '@sinclair/typebox'
 import { promises as fs } from 'fs'
 import path from 'path'
 import { createReadStream } from 'fs'
+import { config } from '../../config.js'
 import { VideoRepository } from '../../repositories/VideoRepository.js'
 import { VideoStorageProvider, VideoStorageConfig } from '../../services/videoStorage.js'
 import { NotFoundError, InternalError, AppError } from '../../lib/errors.js'
@@ -85,7 +86,7 @@ export const thumbnailRoutes: FastifyPluginAsync<{
       }
 
       // Generate thumbnail via model service
-      const modelServiceUrl = process.env.MODEL_SERVICE_URL || 'http://localhost:8000'
+      const modelServiceUrl = config.modelService.url
 
       // Get video URL that model service can access
       // For local storage, this will be a file path

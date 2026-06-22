@@ -42,11 +42,13 @@ import {
   useSavePersonaOntology,
   useWorld,
 } from '@store/queries'
-import { OntologyAugmenter, OntologyCategory } from '@components/ontology/OntologyAugmenter'
+import { OntologyAugmenter } from '@components/ontology/OntologyAugmenter'
+import type { OntologyCategory } from '@api/client'
 import { useModelConfig } from '@store/queries/useModelConfig'
 import { EntityType, RoleType, EventType, RelationType, GlossItem } from '@models/types'
 import { generateId } from '@utils/uuid'
 import { buildDuplicateOntologyType } from './duplicateOntologyType'
+import { config } from '@/config'
 
 /**
  * Union type for any ontology type item that can be filtered/edited.
@@ -165,7 +167,7 @@ export default function OntologyWorkspace() {
   // an admin expects new users to pick a persona deliberately.
   useEffect(() => {
     if (
-      import.meta.env.VITE_DEMO_PUBLIC === '1' &&
+      config.deploymentMode.publicBooth &&
       !selectedPersonaId &&
       personas.length > 0
     ) {

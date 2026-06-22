@@ -20,20 +20,11 @@ onnx
     ONNX Runtime model adapters for CPU inference.
 ctranslate2
     CTranslate2 model adapters for optimized CPU inference.
+
+Model subpackages are imported by their concrete paths rather than
+re-exported here, so importing one model adapter (for example
+``models.detection.loader``) does not force-load every sibling model
+subpackage and its heavy ML dependencies.
 """
 
-from src.infrastructure.adapters.outbound.models import (
-    audio,
-    detection,
-    llm,
-    tracking,
-    vlm,
-)
-
-__all__ = [
-    "audio",
-    "detection",
-    "llm",
-    "tracking",
-    "vlm",
-]
+__all__: list[str] = []

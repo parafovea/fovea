@@ -16,6 +16,8 @@ import axios, { AxiosError } from 'axios'
 import type { FastifyBaseLogger } from 'fastify'
 import type { PrismaClient } from '@prisma/client'
 
+import { config } from '../config.js'
+
 interface AdminPushPayload {
   key: string
   value: unknown
@@ -42,8 +44,8 @@ export async function pushSystemConfigRow(
   log: Pick<FastifyBaseLogger, 'warn' | 'info'>,
   payload: AdminPushPayload
 ): Promise<PushResult> {
-  const modelServiceUrl = process.env.MODEL_SERVICE_URL || 'http://model-service:8000'
-  const token = process.env.MODEL_SERVICE_ADMIN_TOKEN
+  const modelServiceUrl = config.modelService.url
+  const token = config.modelService.adminToken
   if (!token) {
     log.warn('MODEL_SERVICE_ADMIN_TOKEN not set; skipping SystemConfig propagation')
     return 'skipped-no-token'

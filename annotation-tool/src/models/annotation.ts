@@ -24,6 +24,14 @@ interface BaseAnnotation {
 
   /** Confidence score for this annotation (0-1) */
   confidence?: number
+  /**
+   * Display name of the linked world object, resolved server-side from the
+   * annotation owner's world. Lets a reviewer reading another annotator's
+   * object annotation show the object's name even though the object lives in
+   * the owner's private world (not the reviewer's). Used only as a fallback
+   * when the local world lookup cannot resolve the object.
+   */
+  linkedObjectName?: string | null
   /** User notes attached to this annotation */
   notes?: string
   /** Additional metadata */

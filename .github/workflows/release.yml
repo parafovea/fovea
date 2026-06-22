@@ -112,6 +112,52 @@ jobs:
           cache-from: type=gha,scope=${{ matrix.service.name }}
           cache-to: type=gha,mode=max,scope=${{ matrix.service.name }}
 
+  create-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    # Deliberately independent of build-and-push-images (no `needs`): the
+    # GitHub Release and its notes do not depend on the images, and the
+    # heavy model-service-gpu image has historically hit the 90 min ceiling
+    # and been cancelled. Coupling the Release to that build is exactly how
+    # the v0.4.3 Release came to be missing. Keeping this job independent
+    # guarantees a tag always publishes a Release even if an image times out.
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create or update the GitHub Release from the changelog
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          VERSION="${TAG#v}"
+          NOTES="$(mktemp)"
+          # Extract the "## [VERSION]" section body from CHANGELOG.md (from the
+          # version heading up to the next "## [" heading). `index(...)==1`
+          # anchors on a literal heading so version numbers are not treated as
+          # regex (the dots would otherwise match any character).
+          awk -v ver="## [$VERSION]" \
+            'index($0, ver) == 1 {f=1; next} f && /^## \[/ {exit} f' \
+            CHANGELOG.md > "$NOTES"
+          if [ ! -s "$NOTES" ]; then
+            echo "::warning::No CHANGELOG section for $VERSION; using auto-generated notes"
+            if gh release view "$TAG" >/dev/null 2>&1; then
+              gh release edit "$TAG" --title "$TAG"
+            else
+              gh release create "$TAG" --title "$TAG" --generate-notes --verify-tag
+            fi
+            exit 0
+          fi
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists; updating its notes from the changelog"
+            gh release edit "$TAG" --title "$TAG" --notes-file "$NOTES"
+          else
+            echo "Creating release $TAG from the changelog"
+            gh release create "$TAG" --title "$TAG" --notes-file "$NOTES" --verify-tag
+          fi
+
   update-deployment:
     name: Update Deployment Manifests
     runs-on: ubuntu-latest

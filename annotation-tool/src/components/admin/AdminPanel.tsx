@@ -45,6 +45,7 @@ import { PermissionsPage } from './PermissionsPage'
 import { ModelManagementPage } from './ModelManagementPage'
 import { SystemConfigPanel } from './SystemConfigPanel'
 import { DemoAdminPanel } from './DemoAdminPanel'
+import { config } from '@/config'
 
 /**
  * Admin panel component.
@@ -61,7 +62,7 @@ export function AdminPanel(): JSX.Element {
   // preview for any visitor — server-side mutation guards still
   // reject every POST/PUT/PATCH/DELETE from a non-admin so the
   // viewable preview is genuinely read-only.
-  const isDemoPublic = import.meta.env.VITE_DEMO_PUBLIC === '1'
+  const isDemoPublic = config.deploymentMode.publicBooth
   if (!isDemoPublic && !currentUser?.isAdmin) {
     return <Navigate to="/" replace />
   }

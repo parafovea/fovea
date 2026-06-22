@@ -133,8 +133,16 @@ test.describe('Annotation Auto-Save Persistence', () => {
     // Verify annotation exists
     await annotationWorkspace.expectBoundingBoxVisible()
 
+    // Editing a keyframe requires the annotation to be selected; after a
+    // reload the box is merely displayed, not selected. Click its sidebar row
+    // so the keyframe handler operates on it (and seeks to its start).
+    await annotationWorkspace.selectFirstAnnotation()
+
     // Show timeline to edit the annotation
     await annotationWorkspace.timeline.show()
+
+    // The freshly drawn box has exactly one keyframe.
+    await annotationWorkspace.expectKeyframeMarkerCountAtLeast(1)
 
     // Seek forward 20 frames
     for (let i = 0; i < 20; i++) {
@@ -151,6 +159,9 @@ test.describe('Annotation Auto-Save Persistence', () => {
     await editSavePromise
     await page.waitForTimeout(500)
 
+    // The edit added a second keyframe; confirm it is present before reload.
+    await annotationWorkspace.expectKeyframeMarkerCountAtLeast(2)
+
     // Reload again to verify the edit persisted
     await page.reload()
     await page.waitForLoadState('domcontentloaded')
@@ -166,8 +177,16 @@ test.describe('Annotation Auto-Save Persistence', () => {
     await personaOption2.click()
     await page.waitForTimeout(1000)
 
-    // Verify annotation with edits still exists
+    // Verify the annotation still exists.
     await annotationWorkspace.expectBoundingBoxVisible()
+
+    // The crux: the keyframe edit must have persisted to the database. Show the
+    // timeline and assert BOTH keyframes (original + edit) survived the reload.
+    // Before the auto-save loop fix this passed by catching an incidental loop
+    // save that never carried the keyframe; now the keyframe genuinely round-
+    // trips through the server.
+    await annotationWorkspace.timeline.show()
+    await annotationWorkspace.expectKeyframeMarkerCountAtLeast(2)
   })
 
   test('multiple rapid annotations all auto-save correctly', async ({

@@ -8,6 +8,7 @@ import {
   modelServiceCounter,
   modelServiceDuration,
 } from "../metrics.js";
+import { config as appConfig } from "../config.js";
 import { buildPersonaPrompts } from "../utils/queryBuilder.js";
 import {
   fetchModelService,
@@ -17,11 +18,18 @@ import {
 /**
  * Response type from model service /api/summarize endpoint.
  */
-interface ModelSummarizeResponse {
+export interface ModelSummarizeResponse {
   summary: string;
   visual_analysis: string;
   audio_transcript: string;
-  key_frames: number[];
+  // Mirrors the model-service `KeyFrame` shape (the producer sends objects,
+  // not frame indices). Persisted verbatim into the `keyFrames` JSON column.
+  key_frames: Array<{
+    frame_number: number;
+    timestamp: number;
+    description: string;
+    confidence: number;
+  }>;
   confidence: number;
   transcript_json?: Record<string, unknown>;
   audio_language?: string;
@@ -37,13 +45,13 @@ interface ModelSummarizeResponse {
 /**
  * Request type for model service /api/summarize endpoint.
  */
-interface ModelGenerationOverrides {
+export interface ModelGenerationOverrides {
   temperature?: number;
   top_p?: number;
   max_tokens?: number;
 }
 
-interface ModelAudioOverrides {
+export interface ModelAudioOverrides {
   beam_size?: number;
   compute_type?: 'float16' | 'float32' | 'int8' | 'int8_float16';
   num_speakers?: number;
@@ -52,7 +60,7 @@ interface ModelAudioOverrides {
   vad_threshold?: number;
 }
 
-interface ModelSummarizeRequest {
+export interface ModelSummarizeRequest {
   video_id: string;
   video_path?: string;
   persona_id: string;
@@ -73,8 +81,8 @@ interface ModelSummarizeRequest {
  * Uses environment variables with localhost defaults for development.
  */
 const connection = new Redis({
-  host: process.env.REDIS_HOST || "localhost",
-  port: parseInt(process.env.REDIS_PORT || "6379"),
+  host: appConfig.redis.host,
+  port: appConfig.redis.port,
   maxRetriesPerRequest: null,
 });
 
@@ -251,8 +259,7 @@ export const videoWorker = new Worker<
     const modelVideoPath = video.path.replace('/data/', '/videos/');
 
     // Call model service with metrics tracking
-    const modelServiceUrl =
-      process.env.MODEL_SERVICE_URL || "http://localhost:8000";
+    const modelServiceUrl = appConfig.modelService.url;
     const modelStartTime = Date.now();
 
     const camelCaseRequest = {
@@ -482,7 +489,7 @@ export interface ClaimExtractionResult {
 /**
  * Response type from model service /api/extract-claims endpoint.
  */
-interface ModelClaimExtractionResponse {
+export interface ModelClaimExtractionResponse {
   summary_id: string;
   claims: Array<{
     text: string;
@@ -582,8 +589,7 @@ export const claimWorker = new Worker<
     }
 
     // Call model service
-    const modelServiceUrl =
-      process.env.MODEL_SERVICE_URL || "http://localhost:8000";
+    const modelServiceUrl = appConfig.modelService.url;
     const modelStartTime = Date.now();
 
     await job.updateProgress(30);
@@ -836,7 +842,7 @@ export interface ClaimSynthesisResult {
 /**
  * Response type from model service /api/synthesize-summary endpoint.
  */
-interface ModelSynthesisResponse {
+export interface ModelSynthesisResponse {
   summary_id: string;
   summary_gloss: unknown[];
   model_used: string;
@@ -936,8 +942,7 @@ export const synthesisWorker = new Worker<
     const requestBody = snakecaseKeys(camelCaseRequestBody, { deep: true });
 
     // Call model service
-    const modelServiceUrl =
-      process.env.MODEL_SERVICE_URL || "http://localhost:8000";
+    const modelServiceUrl = appConfig.modelService.url;
     const modelStartTime = Date.now();
 
     await job.updateProgress(30);

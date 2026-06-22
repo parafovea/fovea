@@ -16,6 +16,8 @@
  * fetch-based call sites.
  */
 
+import { config } from '../config.js'
+
 export class ModelServiceTimeoutError extends Error {
   readonly endpoint: string
   readonly timeoutMs: number
@@ -85,43 +87,42 @@ export async function fetchModelService(
   }
 }
 
-/** Parse a positive-integer env var, falling back to a default when unset
- * or malformed. Used by the per-endpoint timeouts below so deployments
- * with slower upstream hardware (CPU-only model-service, cold-start
- * cloud instances) can raise the ceiling without a code change.
- */
-function envTimeoutMs(name: string, defaultMs: number): number {
-  const raw = process.env[name]
-  if (raw === undefined || raw === '') return defaultMs
-  const parsed = Number.parseInt(raw, 10)
-  if (Number.isFinite(parsed) && parsed > 0) return parsed
-  return defaultMs
-}
-
-/** Per-endpoint timeout defaults. Each value is the upper bound the
+/** Per-endpoint timeout accessors. Each value is the upper bound the
  * backend waits before aborting a forwarded request to the model-
  * service and surfacing 504 MODEL_SERVICE_TIMEOUT to the caller. The
- * defaults below target a GPU-warm production deployment; CPU-cold
- * first-load (e.g. the integration-models E2E stack) is materially
- * slower (an LLM augmenter call took 94s on first invocation, beyond
- * the prior 60s detection / augment ceilings), so deployments that
- * need higher ceilings override these via the matching env vars.
- */
-export const MODEL_SERVICE_TIMEOUTS = {
+ * defaults target a GPU-warm production deployment; CPU-cold first-load
+ * (e.g. the integration-models E2E stack) is materially slower, so
+ * deployments that need higher ceilings override via the matching
+ * `MODEL_SERVICE_TIMEOUT_<NAME>_MS` env var. Values are resolved through
+ * `config.modelService.timeoutMs` so the env surface lives in one place;
+ * each property reads at access time so an env override is honored. */
+export const MODEL_SERVICE_TIMEOUTS = Object.freeze({
   /** Detection across N frames: heavier than a simple inference. */
-  detection: envTimeoutMs('MODEL_SERVICE_TIMEOUT_DETECTION_MS', 60_000),
+  get detection(): number {
+    return config.modelService.timeoutMs('detection')
+  },
   /** Single-frame thumbnail render. */
-  thumbnails: envTimeoutMs('MODEL_SERVICE_TIMEOUT_THUMBNAILS_MS', 30_000),
+  get thumbnails(): number {
+    return config.modelService.timeoutMs('thumbnails')
+  },
   /** LLM-backed ontology suggestion. */
-  ontologyAugment: envTimeoutMs('MODEL_SERVICE_TIMEOUT_ONTOLOGY_AUGMENT_MS', 60_000),
+  get ontologyAugment(): number {
+    return config.modelService.timeoutMs('ontologyAugment')
+  },
   /** Transcription / summarization over a whole video. */
-  summarize: envTimeoutMs('MODEL_SERVICE_TIMEOUT_SUMMARIZE_MS', 300_000),
+  get summarize(): number {
+    return config.modelService.timeoutMs('summarize')
+  },
   /** Claim extraction over a summary. */
-  extractClaims: envTimeoutMs('MODEL_SERVICE_TIMEOUT_EXTRACT_CLAIMS_MS', 300_000),
+  get extractClaims(): number {
+    return config.modelService.timeoutMs('extractClaims')
+  },
   /** Synthesizing a final summary from extracted claims. */
-  synthesize: envTimeoutMs('MODEL_SERVICE_TIMEOUT_SYNTHESIZE_MS', 300_000),
-  /** Audio transcription over a video / audio file. faster-whisper-tiny
-   * on CPU does a 14 s clip in ~6 s cold, ~3 s warm, but a longer
-   * input or larger model can run minutes; default 5 min. */
-  transcribe: envTimeoutMs('MODEL_SERVICE_TIMEOUT_TRANSCRIBE_MS', 300_000),
-} as const
+  get synthesize(): number {
+    return config.modelService.timeoutMs('synthesize')
+  },
+  /** Audio transcription over a video / audio file. */
+  get transcribe(): number {
+    return config.modelService.timeoutMs('transcribe')
+  },
+})

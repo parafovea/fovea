@@ -16,10 +16,11 @@ import { server } from '@test/setup'
  * Mock InteractiveBoundingBox to avoid complex rendering.
  */
 vi.mock('./InteractiveBoundingBox', () => ({
-  default: ({ annotation, isActive, onSelect }: any) => (
+  default: ({ annotation, linkedObject, isActive, onSelect }: any) => (
     <rect
       data-testid={`annotation-${annotation.id}`}
       data-active={isActive}
+      data-linked-name={linkedObject?.name ?? ''}
       onClick={onSelect}
       x={0}
       y={0}
@@ -525,6 +526,72 @@ describe('AnnotationOverlay', () => {
 
       // SVG should still be present
       expect(container.querySelector('svg')).toBeInTheDocument()
+    })
+
+    it('falls back to linkedObjectName when the local world lacks the linked object', async () => {
+      // Reviewer reading another annotator's object annotation: the linked
+      // entity lives in the owner's world, not the reviewer's, so the local
+      // world lookup resolves nothing. The server-resolved linkedObjectName
+      // should drive the badge name instead of a generic kind label.
+      server.use(
+        http.get('/api/world', () => {
+          // Reviewer's own world is empty (does not contain owner-entity-1).
+          return HttpResponse.json({
+            entities: [],
+            events: [],
+            times: [],
+            entityCollections: [],
+            eventCollections: [],
+            timeCollections: [],
+            relations: [],
+          })
+        }),
+        http.get('/api/annotations/:videoId', () => {
+          return HttpResponse.json([
+            {
+              id: 'ann-cross-user',
+              videoId: 'test-video',
+              personaId: null,
+              type: 'object',
+              label: 'owner-entity-1',
+              linkType: 'entity',
+              linkedObjectName: 'Owner Entity',
+              frames: {
+                boxes: [{ x: 100, y: 100, width: 200, height: 200, frameNumber: 150, isKeyframe: true }],
+                interpolationSegments: [],
+                visibilityRanges: [{ startFrame: 150, endFrame: 150, visible: true }],
+                totalFrames: 1,
+                keyframeCount: 1,
+                interpolatedFrameCount: 0,
+              },
+              confidence: null,
+              source: 'manual',
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            },
+          ])
+        })
+      )
+
+      const Wrapper = createWrapper()
+
+      render(
+        <AnnotationOverlay
+          videoElement={mockVideoElement}
+          currentTime={currentTime}
+          videoWidth={videoWidth}
+          videoHeight={videoHeight}
+          detectionResults={null}
+        />,
+        { wrapper: Wrapper }
+      )
+
+      await waitFor(() => {
+        const annotationElement = screen.getByTestId('annotation-ann-cross-user')
+        // The badge name comes from the server-resolved linkedObjectName
+        // because the local world has no matching entity.
+        expect(annotationElement).toHaveAttribute('data-linked-name', 'Owner Entity')
+      })
     })
 
     it('filters annotations by selected persona in type mode', async () => {

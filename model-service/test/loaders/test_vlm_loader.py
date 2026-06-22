@@ -138,9 +138,11 @@ class TestLlama4MaverickLoader:
         assert loader.processor is None
         assert loader.tokenizer is None
 
-    @patch("src.infrastructure.adapters.outbound.models.vlm.loader.AutoModelForImageTextToText")
-    @patch("src.infrastructure.adapters.outbound.models.vlm.loader.AutoProcessor")
-    @patch("src.infrastructure.adapters.outbound.models.vlm.loader.AutoTokenizer")
+    @patch(
+        "src.infrastructure.adapters.outbound.models.vlm.loaders.llama4_maverick.AutoModelForImageTextToText"
+    )
+    @patch("src.infrastructure.adapters.outbound.models.vlm.loaders.llama4_maverick.AutoProcessor")
+    @patch("src.infrastructure.adapters.outbound.models.vlm.loaders.llama4_maverick.AutoTokenizer")
     def test_load_with_transformers(
         self,
         mock_tokenizer,
@@ -168,9 +170,11 @@ class TestLlama4MaverickLoader:
         mock_processor.from_pretrained.assert_called_once_with("test-model", trust_remote_code=True)
         mock_tokenizer.from_pretrained.assert_called_once_with("test-model", trust_remote_code=True)
 
-    @patch("src.infrastructure.adapters.outbound.models.vlm.loader.AutoModelForImageTextToText")
-    @patch("src.infrastructure.adapters.outbound.models.vlm.loader.AutoProcessor")
-    @patch("src.infrastructure.adapters.outbound.models.vlm.loader.AutoTokenizer")
+    @patch(
+        "src.infrastructure.adapters.outbound.models.vlm.loaders.llama4_maverick.AutoModelForImageTextToText"
+    )
+    @patch("src.infrastructure.adapters.outbound.models.vlm.loaders.llama4_maverick.AutoProcessor")
+    @patch("src.infrastructure.adapters.outbound.models.vlm.loaders.llama4_maverick.AutoTokenizer")
     def test_generate_with_transformers(
         self,
         mock_tokenizer_cls,
@@ -214,7 +218,7 @@ class TestLlama4MaverickLoader:
         with pytest.raises(RuntimeError, match="Model not loaded"):
             loader.generate(sample_images, "test prompt")
 
-    @patch("src.infrastructure.adapters.outbound.models.vlm.loader.torch.cuda")
+    @patch("src.infrastructure.adapters.outbound.models.vlm.loaders.base.torch.cuda")
     def test_unload_clears_memory(self, mock_cuda, llama4_arch, vlm_config):
         """Test that unload properly clears model from memory."""
         mock_cuda.is_available.return_value = True
@@ -283,10 +287,14 @@ class TestGemma3Loader:
         assert loader.model is None
 
     @patch(
-        "src.infrastructure.adapters.outbound.models.vlm.loader.AutoModelForImageTextToText.from_pretrained"
+        "src.infrastructure.adapters.outbound.models.vlm.loaders.gemma3.AutoModelForImageTextToText.from_pretrained"
     )
-    @patch("src.infrastructure.adapters.outbound.models.vlm.loader.AutoProcessor.from_pretrained")
-    @patch("src.infrastructure.adapters.outbound.models.vlm.loader.AutoTokenizer.from_pretrained")
+    @patch(
+        "src.infrastructure.adapters.outbound.models.vlm.loaders.gemma3.AutoProcessor.from_pretrained"
+    )
+    @patch(
+        "src.infrastructure.adapters.outbound.models.vlm.loaders.gemma3.AutoTokenizer.from_pretrained"
+    )
     def test_load_with_transformers(
         self,
         mock_tokenizer,
@@ -322,8 +330,8 @@ class TestInternVL3Loader:
         assert loader.config == vlm_config
         assert loader.model is None
 
-    @patch("src.infrastructure.adapters.outbound.models.vlm.loader.AutoModel")
-    @patch("src.infrastructure.adapters.outbound.models.vlm.loader.AutoTokenizer")
+    @patch("src.infrastructure.adapters.outbound.models.vlm.loaders.internvl3.AutoModel")
+    @patch("src.infrastructure.adapters.outbound.models.vlm.loaders.internvl3.AutoTokenizer")
     def test_load_with_transformers(
         self,
         mock_tokenizer,
@@ -344,8 +352,12 @@ class TestInternVL3Loader:
         assert loader.model == mock_model_instance
         assert loader.tokenizer == mock_tokenizer_instance
 
-    @patch("src.infrastructure.adapters.outbound.models.vlm.loader.AutoModel.from_pretrained")
-    @patch("src.infrastructure.adapters.outbound.models.vlm.loader.AutoTokenizer.from_pretrained")
+    @patch(
+        "src.infrastructure.adapters.outbound.models.vlm.loaders.internvl3.AutoModel.from_pretrained"
+    )
+    @patch(
+        "src.infrastructure.adapters.outbound.models.vlm.loaders.internvl3.AutoTokenizer.from_pretrained"
+    )
     def test_generate(
         self,
         mock_tokenizer_cls,
@@ -387,10 +399,14 @@ class TestPixtralLargeLoader:
         assert loader.model is None
 
     @patch(
-        "src.infrastructure.adapters.outbound.models.vlm.loader.AutoModelForImageTextToText.from_pretrained"
+        "src.infrastructure.adapters.outbound.models.vlm.loaders.pixtral_large.AutoModelForImageTextToText.from_pretrained"
     )
-    @patch("src.infrastructure.adapters.outbound.models.vlm.loader.AutoProcessor.from_pretrained")
-    @patch("src.infrastructure.adapters.outbound.models.vlm.loader.AutoTokenizer.from_pretrained")
+    @patch(
+        "src.infrastructure.adapters.outbound.models.vlm.loaders.pixtral_large.AutoProcessor.from_pretrained"
+    )
+    @patch(
+        "src.infrastructure.adapters.outbound.models.vlm.loaders.pixtral_large.AutoTokenizer.from_pretrained"
+    )
     def test_load_with_transformers(
         self,
         mock_tokenizer,
@@ -426,9 +442,11 @@ class TestQwen25VLLoader:
         assert loader.config == vlm_config
         assert loader.model is None
 
-    @patch("src.infrastructure.adapters.outbound.models.vlm.loader.Qwen2VLForConditionalGeneration")
-    @patch("src.infrastructure.adapters.outbound.models.vlm.loader.AutoProcessor")
-    @patch("src.infrastructure.adapters.outbound.models.vlm.loader.AutoTokenizer")
+    @patch(
+        "src.infrastructure.adapters.outbound.models.vlm.loaders.qwen25_vl.Qwen2VLForConditionalGeneration"
+    )
+    @patch("src.infrastructure.adapters.outbound.models.vlm.loaders.qwen25_vl.AutoProcessor")
+    @patch("src.infrastructure.adapters.outbound.models.vlm.loaders.qwen25_vl.AutoTokenizer")
     def test_load_with_transformers(
         self,
         mock_tokenizer,
@@ -453,9 +471,11 @@ class TestQwen25VLLoader:
         assert loader.processor == mock_processor_instance
         assert loader.tokenizer == mock_tokenizer_instance
 
-    @patch("src.infrastructure.adapters.outbound.models.vlm.loader.Qwen2VLForConditionalGeneration")
-    @patch("src.infrastructure.adapters.outbound.models.vlm.loader.AutoProcessor")
-    @patch("src.infrastructure.adapters.outbound.models.vlm.loader.AutoTokenizer")
+    @patch(
+        "src.infrastructure.adapters.outbound.models.vlm.loaders.qwen25_vl.Qwen2VLForConditionalGeneration"
+    )
+    @patch("src.infrastructure.adapters.outbound.models.vlm.loaders.qwen25_vl.AutoProcessor")
+    @patch("src.infrastructure.adapters.outbound.models.vlm.loaders.qwen25_vl.AutoTokenizer")
     def test_generate_with_transformers(
         self,
         mock_tokenizer_cls,

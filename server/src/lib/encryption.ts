@@ -5,29 +5,20 @@
 
 import crypto from 'node:crypto';
 
+import { config } from '../config.js';
+
 const ALGORITHM = 'aes-256-gcm';
 const IV_LENGTH = 12;
 const AUTH_TAG_LENGTH = 16;
-const KEY_LENGTH = 32;
 
 /**
- * Gets the encryption key from environment variable.
+ * Gets the validated encryption key from configuration.
  *
  * @returns Encryption key as Buffer
- * @throws Error if API_KEY_ENCRYPTION_KEY not configured or invalid length
+ * @throws {Error} if API_KEY_ENCRYPTION_KEY is unset or not 32 bytes
  */
 function getEncryptionKey(): Buffer {
-  const key = process.env.API_KEY_ENCRYPTION_KEY;
-  if (!key) {
-    throw new Error('API_KEY_ENCRYPTION_KEY environment variable not set');
-  }
-
-  const keyBuffer = Buffer.from(key, 'hex');
-  if (keyBuffer.length !== KEY_LENGTH) {
-    throw new Error(`API_KEY_ENCRYPTION_KEY must be ${KEY_LENGTH} bytes (${KEY_LENGTH * 2} hex characters)`);
-  }
-
-  return keyBuffer;
+  return config.auth.encryptionKey();
 }
 
 /**

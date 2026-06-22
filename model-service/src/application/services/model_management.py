@@ -13,7 +13,6 @@ contains no ML framework imports.
 from __future__ import annotations
 
 import logging
-import os
 import time
 from collections import OrderedDict
 from collections.abc import Callable
@@ -474,8 +473,10 @@ class ModelManager:
         if not model_config.provider or not model_config.api_endpoint:
             raise ValueError(f"External API model {task_type} missing provider or endpoint")
 
+        from src.infrastructure.config.settings import get_settings
+
         api_key_var = f"{model_config.provider.upper()}_API_KEY"
-        api_key = os.getenv(api_key_var)
+        api_key = get_settings().get_provider_api_key(model_config.provider)
 
         if model_config.requires_api_key and not api_key:
             raise ValueError(f"Missing API key: {api_key_var} environment variable not set")

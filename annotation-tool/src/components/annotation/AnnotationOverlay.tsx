@@ -20,8 +20,13 @@ import type { Annotation, Entity, Event, EntityCollection, EventCollection } fro
  * @description Annotation with resolved linked object information for display.
  */
 type EnrichedAnnotation = Annotation & {
-  /** Resolved linked object (entity, event, location, or collection) */
-  linkedObject?: Entity | Event | EntityCollection | EventCollection
+  /**
+   * Resolved linked object for badge display. Normally a full world object
+   * (entity, event, location, or collection) from the caller's own world. For
+   * cross-user reads where the caller does not share the owner's world, this
+   * is a name-only stand-in built from the server-resolved linkedObjectName.
+   */
+  linkedObject?: Entity | Event | EntityCollection | EventCollection | { name: string }
   /** Type of the linked object */
   linkedType?: 'entity' | 'event' | 'location' | 'entity-collection' | 'event-collection'
   /** Resolved type name from ontology (for type annotations) */
@@ -45,8 +50,12 @@ interface AnnotationOverlayProps {
   videoFps?: number
   /** Optional AI detection results to display as read-only overlays */
   detectionResults?: DetectionResponse | null
-  /** Optional callback when annotation edit is complete (drag/resize finished) */
-  onAnnotationEditComplete?: () => void
+  /**
+   * Optional callback when annotation edit is complete (drag/resize finished).
+   * Receives the annotations array the edit produced when available so the
+   * save can persist the exact edited value.
+   */
+  onAnnotationEditComplete?: (updatedAnnotations?: Annotation[]) => void
 }
 
 /**
@@ -212,6 +221,15 @@ export default function AnnotationOverlay({
             enriched.linkedObject = collection
             enriched.linkedType = ann.linkedCollectionType === 'entity' ? 'entity-collection' : 'event-collection'
           }
+        }
+
+        // Fallback for cross-user reads: when the caller does not share the
+        // owner's world, the local map lookup above resolves nothing. Use the
+        // server-resolved linkedObjectName so the badge still shows the object
+        // name instead of a generic kind label. The live local object stays
+        // the primary source (preferred when the caller does share the world).
+        if (!enriched.linkedObject && ann.linkedObjectName) {
+          enriched.linkedObject = { name: ann.linkedObjectName }
         }
       }
 

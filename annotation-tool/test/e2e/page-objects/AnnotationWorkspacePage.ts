@@ -239,6 +239,40 @@ export class AnnotationWorkspacePage extends BasePage {
   }
 
   /**
+   * Select the first annotation in the sidebar list by clicking its row.
+   * Selecting an annotation is required before keyframe edits: the workspace
+   * keyframe handlers no-op unless an annotation is selected. The click also
+   * seeks the playhead to the annotation's start.
+   */
+  async selectFirstAnnotation(): Promise<void> {
+    const firstRow = this.page.locator('[data-tour-id="annotation-list-first"]')
+    await expect(firstRow).toBeVisible({ timeout: 10000 })
+    await firstRow.click()
+    await this.page.waitForTimeout(300)
+  }
+
+  /**
+   * Count the keyframe markers rendered on the timeline. Each user-set
+   * keyframe renders one ``[data-slot="timeline-keyframe"]`` element, so this
+   * is the persistence signal for a keyframe edit surviving a reload.
+   */
+  async keyframeMarkerCount(): Promise<number> {
+    return this.page.locator('[data-slot="timeline-keyframe"]').count()
+  }
+
+  /**
+   * Assert that the timeline shows at least the given number of keyframe
+   * markers. Polls so it tolerates the brief window between the timeline
+   * mounting and the track rendering its markers.
+   * @param count - minimum number of keyframe markers expected
+   */
+  async expectKeyframeMarkerCountAtLeast(count: number): Promise<void> {
+    await expect
+      .poll(() => this.keyframeMarkerCount(), { timeout: 10000 })
+      .toBeGreaterThanOrEqual(count)
+  }
+
+  /**
    * Assert that the bounding box is visible (via annotation count).
    * Checks for at least 1 annotation (not exactly 1, to handle test isolation).
    */

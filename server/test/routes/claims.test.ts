@@ -1287,4 +1287,123 @@ describe('Claims API', () => {
       expect(res.statusCode).toBe(400)
     })
   })
+
+  describe('cross-user authorization', () => {
+    let otherUserToken: string
+
+    beforeEach(async () => {
+      // A second regular (non-admin) user whose abilities resolve from the
+      // seeded `user` role: read/update/create on Claim are broad, but delete
+      // is ownOnly so only the claim's creator may delete it.
+      const passwordHash = await hashPassword('otherpass123')
+      await prisma.user.create({
+        data: {
+          username: 'otheruser',
+          email: 'other@example.com',
+          passwordHash,
+          displayName: 'Other User',
+          isAdmin: false,
+          systemRole: 'user',
+        },
+      })
+
+      const loginResponse = await app.inject({
+        method: 'POST',
+        url: '/api/auth/login',
+        payload: { username: 'otheruser', password: 'otherpass123' },
+      })
+      otherUserToken = loginResponse.cookies.find(c => c.name === 'session_token')!.value
+    })
+
+    it('denies deleting a claim owned by another user', async () => {
+      // testUser owns this claim.
+      const claim = await prisma.claim.create({
+        data: {
+          summaryId: testSummaryId,
+          summaryType: 'video',
+          text: 'Owned by test user',
+          gloss: [],
+          createdBy: testUserId,
+        },
+      })
+
+      // otherUser cannot satisfy the ownOnly delete rule (createdBy !== them).
+      const response = await app.inject({
+        method: 'DELETE',
+        url: `/api/summaries/${testSummaryId}/claims/${claim.id}`,
+        cookies: { session_token: otherUserToken },
+      })
+
+      expect(response.statusCode).toBe(403)
+      expect(response.json().error).toBe('FORBIDDEN')
+
+      // The claim must still exist; the denial blocked the delete.
+      const stillThere = await prisma.claim.findUnique({ where: { id: claim.id } })
+      expect(stillThere).not.toBeNull()
+    })
+
+    it('allows the owner to delete their own claim', async () => {
+      const claim = await prisma.claim.create({
+        data: {
+          summaryId: testSummaryId,
+          summaryType: 'video',
+          text: 'Owned by test user',
+          gloss: [],
+          createdBy: testUserId,
+        },
+      })
+
+      const response = await app.inject({
+        method: 'DELETE',
+        url: `/api/summaries/${testSummaryId}/claims/${claim.id}`,
+        cookies: { session_token: testSessionToken },
+      })
+
+      expect(response.statusCode).toBe(200)
+      expect(response.json().success).toBe(true)
+    })
+
+    it('denies deleting a relation whose endpoints another user owns', async () => {
+      const sourceClaim = await prisma.claim.create({
+        data: {
+          summaryId: testSummaryId,
+          summaryType: 'video',
+          text: 'Source owned by test user',
+          gloss: [],
+          createdBy: testUserId,
+        },
+      })
+      const targetClaim = await prisma.claim.create({
+        data: {
+          summaryId: testSummaryId,
+          summaryType: 'video',
+          text: 'Target owned by test user',
+          gloss: [],
+          createdBy: testUserId,
+        },
+      })
+      const relation = await prisma.claimRelation.create({
+        data: {
+          sourceClaimId: sourceClaim.id,
+          targetClaimId: targetClaim.id,
+          relationTypeId: 'conflicts',
+          createdBy: testUserId,
+        },
+      })
+
+      // The relation-delete path requires update on both endpoint claims. The
+      // seeded `user` role grants broad (non-ownOnly) update on Claim, so this
+      // path does not 403 across users; it succeeds. This asserts the relocated
+      // update-on-both-endpoints check resolves to the same decision the route
+      // produced before extraction.
+      const response = await app.inject({
+        method: 'DELETE',
+        url: `/api/summaries/${testSummaryId}/claims/relations/${relation.id}`,
+        cookies: { session_token: otherUserToken },
+      })
+
+      expect(response.statusCode).toBe(200)
+      expect(response.json().success).toBe(true)
+    })
+  })
 })

@@ -1,4 +1,5 @@
 import { FastifyRequest, FastifyReply } from 'fastify'
+import { config } from '../config.js'
 import { authService } from '../services/auth-service.js'
 import { UnauthorizedError, ForbiddenError } from '../lib/errors.js'
 
@@ -73,7 +74,7 @@ export async function requireAdmin(
 ): Promise<void> {
   // Test mode bypass for E2E tests
   // Allows admin API access without authentication in isolated test environment
-  if (process.env.NODE_ENV === 'test' && process.env.ALLOW_TEST_ADMIN_BYPASS === 'true') {
+  if (config.server.isTest && config.auth.allowTestAdminBypass) {
     // Auto-authenticate as test admin user
     request.user = {
       id: 'test-admin',

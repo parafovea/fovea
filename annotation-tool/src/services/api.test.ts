@@ -18,6 +18,22 @@ describe('API Transformation Functions', () => {
   })
 
   describe('transformFrontendToBackend', () => {
+    it('forwards the client id so the create POST keeps it', () => {
+      const objectAnnotation: ObjectAnnotation = {
+        id: 'client-local-id',
+        videoId: 'video-1',
+        annotationType: 'object',
+        linkedEntityId: 'entity-1',
+        boundingBoxSequence: createBoundingBoxSequence(),
+        createdAt: '2025-01-01T00:00:00Z',
+        updatedAt: '2025-01-01T00:00:00Z'
+      }
+
+      const result = transformFrontendToBackend(objectAnnotation)
+
+      expect(result.id).toBe('client-local-id')
+    })
+
     it('returns null personaId for object annotations', () => {
       const objectAnnotation: ObjectAnnotation = {
         id: 'ann-1',

@@ -5,6 +5,7 @@ import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
 import { usePersonaOntology, useWorld, useAnnotations } from '@store/queries'
 import { GlossItem, TimeInstant, getAnnotationTimeBounds, Claim } from '@models/types'
+import { config } from '@/config'
 
 interface GlossEditorProps {
   gloss: GlossItem[]
@@ -619,7 +620,7 @@ export default function GlossEditor({
   // document-level mousedown close is wholesale suppressed for
   // VITE_DEMO_PUBLIC=1.
   useEffect(() => {
-    if (import.meta.env.VITE_DEMO_PUBLIC === '1') return
+    if (config.deploymentMode.publicBooth) return
     const handleClickOutside = (e: MouseEvent) => {
       const target = e.target as Node | null
       if (!target) return

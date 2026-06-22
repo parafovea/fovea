@@ -7,6 +7,7 @@ import { ThemeProvider } from 'next-themes'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { Toaster } from '@/components/ui/sonner'
 import App from './App'
+import { config } from '@/config'
 import { DemoShell } from './demo/DemoShell'
 import { isDemoModeEnabled } from './demo/config'
 import { TourProvider } from './tours'
@@ -23,15 +24,15 @@ import { initErrorLogging } from '@services/errorLogging'
 
 // Initialize tracing first - must be before any other code that might make network requests
 initTracing({
-  enabled: import.meta.env.PROD,
-  sampleRate: import.meta.env.PROD ? 0.2 : 1.0, // 20% in prod, 100% in dev
+  enabled: config.env.isProd,
+  sampleRate: config.env.isProd ? 0.2 : 1.0, // 20% in prod, 100% in dev
 })
 
 // Initialize error logging with backend reporting
 initErrorLogging({
-  enabled: import.meta.env.PROD,
-  sampleRate: import.meta.env.PROD ? 0.2 : 1.0, // 20% in prod, 100% in dev
-  consoleLogging: import.meta.env.DEV,
+  enabled: config.env.isProd,
+  sampleRate: config.env.isProd ? 0.2 : 1.0, // 20% in prod, 100% in dev
+  consoleLogging: config.env.isDev,
 })
 
 // Initialize commands synchronously so they're available when component effects run
@@ -103,6 +104,12 @@ async function isRealSignedInUser(): Promise<boolean> {
  * context, breaking admin navigation on demo.fovea.video.
  */
 async function maybeStartTourDemoMocking(): Promise<void> {
+  // Kept INLINE (not routed through config): Rollup statically folds this
+  // literal comparison to tree-shake the entire `src/mocks/tourDemo` subtree
+  // (and its tour content) out of normal production builds. Replacing it with
+  // a cross-module config property access would defeat that analysis and ship
+  // the mocks in every bundle. See src/config.ts for the rationale.
+  // eslint-disable-next-line no-restricted-syntax
   if (import.meta.env.VITE_TOUR_DEMO !== '1') return
   // VITE_DEMO_PUBLIC builds run against a REAL backend that already
   // serves /api/auth/me, /api/personas, /api/videos, /api/world etc.,
@@ -118,7 +125,7 @@ async function maybeStartTourDemoMocking(): Promise<void> {
   // without the worker getting in the way. Stock VITE_TOUR_DEMO=1
   // builds without DEMO_PUBLIC (E2E / dev) still install the worker
   // because those flows need the mocks.
-  if (import.meta.env.VITE_DEMO_PUBLIC === '1') {
+  if (config.deploymentMode.publicBooth) {
     console.info(
       '[tour-demo] DEMO_PUBLIC build talks to a real backend; MSW worker NOT started.',
     )
@@ -163,7 +170,7 @@ async function maybeStartTourDemoMocking(): Promise<void> {
  * Rollup tree-shakes the request out of those bundles.
  */
 async function maybeBootstrapDemoSession(): Promise<void> {
-  if (import.meta.env.VITE_DEMO_PUBLIC !== '1') return
+  if (!config.deploymentMode.publicBooth) return
   try {
     // Empty JSON body required — Fastify's defaultJsonParser rejects
     // a POST with Content-Type: application/json but no body
@@ -321,7 +328,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
             test/E2E (NODE_ENV=test or VITE_E2E=1) so Playwright can hit
             the FABs.
           */}
-          {import.meta.env.MODE !== 'test' && !import.meta.env.VITE_E2E && (
+          {config.env.mode !== 'test' && !config.deploymentMode.e2e && (
             <ReactQueryDevtools initialIsOpen={false} />
           )}
         </ThemeProvider>

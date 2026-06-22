@@ -90,11 +90,20 @@ const sidebars: SidebarsConfig = {
       link: {type: 'doc', id: 'operations/index'},
       items: [
         'operations/production-deployment',
+        'operations/configuration',
         'operations/demo-fovea-deployment',
         'operations/monitoring',
         'operations/backup-restore',
         'operations/upgrades',
         'operations/troubleshooting',
+      ],
+    },
+    {
+      type: 'category',
+      label: 'Development',
+      link: {type: 'doc', id: 'development/index'},
+      items: [
+        'development/cross-service-contracts',
       ],
     },
     {

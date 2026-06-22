@@ -1,15 +1,19 @@
 {
   "name": "fovea",
   "private": true,
-  "version": "0.4.4",
+  "version": "0.5.0",
   "description": "FOVEA - Flexible Ontology Visual Event Analyzer",
+  "packageManager": "pnpm@10.15.0",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "dev": "pnpm run dev:infra && pnpm run dev:services",
     "dev:services": "pnpm --parallel --filter @fovea/server --filter @fovea/annotation-tool run dev",
     "dev:frontend": "pnpm run --filter @fovea/annotation-tool dev",
     "dev:backend": "pnpm run --filter @fovea/server dev",
-    "dev:infra": "docker compose -f server/docker-compose.dev.yml up -d redis postgres",
-    "dev:infra:full": "docker compose -f server/docker-compose.dev.yml up -d",
+    "dev:infra": "docker compose -f docker-compose.yml up -d postgres redis",
+    "dev:infra:full": "docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d postgres redis otel-collector jaeger prometheus grafana",
     "dev:docker": "docker compose -f docker-compose.yml -f docker-compose.dev.yml up",
     "build": "pnpm run --filter @fovea/annotation-tool build && pnpm run --filter @fovea/server build",
     "build:docker": "docker compose build",
@@ -18,8 +22,9 @@
     "test:backend": "pnpm run --filter @fovea/server test",
     "lint": "pnpm run --filter @fovea/annotation-tool lint && pnpm run --filter @fovea/server lint",
     "type-check": "pnpm run --filter @fovea/annotation-tool type-check",
-    "stop": "docker compose -f server/docker-compose.dev.yml down",
-    "clean": "docker compose -f server/docker-compose.dev.yml down -v"
+    "check:env": "node scripts/check-env-example.mjs",
+    "stop": "docker compose -f docker-compose.yml -f docker-compose.dev.yml down",
+    "clean": "docker compose -f docker-compose.yml -f docker-compose.dev.yml down -v"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

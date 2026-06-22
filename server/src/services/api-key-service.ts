@@ -1,4 +1,5 @@
 import { PrismaClient, ApiKey } from '@prisma/client'
+import { config } from '../config.js'
 import { encryptApiKey, decryptApiKey } from '../lib/encryption.js'
 
 /**
@@ -250,10 +251,7 @@ export async function resolveApiKey(
   }
 
   // Try environment variable
-  const envVarName = `${provider.toUpperCase()}_API_KEY`
-  const envKey = process.env[envVarName]
-
-  return envKey || null
+  return config.getProviderApiKey(provider) ?? null
 }
 
 /**

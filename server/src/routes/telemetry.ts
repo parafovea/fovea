@@ -1,5 +1,6 @@
 import { FastifyPluginAsync } from 'fastify'
 import { Type, Static } from '@sinclair/typebox'
+import { config } from '../config.js'
 import { recordFrontendError, type ErrorSeverity } from '../lib/errorMetrics.js'
 
 /**
@@ -188,7 +189,7 @@ const telemetryRoutes: FastifyPluginAsync = async (fastify) => {
       },
     },
     async (request, reply) => {
-      const otelEndpoint = process.env.OTEL_EXPORTER_OTLP_ENDPOINT || 'http://otel-collector:4318'
+      const otelEndpoint = config.otel.exporterEndpoint
       const tracesUrl = `${otelEndpoint}/v1/traces`
 
       try {

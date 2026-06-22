@@ -18,13 +18,13 @@ import { ImportResult } from '@models/types'
 
 /**
  * Predicate for the orphan-skipped banner. Exported so it can be unit
- * tested without rendering the full Dialog. Returns true when the
- * import dropped one or more annotations because they referenced data
- * not present in the file — the user-visible UX cliff that previously
- * read as "Import Successful" with zero annotations and no warning.
+ * tested without rendering the full Dialog. Returns true when the run
+ * dropped one or more annotations because they referenced data not
+ * present in the file, surfacing the case where a "Import Successful"
+ * result would otherwise show zero annotations and no warning.
  *
- * @param result - Import result to inspect
- * @returns Whether the banner should be shown
+ * @param result - the import result to inspect
+ * @returns whether the banner should be shown
  */
 export function shouldShowOrphanSkippedBanner(result: ImportResult): boolean {
   const skippedCount = result.summary.skippedItems.annotations

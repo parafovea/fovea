@@ -6,7 +6,6 @@ for FastAPI and Redis clients.
 
 import asyncio
 import functools
-import os
 import time
 from collections.abc import Callable, Generator, Mapping
 from contextlib import contextmanager
@@ -23,6 +22,8 @@ from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 
+from src.infrastructure.config.settings import get_settings
+
 if TYPE_CHECKING:
     from fastapi import FastAPI
 
@@ -33,6 +34,8 @@ def configure_observability() -> None:
     Sets up trace and metric providers with OTLP exporters. Configures service
     resource attributes for identification in observability backend.
     """
+    settings = get_settings()
+
     resource = Resource.create(
         {
             "service.name": "fovea-model-service",
@@ -42,18 +45,12 @@ def configure_observability() -> None:
 
     trace_provider = TracerProvider(resource=resource)
     trace_provider.add_span_processor(
-        BatchSpanProcessor(
-            OTLPSpanExporter(
-                endpoint=os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4318/v1/traces")
-            )
-        )
+        BatchSpanProcessor(OTLPSpanExporter(endpoint=settings.otel_traces_endpoint))
     )
     trace.set_tracer_provider(trace_provider)
 
     metric_reader = PeriodicExportingMetricReader(
-        OTLPMetricExporter(
-            endpoint=os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4318/v1/metrics")
-        ),
+        OTLPMetricExporter(endpoint=settings.otel_metrics_endpoint),
         export_interval_millis=60000,
     )
     metric_provider = MeterProvider(resource=resource, metric_readers=[metric_reader])

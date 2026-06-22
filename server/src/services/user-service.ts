@@ -1,3 +1,4 @@
+import { config } from '../config.js'
 import { prisma } from '../lib/prisma.js'
 import type { User } from '@prisma/client'
 
@@ -14,10 +15,8 @@ import type { User } from '@prisma/client'
  * @returns Default user record
  */
 export async function ensureDefaultUser(): Promise<User> {
-  const mode = process.env.FOVEA_MODE || 'multi-user'
-
   // Only relevant for single-user mode
-  if (mode !== 'single-user') {
+  if (!isSingleUserMode()) {
     throw new Error('ensureDefaultUser should only be called in single-user mode')
   }
 
@@ -34,8 +33,8 @@ export async function ensureDefaultUser(): Promise<User> {
   const defaultUser = await prisma.user.create({
     data: {
       id: 'default-user',
-      username: process.env.DEFAULT_USER_USERNAME || 'default-user',
-      displayName: process.env.DEFAULT_USER_DISPLAY_NAME || 'Default User',
+      username: config.defaultUser.username,
+      displayName: config.defaultUser.displayName,
       email: null,
       passwordHash: null, // No password in single-user mode
       isAdmin: true
@@ -62,6 +61,5 @@ export async function getDefaultUser(): Promise<User | null> {
  * @returns True if single-user mode, false otherwise
  */
 export function isSingleUserMode(): boolean {
-  const mode = process.env.FOVEA_MODE || 'multi-user'
-  return mode === 'single-user'
+  return config.mode.isSingleUser
 }

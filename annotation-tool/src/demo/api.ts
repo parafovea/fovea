@@ -7,6 +7,8 @@
  * forbidden by ESLint from importing this file.
  */
 
+import { config } from '@/config'
+
 export interface AnonymousSession {
   userId: string
   sessionToken: string
@@ -48,11 +50,11 @@ export async function seedFixture(args: {
 }): Promise<{ seeded: string[] }> {
   // Production demo deployments inject X-Demo-Seed-Token at the edge so
   // the token never reaches client JS. Local-run reads it from a Vite
-  // env var instead — set VITE_FOVEA_DEMO_SEED_TOKEN to match the
-  // backend's FOVEA_DEMO_SEED_TOKEN in run-demo-local.sh.
-  const env = (import.meta as unknown as { env?: Record<string, string | undefined> }).env ?? {}
+  // env var instead (resolved in src/config.ts) — set
+  // VITE_FOVEA_DEMO_SEED_TOKEN to match the backend's
+  // FOVEA_DEMO_SEED_TOKEN in run-demo-local.sh.
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-  const localToken = env.VITE_FOVEA_DEMO_SEED_TOKEN
+  const localToken = config.demo.seedToken
   if (localToken) headers['X-Demo-Seed-Token'] = localToken
 
   const res = await fetch('/api/demo/seed', {

@@ -1,6 +1,6 @@
 {
   "name": "@fovea/server",
-  "version": "0.4.4",
+  "version": "0.5.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -8,6 +8,8 @@
     "build": "tsc && tsc-alias",
     "start": "node dist/index.js",
     "seed": "node prisma/seed.cjs",
+    "gen:openapi": "tsx scripts/dump-openapi.ts",
+    "gen:model-service-types": "openapi-typescript ../model-service/openapi.json --default-non-nullable false -o src/lib/model-service/contract.ts",
     "lint": "eslint . --ext ts --report-unused-disable-directives --max-warnings 0",
     "test": "vitest",
     "test:coverage": "vitest --coverage",
@@ -65,6 +67,7 @@
     "eslint": "^8.56.0",
     "fast-check": "^3.23.2",
     "form-data": "^4.0.5",
+    "openapi-typescript": "^7.13.0",
     "supertest": "^7.1.4",
     "tsc-alias": "^1.8.16",
     "tsx": "^4.7.1",

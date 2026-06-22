@@ -26,6 +26,7 @@ from src.infrastructure.adapters.outbound.models.audio.base import (
     AudioTranscriptionLoader,
     TranscriptionResult,
 )
+from src.infrastructure.config.settings import get_settings
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -38,8 +39,8 @@ logger = logging.getLogger(__name__)
 # normalised with a trailing separator so the StartswithCall guard
 # below cannot match a sibling directory whose name starts with
 # the root name.
-_VIDEO_DATA_PREFIX: str = os.path.realpath(os.environ.get("VIDEO_DATA_ROOT", "/videos")) + os.sep
-_AUDIO_OUTPUT_PREFIX: str = os.path.realpath(os.environ.get("AUDIO_OUTPUT_ROOT", "/audio")) + os.sep
+_VIDEO_DATA_PREFIX: str = os.path.realpath(str(get_settings().video_data_root)) + os.sep
+_AUDIO_OUTPUT_PREFIX: str = os.path.realpath(str(get_settings().audio_output_root)) + os.sep
 _AUDIO_PATH_ROOTS: tuple[str, str] = (_VIDEO_DATA_PREFIX, _AUDIO_OUTPUT_PREFIX)
 
 

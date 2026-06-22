@@ -51,12 +51,26 @@ export interface UseAutoSaveOptions<T> {
   entityType: AutoSaveEntityType
   /** Entity ID for tracing context */
   entityId?: string
+  /**
+   * Optional projection applied to `data` before change detection. The
+   * serialized snapshot of the result is compared against the last save to
+   * decide whether anything changed. Defaults to `JSON.stringify(data)`.
+   * Override this to strip server-managed fields the editor never writes
+   * (e.g. `updatedAt`) so the post-save refetch echoing a new timestamp does
+   * not look like a change and re-arm auto-save.
+   *
+   * @param data - the current data
+   * @returns a JSON-serializable value compared via `JSON.stringify`
+   */
+  getComparisonSnapshot?: (data: T) => unknown
 }
 
 /**
  * Return value from useAutoSave hook.
+ *
+ * @typeParam T - the data type managed by the hook
  */
-export interface UseAutoSaveReturn {
+export interface UseAutoSaveReturn<T> {
   /** Current save status */
   saveStatus: SaveStatus
   /** Timestamp of last successful save */
@@ -67,8 +81,19 @@ export interface UseAutoSaveReturn {
   errorMessage: string | null
   /** Current retry attempt count */
   retryCount: number
-  /** Force an immediate save, bypassing debounce */
-  forceSave: () => Promise<void>
+  /**
+   * Force an immediate save, bypassing debounce and the change-skip guard.
+   *
+   * Pass `dataOverride` after a discrete edit (e.g. adding a keyframe) whose
+   * mutation has updated an external store but has not yet propagated back
+   * into `data` for the current render. Without it the save would read the
+   * pre-edit `data` and silently persist the stale value. When omitted, the
+   * latest `data` seen on render is used.
+   *
+   * @param dataOverride - the exact data to persist, used in place of the
+   *   render-time `data`
+   */
+  forceSave: (dataOverride?: T) => Promise<void>
 }
 
 /**
@@ -107,7 +132,8 @@ export function useAutoSave<T>({
   maxRetries = 3,
   entityType,
   entityId,
-}: UseAutoSaveOptions<T>): UseAutoSaveReturn {
+  getComparisonSnapshot,
+}: UseAutoSaveOptions<T>): UseAutoSaveReturn<T> {
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null)
   const [pendingChanges, setPendingChanges] = useState(false)
@@ -120,21 +146,48 @@ export function useAutoSave<T>({
   const dataRef = useRef(data)
   const lastSavedDataRef = useRef<string>('')
 
-  // Update data ref when data changes
+  // Serialize `data` to the string used for change detection. When a caller
+  // supplies getComparisonSnapshot, serialize the snapshot it derives (which
+  // strips server-managed fields the editor never writes); otherwise fall
+  // back to serializing the whole `data`. Held in a ref for the same reason
+  // performSave is (see performSaveRef below): the caller's
+  // getComparisonSnapshot closure can change identity on every render, and we
+  // must not let that churn re-arm the debounce/periodic effects.
+  const getComparisonSnapshotRef = useRef(getComparisonSnapshot)
   useEffect(() => {
-    dataRef.current = data
-  }, [data])
+    getComparisonSnapshotRef.current = getComparisonSnapshot
+  }, [getComparisonSnapshot])
 
-  // Core save function with retry logic
+  const serialize = useCallback((value: T): string => {
+    const snapshot = getComparisonSnapshotRef.current
+    return JSON.stringify(snapshot ? snapshot(value) : value)
+  }, [])
+
+  // Keep the data ref pointed at the latest `data` seen on render. Done during
+  // render (not in an effect) so a forceSave fired from the same event handler
+  // that just re-rendered the parent reads the committed value rather than the
+  // previous render's. This narrows but does not close the gap for edits whose
+  // mutation has not yet reached `data` this render; those pass dataOverride to
+  // forceSave (see performSave).
+  dataRef.current = data
+
+  // Core save function with retry logic. `dataOverride`, when provided, is the
+  // exact data to persist; it is used in place of dataRef so a forced save can
+  // carry an edit that has not yet propagated back into `data`.
   const performSave = useCallback(
-    async (attempt = 0): Promise<void> => {
+    async (attempt = 0, force = false, dataOverride?: T): Promise<void> => {
       if (saveInProgressRef.current) return
 
-      const currentData = dataRef.current
-      const serialized = JSON.stringify(currentData)
+      const currentData = dataOverride !== undefined ? dataOverride : dataRef.current
+      const serialized = serialize(currentData)
 
-      // Skip if no changes
-      if (serialized === lastSavedDataRef.current) {
+      // Skip if no changes — unless this is a forced save. `forceSave` is the
+      // explicit "save now" path used after discrete edits (e.g. adding a
+      // keyframe), where the data ref may not yet reflect the just-issued
+      // mutation; those must persist rather than be skipped by change
+      // detection. Forced saves are never triggered on the idle refetch, so
+      // bypassing the guard here cannot re-introduce the auto-save loop.
+      if (!force && serialized === lastSavedDataRef.current) {
         setPendingChanges(false)
         return
       }
@@ -189,7 +242,7 @@ export function useAutoSave<T>({
 
           setTimeout(() => {
             saveInProgressRef.current = false
-            performSave(attempt + 1)
+            performSave(attempt + 1, force, dataOverride)
           }, delay)
         } else {
           setSaveStatus('error')
@@ -205,7 +258,7 @@ export function useAutoSave<T>({
         }
       }
     },
-    [onSave, entityType, entityId, maxRetries]
+    [onSave, entityType, entityId, maxRetries, serialize]
   )
 
   // Stable ref to the latest performSave so the debounce/periodic
@@ -226,12 +279,12 @@ export function useAutoSave<T>({
   }, [performSave])
 
   // Force save function
-  const forceSave = useCallback(async () => {
+  const forceSave = useCallback(async (dataOverride?: T) => {
     if (debounceTimerRef.current) {
       clearTimeout(debounceTimerRef.current)
       debounceTimerRef.current = null
     }
-    await performSaveRef.current()
+    await performSaveRef.current(0, true, dataOverride)
   }, [])
 
   // Debounced save on data change. Deps deliberately exclude
@@ -239,7 +292,7 @@ export function useAutoSave<T>({
   useEffect(() => {
     if (!isEnabled) return
 
-    const serialized = JSON.stringify(data)
+    const serialized = serialize(data)
     if (serialized !== lastSavedDataRef.current) {
       setPendingChanges(true)
     }
@@ -257,7 +310,7 @@ export function useAutoSave<T>({
         clearTimeout(debounceTimerRef.current)
       }
     }
-  }, [data, isEnabled, debounceMs])
+  }, [data, isEnabled, debounceMs, serialize])
 
   // Periodic backup save. performSave intentionally NOT in deps for
   // the same reason — periodicTimer should NOT re-arm every render.

@@ -145,10 +145,16 @@ export function defineAbilitiesFor(
         .map(pr => pr.projectId)
 
       if (matchingProjects.length > 0) {
+        // The Project model *is* the project: its identity column is `id`,
+        // whereas every content model references its enclosing project via
+        // `projectId`. Scope the condition against the right column so a
+        // project-scoped Project permission (read/update/delete/manage_members)
+        // resolves against the project's own id.
+        const projectKey = modelName === 'Project' ? 'id' : 'projectId'
         if (perm.ownOnly) {
-          rules.push({ action, subject: modelName, conditions: { projectId: { in: matchingProjects }, [ownField]: userId } })
+          rules.push({ action, subject: modelName, conditions: { [projectKey]: { in: matchingProjects }, [ownField]: userId } })
         } else {
-          rules.push({ action, subject: modelName, conditions: { projectId: { in: matchingProjects } } })
+          rules.push({ action, subject: modelName, conditions: { [projectKey]: { in: matchingProjects } } })
         }
       }
     } else if (perm.scope === 'group') {
@@ -157,7 +163,14 @@ export function defineAbilitiesFor(
         .map(gr => gr.groupId)
 
       if (matchingGroups.length > 0) {
-        if (perm.ownOnly) {
+        if (modelName === 'Project') {
+          // A group-scoped Project permission (e.g. project:create granted to
+          // group_owner / group_admin) applies only to projects owned by a
+          // group the user administers. Scope by the candidate project's
+          // ownerGroupId so a group admin cannot act on another group's
+          // projects.
+          rules.push({ action, subject: modelName, conditions: { ownerGroupId: { in: matchingGroups } } })
+        } else if (perm.ownOnly) {
           rules.push({ action, subject: modelName, conditions: { [ownField]: userId } })
         } else {
           rules.push({ action, subject: modelName })
@@ -201,6 +214,20 @@ export function defineAbilitiesFor(
   rules.push({ action: 'read', subject: 'WorldState', conditions: { userId } })
   rules.push({ action: 'update', subject: 'WorldState', conditions: { userId } })
   rules.push({ action: 'delete', subject: 'WorldState', conditions: { userId } })
+
+  // Projects: every user can fully manage projects they personally own
+  // (ownerUserId === userId). The create baseline is load-bearing — personal
+  // project creation has no pre-existing project_memberships row to authorize
+  // against, so without it a user could never create their own project; the
+  // route sets the candidate's ownerUserId to request.user.id, so the rule
+  // matches a personal project and an attempt to forge ownerUserId=otherUser
+  // fails. Group-owned projects (ownerUserId === null) are governed entirely
+  // by membership and the group-scoped create rule above.
+  rules.push({ action: 'create', subject: 'Project', conditions: { ownerUserId: userId } })
+  rules.push({ action: 'read', subject: 'Project', conditions: { ownerUserId: userId } })
+  rules.push({ action: 'update', subject: 'Project', conditions: { ownerUserId: userId } })
+  rules.push({ action: 'delete', subject: 'Project', conditions: { ownerUserId: userId } })
+  rules.push({ action: 'manage_members', subject: 'Project', conditions: { ownerUserId: userId } })
 
   // All authenticated users can read videos (filtered by VideoAccessService)
   rules.push({ action: 'read', subject: 'Video' })

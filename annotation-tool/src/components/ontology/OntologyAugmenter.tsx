@@ -33,34 +33,8 @@ import {
   useAddRoleToPersona,
 } from '@store/queries'
 import { apiClient } from '@api/client'
+import type { OntologyCategory, OntologySuggestion } from '@api/client'
 import { EntityType, EventType, RoleType } from '@models/types'
-
-/**
- * Category of ontology type to augment.
- */
-export type OntologyCategory = 'entity' | 'event' | 'role' | 'relation'
-
-/**
- * Suggested ontology type from the AI.
- */
-export interface OntologySuggestion {
-  name: string
-  description: string
-  parent: string | null
-  confidence: number
-  examples: string[]
-}
-
-/**
- * Response from ontology augmentation API.
- */
-export interface AugmentationResponse {
-  id: string
-  persona_id: string
-  target_category: OntologyCategory
-  suggestions: OntologySuggestion[]
-  reasoning: string
-}
 
 /**
  * Props for OntologyAugmenter component.

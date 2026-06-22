@@ -30,6 +30,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from src.infrastructure.adapters.inbound.fastapi.dependencies import ModelManagerDep  # noqa: TC001
+from src.infrastructure.config.settings import get_settings
 
 if TYPE_CHECKING:
     from src.infrastructure.adapters.outbound.models.audio.loader import DiarizationResult
@@ -42,8 +43,8 @@ logger = logging.getLogger(__name__)
 # barrier (realpath + startswith + raise) MUST be inlined at the use
 # site so CodeQL's taint engine recognises it; wrapping it in a helper
 # breaks the recognised StartswithCall pattern.
-_VIDEO_DATA_PREFIX: str = os.path.realpath(os.environ.get("VIDEO_DATA_ROOT", "/videos")) + os.sep
-_AUDIO_OUTPUT_PREFIX: str = os.path.realpath(os.environ.get("AUDIO_OUTPUT_ROOT", "/audio")) + os.sep
+_VIDEO_DATA_PREFIX: str = os.path.realpath(str(get_settings().video_data_root)) + os.sep
+_AUDIO_OUTPUT_PREFIX: str = os.path.realpath(str(get_settings().audio_output_root)) + os.sep
 _AUDIO_PATH_ROOTS: tuple[str, str] = (_VIDEO_DATA_PREFIX, _AUDIO_OUTPUT_PREFIX)
 
 

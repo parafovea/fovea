@@ -1,29 +1,23 @@
 /**
  * API routes for project management.
  *
- * Provides endpoints for creating, listing, updating, and deleting projects,
- * managing project memberships, and accessing project-scoped personas and
- * world state.
+ * Routes perform HTTP concerns only: schema validation, request parsing, and
+ * dispatch to a per-request ProjectService that owns business rules and CASL
+ * authorization. The ProjectRepository owns all Prisma access.
+ *
+ * Endpoints for creating, listing, updating, and deleting projects, managing
+ * project memberships, listing assignable users, and accessing project-scoped
+ * personas and world state.
  */
 
 import { Type, Static } from '@sinclair/typebox'
-import { FastifyPluginAsync } from 'fastify'
-import { Prisma } from '@prisma/client'
+import { FastifyPluginAsync, FastifyRequest } from 'fastify'
 import { requireAuth } from '@middleware/auth.js'
-
-/** Convert a value to Prisma JSON without type assertions. */
-function toJson(value: unknown): Prisma.InputJsonValue {
-  return JSON.parse(JSON.stringify(value))
-}
+import { buildAbilities } from '@middleware/abilities.js'
 import { projectOperationCounter } from '../metrics.js'
-import { buildAbilities, invalidateUserAbilities } from '@middleware/abilities.js'
-import {
-  NotFoundError,
-  ValidationError,
-  ForbiddenError,
-  ConflictError,
-  ErrorResponseSchema,
-} from '@lib/errors.js'
+import { ErrorResponseSchema } from '@lib/errors.js'
+import { ProjectRepository } from '../repositories/ProjectRepository.js'
+import { ProjectService } from '../services/project-service.js'
 
 // ---------------------------------------------------------------------------
 // Nullable type helpers for fast-json-stringify compatibility.
@@ -94,6 +88,13 @@ const MembershipSchema = Type.Object({
   }),
 })
 
+const AssignableUserSchema = Type.Object({
+  id: Type.String({ format: 'uuid' }),
+  username: Type.String(),
+  displayName: Type.String(),
+  email: NullableString,
+})
+
 const PersonaSchema = Type.Object({
   id: Type.String({ format: 'uuid' }),
   name: Type.String(),
@@ -122,28 +123,62 @@ const WorldStateResponseSchema = Type.Object({
 })
 
 // ---------------------------------------------------------------------------
-// Allowed membership roles (excluding project_owner, which is assigned only
-// during project creation).
+// Body schemas
 // ---------------------------------------------------------------------------
 
-const ASSIGNABLE_ROLES = ['project_manager', 'annotator', 'reviewer', 'viewer'] as const
-type AssignableRole = typeof ASSIGNABLE_ROLES[number]
+const CreateProjectBody = Type.Object({
+  name: Type.String({ minLength: 1 }),
+  description: Type.Optional(Type.String()),
+  slug: Type.String({ minLength: 1, pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$' }),
+  ownerGroupId: Type.Optional(Type.String({ format: 'uuid' })),
+})
 
-/**
- * Returns true if the value is a valid assignable project role.
- *
- * @param value - string to check
- * @returns whether the value is a valid assignable role
- */
-function isAssignableRole(value: string): value is AssignableRole {
-  return (ASSIGNABLE_ROLES as readonly string[]).includes(value)
-}
+const UpdateProjectBody = Type.Object({
+  name: Type.Optional(Type.String({ minLength: 1 })),
+  description: Type.Optional(Type.String()),
+  settings: Type.Optional(Type.Unknown()),
+  isArchived: Type.Optional(Type.Boolean()),
+})
+
+const AddMemberBody = Type.Object({
+  userId: Type.String({ format: 'uuid' }),
+  role: Type.String(),
+})
+
+const ChangeRoleBody = Type.Object({
+  role: Type.String(),
+})
+
+const UpdateWorldBody = Type.Object({
+  entities: Type.Optional(Type.Array(Type.Unknown())),
+  events: Type.Optional(Type.Array(Type.Unknown())),
+  times: Type.Optional(Type.Array(Type.Unknown())),
+  entityCollections: Type.Optional(Type.Array(Type.Unknown())),
+  eventCollections: Type.Optional(Type.Array(Type.Unknown())),
+  timeCollections: Type.Optional(Type.Array(Type.Unknown())),
+  relations: Type.Optional(Type.Array(Type.Unknown())),
+})
 
 // ---------------------------------------------------------------------------
 // Route plugin
 // ---------------------------------------------------------------------------
 
 const projectsRoute: FastifyPluginAsync = async (fastify) => {
+  // Request-independent: one repository for the plugin's lifetime.
+  const repository = new ProjectRepository(fastify.prisma)
+
+  /**
+   * Builds a per-request service from the request-scoped CASL ability and the
+   * authenticated user's id and system role.
+   */
+  const serviceFor = (request: FastifyRequest): ProjectService =>
+    new ProjectService(
+      repository,
+      request.ability ?? null,
+      request.user?.id,
+      request.user?.systemRole ?? undefined
+    )
+
   // =========================================================================
   // POST /api/projects - Create a project
   // =========================================================================
@@ -167,53 +202,8 @@ const projectsRoute: FastifyPluginAsync = async (fastify) => {
       },
     },
     async (request, reply) => {
-      const userId = request.user!.id
-      const { name, description, slug, ownerGroupId } = request.body
-
-      // Validate slug uniqueness
-      const existing = await fastify.prisma.project.findUnique({
-        where: { slug },
-      })
-      if (existing) {
-        throw new ConflictError(`Project slug "${slug}" is already taken`)
-      }
-
-      // If group-owned, verify the user is group_admin or group_owner
-      if (ownerGroupId) {
-        const membership = await fastify.prisma.groupMembership.findUnique({
-          where: { userId_groupId: { userId, groupId: ownerGroupId } },
-        })
-        if (!membership || !['group_admin', 'group_owner'].includes(membership.role)) {
-          throw new ForbiddenError('You must be a group admin or owner to create a project for this group')
-        }
-      }
-
-      // Create project and initial membership in a transaction
-      const project = await fastify.prisma.$transaction(async (tx) => {
-        const created = await tx.project.create({
-          data: {
-            name,
-            description: description ?? null,
-            slug,
-            ownerUserId: ownerGroupId ? null : userId,
-            ownerGroupId: ownerGroupId ?? null,
-            createdBy: userId,
-          },
-        })
-
-        await tx.projectMembership.create({
-          data: {
-            userId,
-            projectId: created.id,
-            role: 'project_owner',
-          },
-        })
-
-        return created
-      })
-
-      // Creator is now a project_owner; their abilities have changed
-      invalidateUserAbilities(userId)
+      const service = serviceFor(request)
+      const project = await service.create(request.body)
       projectOperationCounter.add(1, { operation: 'create', status: 'success' })
       return reply.status(201).send(project)
     },
@@ -247,75 +237,9 @@ const projectsRoute: FastifyPluginAsync = async (fastify) => {
     async (request, reply) => {
       const userId = request.user!.id
       const scope = request.query.scope ?? 'all'
-
-      // Build the OR conditions based on scope
-      const conditions: Prisma.ProjectWhereInput[] = []
-
-      if (scope === 'personal' || scope === 'all') {
-        conditions.push({ ownerUserId: userId })
-      }
-
-      if (scope === 'group' || scope === 'all') {
-        // Find groups the user belongs to
-        const groupMemberships = await fastify.prisma.groupMembership.findMany({
-          where: { userId },
-          select: { groupId: true },
-        })
-        const groupIds = groupMemberships.map((gm) => gm.groupId)
-        if (groupIds.length > 0) {
-          conditions.push({ ownerGroupId: { in: groupIds } })
-        }
-      }
-
-      if (scope === 'all') {
-        // Projects where user has direct membership
-        conditions.push({
-          members: { some: { userId } },
-        })
-      }
-
-      if (conditions.length === 0) {
-        return reply.send([])
-      }
-
-      const projects = await fastify.prisma.project.findMany({
-        where: { OR: conditions },
-        include: {
-          _count: { select: { members: true } },
-          members: {
-            where: { userId },
-            select: { role: true },
-            take: 1,
-          },
-        },
-        orderBy: { createdAt: 'desc' },
-      })
-
-      // Deduplicate (a project can match multiple conditions)
-      const seen = new Set<string>()
-      const unique = projects.filter((p) => {
-        if (seen.has(p.id)) return false
-        seen.add(p.id)
-        return true
-      })
-
-      const result = unique.map((p) => ({
-        id: p.id,
-        name: p.name,
-        description: p.description,
-        slug: p.slug,
-        ownerUserId: p.ownerUserId,
-        ownerGroupId: p.ownerGroupId,
-        settings: p.settings,
-        isArchived: p.isArchived,
-        createdBy: p.createdBy,
-        createdAt: p.createdAt.toISOString(),
-        updatedAt: p.updatedAt.toISOString(),
-        _count: p._count,
-        myRole: p.members[0]?.role ?? null,
-      }))
-
-      return reply.send(result)
+      const service = serviceFor(request)
+      const projects = await service.list(userId, scope)
+      return reply.send(projects)
     },
   )
 
@@ -353,56 +277,9 @@ const projectsRoute: FastifyPluginAsync = async (fastify) => {
       },
     },
     async (request, reply) => {
-      const userId = request.user!.id
-      const { projectId } = request.params
-
-      const project = await fastify.prisma.project.findUnique({
-        where: { id: projectId },
-        include: {
-          members: {
-            include: {
-              user: {
-                select: { id: true, username: true, displayName: true, email: true },
-              },
-            },
-          },
-          _count: { select: { videoAssignments: true } },
-        },
-      })
-
-      if (!project) {
-        throw new NotFoundError('Project', projectId)
-      }
-
-      // Must be a member or system_admin
-      const isMember = project.members.some((m) => m.userId === userId)
-      const isAdmin = request.user!.isAdmin
-      if (!isMember && !isAdmin) {
-        throw new ForbiddenError('You must be a project member to view this project')
-      }
-
-      return reply.send({
-        id: project.id,
-        name: project.name,
-        description: project.description,
-        slug: project.slug,
-        ownerUserId: project.ownerUserId,
-        ownerGroupId: project.ownerGroupId,
-        settings: project.settings,
-        isArchived: project.isArchived,
-        createdBy: project.createdBy,
-        createdAt: project.createdAt.toISOString(),
-        updatedAt: project.updatedAt.toISOString(),
-        members: project.members.map((m) => ({
-          id: m.id,
-          userId: m.userId,
-          projectId: m.projectId,
-          role: m.role,
-          joinedAt: m.joinedAt.toISOString(),
-          user: m.user,
-        })),
-        videoAssignmentCount: project._count.videoAssignments,
-      })
+      const service = serviceFor(request)
+      const project = await service.getById(request.params.projectId)
+      return reply.send(project)
     },
   )
 
@@ -430,34 +307,8 @@ const projectsRoute: FastifyPluginAsync = async (fastify) => {
       },
     },
     async (request, reply) => {
-      const userId = request.user!.id
-      const { projectId } = request.params
-      const { name, description, settings, isArchived } = request.body
-
-      const project = await fastify.prisma.project.findUnique({
-        where: { id: projectId },
-        include: { members: { where: { userId }, take: 1 } },
-      })
-
-      if (!project) {
-        throw new NotFoundError('Project', projectId)
-      }
-
-      const myRole = project.members[0]?.role
-      if (!myRole || !['project_owner', 'project_manager'].includes(myRole)) {
-        throw new ForbiddenError('Only project owners and managers can update the project')
-      }
-
-      const updated = await fastify.prisma.project.update({
-        where: { id: projectId },
-        data: {
-          ...(name !== undefined && { name }),
-          ...(description !== undefined && { description }),
-          ...(settings !== undefined && { settings: toJson(settings) }),
-          ...(isArchived !== undefined && { isArchived }),
-        },
-      })
-
+      const service = serviceFor(request)
+      const updated = await service.update(request.params.projectId, request.body)
       projectOperationCounter.add(1, { operation: 'update', status: 'success' })
       return reply.send(updated)
     },
@@ -483,38 +334,8 @@ const projectsRoute: FastifyPluginAsync = async (fastify) => {
       },
     },
     async (request, reply) => {
-      const userId = request.user!.id
-      const { projectId } = request.params
-
-      const project = await fastify.prisma.project.findUnique({
-        where: { id: projectId },
-        include: { members: { where: { userId }, take: 1 } },
-      })
-
-      if (!project) {
-        throw new NotFoundError('Project', projectId)
-      }
-
-      const isOwnerRole = project.members[0]?.role === 'project_owner'
-      const isAdmin = request.user!.isAdmin
-      if (!isOwnerRole && !isAdmin) {
-        throw new ForbiddenError('Only the project owner or a system admin can delete a project')
-      }
-
-      // Snapshot member ids before the cascade deletes project memberships
-      const doomedMembers = await fastify.prisma.projectMembership.findMany({
-        where: { projectId },
-        select: { userId: true },
-      })
-
-      // Cascade deletes are handled by Prisma's onDelete: Cascade on memberships
-      // and assignments. Delete the project directly.
-      await fastify.prisma.project.delete({ where: { id: projectId } })
-
-      // Every former member loses project-scope access
-      for (const { userId: memberId } of doomedMembers) {
-        invalidateUserAbilities(memberId)
-      }
+      const service = serviceFor(request)
+      await service.delete(request.params.projectId)
       projectOperationCounter.add(1, { operation: 'delete', status: 'success' })
       return reply.send({ message: 'Project deleted successfully' })
     },
@@ -546,64 +367,12 @@ const projectsRoute: FastifyPluginAsync = async (fastify) => {
       },
     },
     async (request, reply) => {
-      const callerUserId = request.user!.id
       const { projectId } = request.params
       const { userId: targetUserId, role } = request.body
-
-      if (!isAssignableRole(role)) {
-        throw new ValidationError(
-          `Invalid role "${role}". Must be one of: ${ASSIGNABLE_ROLES.join(', ')}`,
-        )
-      }
-
-      // Verify caller has permission
-      const callerMembership = await fastify.prisma.projectMembership.findUnique({
-        where: { userId_projectId: { userId: callerUserId, projectId } },
-      })
-      if (!callerMembership || !['project_owner', 'project_manager'].includes(callerMembership.role)) {
-        throw new ForbiddenError('Only project owners and managers can add members')
-      }
-
-      // Verify target user exists
-      const targetUser = await fastify.prisma.user.findUnique({
-        where: { id: targetUserId },
-      })
-      if (!targetUser) {
-        throw new NotFoundError('User', targetUserId)
-      }
-
-      // Check for existing membership
-      const existingMembership = await fastify.prisma.projectMembership.findUnique({
-        where: { userId_projectId: { userId: targetUserId, projectId } },
-      })
-      if (existingMembership) {
-        throw new ConflictError('User is already a member of this project')
-      }
-
-      const membership = await fastify.prisma.projectMembership.create({
-        data: {
-          userId: targetUserId,
-          projectId,
-          role,
-        },
-        include: {
-          user: {
-            select: { id: true, username: true, displayName: true, email: true },
-          },
-        },
-      })
-
-      // Newly added member picks up project-scope role permissions
-      invalidateUserAbilities(targetUserId)
+      const service = serviceFor(request)
+      const membership = await service.addMember(projectId, targetUserId, role)
       projectOperationCounter.add(1, { operation: 'add_member', status: 'success' })
-      return reply.status(201).send({
-        id: membership.id,
-        userId: membership.userId,
-        projectId: membership.projectId,
-        role: membership.role,
-        joinedAt: membership.joinedAt.toISOString(),
-        user: membership.user,
-      })
+      return reply.status(201).send(membership)
     },
   )
 
@@ -627,42 +396,35 @@ const projectsRoute: FastifyPluginAsync = async (fastify) => {
       },
     },
     async (request, reply) => {
-      const userId = request.user!.id
-      const { projectId } = request.params
+      const service = serviceFor(request)
+      const members = await service.listMembers(request.params.projectId)
+      return reply.send(members)
+    },
+  )
 
-      const project = await fastify.prisma.project.findUnique({
-        where: { id: projectId },
-        include: {
-          members: {
-            include: {
-              user: {
-                select: { id: true, username: true, displayName: true, email: true },
-              },
-            },
-          },
+  // =========================================================================
+  // GET /api/projects/:projectId/assignable-users - List addable users
+  // =========================================================================
+
+  fastify.get<{ Params: Static<typeof ProjectIdParams> }>(
+    '/api/projects/:projectId/assignable-users',
+    {
+      onRequest: [requireAuth, buildAbilities],
+      schema: {
+        description: 'List users who can be added as members (not already members)',
+        tags: ['projects'],
+        params: ProjectIdParams,
+        response: {
+          200: Type.Array(AssignableUserSchema),
+          403: ErrorResponseSchema,
+          404: ErrorResponseSchema,
         },
-      })
-
-      if (!project) {
-        throw new NotFoundError('Project', projectId)
-      }
-
-      const isMember = project.members.some((m) => m.userId === userId)
-      const isAdmin = request.user!.isAdmin
-      if (!isMember && !isAdmin) {
-        throw new ForbiddenError('You must be a project member to list members')
-      }
-
-      const result = project.members.map((m) => ({
-        id: m.id,
-        userId: m.userId,
-        projectId: m.projectId,
-        role: m.role,
-        joinedAt: m.joinedAt.toISOString(),
-        user: m.user,
-      }))
-
-      return reply.send(result)
+      },
+    },
+    async (request, reply) => {
+      const service = serviceFor(request)
+      const users = await service.listAssignableUsers(request.params.projectId)
+      return reply.send(users)
     },
   )
 
@@ -694,55 +456,10 @@ const projectsRoute: FastifyPluginAsync = async (fastify) => {
       const callerUserId = request.user!.id
       const { projectId, userId: targetUserId } = request.params
       const { role } = request.body
-
-      if (!isAssignableRole(role)) {
-        throw new ValidationError(
-          `Invalid role "${role}". Must be one of: ${ASSIGNABLE_ROLES.join(', ')}`,
-        )
-      }
-
-      // Cannot change own role
-      if (callerUserId === targetUserId) {
-        throw new ValidationError('You cannot change your own role')
-      }
-
-      // Verify caller has permission
-      const callerMembership = await fastify.prisma.projectMembership.findUnique({
-        where: { userId_projectId: { userId: callerUserId, projectId } },
-      })
-      if (!callerMembership || !['project_owner', 'project_manager'].includes(callerMembership.role)) {
-        throw new ForbiddenError('Only project owners and managers can change member roles')
-      }
-
-      // Verify target membership exists
-      const targetMembership = await fastify.prisma.projectMembership.findUnique({
-        where: { userId_projectId: { userId: targetUserId, projectId } },
-      })
-      if (!targetMembership) {
-        throw new NotFoundError('ProjectMembership', targetUserId)
-      }
-
-      const updated = await fastify.prisma.projectMembership.update({
-        where: { userId_projectId: { userId: targetUserId, projectId } },
-        data: { role },
-        include: {
-          user: {
-            select: { id: true, username: true, displayName: true, email: true },
-          },
-        },
-      })
-
-      // Role change alters the member's effective permissions
-      invalidateUserAbilities(targetUserId)
+      const service = serviceFor(request)
+      const updated = await service.changeMemberRole(projectId, targetUserId, callerUserId, role)
       projectOperationCounter.add(1, { operation: 'update', status: 'success' })
-      return reply.send({
-        id: updated.id,
-        userId: updated.userId,
-        projectId: updated.projectId,
-        role: updated.role,
-        joinedAt: updated.joinedAt.toISOString(),
-        user: updated.user,
-      })
+      return reply.send(updated)
     },
   )
 
@@ -769,41 +486,8 @@ const projectsRoute: FastifyPluginAsync = async (fastify) => {
     async (request, reply) => {
       const callerUserId = request.user!.id
       const { projectId, userId: targetUserId } = request.params
-
-      const targetMembership = await fastify.prisma.projectMembership.findUnique({
-        where: { userId_projectId: { userId: targetUserId, projectId } },
-      })
-
-      if (!targetMembership) {
-        throw new NotFoundError('ProjectMembership', targetUserId)
-      }
-
-      // If removing someone else, caller must be owner or manager
-      if (callerUserId !== targetUserId) {
-        const callerMembership = await fastify.prisma.projectMembership.findUnique({
-          where: { userId_projectId: { userId: callerUserId, projectId } },
-        })
-        if (!callerMembership || !['project_owner', 'project_manager'].includes(callerMembership.role)) {
-          throw new ForbiddenError('Only project owners and managers can remove members')
-        }
-      }
-
-      // Cannot remove the last project_owner
-      if (targetMembership.role === 'project_owner') {
-        const ownerCount = await fastify.prisma.projectMembership.count({
-          where: { projectId, role: 'project_owner' },
-        })
-        if (ownerCount <= 1) {
-          throw new ValidationError('Cannot remove the last project owner')
-        }
-      }
-
-      await fastify.prisma.projectMembership.delete({
-        where: { userId_projectId: { userId: targetUserId, projectId } },
-      })
-
-      // Removed member loses project-scope permissions immediately
-      invalidateUserAbilities(targetUserId)
+      const service = serviceFor(request)
+      await service.removeMember(projectId, targetUserId, callerUserId)
       projectOperationCounter.add(1, { operation: 'remove_member', status: 'success' })
       return reply.send({ message: 'Member removed successfully' })
     },
@@ -829,30 +513,8 @@ const projectsRoute: FastifyPluginAsync = async (fastify) => {
       },
     },
     async (request, reply) => {
-      const userId = request.user!.id
-      const { projectId } = request.params
-
-      // Verify project exists and user is a member
-      const project = await fastify.prisma.project.findUnique({
-        where: { id: projectId },
-        include: { members: { where: { userId }, take: 1 } },
-      })
-
-      if (!project) {
-        throw new NotFoundError('Project', projectId)
-      }
-
-      const isMember = project.members.length > 0
-      const isAdmin = request.user!.isAdmin
-      if (!isMember && !isAdmin) {
-        throw new ForbiddenError('You must be a project member to view personas')
-      }
-
-      const personas = await fastify.prisma.persona.findMany({
-        where: { projectId },
-        orderBy: { createdAt: 'desc' },
-      })
-
+      const service = serviceFor(request)
+      const personas = await service.listProjectPersonas(request.params.projectId)
       return reply.send(personas)
     },
   )
@@ -878,59 +540,9 @@ const projectsRoute: FastifyPluginAsync = async (fastify) => {
     },
     async (request, reply) => {
       const userId = request.user!.id
-      const { projectId } = request.params
-
-      // Verify project exists and user is a member
-      const project = await fastify.prisma.project.findUnique({
-        where: { id: projectId },
-        include: { members: { where: { userId }, take: 1 } },
-      })
-
-      if (!project) {
-        throw new NotFoundError('Project', projectId)
-      }
-
-      const isMember = project.members.length > 0
-      const isAdmin = request.user!.isAdmin
-      if (!isMember && !isAdmin) {
-        throw new ForbiddenError('You must be a project member to access world state')
-      }
-
-      // Find or create world state for (userId, projectId)
-      let worldState = await fastify.prisma.worldState.findUnique({
-        where: { userId_projectId: { userId, projectId } },
-      })
-
-      if (!worldState) {
-        worldState = await fastify.prisma.worldState.create({
-          data: {
-            userId,
-            projectId,
-            entities: [],
-            events: [],
-            times: [],
-            entityCollections: [],
-            eventCollections: [],
-            timeCollections: [],
-            relations: [],
-          },
-        })
-      }
-
-      return reply.send({
-        id: worldState.id,
-        userId: worldState.userId,
-        projectId: worldState.projectId,
-        entities: worldState.entities || [],
-        events: worldState.events || [],
-        times: worldState.times || [],
-        entityCollections: worldState.entityCollections || [],
-        eventCollections: worldState.eventCollections || [],
-        timeCollections: worldState.timeCollections || [],
-        relations: worldState.relations || [],
-        createdAt: worldState.createdAt.toISOString(),
-        updatedAt: worldState.updatedAt.toISOString(),
-      })
+      const service = serviceFor(request)
+      const worldState = await service.getWorldState(request.params.projectId, userId)
+      return reply.send(worldState)
     },
   )
 
@@ -959,114 +571,11 @@ const projectsRoute: FastifyPluginAsync = async (fastify) => {
     },
     async (request, reply) => {
       const userId = request.user!.id
-      const { projectId } = request.params
-      const updateData = request.body
-
-      // Verify project exists and user is a member
-      const project = await fastify.prisma.project.findUnique({
-        where: { id: projectId },
-        include: { members: { where: { userId }, take: 1 } },
-      })
-
-      if (!project) {
-        throw new NotFoundError('Project', projectId)
-      }
-
-      const isMember = project.members.length > 0
-      const isAdmin = request.user!.isAdmin
-      if (!isMember && !isAdmin) {
-        throw new ForbiddenError('You must be a project member to update world state')
-      }
-
-      // Find or create, then update
-      const existing = await fastify.prisma.worldState.findUnique({
-        where: { userId_projectId: { userId, projectId } },
-      })
-
-      let worldState
-      if (existing) {
-        worldState = await fastify.prisma.worldState.update({
-          where: { userId_projectId: { userId, projectId } },
-          data: {
-            entities: updateData.entities !== undefined ? toJson(updateData.entities) : undefined,
-            events: updateData.events !== undefined ? toJson(updateData.events) : undefined,
-            times: updateData.times !== undefined ? toJson(updateData.times) : undefined,
-            entityCollections: updateData.entityCollections !== undefined ? toJson(updateData.entityCollections) : undefined,
-            eventCollections: updateData.eventCollections !== undefined ? toJson(updateData.eventCollections) : undefined,
-            timeCollections: updateData.timeCollections !== undefined ? toJson(updateData.timeCollections) : undefined,
-            relations: updateData.relations !== undefined ? toJson(updateData.relations) : undefined,
-          },
-        })
-      } else {
-        worldState = await fastify.prisma.worldState.create({
-          data: {
-            userId,
-            projectId,
-            entities: toJson(updateData.entities || []),
-            events: toJson(updateData.events || []),
-            times: toJson(updateData.times || []),
-            entityCollections: toJson(updateData.entityCollections || []),
-            eventCollections: toJson(updateData.eventCollections || []),
-            timeCollections: toJson(updateData.timeCollections || []),
-            relations: toJson(updateData.relations || []),
-          },
-        })
-      }
-
-      return reply.send({
-        id: worldState.id,
-        userId: worldState.userId,
-        projectId: worldState.projectId,
-        entities: worldState.entities || [],
-        events: worldState.events || [],
-        times: worldState.times || [],
-        entityCollections: worldState.entityCollections || [],
-        eventCollections: worldState.eventCollections || [],
-        timeCollections: worldState.timeCollections || [],
-        relations: worldState.relations || [],
-        createdAt: worldState.createdAt.toISOString(),
-        updatedAt: worldState.updatedAt.toISOString(),
-      })
+      const service = serviceFor(request)
+      const worldState = await service.updateWorldState(request.params.projectId, userId, request.body)
+      return reply.send(worldState)
     },
   )
 }
-
-// ---------------------------------------------------------------------------
-// Body schemas (defined after the plugin function to keep route definitions
-// close to their handler, per the codebase convention).
-// ---------------------------------------------------------------------------
-
-const CreateProjectBody = Type.Object({
-  name: Type.String({ minLength: 1 }),
-  description: Type.Optional(Type.String()),
-  slug: Type.String({ minLength: 1, pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$' }),
-  ownerGroupId: Type.Optional(Type.String({ format: 'uuid' })),
-})
-
-const UpdateProjectBody = Type.Object({
-  name: Type.Optional(Type.String({ minLength: 1 })),
-  description: Type.Optional(Type.String()),
-  settings: Type.Optional(Type.Unknown()),
-  isArchived: Type.Optional(Type.Boolean()),
-})
-
-const AddMemberBody = Type.Object({
-  userId: Type.String({ format: 'uuid' }),
-  role: Type.String(),
-})
-
-const ChangeRoleBody = Type.Object({
-  role: Type.String(),
-})
-
-const UpdateWorldBody = Type.Object({
-  entities: Type.Optional(Type.Array(Type.Unknown())),
-  events: Type.Optional(Type.Array(Type.Unknown())),
-  times: Type.Optional(Type.Array(Type.Unknown())),
-  entityCollections: Type.Optional(Type.Array(Type.Unknown())),
-  eventCollections: Type.Optional(Type.Array(Type.Unknown())),
-  timeCollections: Type.Optional(Type.Array(Type.Unknown())),
-  relations: Type.Optional(Type.Array(Type.Unknown())),
-})
 
 export default projectsRoute

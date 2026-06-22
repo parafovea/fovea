@@ -52,6 +52,7 @@ import { SaveStatusIndicator } from '@components/shared/SaveStatusIndicator'
 import { useAutoSave } from '@hooks/data/useAutoSave'
 import { GlossItem, Claim, ClaimExtractionConfig, ClaimTextSpan, UpdateClaimRequest } from '@models/types'
 import { logError, logWarning } from '@services/errorLogging'
+import { config } from '@/config'
 
 interface VideoSummaryEditorProps {
   videoId: string
@@ -482,7 +483,7 @@ const VideoSummaryEditor = forwardRef<VideoSummaryEditorRef, VideoSummaryEditorP
               // the gloss-reference showcase has a textarea to type
               // into — the editor's Save is the no-op path for
               // anonymous visitors but the dialog still renders.
-              disabled={!summaryId && import.meta.env.VITE_DEMO_PUBLIC !== '1'}
+              disabled={!summaryId && !config.deploymentMode.publicBooth}
               data-tour-id="add-manual-claim-button"
             >
               <Plus className="size-4 mr-1" />

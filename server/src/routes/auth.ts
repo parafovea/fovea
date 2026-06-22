@@ -15,8 +15,10 @@ import {
   recordSessionEvent,
 } from '../lib/authMetrics.js'
 import { requireAuth } from '../middleware/auth.js'
+import { config } from '../config.js'
 import { buildAbilities } from '../middleware/abilities.js'
 import { serializeAbilities } from '../lib/abilities.js'
+import { isSingleUserMode } from '../services/user-service.js'
 
 /**
  * Authentication routes for login, logout, registration.
@@ -133,7 +135,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       // Set session cookie
       reply.setCookie('session_token', token, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
+        secure: config.server.isProduction,
         sameSite: 'lax',
         expires: expiresAt,
         path: '/',
@@ -213,7 +215,6 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     },
     async (request, reply) => {
       const token = request.cookies.session_token
-      const mode = process.env.FOVEA_MODE || 'single-user'
 
       // Handle session-based authentication
       if (token) {
@@ -236,7 +237,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       // In single-user mode, auto-authenticate with default user
-      if (mode === 'single-user') {
+      if (isSingleUserMode()) {
         // Find default user by id (matches what seed.ts creates)
         const defaultUserId = 'default-user'
         let defaultUser = await prisma.user.findUnique({
@@ -270,7 +271,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
         // Set session cookie
         reply.setCookie('session_token', sessionToken, {
           httpOnly: true,
-          secure: process.env.NODE_ENV === 'production',
+          secure: config.server.isProduction,
           sameSite: 'lax',
           expires: expiresAt,
           path: '/',
@@ -338,7 +339,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     },
     async (request, reply) => {
       // Check if registration is enabled
-      if (process.env.ALLOW_REGISTRATION !== 'true') {
+      if (!config.auth.allowRegistration) {
         throw new ForbiddenError('Registration is disabled')
       }
 
@@ -378,7 +379,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
 
       reply.setCookie('session_token', token, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
+        secure: config.server.isProduction,
         sameSite: 'lax',
         expires: expiresAt,
         path: '/',
@@ -486,7 +487,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       // Update cookie with new expiration
       reply.setCookie('session_token', token, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
+        secure: config.server.isProduction,
         sameSite: 'lax',
         expires: newExpiresAt,
         path: '/',

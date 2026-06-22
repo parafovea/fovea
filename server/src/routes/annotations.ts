@@ -1,12 +1,12 @@
 import { Type } from '@sinclair/typebox'
 import { FastifyPluginAsync } from 'fastify'
-import { Prisma } from '@prisma/client'
+import { Prisma, Annotation } from '@prisma/client'
 import { accessibleBy } from '@casl/prisma'
 import { subject } from '@casl/ability'
 import { NotFoundError, ForbiddenError } from '../lib/errors.js'
 import { requireAuth } from '../middleware/auth.js'
 import { buildAbilities } from '../middleware/abilities.js'
-import { isDemoModeEnabled } from '../lib/demo-flags.js'
+import { demoAnnotationListWhere } from '../lib/demo-rbac.js'
 
 /**
  * TypeBox schema for Annotation response.
@@ -24,9 +24,68 @@ const AnnotationResponseSchema = Type.Object({
   frames: Type.Unknown(),
   confidence: Type.Union([Type.Null(), Type.Number()]),
   source: Type.String(),
+  /// Display name of the linked world object, resolved server-side from the
+  /// annotation owner's WorldState. Lets a reviewer reading another
+  /// annotator's object annotation see the object's name even though the
+  /// object lives in the owner's private world (not the reviewer's). Absent
+  /// for type annotations and null when the object cannot be resolved.
+  linkedObjectName: Type.Optional(Type.Union([Type.Null(), Type.String()])),
   createdAt: Type.String(),
   updatedAt: Type.String()
 })
+
+/**
+ * Kinds of world object an object annotation may link to via its `label`.
+ */
+const RESOLVABLE_LINK_TYPES = new Set(['entity', 'event', 'time', 'location'])
+
+/**
+ * A world object as stored in a WorldState JSON array. Only the fields the
+ * name resolver needs are typed; arrays hold richer shapes than this.
+ */
+interface WorldObjectRecord {
+  id?: unknown
+  name?: unknown
+  label?: unknown
+}
+
+/**
+ * Builds an id -> display-name index over a single owner's WorldState.
+ *
+ * `linkType` determines which JSON array the object lives in:
+ * - entity, location -> `entities` (locations are entities carrying a
+ *   `locationType` field, so they share the entities array)
+ * - event -> `events`
+ * - time -> `times`
+ *
+ * The display name is the object's `name`; times carry a `label` instead of a
+ * `name`, so `label` is used as a fallback. Objects missing both are skipped.
+ *
+ * @param worldState - the owner's WorldState row (entities/events/times JSON)
+ * @returns map from world-object id to its display name
+ */
+function indexWorldObjectNames(worldState: {
+  entities: unknown
+  events: unknown
+  times: unknown
+}): Map<string, string> {
+  const index = new Map<string, string>()
+  const arrays: unknown[] = [worldState.entities, worldState.events, worldState.times]
+  for (const arr of arrays) {
+    if (!Array.isArray(arr)) continue
+    for (const raw of arr) {
+      const obj = raw as WorldObjectRecord
+      if (typeof obj?.id !== 'string') continue
+      const name = typeof obj.name === 'string'
+        ? obj.name
+        : typeof obj.label === 'string'
+          ? obj.label
+          : null
+      if (name !== null) index.set(obj.id, name)
+    }
+  }
+  return index
+}
 
 /**
  * Fastify plugin for annotation-related routes.
@@ -57,37 +116,61 @@ const annotationsRoute: FastifyPluginAsync = async (fastify) => {
   }, async (request, reply) => {
     const { videoId } = request.params as { videoId: string }
     if (!request.ability) throw new ForbiddenError('No abilities defined')
+    const userId = request.user!.id
 
-    // FOVEA_DEMO_MODE override: demo deployments seed system-
-    // generated annotations on the curated tour videos that are
-    // not authored by the visitor, so the CASL accessibleBy
-    // filter would hide them. In demo mode we also surface every
-    // annotation whose source flag marks it a fixture row — the
-    // demo seeder writes `source: 'demo-fixture'` for every
-    // hand-authored or model-service-produced tour annotation,
-    // so a self-hoster with no demo seed sees zero extra rows.
-    const baseWhere = isDemoModeEnabled()
-      ? {
-          videoId,
-          OR: [
-            accessibleBy(request.ability, 'read').Annotation,
-            // The demo seeder writes `source: 'demo-fixture:<stableId>'`
-            // so each hand-authored track persists as its own row.
-            // startsWith matches the whole family without coupling
-            // the read path to the per-track stable IDs.
-            { source: { startsWith: 'demo-fixture' } },
-          ],
-        }
-      : {
-          AND: [
-            { videoId },
-            accessibleBy(request.ability, 'read').Annotation,
-          ],
-        }
+    // Demo deployments seed system-generated annotations on the curated tour
+    // videos that the visitor did not author, so the CASL accessibleBy filter
+    // alone would hide them. demoAnnotationListWhere widens the read to demo
+    // fixtures when demo mode is on and returns the plain per-user filter when
+    // it is off (see lib/demo-rbac.ts).
+    const baseWhere = demoAnnotationListWhere(
+      videoId,
+      accessibleBy(request.ability, 'read').Annotation
+    )
     const annotations = await fastify.prisma.annotation.findMany({
       where: baseWhere,
       orderBy: { createdAt: 'asc' },
     })
+
+    // Resolve linkedObjectName for object annotations from each annotation
+    // owner's WorldState. World objects (entities/events/times/locations) are
+    // per-user JSON private to their owner, so a reviewer reading another
+    // annotator's object annotation cannot resolve the linked object's name
+    // from their own world. This privileged read exposes only the object's
+    // name and only for annotations the caller already passed the CASL read
+    // filter above. Batch the owners into one query, then index per owner.
+    const ownerIds = new Set<string>()
+    for (const a of annotations) {
+      if (a.linkType && RESOLVABLE_LINK_TYPES.has(a.linkType) && a.label) {
+        ownerIds.add(a.createdByUserId ?? userId)
+      }
+    }
+
+    const nameIndexByOwner = new Map<string, Map<string, string>>()
+    if (ownerIds.size > 0) {
+      const worldStates = await fastify.prisma.worldState.findMany({
+        where: { userId: { in: [...ownerIds] }, projectId: null },
+        select: { userId: true, entities: true, events: true, times: true },
+      })
+      for (const ws of worldStates) {
+        nameIndexByOwner.set(ws.userId, indexWorldObjectNames(ws))
+      }
+    }
+
+    /**
+     * Resolves the display name of an annotation's linked world object.
+     *
+     * @param a - the annotation row
+     * @returns the object's name, or null when it is a type annotation or the
+     *   object cannot be found in the owner's world
+     */
+    const resolveLinkedObjectName = (a: typeof annotations[number]): string | null => {
+      if (!a.linkType || !RESOLVABLE_LINK_TYPES.has(a.linkType) || !a.label) {
+        return null
+      }
+      const ownerId = a.createdByUserId ?? userId
+      return nameIndexByOwner.get(ownerId)?.get(a.label) ?? null
+    }
 
     return reply.send(annotations.map(a => ({
       id: a.id,
@@ -99,6 +182,7 @@ const annotationsRoute: FastifyPluginAsync = async (fastify) => {
       frames: a.frames,
       confidence: a.confidence,
       source: a.source,
+      linkedObjectName: resolveLinkedObjectName(a),
       createdAt: a.createdAt.toISOString(),
       updatedAt: a.updatedAt.toISOString()
     })))
@@ -112,9 +196,14 @@ const annotationsRoute: FastifyPluginAsync = async (fastify) => {
   fastify.post('/api/annotations', {
     onRequest: [requireAuth, buildAbilities],
     schema: {
-      description: 'Create a new annotation',
+      description: 'Create an annotation, or update it in place when a client-supplied id already exists (idempotent create)',
       tags: ['annotations'],
       body: Type.Object({
+        // Optional client-generated id. When supplied and already present, the
+        // create is idempotent (the existing annotation is updated in place
+        // instead of a duplicate being minted), which is what stops autosave
+        // from re-creating already-persisted boxes.
+        id: Type.Optional(Type.String({ format: 'uuid' })),
         videoId: Type.String(),
         personaId: Type.Optional(Type.Union([Type.Null(), Type.String()])),
         type: Type.String(),
@@ -131,11 +220,13 @@ const annotationsRoute: FastifyPluginAsync = async (fastify) => {
         source: Type.Optional(Type.String())
       }),
       response: {
+        200: AnnotationResponseSchema,
         201: AnnotationResponseSchema
       }
     }
   }, async (request, reply) => {
     const data = request.body as {
+      id?: string
       videoId: string
       personaId?: string | null
       type: string
@@ -167,6 +258,51 @@ const annotationsRoute: FastifyPluginAsync = async (fastify) => {
       projectId = persona.projectId
     }
 
+    const toResponse = (a: Annotation) => ({
+      id: a.id,
+      videoId: a.videoId,
+      personaId: a.personaId,
+      type: a.type,
+      label: a.label,
+      linkType: a.linkType,
+      frames: a.frames,
+      confidence: a.confidence,
+      source: a.source,
+      createdAt: a.createdAt.toISOString(),
+      updatedAt: a.updatedAt.toISOString()
+    })
+
+    // Idempotent update of an existing annotation by its client id. Authorizes
+    // against the EXISTING row's `update` permission (not the generic `create`
+    // candidate), so a caller cannot hijack another user's annotation by
+    // supplying its id; identity columns (videoId / persona / owner) are left
+    // untouched, only the mutable fields are written.
+    const updateExisting = async (existing: Annotation) => {
+      if (!request.ability!.can('update', subject('Annotation', existing))) {
+        throw new ForbiddenError('Cannot update this Annotation')
+      }
+      const updated = await fastify.prisma.annotation.update({
+        where: { id: existing.id },
+        data: {
+          label: data.label,
+          linkType: existing.type === 'object' ? (data.linkType ?? null) : null,
+          frames: data.frames,
+          confidence: data.confidence,
+          source: data.source || existing.source
+        }
+      })
+      return reply.code(200).send(toResponse(updated))
+    }
+
+    // Idempotent create: when the client supplies a stable id that already
+    // exists, update that annotation in place instead of minting a duplicate.
+    // Autosave re-sends each box with its client id, so without this a lagged
+    // re-POST of an already-persisted box would create a second row.
+    if (data.id) {
+      const existing = await fastify.prisma.annotation.findUnique({ where: { id: data.id } })
+      if (existing) return updateExisting(existing)
+    }
+
     // Pre-authorize the create in the resolved scope. Build a candidate
     // shape carrying the final projectId and createdByUserId so CASL's
     // MongoQuery conditions ({ projectId: { $in: memberProjects } } or
@@ -179,35 +315,39 @@ const annotationsRoute: FastifyPluginAsync = async (fastify) => {
       throw new ForbiddenError('Cannot create Annotation in this scope')
     }
 
-    const annotation = await fastify.prisma.annotation.create({
-      data: {
-        videoId: data.videoId,
-        personaId: data.personaId ?? null,
-        userId,
-        createdByUserId: userId,
-        projectId,
-        type: data.type,
-        label: data.label,
-        linkType: data.type === 'object' ? (data.linkType ?? null) : null,
-        frames: data.frames,
-        confidence: data.confidence,
-        source: data.source || 'manual'
+    try {
+      const annotation = await fastify.prisma.annotation.create({
+        data: {
+          id: data.id,
+          videoId: data.videoId,
+          personaId: data.personaId ?? null,
+          userId,
+          createdByUserId: userId,
+          projectId,
+          type: data.type,
+          label: data.label,
+          linkType: data.type === 'object' ? (data.linkType ?? null) : null,
+          frames: data.frames,
+          confidence: data.confidence,
+          source: data.source || 'manual'
+        }
+      })
+      return reply.code(201).send(toResponse(annotation))
+    } catch (error) {
+      // Concurrent-create race: a parallel request with the same client id won
+      // the insert between our findUnique and create. Fall back to the
+      // idempotent update path (re-authorizing against the now-existing row)
+      // so the duplicate the loop would otherwise produce never materializes.
+      if (
+        data.id &&
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        const existing = await fastify.prisma.annotation.findUnique({ where: { id: data.id } })
+        if (existing) return updateExisting(existing)
       }
-    })
-
-    return reply.code(201).send({
-      id: annotation.id,
-      videoId: annotation.videoId,
-      personaId: annotation.personaId,
-      type: annotation.type,
-      label: annotation.label,
-      linkType: annotation.linkType,
-      frames: annotation.frames,
-      confidence: annotation.confidence,
-      source: annotation.source,
-      createdAt: annotation.createdAt.toISOString(),
-      updatedAt: annotation.updatedAt.toISOString()
-    })
+      throw error
+    }
   })
 
   /**

@@ -7,6 +7,13 @@ import axios, { AxiosInstance, AxiosError } from 'axios'
 import { GlossItem } from '@models/types'
 import { TranscriptJson } from '@components/video/types'
 import { logError } from '@services/errorLogging'
+import { config as appConfig } from '@/config'
+import type {
+  DetectionRequest,
+  DetectionResponse,
+  AugmentOntologyRequest,
+  AugmentationResponse,
+} from './generated/contracts'
 
 /**
  * Video summary data structure returned by the API.
@@ -164,68 +171,19 @@ export interface ApiError {
 }
 
 /**
- * Bounding box coordinates for object detection (normalized 0-1).
+ * Object-detection contract types, derived from the server's OpenAPI spec.
+ * Re-exported here so existing `@api/client` import sites keep working while the
+ * shapes track the generated `paths` interface.
  */
-export interface BoundingBox {
-  x: number
-  y: number
-  width: number
-  height: number
-}
+export type {
+  BoundingBox,
+  Detection,
+  FrameDetections,
+  DetectionQueryOptions,
+  DetectionRequest,
+  DetectionResponse,
+} from './generated/contracts'
 
-/**
- * Single object detection result.
- */
-export interface Detection {
-  label: string
-  boundingBox: BoundingBox
-  confidence: number
-  trackId?: string | null
-  /**
-   * Optional final entity type the analyst should snap the box to,
-   * populated by the tour-demo mock layer so the candidates list can
-   * render a "suggested type" chip. Null when the proposal is meant
-   * to be rejected outright; absent on real model-service responses.
-   */
-  acceptAsLabel?: string | null
-  /** Wikidata QID for `acceptAsLabel`, when grounded. */
-  acceptAsWikidataId?: string | null
-}
-
-/**
- * Detections for a single video frame.
- */
-export interface FrameDetections {
-  frameNumber: number
-  timestamp: number
-  detections: Detection[]
-}
-
-/**
- * Detection query options for persona-based detection.
- */
-export interface DetectionQueryOptions {
-  includeEntityTypes?: boolean
-  includeEntityGlosses?: boolean
-  includeEventTypes?: boolean
-  includeEventGlosses?: boolean
-  includeRoleTypes?: boolean
-  includeRoleGlosses?: boolean
-  includeRelationTypes?: boolean
-  includeRelationGlosses?: boolean
-  includeEntityInstances?: boolean
-  includeEntityInstanceGlosses?: boolean
-  includeEventInstances?: boolean
-  includeEventInstanceGlosses?: boolean
-  includeLocationInstances?: boolean
-  includeLocationInstanceGlosses?: boolean
-  includeTimeInstances?: boolean
-  includeTimeInstanceGlosses?: boolean
-}
-
-/**
- * Request payload for object detection.
- */
 /**
  * Request to transcribe a video's audio track. When `enableDiarization`
  * is true the backend also calls the speaker_diarization model and the
@@ -264,28 +222,6 @@ export interface TranscribeResponse {
   speakers?: string[]
   diarizationModelUsed?: string
   diarizationProcessingTime?: number
-}
-
-export interface DetectionRequest {
-  videoId: string
-  personaId?: string
-  manualQuery?: string
-  queryOptions?: DetectionQueryOptions
-  frameNumbers?: number[]
-  confidenceThreshold?: number
-  enableTracking?: boolean
-}
-
-/**
- * Response from object detection endpoint.
- */
-export interface DetectionResponse {
-  id: string
-  videoId: string
-  query: string
-  frames: FrameDetections[]
-  totalDetections: number
-  processingTime: number
 }
 
 /**
@@ -667,42 +603,16 @@ export interface ModelFrameworksResponse {
 }
 
 /**
- * Category of ontology type to augment.
+ * Ontology-augmentation contract types, derived from the server's OpenAPI spec.
+ * Re-exported here so existing `@api/client` import sites keep working while the
+ * shapes track the generated `paths` interface.
  */
-export type OntologyCategory = 'entity' | 'event' | 'role' | 'relation'
-
-/**
- * Suggested ontology type from the AI.
- */
-export interface OntologySuggestion {
-  name: string
-  description: string
-  parent: string | null
-  confidence: number
-  examples: string[]
-}
-
-/**
- * Request payload for ontology augmentation.
- */
-export interface AugmentOntologyRequest {
-  personaId: string
-  domain: string
-  existingTypes: string[]
-  targetCategory: OntologyCategory
-  maxSuggestions?: number
-}
-
-/**
- * Response from ontology augmentation API.
- */
-export interface AugmentationResponse {
-  id: string
-  personaId: string
-  targetCategory: OntologyCategory
-  suggestions: OntologySuggestion[]
-  reasoning: string
-}
+export type {
+  OntologyCategory,
+  OntologySuggestion,
+  AugmentOntologyRequest,
+  AugmentationResponse,
+} from './generated/contracts'
 
 /**
  * API client configuration options.
@@ -724,14 +634,7 @@ export interface ApiClientConfig {
  * the synchronous calls return in seconds), the default mirrors the
  * backend's prod default ceiling of 60_000 ms.
  */
-const INFERENCE_TIMEOUT_MS: number = (() => {
-  const raw = import.meta.env.VITE_INFERENCE_TIMEOUT_MS as string | undefined
-  if (typeof raw === 'string' && raw.length > 0) {
-    const parsed = Number.parseInt(raw, 10)
-    if (Number.isFinite(parsed) && parsed > 0) return parsed
-  }
-  return 60_000
-})()
+const INFERENCE_TIMEOUT_MS: number = appConfig.api.inferenceTimeoutMs
 
 /**
  * HTTP client for backend API communication.
@@ -753,7 +656,7 @@ export class ApiClient {
     // Use relative URLs by default to work with Vite proxy
     // This ensures SSH port forwarding works when only port 3000 is forwarded
     // The Vite proxy forwards /api/* to the backend server
-    const baseURL = config.baseURL ?? import.meta.env.VITE_API_URL ?? ''
+    const baseURL = config.baseURL ?? appConfig.api.url
 
     this.client = axios.create({
       baseURL,

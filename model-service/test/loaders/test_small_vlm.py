@@ -54,8 +54,10 @@ class TestSmallVLMLoader:
         assert loader._model is None
         assert loader._processor is None
 
-    @patch("src.infrastructure.adapters.outbound.models.vlm.loader.AutoModelForImageTextToText")
-    @patch("src.infrastructure.adapters.outbound.models.vlm.loader.AutoProcessor")
+    @patch(
+        "src.infrastructure.adapters.outbound.models.vlm.loaders.small_vlm.AutoModelForImageTextToText"
+    )
+    @patch("src.infrastructure.adapters.outbound.models.vlm.loaders.small_vlm.AutoProcessor")
     def test_load_initializes_model_and_processor(
         self,
         mock_processor_cls: MagicMock,

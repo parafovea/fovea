@@ -1,151 +1,60 @@
 # GitHub Actions Workflows
 
-This directory contains CI/CD workflows organized by responsibility following industry best practices.
+This file describes what each workflow actually does. The workflows are the
+source of truth; keep this in sync when you change them. Local equivalents of
+the CI recipes live in the root `Makefile` (`make lint`, `make typecheck`,
+`make test`, `make build`).
 
-## Workflows
+## CI and quality gate
 
-### ci.yml
-**Primary CI pipeline** that runs on every push and PR to `main` and `develop` branches.
+### ci.yml — primary lint/test/build gate
+Runs on push and PR to `main`, `develop`, and `release/**`.
 
-**Jobs:**
-- **Frontend** (parallel execution):
-  - `lint-frontend`: ESLint + TypeScript type checking
-  - `test-frontend`: Unit tests with coverage (451 tests)
-  - `build-frontend`: Production build validation
+Jobs (all run in parallel; service containers `pgvector/pgvector:pg16` + `redis:7-alpine` back the backend tests):
+- Frontend: `lint-frontend` (ESLint + `tsc --noEmit`), `test-frontend` (Vitest + coverage), `build-frontend`.
+- Backend: `lint-backend` (ESLint + `tsc --noEmit` + the `.env.example` drift guard `check:env`), `test-backend` (Vitest with Postgres + Redis), `build-backend`.
+- Model service: `lint-model-service` (`ruff check` + `ruff format --check` + `mypy src/`), `test-model-service` (`pytest -m "not requires_models"`).
+- Wikibase loader: `lint-wikibase` (ruff + mypy), `test-wikibase` (pytest).
+- `verify-compose`: validates every committed docker compose configuration with its override chain.
+- `quality-gate`: aggregates results into one required status check.
 
-- **Backend** (parallel execution):
-  - `lint-backend`: ESLint + TypeScript type checking
-  - `test-backend`: Unit tests with PostgreSQL + Redis (130 tests)
-  - `build-backend`: Production build validation
+The quality gate requires: the frontend lint/test/build, backend lint/test/build, model-service lint, wikibase lint/test, and `verify-compose`. **`test-model-service` runs but is advisory** (not required) — its `pip install -e ".[dev]"` pulls the full ML stack and is disk-sensitive on shared runners, so a failure is surfaced but does not block the gate. There is no in-CI `test-e2e` job; end-to-end tests live in the dedicated e2e workflows below.
 
-- **Model Service** (parallel execution):
-  - `lint-model-service`: Ruff + mypy checks
-  - `test-model-service`: pytest with coverage (288 tests)
+## Image builds
 
-- **Integration**:
-  - `test-e2e`: Playwright E2E tests (runs after unit tests pass)
+### docker.yml — dev image builds
+Runs on push and PR to `main`/`develop`. Builds the `frontend`, `backend`, `model-service` (CPU, `minimal`), and `wikibase-loader` images (all `linux/amd64`). On `push` to `main`/`develop` it pushes to `ghcr.io/<owner>/<repo>/<service>`; on PRs it builds without pushing.
 
-- **Quality Gate**:
-  - Aggregates all results and enforces pass/fail
-  - Provides summary of all check results
+### release.yml — tag-driven release images + GitHub Release
+Runs on `v*.*.*` tag push. `build-and-push-images` builds and pushes four images (`frontend`, `backend`, `model-service-cpu`, `model-service-gpu`), all `linux/amd64` (no arm64 emulation), tagged by `docker/metadata-action` semver. `create-release` extracts the matching `CHANGELOG.md` section and publishes the GitHub Release, independent of the image build (so a Release publishes even if the heavy GPU image times out).
 
-**Total duration:** ~5-8 minutes (with maximum parallelization)
-
-### docker.yml
-**Docker image builds** for all services.
-
-**Jobs:**
-- `build-frontend`: Builds frontend container image
-- `build-backend`: Builds backend container image
-- `build-model-service`: Matrix strategy builds both CPU and GPU variants
-- `verify-compose`: Validates docker-compose.yml syntax
-
-**Behavior:**
-- **On PR**: Builds images for validation (no push)
-- **On push to main/develop**: Builds and pushes to GitHub Container Registry
-
-**Registry:** `ghcr.io/<owner>/<repo>/<service>:<tag>`
+## Security
 
 ### security.yml
-**Security scanning** pipeline.
+Runs on push/PR to `main`/`develop` and weekly. `pnpm audit` (frontend/backend), `pip`/`safety` (model service), CodeQL (JavaScript + Python), and TruffleHog secret scanning. Findings are surfaced but `continue-on-error`, so they do not block CI.
 
-**Jobs:**
-- `dependency-scan-*`: npm audit / pip safety checks
-- `codeql-analysis`: GitHub CodeQL for JavaScript and Python
-- `secret-scan`: TruffleHog for exposed secrets
+## End-to-end tests
 
-**Trigger:**
-- Every push/PR
-- Weekly scheduled scan (Sundays at 00:00 UTC)
+### e2e-mock.yml / e2e-real-models.yml
+Label-gated and nightly (not part of the per-PR gate). `e2e-mock` runs the Playwright smoke/functional/regression/accessibility suites against a mock model-service when a PR carries the `e2e-mock` label (or nightly / `workflow_dispatch`). `e2e-real-models` runs the `integration-models` suite against a real CPU model-service under the `e2e-models` label.
 
-### release.yml
-**Release automation** for tagged versions.
+## Docs and ops
 
-**Jobs:**
-- `create-release`: Generates changelog and creates GitHub release
-- `build-and-push-images`: Multi-platform Docker images (amd64 + arm64)
-- `update-deployment`: Updates deployment manifests
+- **docs.yml** — builds and deploys the Docusaurus site (push to `main`, paths-filtered; PRs build only).
+- **docs-links.yml** — markdown link checker on PRs touching docs and weekly.
+- **dev-build.yml** — brings up the dev compose stack and verifies frontend↔backend connectivity (push/PR to `main`/`develop`).
+- **deploy.yml** — deploys demo.fovea.video over SSH on push to `main` (and `workflow_dispatch`).
+- **rollback.yml** — `workflow_dispatch` rollback to a given commit.
+- **health-check.yml** — cron health/SSL checks of the live sites every 15 minutes.
 
-**Trigger:** Push to version tags (`v*.*.*`)
+## Validating workflow changes
 
-**Image tags:**
-- `v1.2.3` (exact version)
-- `v1.2` (minor version)
-- `v1` (major version)
-- `latest` (always latest release)
-
-## Architecture Decisions
-
-### Parallel Execution
-All service jobs (lint, test, build) run in parallel for maximum speed. E2E tests run only after unit tests pass.
-
-### Job Independence
-Each job is independent and can be run in isolation. No hidden dependencies between jobs except explicit `needs:` declarations.
-
-### Artifact Retention
-- Coverage reports: 30 days
-- Build artifacts: 7 days
-- Docker images: Per registry policy
-
-### Quality Gate Pattern
-The `quality-gate` job aggregates all results and provides a single pass/fail status. This allows:
-- Clear visibility into which checks failed
-- Branch protection rules to require just one status check
-- Detailed summary in GitHub UI
-
-### Separated Workflows
-Workflows are separated by concern:
-- **ci.yml**: Fast feedback loop (tests, lints, builds)
-- **docker.yml**: Container image management
-- **security.yml**: Security posture
-- **release.yml**: Release process
-
-This separation allows:
-- Independent triggering
-- Clear responsibilities
-- Easier maintenance
-- Selective CI runs (e.g., skip Docker builds on draft PRs)
-
-## Best Practices Implemented
-
-1. ✅ **Caching**: npm and pip caching enabled
-2. ✅ **Matrix builds**: Model service CPU/GPU variants
-3. ✅ **Service containers**: PostgreSQL + Redis for backend tests
-4. ✅ **Artifact uploads**: Coverage and build outputs preserved
-5. ✅ **Conditional execution**: Docker pushes only on main/develop
-6. ✅ **Health checks**: Database services wait for readiness
-7. ✅ **Fail-fast disabled**: Security scans don't block CI
-8. ✅ **Shellcheck validation**: All bash scripts validated
-9. ✅ **Permissions**: Least-privilege GITHUB_TOKEN scopes
-10. ✅ **Multi-platform builds**: amd64 + arm64 support
-
-## Local Testing
-
-Validate workflows locally:
 ```bash
-# Install actionlint
-brew install actionlint
-
-# Validate all workflows
+# Lint the workflow YAML (optional)
 actionlint .github/workflows/*.yml
 
-# Run tests locally (matches CI exactly)
-cd annotation-tool && npm run test:coverage
-cd server && npm run test:coverage
-cd model-service && pytest --cov=src
+# Reproduce the CI recipes locally
+make lint
+make typecheck
+make test
 ```
-
-## Monitoring
-
-- **GitHub Actions UI**: View workflow runs and logs
-- **Status badges**: Add to README for visibility
-- **Branch protection**: Require `quality-gate` status check
-
-## Future Enhancements
-
-Potential improvements:
-- [ ] Add performance benchmarking job
-- [ ] Integrate Codecov/Coveralls for coverage tracking
-- [ ] Add automatic dependency updates (Dependabot/Renovate)
-- [ ] Implement canary deployments
-- [ ] Add infrastructure-as-code validation

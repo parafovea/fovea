@@ -12,12 +12,10 @@ config
     Configuration and dependency injection setup.
 observability
     Telemetry, logging, and monitoring infrastructure.
+
+Subpackages are imported by their concrete paths rather than re-exported
+here, so importing one subpackage does not force-load its siblings (and the
+heavy ML dependencies they pull in).
 """
 
-from src.infrastructure import adapters, config, observability
-
-__all__ = [
-    "adapters",
-    "config",
-    "observability",
-]
+__all__: list[str] = []

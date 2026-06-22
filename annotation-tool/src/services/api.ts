@@ -40,6 +40,10 @@ export interface BackendAnnotation {
   frames: BoundingBoxSequence
   confidence: number | null
   source: string
+  /// Display name of the linked world object, resolved server-side from the
+  /// annotation owner's world. Present only on object annotations the server
+  /// could resolve; absent or null otherwise.
+  linkedObjectName?: string | null
   createdAt: string
   updatedAt: string
 }
@@ -58,6 +62,10 @@ export function transformBackendToFrontend(backendAnnotation: BackendAnnotation)
     videoId: backendAnnotation.videoId,
     boundingBoxSequence: backendAnnotation.frames,
     confidence: backendAnnotation.confidence ?? undefined,
+    // Carry the server-resolved linked object name through so the overlay can
+    // fall back to it when the local world lacks the linked object (a reviewer
+    // reading another annotator's annotation).
+    linkedObjectName: backendAnnotation.linkedObjectName ?? null,
     createdAt: backendAnnotation.createdAt,
     updatedAt: backendAnnotation.updatedAt,
     // Forward the server's source flag through the metadata bag so
@@ -107,6 +115,7 @@ export function transformBackendToFrontend(backendAnnotation: BackendAnnotation)
  * @returns Backend-formatted payload
  */
 export function transformFrontendToBackend(annotation: Annotation): {
+  id: string
   videoId: string
   personaId: string | null
   type: string
@@ -147,6 +156,11 @@ export function transformFrontendToBackend(annotation: Annotation): {
   }
 
   return {
+    // Forward the client's stable local id so the create POST keeps it.
+    // The backend create is idempotent on this id: a first create returns
+    // 201 with the same id, and a lagged re-POST of an already-persisted
+    // box updates it in place (200) instead of minting a duplicate row.
+    id: annotation.id,
     videoId: annotation.videoId,
     personaId,
     type: annotation.annotationType,

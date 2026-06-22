@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "fovea-model-service"
-version = "0.4.4"
+version = "0.5.0"
 description = "Model service for fovea video annotation tool"
 requires-python = ">=3.12"
 dependencies = [
@@ -17,6 +17,7 @@ dependencies = [
     # converging. `>=` bounds let pip pick a single set in one pass.
     "uvicorn[standard]>=0.27",
     "pydantic>=2.9",
+    "pydantic-settings>=2.5",
     "python-multipart>=0.0.9",
     # opentelemetry was previously pinned to 1.28.0 (instrumentation
     # 0.49b0) across the board. That collides with pyannote.audio 4.x,
@@ -38,7 +39,7 @@ dependencies = [
     "opentelemetry-instrumentation-fastapi==0.63b1",
     "opentelemetry-instrumentation-redis==0.63b1",
     "redis>=5.0.0",
-    "opencv-python>=4.9",
+    "opencv-python>=4.10",
     "numpy>=1.26,<3",
     "pyyaml>=6",
     "torch>=2.5",
