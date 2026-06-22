@@ -74,7 +74,7 @@ async function dismissDialog(
   page: import('@playwright/test').Page,
   anchor: string,
 ): Promise<void> {
-  const dialog = page.locator(`[data-tour-id="${anchor}"]`)
+  const dialog = page.locator(`[data-tour-anchor="${anchor}"]`)
   if (await dialog.isVisible({ timeout: 5000 }).catch(() => false)) {
     const cancel = dialog.getByRole('button', { name: /^Cancel$/i }).first()
     if (await cancel.isVisible({ timeout: 1000 }).catch(() => false)) {
@@ -127,7 +127,7 @@ test.describe('Tour 5: The world layer — end to end', () => {
       undefined,
       { timeout: 10000 },
     )
-    await page.waitForSelector('[data-tour-id="world-panel-tabs"]', {
+    await page.waitForSelector('[data-tour-anchor="world-panel-tabs"]', {
       timeout: 10000,
     })
 
@@ -148,7 +148,7 @@ test.describe('Tour 5: The world layer — end to end', () => {
       timeout: 5000,
     })
     await openTabAndOpenEditor(page, /^Entities/)
-    await page.waitForSelector('[data-tour-id="entity-editor"]', {
+    await page.waitForSelector('[data-tour-anchor="entity-editor"]', {
       timeout: 5000,
     })
     await dismissDialog(page, 'entity-editor')
@@ -159,7 +159,7 @@ test.describe('Tour 5: The world layer — end to end', () => {
       timeout: 5000,
     })
     await openTabAndOpenEditor(page, /^Locations/)
-    await page.waitForSelector('[data-tour-id="location-map-picker"]', {
+    await page.waitForSelector('[data-tour-anchor="location-map-picker"]', {
       timeout: 5000,
     })
     await dismissDialog(page, 'location-map-picker')
@@ -170,7 +170,7 @@ test.describe('Tour 5: The world layer — end to end', () => {
       timeout: 5000,
     })
     await openTabAndOpenEditor(page, /^Times/)
-    await page.waitForSelector('[data-tour-id="time-editor"]', {
+    await page.waitForSelector('[data-tour-anchor="time-editor"]', {
       timeout: 5000,
     })
     await dismissDialog(page, 'time-editor')
@@ -187,7 +187,7 @@ test.describe('Tour 5: The world layer — end to end', () => {
     await page
       .getByRole('button', { name: /\+ Time Pattern/ })
       .click()
-    await page.waitForSelector('[data-tour-id="time-collection-builder"]', {
+    await page.waitForSelector('[data-tour-anchor="time-collection-builder"]', {
       timeout: 5000,
     })
     await dismissDialog(page, 'time-collection-builder')
@@ -200,7 +200,7 @@ test.describe('Tour 5: The world layer — end to end', () => {
     await page
       .getByRole('button', { name: /\+ Entity Collection/ })
       .click()
-    await page.waitForSelector('[data-tour-id="collection-builder"]', {
+    await page.waitForSelector('[data-tour-anchor="collection-builder"]', {
       timeout: 5000,
     })
     await dismissDialog(page, 'collection-builder')

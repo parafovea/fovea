@@ -96,7 +96,7 @@ test.describe('Tour 7: Summaries, transcripts, claims — end to end', () => {
     const editSummaryBtn = page.getByRole('button', { name: /Edit Summary/i })
     await expect(editSummaryBtn).toBeVisible({ timeout: 15000 })
     await editSummaryBtn.click()
-    await page.waitForSelector('[data-tour-id="video-summary-editor"]', {
+    await page.waitForSelector('[data-tour-anchor="video-summary-editor"]', {
       timeout: 10000,
     })
 
@@ -105,7 +105,7 @@ test.describe('Tour 7: Summaries, transcripts, claims — end to end', () => {
     // ball-grab incident, so the visitor types narration the screen
     // is actually depicting.
     const summaryBox = page
-      .locator('[data-tour-id="video-summary-editor"]')
+      .locator('[data-tour-anchor="video-summary-editor"]')
       .getByRole('textbox')
       .first()
     if (await summaryBox.isVisible({ timeout: 2000 }).catch(() => false)) {

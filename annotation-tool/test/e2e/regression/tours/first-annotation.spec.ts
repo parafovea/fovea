@@ -104,7 +104,7 @@ test.describe('Tour 1: First annotation in 90 seconds — end to end', () => {
       undefined,
       { timeout: 10000 },
     )
-    await page.waitForSelector('[data-tour-id="video-browser-card-first"]', {
+    await page.waitForSelector('[data-tour-anchor="video-browser-card-first"]', {
       timeout: 15000,
     })
     // Navigate directly to the videoId the bundle pins for Tour 1 —
@@ -131,7 +131,7 @@ test.describe('Tour 1: First annotation in 90 seconds — end to end', () => {
       window.history.pushState({}, '', '/')
       window.dispatchEvent(new PopStateEvent('popstate'))
     })
-    await page.waitForSelector('[data-tour-id="video-browser-card-first"]', {
+    await page.waitForSelector('[data-tour-anchor="video-browser-card-first"]', {
       timeout: 15000,
     })
     void preflightVideoId
@@ -167,7 +167,7 @@ test.describe('Tour 1: First annotation in 90 seconds — end to end', () => {
     // because expectAction='click' has a one-shot click listener on the
     // anchor element.
     await page
-      .locator('[data-tour-id="video-browser-card-first"]')
+      .locator('[data-tour-anchor="video-browser-card-first"]')
       .getByRole('button', { name: /annotate/i })
       .click()
 
@@ -197,7 +197,7 @@ test.describe('Tour 1: First annotation in 90 seconds — end to end', () => {
     })
 
     // ---- step 3: video-player-scrubber ----
-    await page.waitForSelector('[data-tour-id="video-player-scrubber"]', {
+    await page.waitForSelector('[data-tour-anchor="video-player-scrubber"]', {
       timeout: 15000,
     })
     // No interaction required — narration is informational ("Standard
@@ -208,7 +208,7 @@ test.describe('Tour 1: First annotation in 90 seconds — end to end', () => {
     await expect(card.locator('text=/^4\\s*\\/\\s*7$/')).toBeVisible({
       timeout: 5000,
     })
-    await page.waitForSelector('[data-tour-id="drawing-canvas"]', {
+    await page.waitForSelector('[data-tour-anchor="drawing-canvas"]', {
       timeout: 5000,
     })
 
@@ -275,7 +275,7 @@ test.describe('Tour 1: First annotation in 90 seconds — end to end', () => {
       }
     }
     const objectPickerDialog = page.locator(
-      '[data-tour-id="object-picker-popover"]',
+      '[data-tour-anchor="object-picker-popover"]',
     )
     // The picker may not open if the editor flow above didn't land
     // correctly — handle both the open-and-advance path and the
@@ -317,7 +317,7 @@ test.describe('Tour 1: First annotation in 90 seconds — end to end', () => {
     if (await showTimeline.isVisible({ timeout: 1500 }).catch(() => false)) {
       await showTimeline.click()
     }
-    await page.waitForSelector('[data-tour-id="timeline"]', { timeout: 5000 })
+    await page.waitForSelector('[data-tour-anchor="timeline"]', { timeout: 5000 })
     await card.getByRole('button', { name: 'Next' }).click()
 
     // ---- step 7: save-indicator ----

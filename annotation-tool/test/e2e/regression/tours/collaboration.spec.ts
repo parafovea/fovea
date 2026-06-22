@@ -68,7 +68,7 @@ test.describe('Tour 8: Collaboration — end to end', () => {
     await page.waitForFunction(() => Boolean(window.__foveaTour), undefined, {
       timeout: 10000,
     })
-    await page.waitForSelector('[data-tour-id="projects-page"]', {
+    await page.waitForSelector('[data-tour-anchor="projects-page"]', {
       timeout: 10000,
     })
 
@@ -92,14 +92,14 @@ test.describe('Tour 8: Collaboration — end to end', () => {
     // step 3: groups-page — navigate to /groups.
     await softNavigate(page, '/groups')
     await page
-      .waitForSelector('[data-tour-id="groups-page"]', { timeout: 5000 })
+      .waitForSelector('[data-tour-anchor="groups-page"]', { timeout: 5000 })
       .catch(() => {})
     await advanceTo(page, 4, 6)
 
     // step 4: shared-annotations-page
     await softNavigate(page, '/shared')
     await page
-      .waitForSelector('[data-tour-id="shared-annotations-page"]', {
+      .waitForSelector('[data-tour-anchor="shared-annotations-page"]', {
         timeout: 5000,
       })
       .catch(() => {})

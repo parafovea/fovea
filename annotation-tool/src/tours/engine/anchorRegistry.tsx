@@ -74,14 +74,19 @@ export function useAnchorRegistry(): AnchorRegistry {
 /**
  * Register the calling component's element as the anchor `id`. Spread the
  * returned ref onto the node the engine should spotlight; it registers on mount
- * and unregisters on unmount.
+ * and unregisters on unmount. The element also carries a `data-tour-anchor`
+ * attribute holding the id, so the anchor inspector and tests can locate it.
  */
 export function useTourAnchor(id: AnchorId): (element: HTMLElement | null) => void {
   const registry = useAnchorRegistry()
   return useCallback(
     (element: HTMLElement | null) => {
-      if (element) registry.register(id, element)
-      else registry.unregister(id)
+      if (element) {
+        element.setAttribute('data-tour-anchor', id)
+        registry.register(id, element)
+      } else {
+        registry.unregister(id)
+      }
     },
     [registry, id],
   )

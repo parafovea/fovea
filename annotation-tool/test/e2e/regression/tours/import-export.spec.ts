@@ -73,14 +73,14 @@ test.describe('Tour 10: Import & Export — end to end', () => {
     await page.waitForFunction(() => Boolean(window.__foveaTour), undefined, {
       timeout: 10000,
     })
-    await page.waitForSelector('[data-tour-id="app-shell"]', { timeout: 10000 })
+    await page.waitForSelector('[data-tour-anchor="app-shell"]', { timeout: 10000 })
 
     // Open the Import dialog via the toolbar button — this is the
     // demo surface a CVPR booth visitor would click.
     const importBtn = page.getByRole('button', { name: /^Import$/ })
     await expect(importBtn).toBeVisible({ timeout: 10000 })
     await importBtn.click()
-    await page.waitForSelector('[data-tour-id="import-dialog"]', {
+    await page.waitForSelector('[data-tour-anchor="import-dialog"]', {
       timeout: 5000,
     })
 
@@ -96,7 +96,7 @@ test.describe('Tour 10: Import & Export — end to end', () => {
     await expect(card.locator('text=/^1\\s*\\/\\s*3$/')).toBeVisible()
 
     // ---- the actual import: upload the microvent JSONL ----
-    const importDialog = page.locator('[data-tour-id="import-dialog"]')
+    const importDialog = page.locator('[data-tour-anchor="import-dialog"]')
     // The dialog has a file-input under the hood; Playwright's
     // setInputFiles drives it directly. Selector targets any
     // type="file" element inside the dialog.
@@ -117,7 +117,7 @@ test.describe('Tour 10: Import & Export — end to end', () => {
     // either a success summary or a list of conflicts). Either way it
     // satisfies step 2's anchor.
     await page
-      .waitForSelector('[data-tour-id="import-result-dialog"]', {
+      .waitForSelector('[data-tour-anchor="import-result-dialog"]', {
         timeout: 30000,
       })
       .catch(() => {
@@ -133,12 +133,12 @@ test.describe('Tour 10: Import & Export — end to end', () => {
     // listener would abandon the tour. Click an outside region
     // instead to dismiss the dialog if still open.
     const importResultDialogStillOpen = await page
-      .locator('[data-tour-id="import-result-dialog"]')
+      .locator('[data-tour-anchor="import-result-dialog"]')
       .isVisible({ timeout: 500 })
       .catch(() => false)
     if (importResultDialogStillOpen) {
       await page
-        .locator('[data-tour-id="import-result-dialog"]')
+        .locator('[data-tour-anchor="import-result-dialog"]')
         .getByRole('button', { name: /^(Done|Close|Dismiss|OK)$/i })
         .first()
         .click()
@@ -148,7 +148,7 @@ test.describe('Tour 10: Import & Export — end to end', () => {
     if (await exportBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
       await exportBtn.click()
       await page
-        .waitForSelector('[data-tour-id="export-dialog"]', { timeout: 5000 })
+        .waitForSelector('[data-tour-anchor="export-dialog"]', { timeout: 5000 })
         .catch(() => {})
     }
 

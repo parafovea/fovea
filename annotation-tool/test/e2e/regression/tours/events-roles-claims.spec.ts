@@ -174,7 +174,7 @@ test.describe('Tour 4: Events, roles, claims — end to end', () => {
       }
     }
     const objectPicker = page.locator(
-      '[data-tour-id="object-picker-popover"]',
+      '[data-tour-anchor="object-picker-popover"]',
     )
     if (await objectPicker.isVisible({ timeout: 4000 }).catch(() => false)) {
       // Clicking inside the picker triggers the engine's one-shot
@@ -221,7 +221,7 @@ test.describe('Tour 4: Events, roles, claims — end to end', () => {
     // The anchor is on the Type/Object mode toggle's "Type" item.
     // expectAction='click' so clicking it auto-advances.
     const eventBtn = page.locator(
-      '[data-tour-id="event-annotation-button"]',
+      '[data-tour-anchor="event-annotation-button"]',
     )
     if (await eventBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
       await eventBtn.click()

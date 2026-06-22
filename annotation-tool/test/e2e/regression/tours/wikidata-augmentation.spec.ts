@@ -90,7 +90,7 @@ test.describe('Tour 3: Grow your ontology from Wikidata — end to end', () => {
       .locator('button', { hasText: 'Open' })
       .first()
       .click()
-    await page.waitForSelector('[data-tour-id="ontology-workspace-tabs"]', {
+    await page.waitForSelector('[data-tour-anchor="ontology-workspace-tabs"]', {
       timeout: 10000,
     })
 
@@ -98,12 +98,12 @@ test.describe('Tour 3: Grow your ontology from Wikidata — end to end', () => {
     // tour's augmenter-search anchor (now on WikidataSearch) mounts.
     await page.getByRole('tab', { name: /^Entity Types/ }).click()
     await page.getByRole('button', { name: 'add type' }).click()
-    const editor = page.locator('[data-tour-id="entity-type-editor"]')
+    const editor = page.locator('[data-tour-anchor="entity-type-editor"]')
     await expect(editor).toBeVisible({ timeout: 5000 })
     await editor
       .getByRole('button', { name: /Import from Wikidata/i })
       .click()
-    await page.waitForSelector('[data-tour-id="augmenter-search"]', {
+    await page.waitForSelector('[data-tour-anchor="augmenter-search"]', {
       timeout: 5000,
     })
 
@@ -118,7 +118,7 @@ test.describe('Tour 3: Grow your ontology from Wikidata — end to end', () => {
     // step 1: augmenter-search — type to trigger Wikidata query
     await expect(card.locator('text=/^1\\s*\\/\\s*6$/')).toBeVisible()
     const searchBox = editor
-      .locator('[data-tour-id="augmenter-search"]')
+      .locator('[data-tour-anchor="augmenter-search"]')
       .getByRole('textbox')
       .first()
     await searchBox.fill('dust cloud')
@@ -126,7 +126,7 @@ test.describe('Tour 3: Grow your ontology from Wikidata — end to end', () => {
 
     // step 2: augmenter-results — mock returns deterministic results
     await page
-      .waitForSelector('[data-tour-id="augmenter-results"]', { timeout: 10000 })
+      .waitForSelector('[data-tour-anchor="augmenter-results"]', { timeout: 10000 })
       .catch(() => {})
     await advanceTo(page, 3, 6)
 

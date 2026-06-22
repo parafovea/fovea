@@ -38,6 +38,7 @@ import { TourMenu } from './TourMenu'
 import { TourRunner } from '../engine'
 import type { Tour, TourStep, TourEvent } from '../engine'
 import { loadTours } from '../content/tourLoader'
+import { getBuiltInTours } from '../scripts'
 import { microventContent } from '../content/microvent'
 import type { TourContentBundle } from '../content/types'
 import { TourContext, type TourContextValue } from './tour-context'
@@ -156,9 +157,10 @@ export function TourProvider({
   contentBundle = microventContent,
 }: TourProviderProps) {
   // Resolve the per-deployment tour catalogue from the bundle: the first-party
-  // tours plus any admin override served from `public/tours/`. Reload when the
-  // bundle reference changes so swapping bundles rebuilds the list.
-  const [tours, setTours] = useState<Tour[]>([])
+  // tours plus any admin override served from `public/tours/`. The first-party
+  // tours are available synchronously so a launch lands immediately; the admin
+  // overrides merge in once they load, and a changed bundle rebuilds the list.
+  const [tours, setTours] = useState<Tour[]>(() => getBuiltInTours(contentBundle))
   useEffect(() => {
     let cancelled = false
     loadTours(contentBundle)

@@ -123,7 +123,7 @@ test.describe('Tour 2: Building a persona\'s ontology — end to end', () => {
       .first()
       .click()
 
-    await page.waitForSelector('[data-tour-id="ontology-workspace-tabs"]', {
+    await page.waitForSelector('[data-tour-anchor="ontology-workspace-tabs"]', {
       timeout: 10000,
     })
 
@@ -150,11 +150,11 @@ test.describe('Tour 2: Building a persona\'s ontology — end to end', () => {
       .click()
     // Click the floating "+" FAB to open the editor for this tab.
     await page.getByRole('button', { name: 'add type' }).click()
-    await page.waitForSelector('[data-tour-id="entity-type-editor"]', {
+    await page.waitForSelector('[data-tour-anchor="entity-type-editor"]', {
       timeout: 5000,
     })
     // Fill the name + gloss for "gunshot".
-    const entityDialog = page.locator('[data-tour-id="entity-type-editor"]')
+    const entityDialog = page.locator('[data-tour-anchor="entity-type-editor"]')
     await entityDialog
       .getByRole('textbox', { name: /^Name$/i })
       .fill(entityTypeName!)
@@ -202,10 +202,10 @@ test.describe('Tour 2: Building a persona\'s ontology — end to end', () => {
     })
     await page.getByRole('tab', { name: /^Event Types/ }).click()
     await page.getByRole('button', { name: 'add type' }).click()
-    await page.waitForSelector('[data-tour-id="event-type-editor"]', {
+    await page.waitForSelector('[data-tour-anchor="event-type-editor"]', {
       timeout: 5000,
     })
-    const eventDialog = page.locator('[data-tour-id="event-type-editor"]')
+    const eventDialog = page.locator('[data-tour-anchor="event-type-editor"]')
     await eventDialog
       .getByRole('textbox', { name: /^Name$/i })
       .fill(eventTypeName!)
@@ -230,10 +230,10 @@ test.describe('Tour 2: Building a persona\'s ontology — end to end', () => {
     })
     await page.getByRole('tab', { name: /^Role Types/ }).click()
     await page.getByRole('button', { name: 'add type' }).click()
-    await page.waitForSelector('[data-tour-id="role-type-editor"]', {
+    await page.waitForSelector('[data-tour-anchor="role-type-editor"]', {
       timeout: 5000,
     })
-    const roleDialog = page.locator('[data-tour-id="role-type-editor"]')
+    const roleDialog = page.locator('[data-tour-anchor="role-type-editor"]')
     await roleDialog
       .getByRole('textbox', { name: /^Name$/i })
       .fill(roleTypeName)
@@ -255,11 +255,11 @@ test.describe('Tour 2: Building a persona\'s ontology — end to end', () => {
     })
     await page.getByRole('tab', { name: /^Relation Types/ }).click()
     await page.getByRole('button', { name: 'add type' }).click()
-    await page.waitForSelector('[data-tour-id="relation-type-editor"]', {
+    await page.waitForSelector('[data-tour-anchor="relation-type-editor"]', {
       timeout: 5000,
     })
     const relationDialog = page.locator(
-      '[data-tour-id="relation-type-editor"]',
+      '[data-tour-anchor="relation-type-editor"]',
     )
     // Relation editor's schema is different — textbox label is
     // "Relation Type Name", and the form needs at least one Source +

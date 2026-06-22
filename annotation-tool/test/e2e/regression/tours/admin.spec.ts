@@ -52,7 +52,7 @@ test.describe('Tour 9: Admin — end to end', () => {
     await page.waitForFunction(() => Boolean(window.__foveaTour), undefined, {
       timeout: 10000,
     })
-    await page.waitForSelector('[data-tour-id="admin-panel"]', {
+    await page.waitForSelector('[data-tour-anchor="admin-panel"]', {
       timeout: 10000,
     })
 
