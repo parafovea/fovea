@@ -5,6 +5,16 @@ All notable changes to the Fovea project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.3] - 2026-06-24
+
+The 0.5.3 patch fixes a claims-workspace interaction bug ([#177](https://github.com/parafovea/fovea/pull/177)). No API shapes change and nothing is breaking.
+
+### Fixed
+
+#### Clicking a Claim Card No Longer Switches to the Summary Tab
+
+- In the video summary editor's Claims tab, clicking a claim card switched the interface back to the Summary tab, which is not what clicking a card should do. A card now selects in place: it is marked selected on the Claims tab and records its source spans so the Summary tab highlights the claim's provenance only if the user chooses to switch there. The card's selected styling, previously bound to a state value that was never set, is now driven by the selected-claim state (`annotation-tool/src/components/video/VideoSummaryEditor.tsx`, `annotation-tool/src/components/claims/ClaimsViewer.tsx`).
+
 ## [0.5.2] - 2026-06-22
 
 The 0.5.2 patch fixes a Safari-only failure ([#143](https://github.com/parafovea/fovea/issues/143)) where a video in the annotation workspace blacked out the moment it was paused and jumped position on resume, while Chrome and Firefox played it back correctly. The cause was twofold: the video stream endpoint mishandled the byte-range requests Safari issues but Chrome does not, and WebKit dropped the paused video frame from its compositor. No API shapes change and nothing is breaking.
