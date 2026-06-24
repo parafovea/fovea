@@ -85,7 +85,6 @@ const VideoSummaryEditor = forwardRef<VideoSummaryEditorRef, VideoSummaryEditorP
   const modelsDisabled = !modelConfig?.cudaAvailable && !modelConfig?.cpuModelsAvailable
 
   // Claims UI state from Zustand
-  const selectedClaimId = useClaimsUiStore((state) => state.selectedClaimId)
   const extracting = useClaimsUiStore((state) => state.extracting)
   const extractionJobId = useClaimsUiStore((state) => state.extractionJobId)
   const extractionProgress = useClaimsUiStore((state) => state.extractionProgress)
@@ -399,16 +398,15 @@ const VideoSummaryEditor = forwardRef<VideoSummaryEditorRef, VideoSummaryEditorP
 
   const handleTabChange = (value: string) => {
     setActiveTab(value)
-    // Clear highlighting when switching tabs
-    if (value === 'summary') {
-      setHighlightedSpans([])
-      setHighlightedClaimId(null)
-    }
   }
 
   const handleClaimSelect = (claimId: string, sourceSpans: ClaimTextSpan[]) => {
-    // Switch to Summary tab to show highlighted text
-    setActiveTab('summary')
+    // Select the claim in place on the Claims tab; do NOT navigate away.
+    // Selecting a card marks it as selected and records its source spans so
+    // the Summary tab highlights the claim's provenance if and when the user
+    // chooses to switch there (dismissed with the "×" on that view). Clicking
+    // a card previously yanked the user to the Summary tab, which is not what
+    // clicking a card should do.
     setHighlightedSpans(sourceSpans)
     setHighlightedClaimId(claimId)
   }
@@ -626,7 +624,7 @@ const VideoSummaryEditor = forwardRef<VideoSummaryEditorRef, VideoSummaryEditorP
                         onEditClaim={handleEditClaim}
                         onAddClaim={handleAddClaim}
                         onDeleteClaim={handleDeleteClaim}
-                        selectedClaimId={selectedClaimId}
+                        selectedClaimId={highlightedClaimId}
                         onClaimSelect={handleClaimSelect}
                         loading={claimsLoading}
                         error={claimsError ? (claimsError instanceof Error ? claimsError.message : String(claimsError)) : null}
