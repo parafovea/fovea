@@ -130,6 +130,8 @@ const ClaimTreeNode = memo(function ClaimTreeNode({
   return (
     <div style={{ marginLeft: `${depth * 1.5}rem` }}>
       <div
+        data-testid="claim-card"
+        data-selected={isSelected ? 'true' : 'false'}
         className={cn(
           'mb-2 cursor-pointer rounded-lg border p-3 transition-colors duration-200',
           isSelected ? 'bg-accent' : 'bg-card hover:bg-accent/50',

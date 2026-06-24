@@ -5,9 +5,11 @@ import os from 'os'
 import {
   createVideoStorageProvider,
   loadStorageConfig,
+  parseByteRange,
   VideoStorageProvider,
   VideoStorageConfig,
 } from '../../src/services/videoStorage.js'
+import { RangeNotSatisfiableError } from '../../src/lib/errors.js'
 
 describe('Video Storage Providers', () => {
   let tempDir: string
@@ -59,6 +61,58 @@ describe('Video Storage Providers', () => {
         end: 10,
         total: 18, // Length of 'fake video content' buffer
       })
+    })
+
+    // Reads a Readable fully into a Buffer so range tests can assert the
+    // exact bytes streamed, not just the declared content length.
+    const collect = async (stream: import('stream').Readable): Promise<Buffer> => {
+      const chunks: Buffer[] = []
+      for await (const chunk of stream) chunks.push(Buffer.from(chunk))
+      return Buffer.concat(chunks)
+    }
+
+    it('serves a suffix range (the last N bytes Safari requests)', async () => {
+      const result = await provider.getVideoStream('test-video.mp4', 'bytes=-5')
+
+      expect(result.contentLength).toBe(5)
+      expect(result.range).toEqual({ start: 13, end: 17, total: 18 })
+      expect((await collect(result.stream)).toString()).toBe('ntent')
+    })
+
+    it('serves an open-ended range to the last byte', async () => {
+      const result = await provider.getVideoStream('test-video.mp4', 'bytes=5-')
+
+      expect(result.contentLength).toBe(13)
+      expect(result.range).toEqual({ start: 5, end: 17, total: 18 })
+      expect((await collect(result.stream)).toString()).toBe('video content')
+    })
+
+    it('clamps an end past EOF so Content-Length matches the bytes streamed', async () => {
+      const result = await provider.getVideoStream('test-video.mp4', 'bytes=10-100')
+
+      expect(result.range).toEqual({ start: 10, end: 17, total: 18 })
+      expect(result.contentLength).toBe(8)
+      expect((await collect(result.stream)).length).toBe(8)
+    })
+
+    it('treats an oversized suffix as the whole file', async () => {
+      const result = await provider.getVideoStream('test-video.mp4', 'bytes=-100')
+
+      expect(result.range).toEqual({ start: 0, end: 17, total: 18 })
+      expect(result.contentLength).toBe(18)
+    })
+
+    it('rejects a range starting past EOF with RangeNotSatisfiableError', async () => {
+      await expect(
+        provider.getVideoStream('test-video.mp4', 'bytes=100-200')
+      ).rejects.toBeInstanceOf(RangeNotSatisfiableError)
+    })
+
+    it('ignores a malformed range header and serves the full file', async () => {
+      const result = await provider.getVideoStream('test-video.mp4', 'bytes=abc')
+
+      expect(result.range).toBeUndefined()
+      expect(result.contentLength).toBe(18)
     })
 
     it('should get video URL for local storage', async () => {
@@ -266,5 +320,51 @@ describe('Video Storage Providers', () => {
 
       expect(() => createVideoStorageProvider(config as VideoStorageConfig)).toThrow('Unsupported storage type')
     })
+  })
+})
+
+describe('parseByteRange', () => {
+  const SIZE = 1000
+
+  it('returns null when no range header is present', () => {
+    expect(parseByteRange(undefined, SIZE)).toBeNull()
+  })
+
+  it('resolves a fully bounded range', () => {
+    expect(parseByteRange('bytes=100-200', SIZE)).toEqual({ start: 100, end: 200 })
+  })
+
+  it('resolves an open-ended range to the last byte', () => {
+    expect(parseByteRange('bytes=0-', SIZE)).toEqual({ start: 0, end: 999 })
+    expect(parseByteRange('bytes=500-', SIZE)).toEqual({ start: 500, end: 999 })
+  })
+
+  it('resolves a suffix range to the last N bytes', () => {
+    expect(parseByteRange('bytes=-500', SIZE)).toEqual({ start: 500, end: 999 })
+  })
+
+  it('clamps a suffix larger than the file to the whole file', () => {
+    expect(parseByteRange('bytes=-5000', SIZE)).toEqual({ start: 0, end: 999 })
+  })
+
+  it('clamps an end past EOF to the last byte', () => {
+    expect(parseByteRange('bytes=999-5000', SIZE)).toEqual({ start: 999, end: 999 })
+  })
+
+  it('reports a start past EOF as unsatisfiable', () => {
+    expect(parseByteRange('bytes=1000-2000', SIZE)).toBe('unsatisfiable')
+    expect(parseByteRange('bytes=2000-', SIZE)).toBe('unsatisfiable')
+  })
+
+  it('reports a zero-length suffix and zero-size resource as unsatisfiable', () => {
+    expect(parseByteRange('bytes=-0', SIZE)).toBe('unsatisfiable')
+    expect(parseByteRange('bytes=0-100', 0)).toBe('unsatisfiable')
+  })
+
+  it('ignores malformed, multi-range, and non-bytes headers', () => {
+    expect(parseByteRange('bytes=abc', SIZE)).toBeNull()
+    expect(parseByteRange('bytes=-', SIZE)).toBeNull()
+    expect(parseByteRange('bytes=0-100,200-300', SIZE)).toBeNull()
+    expect(parseByteRange('items=0-100', SIZE)).toBeNull()
   })
 })

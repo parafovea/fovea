@@ -11,6 +11,36 @@ All notable changes to the Fovea project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.3] - 2026-06-24
+
+The 0.5.3 patch fixes a claims-workspace interaction bug ([#177](https://github.com/parafovea/fovea/pull/177)). No API shapes change and nothing is breaking.
+
+### Fixed
+
+#### Clicking a Claim Card No Longer Switches to the Summary Tab
+
+- In the video summary editor's Claims tab, clicking a claim card switched the interface back to the Summary tab, which is not what clicking a card should do. A card now selects in place: it is marked selected on the Claims tab and records its source spans so the Summary tab highlights the claim's provenance only if the user chooses to switch there. The card's selected styling, previously bound to a state value that was never set, is now driven by the selected-claim state (`annotation-tool/src/components/video/VideoSummaryEditor.tsx`, `annotation-tool/src/components/claims/ClaimsViewer.tsx`).
+
+## [0.5.2] - 2026-06-22
+
+The 0.5.2 patch fixes a Safari-only failure ([#143](https://github.com/parafovea/fovea/issues/143)) where a video in the annotation workspace blacked out the moment it was paused and jumped position on resume, while Chrome and Firefox played it back correctly. The cause was twofold: the video stream endpoint mishandled the byte-range requests Safari issues but Chrome does not, and WebKit dropped the paused video frame from its compositor. No API shapes change and nothing is breaking.
+
+### Fixed
+
+#### Video Stream Range Requests Handle Safari's Suffix and Edge Ranges
+
+- The local video stream provider (`server/src/services/videoStorage.ts`) parsed the HTTP `Range` header with a naive `split('-')`. A suffix range (`bytes=-N`, which Safari uses to read a file's trailing `moov` atom and to re-buffer on pause and resume) produced a `NaN` start offset and threw, and a range whose end ran past the file declared a `Content-Length` larger than the bytes actually streamed. Chrome and Firefox issue plain bounded ranges and were unaffected, so the player worked there while Safari received a failed request mid-playback, blacked out, and re-seeked on resume. Range parsing now follows RFC 7233: suffix ranges resolve to the last N bytes, open-ended ranges run to the last byte, an end past the file clamps so `Content-Length` always matches the stream, and a start past the file returns `416 Range Not Satisfiable` with a `Content-Range` header rather than a 404 that strict clients treat as a fatal media error.
+
+#### Paused Video Keeps Its Frame in Safari
+
+- The annotation video element (`annotation-tool/src/components/annotation/AnnotationWorkspace.css`) is composited beneath the interactive annotation overlay, and WebKit stopped repainting the last decoded frame the instant playback paused, showing the container's black background instead. The element is now pinned to its own GPU compositing layer (`transform: translateZ(0)` with `backface-visibility: hidden`), which keeps the frame painted while paused.
+
+### Added
+
+#### Cross-Browser Video Playback E2E Coverage
+
+- The Playwright matrix gained `video-chromium`, `video-webkit`, and `video-firefox` projects (`annotation-tool/playwright.config.ts`) that run a new pause-and-resume spec under all three engines, since the regression above was WebKit-only and the prior E2E matrix ran only under Chrome. The spec asserts that the stream endpoint answers Safari's suffix and edge byte ranges, that the playhead stays steady across pause and resume, and that the paused frame stays decoded.
+
 ## [0.5.1] - 2026-06-22
 
 The 0.5.1 patch resolves a batch of field-reported bugs surfaced on a self-hosted production deployment, spanning backend request validation and rate limiting, frontend request fan-out and resilience, and a set of annotation-workspace and persona-builder display fixes. No API shapes change and nothing is breaking; the cross-service contracts are unchanged.
