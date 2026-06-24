@@ -155,6 +155,25 @@ export class ConflictError extends AppError {
 }
 
 /**
+ * 416 Range Not Satisfiable error.
+ * Use when a syntactically valid byte-range request cannot be served against
+ * the resource (e.g. the requested start is past the end of the file). The
+ * caller is expected to respond with a `Content-Range` header reporting the
+ * total resource size so the client can re-request a satisfiable range.
+ *
+ * @example
+ * ```typescript
+ * throw new RangeNotSatisfiableError(fileSize)
+ * // Returns: 416 { error: 'RANGE_NOT_SATISFIABLE', message: 'Requested range not satisfiable' }
+ * ```
+ */
+export class RangeNotSatisfiableError extends AppError {
+  constructor(public readonly size: number) {
+    super(416, 'RANGE_NOT_SATISFIABLE', 'Requested range not satisfiable', { size })
+  }
+}
+
+/**
  * 429 Too Many Requests error.
  * Use when rate limiting or lockout is triggered.
  *
