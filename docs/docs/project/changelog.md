@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.6.0] - 2026-06-25
 
-The 0.6.0 release rebuilds the guided-tour engine so a deployment can author and tailor tours from data rather than code. A tour is now a validated data document an administrator ships under `public/tours/`, every UI surface a tour points at is a named entry in a typed anchor catalog the build checks, and the runner drives each step's prerequisites declaratively. The change is breaking for anyone who built on the previous tour module's internals; the built-in tours and the in-app tour menu are unchanged for end users.
+The 0.6.0 release rebuilds the guided-tour engine so a deployment can author and tailor tours from data rather than code ([#180](https://github.com/parafovea/fovea/pull/180)). A tour is now a validated data document an administrator ships under `public/tours/`, every UI surface a tour points at is a named entry in a typed anchor catalog the build checks, and the runner drives each step's prerequisites declaratively. The change is breaking for anyone who built on the previous tour module's internals; the built-in tours and the in-app tour menu are unchanged for end users.
 
 ### Added
 
