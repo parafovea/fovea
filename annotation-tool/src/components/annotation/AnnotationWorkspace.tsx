@@ -67,6 +67,7 @@ import { config } from '@/config'
 import { useAnnotationDialogs } from './hooks/useAnnotationDialogs'
 import { useSummaryFlow } from './hooks/useSummaryFlow'
 import { useAnnotationState } from './hooks/useAnnotationState'
+import { useTourAnchor } from '@/tours/engine/anchorRegistry'
 
 const DRAWER_WIDTH = 300
 
@@ -152,6 +153,17 @@ export default function AnnotationWorkspace() {
     setDiarizationRequested,
     transcribeMutation,
   } = useAnnotationDialogs()
+
+  const eventAnnotationAnchor = useTourAnchor('event-annotation-button')
+  const showTimelineAnchor = useTourAnchor('show-timeline-button')
+  const typeAssignmentAnchor = useTourAnchor('type-assignment-picker')
+  const detectObjectsAnchor = useTourAnchor('detect-objects-button')
+  const transcribeAudioAnchor = useTourAnchor('transcribe-audio-button')
+  const editSummaryAnchor = useTourAnchor('edit-summary-button')
+  const timelinePanelAnchor = useTourAnchor('timeline-panel')
+  const roleAssignmentAnchor = useTourAnchor('role-assignment-panel')
+  const annotationListFirstAnchor = useTourAnchor('annotation-list-first')
+  const transcriptDialogAnchor = useTourAnchor('transcript-dialog')
 
   // Summary dialog + claim timestamp-capture flow.
   const { timestampCapture, captureTimestamp, cancelTimestampCapture } = useSummaryFlow({
@@ -720,7 +732,7 @@ export default function AnnotationWorkspace() {
                     variant="outline"
                     size="sm"
                   >
-                    <ToggleGroupItem value="type" data-tour-id="event-annotation-button">
+                    <ToggleGroupItem ref={eventAnnotationAnchor} value="type">
                       Type
                     </ToggleGroupItem>
                     <ToggleGroupItem value="object">
@@ -773,10 +785,10 @@ export default function AnnotationWorkspace() {
 
                 {/* Timeline Toggle Button */}
                 <Button
+                  ref={showTimelineAnchor}
                   variant={timelineExpanded ? 'default' : 'outline'}
                   onClick={() => setTimelineExpanded(!timelineExpanded)}
                   size="sm"
-                  data-tour-id="show-timeline-button"
                 >
                   {timelineExpanded ? 'Hide Timeline' : 'Show Timeline'}
                 </Button>
@@ -847,7 +859,7 @@ export default function AnnotationWorkspace() {
                   // available the moment the annotate route paints —
                   // no drawing, dialog open, or sidebar selection
                   // needed.
-                  <div className="flex-1 max-w-[400px]" data-tour-id="type-assignment-picker">
+                  <div ref={typeAssignmentAnchor} className="flex-1 max-w-[400px]">
                     <AnnotationAutocomplete
                       mode={annotationMode}
                       personaId={selectedPersonaId}
@@ -877,11 +889,11 @@ export default function AnnotationWorkspace() {
                     <Tooltip>
                       <TooltipTrigger render={<span />}>
                         <Button
+                          ref={detectObjectsAnchor}
                           variant="outline"
                           onClick={() => setDetectionDialogOpen(true)}
                           size="sm"
                           disabled={modelsDisabled}
-                          data-tour-id="detect-objects-button"
                         >
                           <Search className="size-4 mr-1" />
                           Detect Objects
@@ -915,7 +927,7 @@ export default function AnnotationWorkspace() {
                           size="sm"
                           disabled={transcribeMutation.isPending || !currentVideo || modelsDisabled}
                           data-testid="transcribe-audio-button"
-                          data-tour-id="transcribe-audio-button"
+                          ref={transcribeAudioAnchor}
                         >
                           <Mic className="size-4 mr-1" />
                           {transcribeMutation.isPending ? 'Transcribing…' : 'Transcribe Audio'}
@@ -932,10 +944,10 @@ export default function AnnotationWorkspace() {
                   {/* Video Summary Button */}
                   {currentVideo && videoId && (
                     <Button
+                      ref={editSummaryAnchor}
                       variant="outline"
                       onClick={() => setSummaryDialogOpen(true)}
                       size="sm"
-                      data-tour-id="edit-summary-button"
                     >
                       <Pencil className="size-4 mr-1" />
                       Edit Summary
@@ -947,8 +959,8 @@ export default function AnnotationWorkspace() {
 
             {/* Timeline Panel - slides in from right to replace standard controls */}
             <div
+              ref={timelinePanelAnchor}
               data-testid="timeline-panel"
-              data-tour-id="timeline-panel"
               className="absolute top-0 left-0 right-0 transition-all duration-300 ease-in-out"
               style={{
                 transform: timelineExpanded ? 'translateX(0)' : 'translateX(100%)',
@@ -993,7 +1005,7 @@ export default function AnnotationWorkspace() {
       >
         {/* Spacer for toolbar height */}
         <div className="h-16" />
-        <div className="overflow-auto p-4" data-tour-id="role-assignment-panel">
+        <div ref={roleAssignmentAnchor} className="overflow-auto p-4">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-xl font-semibold">
               All Annotations ({sortedAnnotations.length})
@@ -1017,7 +1029,7 @@ export default function AnnotationWorkspace() {
               return (
                 <li
                   key={annotation.id}
-                  data-tour-id={index === 0 ? 'annotation-list-first' : undefined}
+                  ref={index === 0 ? annotationListFirstAnchor : undefined}
                   className={`flex items-start justify-between py-2 px-2 cursor-pointer rounded-sm transition-colors ${
                     isSelected ? 'bg-accent ring-1 ring-primary/30' : isActive ? 'bg-muted' : 'hover:bg-muted'
                   }`}
@@ -1165,7 +1177,7 @@ export default function AnnotationWorkspace() {
 
       {/* Transcript Dialog */}
       <Dialog open={transcriptDialogOpen} onOpenChange={setTranscriptDialogOpen}>
-        <DialogContent className="sm:max-w-3xl" data-testid="transcript-dialog" data-tour-id="transcript-dialog">
+        <DialogContent ref={transcriptDialogAnchor} className="sm:max-w-3xl" data-testid="transcript-dialog">
           <DialogHeader>
             <DialogTitle>Audio Transcript</DialogTitle>
           </DialogHeader>

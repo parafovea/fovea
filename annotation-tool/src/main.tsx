@@ -12,6 +12,7 @@ import { config } from '@/config'
 import { DemoShell } from './demo/DemoShell'
 import { isDemoModeEnabled } from './demo/config'
 import { TourProvider } from './tours'
+import { AnchorRegistryProvider, AnchorInspector } from './tours/engine'
 import { loadTourContentBundle } from './tours/content/loader'
 import type { TourContentBundle } from './tours/content/types'
 import './index.css'
@@ -309,40 +310,49 @@ void maybeBootstrapDemoSession().then(() => {
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
-        <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-          <TooltipProvider>
-            {/*
-              Demo deployments render <DemoShell />, which provides its
-              own TourProvider with the seed-on-launch hook wrapped
-              around App. Stock builds mount TourProvider here so the
-              tour engine is available to <App /> directly (anchored
-              mode against the user's real workspace). Either way the
-              TourProvider is mounted EXACTLY ONCE. Nesting it would
-              shadow the outer state and the runner would never paint.
+    {/*
+      AnchorRegistryProvider wraps the whole app so any component can
+      publish its element under a tour anchor id and the tour engine
+      reads the live element for a step. AnchorInspector renders inside
+      it as the author-mode overlay that badges every registered anchor.
+    */}
+    <AnchorRegistryProvider>
+      <QueryClientProvider client={queryClient}>
+        <BrowserRouter>
+          <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+            <TooltipProvider>
+              {/*
+                Demo deployments render <DemoShell />, which provides its
+                own TourProvider with the seed-on-launch hook wrapped
+                around App. Stock builds mount TourProvider here so the
+                tour engine is available to <App /> directly (anchored
+                mode against the user's real workspace). Either way the
+                TourProvider is mounted EXACTLY ONCE. Nesting it would
+                shadow the outer state and the runner would never paint.
 
-              The tour content bundle comes from /tour-content.json
-              (admin-editable JSON, loaded at boot via Root above).
-              Edit that file to retheme the tour catalogue for your
-              own domain. See docs/tour-customization.md.
+                The tour content bundle comes from /tour-content.json
+                (admin-editable JSON, loaded at boot via Root above).
+                Edit that file to retheme the tour catalogue for your
+                own domain. See docs/tour-customization.md.
+              */}
+              <Root />
+              <Toaster position="bottom-right" />
+            </TooltipProvider>
+            {/*
+              The TanStack Query devtools toggle button is fixed to the
+              bottom-right corner with a large invisible hit area; the
+              annotation-workspace and ontology-workspace FABs sit at the
+              same corner and the devtools intercept their clicks. Skip in
+              test/E2E (NODE_ENV=test or VITE_E2E=1) so Playwright can hit
+              the FABs.
             */}
-            <Root />
-            <Toaster position="bottom-right" />
-          </TooltipProvider>
-          {/*
-            The TanStack Query devtools toggle button is fixed to the
-            bottom-right corner with a large invisible hit area; the
-            annotation-workspace and ontology-workspace FABs sit at the
-            same corner and the devtools intercept their clicks. Skip in
-            test/E2E (NODE_ENV=test or VITE_E2E=1) so Playwright can hit
-            the FABs.
-          */}
-          {config.env.mode !== 'test' && !config.deploymentMode.e2e && (
-            <ReactQueryDevtools initialIsOpen={false} />
-          )}
-        </ThemeProvider>
-      </BrowserRouter>
-    </QueryClientProvider>
+            {config.env.mode !== 'test' && !config.deploymentMode.e2e && (
+              <ReactQueryDevtools initialIsOpen={false} />
+            )}
+          </ThemeProvider>
+        </BrowserRouter>
+      </QueryClientProvider>
+      <AnchorInspector />
+    </AnchorRegistryProvider>
   </React.StrictMode>,
 )

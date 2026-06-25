@@ -1,6 +1,6 @@
 [project]
 name = "fovea-wikibase-loader"
-version = "0.5.1"
+version = "0.6.0"
 description = "Data loader for importing Wikidata into local Wikibase instances"
 readme = "README.md"
 requires-python = ">=3.12"

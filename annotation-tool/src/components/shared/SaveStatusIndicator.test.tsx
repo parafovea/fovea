@@ -4,18 +4,24 @@
 
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
+import type { ReactElement } from 'react'
 import { SaveStatusIndicator } from './SaveStatusIndicator'
+import { AnchorRegistryProvider } from '@/tours/engine/anchorRegistry'
+
+/** Render within an anchor registry so the save-indicator tour anchor can register. */
+function renderIndicator(ui: ReactElement) {
+  return render(<AnchorRegistryProvider>{ui}</AnchorRegistryProvider>)
+}
 
 describe('SaveStatusIndicator', () => {
   describe('idle status', () => {
     it('renders an invisible placeholder when status is idle', () => {
-      // Idle renders a screen-reader-only div carrying the
-      // data-tour-id="save-indicator" anchor so the first-annotation
-      // tour's "Saved. No submit button" step has a stable DOM target.
-      // Visually identical to nothing (height 0, sr-only). The test
-      // asserts the placeholder is present and aria-hidden, not that
+      // Idle renders a screen-reader-only div carrying the save-indicator
+      // anchor so the auto-save surface has a stable spotlight target while no
+      // save is in flight. Visually identical to nothing (height 0, sr-only).
+      // The test asserts the placeholder is present and aria-hidden, not that
       // the element tree is empty.
-      const { container } = render(
+      const { container } = renderIndicator(
         <SaveStatusIndicator
           status="idle"
           lastSavedAt={null}
@@ -32,7 +38,7 @@ describe('SaveStatusIndicator', () => {
 
   describe('data-testid attributes', () => {
     it('renders with data-testid for saving status', () => {
-      render(
+      renderIndicator(
         <SaveStatusIndicator
           status="saving"
           lastSavedAt={null}
@@ -45,7 +51,7 @@ describe('SaveStatusIndicator', () => {
     })
 
     it('renders with data-testid for saved status', () => {
-      render(
+      renderIndicator(
         <SaveStatusIndicator
           status="saved"
           lastSavedAt={new Date()}
@@ -58,7 +64,7 @@ describe('SaveStatusIndicator', () => {
     })
 
     it('renders with data-testid for error status', () => {
-      render(
+      renderIndicator(
         <SaveStatusIndicator
           status="error"
           lastSavedAt={null}
@@ -71,7 +77,7 @@ describe('SaveStatusIndicator', () => {
     })
 
     it('renders with data-testid for retrying status', () => {
-      render(
+      renderIndicator(
         <SaveStatusIndicator
           status="retrying"
           lastSavedAt={null}
@@ -84,7 +90,7 @@ describe('SaveStatusIndicator', () => {
     })
 
     it('renders with data-testid in compact mode', () => {
-      render(
+      renderIndicator(
         <SaveStatusIndicator
           status="saved"
           lastSavedAt={new Date()}
@@ -100,7 +106,7 @@ describe('SaveStatusIndicator', () => {
 
   describe('saving status', () => {
     it('shows saving indicator and message', () => {
-      render(
+      renderIndicator(
         <SaveStatusIndicator
           status="saving"
           lastSavedAt={null}
@@ -114,7 +120,7 @@ describe('SaveStatusIndicator', () => {
     })
 
     it('shows only progress indicator in compact mode', () => {
-      render(
+      renderIndicator(
         <SaveStatusIndicator
           status="saving"
           lastSavedAt={null}
@@ -133,7 +139,7 @@ describe('SaveStatusIndicator', () => {
     it('shows saved message with time', () => {
       const savedAt = new Date('2024-01-15T14:30:00')
 
-      render(
+      renderIndicator(
         <SaveStatusIndicator
           status="saved"
           lastSavedAt={savedAt}
@@ -146,7 +152,7 @@ describe('SaveStatusIndicator', () => {
     })
 
     it('shows saved message without time when lastSavedAt is null', () => {
-      render(
+      renderIndicator(
         <SaveStatusIndicator
           status="saved"
           lastSavedAt={null}
@@ -159,7 +165,7 @@ describe('SaveStatusIndicator', () => {
     })
 
     it('shows check icon in compact mode', () => {
-      render(
+      renderIndicator(
         <SaveStatusIndicator
           status="saved"
           lastSavedAt={new Date()}
@@ -176,7 +182,7 @@ describe('SaveStatusIndicator', () => {
 
   describe('error status', () => {
     it('shows error message', () => {
-      render(
+      renderIndicator(
         <SaveStatusIndicator
           status="error"
           lastSavedAt={null}
@@ -191,7 +197,7 @@ describe('SaveStatusIndicator', () => {
     it('shows retry button when onRetry is provided', () => {
       const onRetry = vi.fn()
 
-      render(
+      renderIndicator(
         <SaveStatusIndicator
           status="error"
           lastSavedAt={null}
@@ -211,7 +217,7 @@ describe('SaveStatusIndicator', () => {
     })
 
     it('does not show retry button when onRetry is not provided', () => {
-      render(
+      renderIndicator(
         <SaveStatusIndicator
           status="error"
           lastSavedAt={null}
@@ -226,7 +232,7 @@ describe('SaveStatusIndicator', () => {
     })
 
     it('shows error icon with tooltip in compact mode', () => {
-      render(
+      renderIndicator(
         <SaveStatusIndicator
           status="error"
           lastSavedAt={null}
@@ -242,7 +248,7 @@ describe('SaveStatusIndicator', () => {
 
   describe('retrying status', () => {
     it('shows retrying message with count', () => {
-      render(
+      renderIndicator(
         <SaveStatusIndicator
           status="retrying"
           lastSavedAt={null}
@@ -257,7 +263,7 @@ describe('SaveStatusIndicator', () => {
     })
 
     it('shows progress indicator with tooltip in compact mode', () => {
-      render(
+      renderIndicator(
         <SaveStatusIndicator
           status="retrying"
           lastSavedAt={null}
@@ -272,7 +278,7 @@ describe('SaveStatusIndicator', () => {
     })
 
     it('uses default maxRetries of 3', () => {
-      render(
+      renderIndicator(
         <SaveStatusIndicator
           status="retrying"
           lastSavedAt={null}

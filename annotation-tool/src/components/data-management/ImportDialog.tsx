@@ -22,6 +22,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { usePersonas, usePersonaOntology, useImportFromPersona } from '@store/queries'
 import { glossToText } from '@/utils/glossUtils'
 import { ImportRequest } from '@models/types'
+import { useTourAnchor } from '@/tours/engine/anchorRegistry'
 
 interface ImportDialogProps {
   open: boolean
@@ -30,6 +31,8 @@ interface ImportDialogProps {
 }
 
 export default function ImportDialog({ open, onClose, targetPersonaId }: ImportDialogProps) {
+  const importDialogRef = useTourAnchor('import-dialog')
+
   // TanStack Query hooks
   const { data: personas = [] } = usePersonas()
   const { mutate: importFromPersonaMutation } = useImportFromPersona()
@@ -146,7 +149,7 @@ export default function ImportDialog({ open, onClose, targetPersonaId }: ImportD
 
   return (
     <Dialog open={open} onOpenChange={(val) => { if (!val) onClose() }}>
-      <DialogContent data-tour-id="import-dialog" className="sm:max-w-2xl">
+      <DialogContent ref={importDialogRef} className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>Import from Another Persona</DialogTitle>
         </DialogHeader>

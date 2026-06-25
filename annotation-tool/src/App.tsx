@@ -12,16 +12,14 @@ import { config } from '@/config'
  * server round-trips, fully MSW-mocked via VITE_TOUR_DEMO=1) and only
  * crosses into the authenticated app via the explicit "Sign in" link.
  *
- * Route components are imported eagerly (no React.lazy). An earlier
- * lazy-load split shrank the catalogue's first paint, but the
- * Suspense fallback for the workspace + ontology + admin chunks
- * also unmounted the data-tour-id anchors the tour engine polls
- * for, which made step 1 of every annotation-workspace-bound tour
- * race a fresh chunk download against the engine's waitForAnchor
- * window and intermittently strand visitors on the missing-anchor
- * banner. Eager imports keep the data-tour-ids in the DOM from
- * first paint; the perf cost of the larger initial download is
- * the right trade-off for the demo's reliability.
+ * Route components are imported eagerly (no React.lazy). A Suspense
+ * fallback for the workspace, ontology, and admin chunks unmounts the
+ * tour anchors the engine resolves a step against, so step 1 of every
+ * annotation-workspace-bound tour would race a fresh chunk download
+ * against the engine's bounded anchor wait and intermittently strand
+ * visitors on the missing-anchor banner. Eager imports keep those
+ * anchors mounted from first paint; the perf cost of the larger initial
+ * download is the right trade-off for the demo's reliability.
  */
 const DEMO_PUBLIC = config.deploymentMode.publicBooth
 import AnnotationWorkspace from '@components/annotation/AnnotationWorkspace'

@@ -1,4 +1,5 @@
 /* eslint-disable react-refresh/only-export-components */
+import * as React from "react"
 import { Tabs as TabsPrimitive } from "@base-ui/react/tabs"
 import { cva, type VariantProps } from "class-variance-authority"
 
@@ -37,24 +38,29 @@ const tabsListVariants = cva(
   }
 )
 
-function TabsList({
-  className,
-  variant = "default",
-  ...props
-}: TabsPrimitive.List.Props & VariantProps<typeof tabsListVariants>) {
+const TabsList = React.forwardRef<
+  HTMLDivElement,
+  TabsPrimitive.List.Props & VariantProps<typeof tabsListVariants>
+>(function TabsList({ className, variant = "default", ...props }, ref) {
   return (
     <TabsPrimitive.List
+      ref={ref}
       data-slot="tabs-list"
       data-variant={variant}
       className={cn(tabsListVariants({ variant }), className)}
       {...props}
     />
   )
-}
+})
+TabsList.displayName = "TabsList"
 
-function TabsTrigger({ className, ...props }: TabsPrimitive.Tab.Props) {
+const TabsTrigger = React.forwardRef<
+  HTMLButtonElement,
+  TabsPrimitive.Tab.Props
+>(function TabsTrigger({ className, ...props }, ref) {
   return (
     <TabsPrimitive.Tab
+      ref={ref}
       data-slot="tabs-trigger"
       className={cn(
         "relative inline-flex h-[calc(100%-1px)] items-center justify-center gap-1.5 rounded-md border border-transparent px-2 py-0.5 text-sm font-medium whitespace-nowrap text-foreground/60 transition-all group-data-[variant=default]/tabs-list:flex-1 group-data-vertical/tabs:w-full group-data-vertical/tabs:justify-start hover:text-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-1 focus-visible:outline-ring disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 dark:text-muted-foreground dark:hover:text-foreground group-data-[variant=default]/tabs-list:data-active:shadow-sm group-data-[variant=line]/tabs-list:data-active:shadow-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
@@ -66,7 +72,8 @@ function TabsTrigger({ className, ...props }: TabsPrimitive.Tab.Props) {
       {...props}
     />
   )
-}
+})
+TabsTrigger.displayName = "TabsTrigger"
 
 function TabsContent({ className, ...props }: TabsPrimitive.Panel.Props) {
   return (

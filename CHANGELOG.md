@@ -5,6 +5,48 @@ All notable changes to the Fovea project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2026-06-25
+
+The 0.6.0 release rebuilds the guided-tour engine so a deployment can author and tailor tours from data rather than code ([#180](https://github.com/parafovea/fovea/pull/180)). A tour is now a validated data document an administrator ships under `public/tours/`, every UI surface a tour points at is a named entry in a typed anchor catalog the build checks, and the runner drives each step's prerequisites declaratively. The change is breaking for anyone who built on the previous tour module's internals; the built-in tours and the in-app tour menu are unchanged for end users.
+
+### Added
+
+#### Typed Anchor Catalog as a Tour Contract
+
+- `annotation-tool/src/tours/engine/anchorCatalog.ts` declares every tour-addressable UI surface once, as a typed entry recording its description, the route or dialog it lives on, whether it is conditional, and the `reachedBy` controls that open it. `AnchorId` is `keyof typeof anchorCatalog`, so a tour step or seeder that names an anchor the catalog does not define fails to compile. A component publishes its element for an anchor with `useTourAnchor(id)` (`annotation-tool/src/tours/engine/anchorRegistry.tsx`), which registers the live node in an `AnchorRegistry` and tags it `data-tour-anchor` for the inspector and tests.
+
+#### Validated Tour Schema and File-Based Authoring
+
+- A tour is a single zod schema (`annotation-tool/src/tours/engine/tourSchema.ts`); `parseTour` validates a document and narrows it to the `Tour` type, so a malformed tour fails loudly with a field-anchored message instead of dropping out silently. `annotation-tool/src/tours/content/tourLoader.ts` assembles the catalogue a deployment runs: the first-party tours merged with an administrator's tours served from `public/tours/` (a manifest at `/tours/index.json` listing tour JSON files). An override replaces the built-in sharing its id, a new id is appended, and a tour marked `enabled: false` is dropped, so an administrator tailors the tour set for their user base without touching application code.
+
+#### Hexagonal Tour Runner with Declarative Step Drivers
+
+- `annotation-tool/src/tours/engine/TourRunner.tsx` drives a tour as a state machine that, for each step, navigates to the step's route, runs its `driver` capability to put the workspace into the state the step needs, resolves the anchor by clicking the catalog `reachedBy` controls, and simulates the step's expected action. Capabilities are named side effects (`annotation-tool/src/tours/engine/capabilities.ts`, `annotation-tool/src/tours/engine/seeders.ts`) a step references by name, so a step declares the state it needs rather than scripting how to reach it. The runner emits a `TourEvent` for every transition (`annotation-tool/src/tours/engine/events.ts`) and is policy-free: the host decides which tour to run and what to do on close.
+
+#### Tour Analytics, a Resume Cursor, and a Pause Control
+
+- The provider folds the runner's event stream into an analytics log (`annotation-tool/src/tours/menu/tourTelemetry.ts`): a `started`, a `step_viewed` per step left carrying its dwell time, and a terminal `completed` with total time or `abandoned` with the reason and last step. It persists a lightweight `fovea.tour.cursor` so a reload resumes in place, and the step card carries a Pause control that snapshots the step for the resume pill. An author-mode anchor inspector (`annotation-tool/src/tours/engine/AnchorInspector.tsx`) lists the anchors currently on the page so a tour can be authored by reading ids off the running UI.
+
+### Changed
+
+#### Dialogs Yield to a Running Tour
+
+- `annotation-tool/src/components/ui/dialog.tsx` reads whether a tour is active and, while one runs, renders non-modal and ignores outside-press and focus-out close reasons, so the tour's step card stays reachable over an open dialog and the engine can drive a surface inside it. Outside a tour, dialog behavior is unchanged. This replaces a deployment-mode check, so dialogs behave the same whether a tour runs in the public booth or a signed-in workspace.
+
+### Fixed
+
+#### Tour Catalogue Load Tolerates a Missing Manifest
+
+- `annotation-tool/src/tours/content/tourLoader.ts` requested `/tours/index.json` and threw when the response was not JSON. A deployment that ships no administrator manifest still answers that path, since the single-page-app history fallback serves `index.html` with a 200, so every page load logged a catalogue-load error. The loader now reads an HTML response as "no manifest" and returns the built-in tours, while a manifest the server genuinely serves as JSON still validates loudly.
+
+### Removed
+
+- The previous tour engine's internal modules and the `data-tour-id` attribute convention are removed; tours and anchors are expressed through the catalog, schema, registry, and capabilities above.
+
+### Testing
+
+- Every built-in tour has a regression spec that launches it through the engine and asserts each step's anchor resolves and the tour completes (`annotation-tool/test/e2e/regression/tours/`), run against the real backend and the MP4 video corpus. A comprehensive engine smoke suite (`annotation-tool/test/e2e/smoke/tour-engine.spec.ts`) covers the runner, spotlight, step card, telemetry, the resume cursor, pause and resume, focus, and keyboard handling.
+
 ## [0.5.4] - 2026-06-25
 
 The 0.5.4 patch fixes project-scope and ownership stamping on video summaries and claims ([#181](https://github.com/parafovea/fovea/pull/181)). Project collaborators could not see a teammate's summary or add claims under it because summaries were persisted without their persona's project, and model-generated summaries and extracted claims were left unowned. Nothing is breaking; the API additively gains a `projectId` field on summary and claim responses.
