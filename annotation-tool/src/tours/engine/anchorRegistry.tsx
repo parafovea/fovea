@@ -76,32 +76,42 @@ export function useAnchorRegistry(): AnchorRegistry {
  * returned ref onto the node the engine should spotlight; it registers on mount
  * and unregisters on unmount. The element also carries a `data-tour-anchor`
  * attribute holding the id, so the anchor inspector and tests can locate it.
+ *
+ * The provider is optional here: a component anchored for tours renders fine
+ * outside an `AnchorRegistryProvider` (an isolated unit test, or any tree with
+ * no tours mounted), where the ref tags the element but registers nothing.
  */
 export function useTourAnchor(id: AnchorId): (element: HTMLElement | null) => void {
-  const registry = useAnchorRegistry()
+  const registry = useContext(AnchorRegistryContext)
   return useCallback(
     (element: HTMLElement | null) => {
       if (element) {
         element.setAttribute('data-tour-anchor', id)
-        registry.register(id, element)
+        registry?.register(id, element)
       } else {
-        registry.unregister(id)
+        registry?.unregister(id)
       }
     },
     [registry, id],
   )
 }
 
-/** The element registered for `id`, re-rendering the caller whenever it changes. */
+/**
+ * The element registered for `id`, re-rendering the caller whenever it changes.
+ * Resolves to null outside an `AnchorRegistryProvider`.
+ */
 export function useAnchorElement(id: AnchorId): HTMLElement | null {
-  const registry = useAnchorRegistry()
+  const registry = useContext(AnchorRegistryContext)
   return useSyncExternalStore(
     useCallback(
-      (notify: () => void) => registry.subscribe((changedId) => {
-        if (changedId === id) notify()
-      }),
+      (notify: () => void) => {
+        if (!registry) return () => {}
+        return registry.subscribe((changedId) => {
+          if (changedId === id) notify()
+        })
+      },
       [registry, id],
     ),
-    () => registry.get(id),
+    () => registry?.get(id) ?? null,
   )
 }
