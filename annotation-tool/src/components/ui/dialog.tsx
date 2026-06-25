@@ -3,25 +3,18 @@ import { Dialog as DialogPrimitive } from "@base-ui/react/dialog"
 
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
-import { config } from "@/config"
+import { TourContext } from "@/tours/menu/tour-context"
 import { XIcon } from "lucide-react"
 
 function Dialog({ onOpenChange, ...props }: DialogPrimitive.Root.Props) {
-  // Demo deployments drive the workspace from the tour engine —
-  // visitors click a "Next" button rendered by TourRunner (and the
-  // engine clicks revealBy openers) OUTSIDE every Radix-style Dialog.
-  // Base UI's default behavior (modal=true) blocks outside-pointer
-  // interactions, and the close reasons 'outsidePress' / 'focusOut'
-  // would dismiss the dialog every time the engine clicks Next on a
-  // gloss-step. We flip to modal={false} so the StepCard remains
-  // unobstructed, then intercept onOpenChange to ignore close events
-  // whose reason is outsidePress / focusOut. Visitors close via the X
-  // button (closePress) or Escape key (escapeKey); the imperative
-  // setOpen(false) calls from the workspace (closePress / imperative)
-  // continue to work.
-  const demoPublic = config.deploymentMode.publicBooth
+  // While a tour runs, the visitor advances it with the Next button the tour
+  // engine renders outside every dialog. A modal dialog inerts that button and
+  // its 'outside-press' / 'focus-out' close reasons would dismiss the dialog
+  // when the engine reaches into it. So a dialog stays non-modal during a tour
+  // and ignores those close reasons; the X button and Escape still close it.
+  const tourActive = React.useContext(TourContext)?.active != null
   const handleOpenChange: DialogPrimitive.Root.Props['onOpenChange'] = (open, details) => {
-    if (demoPublic && open === false) {
+    if (tourActive && open === false) {
       const reason = details?.reason
       if (
         reason === 'outside-press' ||
@@ -38,7 +31,7 @@ function Dialog({ onOpenChange, ...props }: DialogPrimitive.Root.Props) {
     <DialogPrimitive.Root
       data-slot="dialog"
       {...props}
-      modal={demoPublic ? false : (props.modal ?? true)}
+      modal={tourActive ? false : (props.modal ?? true)}
       onOpenChange={handleOpenChange}
     />
   )

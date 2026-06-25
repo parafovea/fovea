@@ -5,7 +5,7 @@ declare global {
     __foveaTour?: {
       launch: (id: string) => Promise<boolean> | boolean
       activeId: () => string | null
-      telemetry: Array<{ type: string; [key: string]: unknown }>
+      telemetry: Array<{ kind: string; [key: string]: unknown }>
       clearTelemetry?: () => void
     }
   }
@@ -68,6 +68,14 @@ export async function walkActiveTour(page: Page): Promise<TourWalk> {
 export async function expectTourWalksClean(page: Page): Promise<TourWalk> {
   const walk = await walkActiveTour(page)
   expect(walk.unresolved, `every step anchor resolves (unresolved: ${walk.unresolved.join(' | ') || 'none'})`).toEqual([])
-  expect(walk.walked, 'the walk reaches the final step').toBeGreaterThanOrEqual(walk.total)
+
+  // Confirm completion from the engine's telemetry rather than the press count:
+  // a step whose action auto-advances (expectAction 'click') moves the tour on
+  // without a Next press, so counting presses undercounts. The engine records a
+  // `completed` analytics event only when the runner advances past the final
+  // step, so its presence proves the walk reached the end.
+  const telemetry = await page.evaluate(() => window.__foveaTour?.telemetry ?? [])
+  const completed = telemetry.some((event) => event.kind === 'completed')
+  expect(completed, 'the tour finishes by completing').toBe(true)
   return walk
 }

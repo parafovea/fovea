@@ -35,8 +35,16 @@ const { loadTours } = await import('./tourLoader')
 /** A bundle stub; the mocked `getBuiltInTours` ignores it. */
 const bundle = {} as TourContentBundle
 
+/** A minimal headers stub exposing `get('content-type')`. */
+function headersWith(contentType: string): Headers {
+  return { get: (name: string) => (name.toLowerCase() === 'content-type' ? contentType : null) } as Headers
+}
+
 /** Build a `fetch` mock from a manifest response and a map of file responses. */
-function mockFetch(manifest: { status?: number; body?: unknown }, files: Record<string, unknown>): void {
+function mockFetch(
+  manifest: { status?: number; body?: unknown; contentType?: string },
+  files: Record<string, unknown>,
+): void {
   vi.stubGlobal(
     'fetch',
     vi.fn(async (url: string) => {
@@ -45,13 +53,19 @@ function mockFetch(manifest: { status?: number; body?: unknown }, files: Record<
         return {
           ok: status >= 200 && status < 300,
           status,
+          headers: headersWith(manifest.contentType ?? 'application/json'),
           json: async () => manifest.body,
         } as Response
       }
       if (url in files) {
-        return { ok: true, status: 200, json: async () => files[url] } as Response
+        return {
+          ok: true,
+          status: 200,
+          headers: headersWith('application/json'),
+          json: async () => files[url],
+        } as Response
       }
-      return { ok: false, status: 404, json: async () => undefined } as Response
+      return { ok: false, status: 404, headers: headersWith('text/html'), json: async () => undefined } as Response
     }),
   )
 }
@@ -63,6 +77,14 @@ beforeEach(() => {
 describe('loadTours', () => {
   it('returns only built-ins when no manifest is present', async () => {
     mockFetch({ status: 404 }, {})
+
+    const tours = await loadTours(bundle)
+
+    expect(tours.map((t) => t.id)).toEqual(['first-annotation', 'ontology-authoring'])
+  })
+
+  it('returns only built-ins when the manifest path serves the SPA index.html fallback', async () => {
+    mockFetch({ status: 200, contentType: 'text/html', body: undefined }, {})
 
     const tours = await loadTours(bundle)
 

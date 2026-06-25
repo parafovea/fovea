@@ -19,7 +19,7 @@
 
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@components/ui/card'
 import { Button } from '@components/ui/button'
-import { RotateCcw, X } from 'lucide-react'
+import { Pause, RotateCcw, X } from 'lucide-react'
 import { useEffect, useId, useRef, useState } from 'react'
 import type { Tour } from './tourSchema'
 
@@ -44,6 +44,8 @@ interface StepCardProps {
   onSkipStep: () => void
   onExit: () => void
   onRestart: () => void
+  /** Pause the tour, when the host supports resuming it later. */
+  onPause?: () => void
 }
 
 export function StepCard({
@@ -56,6 +58,7 @@ export function StepCard({
   onSkipStep,
   onExit,
   onRestart,
+  onPause,
 }: StepCardProps) {
   const step = tour.steps[index]
   const total = tour.steps.length
@@ -125,6 +128,11 @@ export function StepCard({
             <Button size="icon" variant="ghost" aria-label="Restart tour" onClick={onRestart}>
               <RotateCcw className="size-4" />
             </Button>
+            {onPause ? (
+              <Button size="icon" variant="ghost" aria-label="Pause tour" onClick={onPause}>
+                <Pause className="size-4" />
+              </Button>
+            ) : null}
             <Button size="icon" variant="ghost" aria-label="Exit tour" onClick={onExit}>
               <X className="size-4" />
             </Button>

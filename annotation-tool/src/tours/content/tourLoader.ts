@@ -14,8 +14,11 @@
  *   - Any tour, built-in or admin, with `enabled === false` is dropped.
  *
  * A missing `/tours/index.json` means zero overrides (a fresh deployment ships
- * none). A present manifest that names a file which is unreachable, not JSON, or
- * not a valid tour throws, so a broken admin configuration surfaces at load.
+ * none). A deployment without a manifest still answers that path, since the SPA
+ * history fallback serves `index.html` with a 200; an HTML response is read as
+ * "no manifest" rather than a misconfiguration. A manifest the server actually
+ * serves as JSON that names a file which is unreachable, not JSON, or not a
+ * valid tour throws, so a broken admin configuration surfaces at load.
  */
 
 import type { Tour } from '../engine'
@@ -62,6 +65,11 @@ async function fetchManifest(): Promise<string[]> {
   if (!response.ok) {
     throw new TourManifestError(`${TOUR_MANIFEST_URL} fetch failed (${response.status}).`)
   }
+  // A deployment that ships no manifest still answers this path: the SPA history
+  // fallback serves index.html with a 200 and a text/html content-type. Read an
+  // HTML body as "no manifest" rather than a malformed one.
+  const contentType = response.headers?.get('content-type') ?? ''
+  if (contentType.includes('html')) return []
   let manifest: unknown
   try {
     manifest = await response.json()

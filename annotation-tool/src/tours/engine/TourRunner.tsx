@@ -54,11 +54,19 @@ interface TourRunnerProps {
   startIndex?: number
   onEvent?: (event: TourEvent) => void
   onClose: (reason: TourCloseReason) => void
+  /** Pause the tour: snapshot the step and unmount the runner so it can resume. */
+  onPause?: () => void
 }
 
 const sleep = (ms: number) => new Promise<void>((r) => window.setTimeout(r, ms))
 
-export function TourRunner({ tour, startIndex = 0, onEvent, onClose }: TourRunnerProps) {
+/** The live element a component tagged with `data-tour-anchor`, outside the registry. */
+function queryAnchorElement(anchor: AnchorId): HTMLElement | null {
+  if (typeof document === 'undefined') return null
+  return document.querySelector<HTMLElement>(`[data-tour-anchor="${anchor}"]`)
+}
+
+export function TourRunner({ tour, startIndex = 0, onEvent, onClose, onPause }: TourRunnerProps) {
   const registry = useAnchorRegistry()
   const navigate = useNavigate()
   const location = useLocation()
@@ -91,8 +99,13 @@ export function TourRunner({ tour, startIndex = 0, onEvent, onClose }: TourRunne
     emit({ type: 'started', tourId: tour.id })
   }, [emit, tour.id])
 
+  // A run closes once: a double Escape (or any repeated close) must not emit a
+  // second finished event or a duplicate analytics terminal.
+  const finishedRef = useRef(false)
   const finish = useCallback(
     (reason: TourCloseReason) => {
+      if (finishedRef.current) return
+      finishedRef.current = true
       emit({ type: 'finished', reason })
       onClose(reason)
     },
@@ -266,6 +279,7 @@ export function TourRunner({ tour, startIndex = 0, onEvent, onClose }: TourRunne
         onSkipStep={() => advance(+1, 'skip')}
         onExit={() => finish('abandoned')}
         onRestart={() => setIndex(0)}
+        onPause={onPause}
       />
     </>
   )
@@ -282,14 +296,16 @@ async function resolveAnchor(
   anchor: AnchorId,
   signal: AbortSignal,
 ): Promise<HTMLElement | null> {
-  const already = registry.get(anchor)
+  // Prefer the registered element; fall back to any element a component tagged
+  // with the matching `data-tour-anchor` but did not register through the hook.
+  const already = registry.get(anchor) ?? queryAnchorElement(anchor)
   if (already) return already
 
   const meta: AnchorMeta = anchorCatalog[anchor]
   const reachedBy = meta.reachedBy ?? []
   for (const openerId of reachedBy) {
     if (signal.aborted) return null
-    if (registry.get(anchor)) break
+    if (registry.get(anchor) ?? queryAnchorElement(anchor)) break
     if (!isAnchorId(openerId)) continue
     const opener = registry.get(openerId)
     if (!opener) continue
@@ -299,6 +315,8 @@ async function resolveAnchor(
   if (signal.aborted) return null
 
   return new Promise<HTMLElement | null>((resolve) => {
-    waitForRegisteredAnchor(registry, anchor, ANCHOR_WAIT_MS, signal, resolve)
+    waitForRegisteredAnchor(registry, anchor, ANCHOR_WAIT_MS, signal, (element) =>
+      resolve(element ?? queryAnchorElement(anchor)),
+    )
   })
 }

@@ -14,19 +14,28 @@
  * the workspace drivers available without a separate wiring step.
  *
  * Registered capabilities:
- *   - `select-first-video`            open the first video in the browser
- *   - `ensure-annotation-exists`      seed one annotation on the open video
- *   - `open-summary-editor`           open the video summary editor dialog
- *   - `open-claim-editor-with-gloss`  open the claim editor with its gloss field
- *   - `run-detection`                 open the detect dialog and run detection
- *   - `open-type-editor`              open an ontology type editor for a category
+ *   - `select-first-video`             open the first video in the browser
+ *   - `ensure-annotation-exists`       seed one annotation on the open video
+ *   - `open-summary-editor`            open the video summary editor dialog
+ *   - `open-claim-editor-with-gloss`   open the claim editor with its gloss field
+ *   - `run-detection`                  open the detect dialog and run detection
+ *   - `run-transcription`              run transcription and open the transcript dialog
+ *   - `open-type-editor`               open an ontology type editor for a category
+ *   - `open-world-entity-editor`       open the world entity editor
+ *   - `open-world-location-editor`     open the world location editor
+ *   - `open-world-event-editor`        open the world event editor
+ *   - `open-world-time-editor`         open the world time editor
+ *   - `open-entity-collection-builder` open the entity-collection builder
+ *   - `open-time-collection-builder`   open the time-collection builder
+ *   - `open-import-dialog`             open the data import dialog
+ *   - `open-project-video-assignment`  open the project video-assignment surface
  */
 
 import { anchorCatalog } from './anchorCatalog'
 import type { AnchorId, AnchorMeta } from './anchorCatalog'
 import type { AnchorRegistry } from './anchorRegistry'
 import { registerCapability } from './capabilities'
-import type { TourCapabilityContext } from './capabilities'
+import type { TourCapability, TourCapabilityContext } from './capabilities'
 
 /** How long a seeder waits for a surface to register before giving up. */
 const SURFACE_WAIT_MS = 8000
@@ -269,3 +278,92 @@ async function firstPersonaId(): Promise<string | null> {
     return null
   }
 }
+
+// ---------------------------------------------------------------------------
+// world-object editors
+// ---------------------------------------------------------------------------
+
+/**
+ * Build a capability that opens a world-object editor on the objects workspace.
+ * It navigates to the objects route, selects the editor's tab so that tab's add
+ * control mounts, clicks the add control, and resolves once the editor's first
+ * field registers. The objects workspace keeps its active tab in local state, so
+ * the tab is selected by clicking its control rather than writing a store.
+ */
+function worldEditorOpener(tab: AnchorId, add: AnchorId, target: AnchorId): TourCapability {
+  return async (ctx) => {
+    ctx.navigate('/app/objects')
+    await waitForSurface(ctx.registry, 'world-panel-tabs')
+    if (ctx.getAnchor(target)) return
+    await clickControl(ctx, tab)
+    await waitForSurface(ctx.registry, add)
+    await clickControl(ctx, add)
+    await waitForSurface(ctx.registry, target)
+  }
+}
+
+registerCapability(
+  'open-world-entity-editor',
+  worldEditorOpener('world-tab-entities', 'world-add-object-button', 'entity-name-input'),
+)
+registerCapability(
+  'open-world-location-editor',
+  worldEditorOpener('world-tab-locations', 'world-add-object-button', 'location-name-input'),
+)
+registerCapability(
+  'open-world-event-editor',
+  worldEditorOpener('world-tab-events', 'world-add-object-button', 'event-name-input'),
+)
+registerCapability(
+  'open-world-time-editor',
+  worldEditorOpener('world-tab-times', 'world-add-object-button', 'time-label-input'),
+)
+registerCapability(
+  'open-entity-collection-builder',
+  worldEditorOpener('world-tab-collections', 'world-add-entity-collection-button', 'collection-builder'),
+)
+registerCapability(
+  'open-time-collection-builder',
+  worldEditorOpener('world-tab-collections', 'world-add-time-collection-button', 'time-collection-builder'),
+)
+
+// ---------------------------------------------------------------------------
+// open-import-dialog
+// ---------------------------------------------------------------------------
+
+/**
+ * Open the data import dialog from the app header, so import steps anchor inside
+ * the open dialog.
+ */
+registerCapability('open-import-dialog', async (ctx) => {
+  await reachSurface(ctx, 'import-dialog')
+})
+
+// ---------------------------------------------------------------------------
+// open-project-video-assignment
+// ---------------------------------------------------------------------------
+
+/**
+ * Open the project video-assignment surface. Navigates to the admin route,
+ * selects its Video Access tab, and resolves once the assignment surface mounts.
+ */
+registerCapability('open-project-video-assignment', async (ctx) => {
+  ctx.navigate('/app/admin')
+  await waitForSurface(ctx.registry, 'admin-tab-video-access')
+  await clickControl(ctx, 'admin-tab-video-access')
+  await waitForSurface(ctx.registry, 'project-video-assignment')
+})
+
+// ---------------------------------------------------------------------------
+// run-transcription
+// ---------------------------------------------------------------------------
+
+/**
+ * Run transcription from the workspace toolbar and open the transcript dialog, so
+ * transcript steps anchor inside it. On a deployment without a model service the
+ * transcribe control is inert and the dialog stays closed, leaving the surface
+ * for the visitor to run themselves.
+ */
+registerCapability('run-transcription', async (ctx) => {
+  await reachSurface(ctx, 'transcript-dialog')
+})

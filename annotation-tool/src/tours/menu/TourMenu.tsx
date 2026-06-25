@@ -34,7 +34,7 @@ export function TourMenu({ open, onOpenChange, tours, onLaunch }: TourMenuProps)
         </DialogHeader>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {list.map((tour) => (
-            <Card key={tour.id}>
+            <Card key={tour.id} data-tour-anchor={`tour-menu-tile-${tour.id}`}>
               <CardHeader>
                 <CardTitle className="text-base">{tour.title}</CardTitle>
                 <CardDescription>{tour.description}</CardDescription>

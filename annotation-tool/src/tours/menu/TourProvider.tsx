@@ -42,6 +42,7 @@ import { getBuiltInTours } from '../scripts'
 import { microventContent } from '../content/microvent'
 import type { TourContentBundle } from '../content/types'
 import { TourContext, type TourContextValue } from './tour-context'
+import { TourTelemetry, type TourTelemetryEvent } from './tourTelemetry'
 import { config } from '@/config'
 
 /**
@@ -96,6 +97,13 @@ interface PausedTour {
 }
 
 const PAUSE_KEY = 'fovea.tour.paused'
+/** The lightweight step position a run persists so a reload can resume in place. */
+const CURSOR_KEY = 'fovea.tour.cursor'
+
+interface TourCursor {
+  tourId: string
+  stepIndex: number
+}
 
 declare global {
   interface Window {
@@ -109,9 +117,40 @@ declare global {
       resume: () => Promise<boolean>
       pausedId: () => string | null
       discardPaused: () => void
-      telemetry: TourEvent[]
+      telemetry: TourTelemetryEvent[]
       clearTelemetry: () => void
     }
+  }
+}
+
+/** The persisted step cursor for `tourId`, or null when absent or malformed. */
+function readCursor(): TourCursor | null {
+  try {
+    const raw = sessionStorage.getItem(CURSOR_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as TourCursor
+    if (!parsed || typeof parsed.tourId !== 'string' || typeof parsed.stepIndex !== 'number') {
+      return null
+    }
+    return parsed
+  } catch {
+    return null
+  }
+}
+
+function writeCursor(cursor: TourCursor) {
+  try {
+    sessionStorage.setItem(CURSOR_KEY, JSON.stringify(cursor))
+  } catch {
+    // sessionStorage is best-effort.
+  }
+}
+
+function clearCursor() {
+  try {
+    sessionStorage.removeItem(CURSOR_KEY)
+  } catch {
+    // see writeCursor
   }
 }
 
@@ -193,12 +232,34 @@ export function TourProvider({
     if (typeof window === 'undefined') return null
     return readPaused()
   })
-  const eventBufferRef = useRef<TourEvent[]>([])
+  // The analytics view of the running tour, folded from the runner's event
+  // stream. Exposed on the E2E handle and available for a deployment's telemetry
+  // sink.
+  const telemetryRef = useRef(new TourTelemetry())
+  // The element focused when the tour launched, restored when it closes so a
+  // keyboard visitor lands back where they started.
+  const previousFocusRef = useRef<HTMLElement | null>(null)
+  // The running tour's id, read in the event handler that persists the cursor.
+  const currentTourIdRef = useRef<string | null>(null)
   // In-flight guard for pause() — two synchronous calls in the same
   // microtask both see `active` non-null (setActive(null) hasn't
   // committed yet) so without this they'd both fire an event and
   // double-write the pause storage entry.
   const pausingRef = useRef(false)
+
+  // Restore focus to the element that held it when the tour launched.
+  const restoreFocus = useCallback(() => {
+    const target = previousFocusRef.current
+    previousFocusRef.current = null
+    if (!target) return
+    requestAnimationFrame(() => {
+      try {
+        target.focus()
+      } catch {
+        // The element may have left the DOM; ignore.
+      }
+    })
+  }, [])
 
   // VITE_DEMO_PUBLIC builds present the catalogue at `/` (TourCataloguePage).
   // Every tour script is anchored to elements that live inside the
@@ -216,15 +277,23 @@ export function TourProvider({
 
   const captureEvent = useCallback(
     (event: TourEvent) => {
-      eventBufferRef.current.push(event)
+      telemetryRef.current.ingest(event)
       if (event.type === 'step_entered') {
         stepIndexRef.current = event.index
+        if (currentTourIdRef.current) {
+          writeCursor({ tourId: currentTourIdRef.current, stepIndex: event.index })
+        }
       } else if (event.type === 'step_advanced') {
         stepIndexRef.current = event.to
+      } else if (event.type === 'finished') {
+        // A completed or manually-exited run leaves no cursor to resume from, and
+        // returns focus to wherever the visitor started.
+        clearCursor()
+        restoreFocus()
       }
       onEvent?.(event)
     },
-    [onEvent],
+    [onEvent, restoreFocus],
   )
 
   const launch = useCallback(
@@ -233,10 +302,21 @@ export function TourProvider({
       // tour can fire (otherwise the guard would still be true from the
       // prior tour's pause).
       pausingRef.current = false
-      stepIndexRef.current = 0
-      // A fresh launch starts at step 0; resume() overrides this after
-      // the launch resolves so the runner mounts on the paused step.
-      setResumeIndex(0)
+      currentTourIdRef.current = tour.id
+      // Remember where focus sat so it can be restored when the tour closes.
+      if (typeof document !== 'undefined') {
+        previousFocusRef.current = document.activeElement as HTMLElement | null
+      }
+      // Resume at the saved cursor for this tour when one survived a reload,
+      // clamped to the current step count; a fresh launch (or a different tour's
+      // cursor) starts at step 0. resume() also passes the paused step below.
+      const cursor = readCursor()
+      const startIndex =
+        cursor && cursor.tourId === tour.id
+          ? Math.max(0, Math.min(cursor.stepIndex, tour.steps.length - 1))
+          : 0
+      stepIndexRef.current = startIndex
+      setResumeIndex(startIndex)
       // A new launch clears any prior pause — the visitor explicitly
       // started a different tour so the old one is no longer waiting.
       if (paused && paused.tourId !== tour.id) {
@@ -393,6 +473,10 @@ export function TourProvider({
     const scrollY = typeof window === 'undefined' ? 0 : window.scrollY
     const next: PausedTour = { tourId: active.id, stepIndex, route, scrollY }
     writePaused(next)
+    // The cursor lets a stock relaunch (without the resume pill) pick up at the
+    // paused step; the telemetry records the pause as the run's terminal event.
+    writeCursor({ tourId: active.id, stepIndex })
+    telemetryRef.current.close('pause')
     setPaused(next)
     setActive(null)
     return true
@@ -468,7 +552,12 @@ export function TourProvider({
         if (!tour) return false
         return launch(tour)
       },
-      abandon: () => setActive(null),
+      abandon: () => {
+        telemetryRef.current.close('manual_exit')
+        clearCursor()
+        restoreFocus()
+        setActive(null)
+      },
       openMenu: () => setMenuOpen(true),
       closeMenu: () => setMenuOpen(false),
       activeId: () => active?.id ?? null,
@@ -476,16 +565,16 @@ export function TourProvider({
       resume: () => resume(),
       pausedId: () => paused?.tourId ?? null,
       discardPaused,
-      telemetry: eventBufferRef.current,
+      telemetry: telemetryRef.current.events,
       clearTelemetry: () => {
-        eventBufferRef.current.length = 0
+        telemetryRef.current.clear()
       },
     }
     window.__foveaTour = handle
     return () => {
       if (window.__foveaTour === handle) delete window.__foveaTour
     }
-  }, [active, discardPaused, findTour, launch, pause, paused, resume])
+  }, [active, discardPaused, findTour, launch, pause, paused, restoreFocus, resume])
 
   return (
     <TourContext.Provider value={value}>
@@ -504,6 +593,7 @@ export function TourProvider({
           tour={active}
           startIndex={resumeIndex}
           onEvent={captureEvent}
+          onPause={() => pause()}
           onClose={() => {
             setActive(null)
             // VITE_DEMO_PUBLIC: when a tour finishes (or is abandoned)
