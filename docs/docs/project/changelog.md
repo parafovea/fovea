@@ -11,6 +11,26 @@ All notable changes to the Fovea project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.4] - 2026-06-25
+
+The 0.5.4 patch fixes project-scope and ownership stamping on video summaries and claims ([#181](https://github.com/parafovea/fovea/pull/181)). Project collaborators could not see a teammate's summary or add claims under it because summaries were persisted without their persona's project, and model-generated summaries and extracted claims were left unowned. Nothing is breaking; the API additively gains a `projectId` field on summary and claim responses.
+
+### Fixed
+
+#### Summaries and Claims Are Stamped With Their Persona's Project
+
+- Every video-summary and claim write now stamps `projectId` from the persona (or the parent summary). Previously the interactive summary route (`server/src/routes/summaries.ts`), the summarization and claim-extraction workers (`server/src/queues/setup.ts`), and the auto-created empty summary (`server/src/repositories/ClaimRepository.ts`) all omitted it, so rows were born `projectId = NULL` and were invisible to every project collaborator except the creator — which `403`'d them at the parent-summary read gate when they tried to add claims, and hid the content from project-scoped queries. The summary update path also re-stamps the scope so a previously NULL-scoped row heals on its next save, and a migration backfills existing summaries and claims.
+
+#### Model-Generated Summaries and Extracted Claims Are Owned
+
+- The summarization and claim-extraction queue workers created rows without `createdBy`, leaving model-generated summaries and extracted claims owned by no one (readable only by an admin). The requesting user is now threaded through the queue payload and stamped as the owner on create.
+
+### Added
+
+#### projectId on Summary and Claim API Responses
+
+- The `VideoSummary` and `Claim` API responses now include `projectId`, so clients can reflect a resource's project scope; its prior absence had helped the stamping defect go unnoticed.
+
 ## [0.5.3] - 2026-06-24
 
 The 0.5.3 patch fixes a claims-workspace interaction bug ([#177](https://github.com/parafovea/fovea/pull/177)). No API shapes change and nothing is breaking.
