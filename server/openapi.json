@@ -432,6 +432,12 @@
               "string"
             ]
           },
+          "projectId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
           "createdAt": {
             "format": "date-time",
             "type": "string"
@@ -8149,6 +8155,16 @@
                       "createdBy": {
                         "type": "string"
                       },
+                      "projectId": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
                       "createdAt": {
                         "format": "date-time",
                         "type": "string"
@@ -8384,6 +8400,16 @@
                     },
                     "createdBy": {
                       "type": "string"
+                    },
+                    "projectId": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
                     },
                     "createdAt": {
                       "format": "date-time",
@@ -8705,6 +8731,16 @@
                       },
                       "createdBy": {
                         "type": "string"
+                      },
+                      "projectId": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
                       },
                       "createdAt": {
                         "format": "date-time",
@@ -9169,6 +9205,16 @@
                             },
                             "createdBy": {
                               "type": "string"
+                            },
+                            "projectId": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
                             },
                             "createdAt": {
                               "format": "date-time",
@@ -9636,6 +9682,16 @@
                     "createdBy": {
                       "type": "string"
                     },
+                    "projectId": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
                     "createdAt": {
                       "format": "date-time",
                       "type": "string"
@@ -9962,6 +10018,16 @@
                     },
                     "createdBy": {
                       "type": "string"
+                    },
+                    "projectId": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
                     },
                     "createdAt": {
                       "format": "date-time",
@@ -10480,6 +10546,12 @@
                         ]
                       },
                       "createdBy": {
+                        "type": [
+                          "null",
+                          "string"
+                        ]
+                      },
+                      "projectId": {
                         "type": [
                           "null",
                           "string"
@@ -11398,6 +11470,12 @@
                               "string"
                             ]
                           },
+                          "projectId": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          },
                           "createdAt": {
                             "format": "date-time",
                             "type": "string"
@@ -11928,6 +12006,12 @@
                       ]
                     },
                     "createdBy": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "projectId": {
                       "type": [
                         "null",
                         "string"
@@ -12828,6 +12912,12 @@
                             ]
                           },
                           "createdBy": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          },
+                          "projectId": {
                             "type": [
                               "null",
                               "string"
@@ -14854,6 +14944,12 @@
                           ]
                         },
                         "createdBy": {
+                          "type": [
+                            "null",
+                            "string"
+                          ]
+                        },
+                        "projectId": {
                           "type": [
                             "null",
                             "string"
