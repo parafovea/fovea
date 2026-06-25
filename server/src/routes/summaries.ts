@@ -46,6 +46,7 @@ interface AudioOverridesJob {
 interface SummarizeJobData {
   videoId: string;
   personaId: string;
+  createdBy: string;
   frameSampleRate: number;
   maxFrames: number;
   enableAudio?: boolean;
@@ -394,6 +395,7 @@ const summariesRoute: FastifyPluginAsync = async (fastify) => {
       const jobData: SummarizeJobData = {
         videoId,
         personaId,
+        createdBy: userId,
         frameSampleRate,
         maxFrames,
       }

@@ -172,6 +172,8 @@ export interface AudioOverridesJobData {
 export interface VideoSummarizationJobData {
   videoId: string;
   personaId: string;
+  /** Id of the user who requested the summary; stamped as the row's owner. */
+  createdBy?: string;
   frameSampleRate?: number;
   maxFrames?: number;
   enableAudio?: boolean;
@@ -213,6 +215,7 @@ export const videoWorker = new Worker<
     const {
       videoId,
       personaId,
+      createdBy,
       frameSampleRate = 1,
       maxFrames = 30,
       enableAudio,
@@ -348,6 +351,11 @@ export const videoWorker = new Worker<
       create: {
         videoId,
         personaId,
+        // Stamp the requesting user as owner so the generated summary is
+        // readable by its creator (a personal persona has no project scope to
+        // fall back on). Only set on create; the update branch preserves the
+        // original owner.
+        createdBy: createdBy ?? undefined,
         // Stamp the persona's project so a model-generated summary is born in
         // the right project scope; without it the row is NULL-scoped and
         // project members cannot read it.
@@ -459,6 +467,8 @@ claimQueueEvents.on("failed", async ({ jobId, failedReason }) => {
 export interface ClaimExtractionJobData {
   summaryId: string;
   summaryType: "video" | "collection";
+  /** Id of the user who requested extraction; stamped as each claim's owner. */
+  createdBy?: string;
   config: {
     inputSources: {
       includeSummaryText: boolean;
@@ -521,7 +531,7 @@ export const claimWorker = new Worker<
 >(
   "claim-extraction",
   async (job): Promise<ClaimExtractionResult> => {
-    const { summaryId, summaryType, config } = job.data;
+    const { summaryId, summaryType, config, createdBy } = job.data;
 
     await job.updateProgress(10);
 
@@ -650,6 +660,9 @@ export const claimWorker = new Worker<
           // Inherit the parent summary's project scope so extracted claims are
           // project-visible (mirrors the interactive claim-create paths).
           projectId: summary?.projectId ?? undefined,
+          // Owned by the user who requested extraction, so it is readable by
+          // its creator (mirrors the interactive claim-create paths).
+          createdBy: createdBy ?? undefined,
           text: claimData.text,
           gloss: [],
           parentClaimId,

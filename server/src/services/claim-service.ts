@@ -568,6 +568,7 @@ export class ClaimService {
     const jobData: ClaimExtractionJobData = {
       summaryId,
       summaryType,
+      createdBy: this.userId ?? undefined,
       config: {
         inputSources: config.inputSources,
         extractionStrategy: config.extractionStrategy,
