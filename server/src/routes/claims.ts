@@ -106,6 +106,9 @@ const ClaimSchema: any = Type.Recursive(This => Type.Object({
   ])),
   comment: Type.Optional(NullableString),
   createdBy: Type.Optional(NullableString),
+  // The project the claim is scoped to (inherited from its summary; null for
+  // personal personas). Exposed so project scope is observable on the API.
+  projectId: Type.Optional(NullableString),
   createdAt: Type.String({ format: 'date-time' }),
   updatedAt: Type.String({ format: 'date-time' }),
   subclaims: Type.Optional(Type.Array(This))

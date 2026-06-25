@@ -938,8 +938,15 @@ export class ClaimService {
       throw new ForbiddenError('Cannot update this VideoSummary')
     }
 
-    // Find or create VideoSummary
-    const summary = await this.repository.upsertEmptyVideoSummary(videoId, personaId)
+    // Find or create VideoSummary, stamping the persona's project scope and
+    // the caller as owner so the auto-created parent is project-visible and
+    // owned (mirrors the child claim's projectId/createdBy stamping below).
+    const summary = await this.repository.upsertEmptyVideoSummary(
+      videoId,
+      personaId,
+      persona.projectId,
+      userId,
+    )
 
     // If parentClaimId provided, verify it exists and belongs to same
     // summary, and that the caller can update it.

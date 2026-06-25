@@ -341,11 +341,17 @@ export const videoWorker = new Worker<
         processingTimeAudio: modelResponse.processing_time_audio || undefined,
         processingTimeVisual: modelResponse.processing_time_visual || undefined,
         processingTimeFusion: modelResponse.processing_time_fusion || undefined,
+        // Re-stamp project scope so a row created before this fix is healed.
+        projectId: persona.projectId,
         updatedAt: new Date(),
       },
       create: {
         videoId,
         personaId,
+        // Stamp the persona's project so a model-generated summary is born in
+        // the right project scope; without it the row is NULL-scoped and
+        // project members cannot read it.
+        projectId: persona.projectId,
         // Convert text summary to GlossItem[] format
         summary: [{ type: 'text', content: modelResponse.summary }],
         visualAnalysis: modelResponse.visual_analysis,
@@ -641,6 +647,9 @@ export const claimWorker = new Worker<
         data: {
           summaryId,
           summaryType,
+          // Inherit the parent summary's project scope so extracted claims are
+          // project-visible (mirrors the interactive claim-create paths).
+          projectId: summary?.projectId ?? undefined,
           text: claimData.text,
           gloss: [],
           parentClaimId,

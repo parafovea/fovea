@@ -4104,6 +4104,7 @@ export interface paths {
                             processingTimeFusion?: number;
                             comment?: string | null;
                             createdBy?: string;
+                            projectId?: string | null;
                             /** Format: date-time */
                             createdAt: string;
                             /** Format: date-time */
@@ -4188,6 +4189,7 @@ export interface paths {
                             processingTimeFusion?: number;
                             comment?: string | null;
                             createdBy?: string;
+                            projectId?: string | null;
                             /** Format: date-time */
                             createdAt: string;
                             /** Format: date-time */
@@ -4324,6 +4326,7 @@ export interface paths {
                             processingTimeFusion?: number;
                             comment?: string | null;
                             createdBy?: string;
+                            projectId?: string | null;
                             /** Format: date-time */
                             createdAt: string;
                             /** Format: date-time */
@@ -4496,6 +4499,7 @@ export interface paths {
                                 processingTimeFusion?: number;
                                 comment?: string | null;
                                 createdBy?: string;
+                                projectId?: string | null;
                                 /** Format: date-time */
                                 createdAt: string;
                                 /** Format: date-time */
@@ -4638,6 +4642,7 @@ export interface paths {
                             processingTimeFusion?: number;
                             comment?: string | null;
                             createdBy?: string;
+                            projectId?: string | null;
                             /** Format: date-time */
                             createdAt: string;
                             /** Format: date-time */
@@ -4744,6 +4749,7 @@ export interface paths {
                             processingTimeFusion?: number;
                             comment?: string | null;
                             createdBy?: string;
+                            projectId?: string | null;
                             /** Format: date-time */
                             createdAt: string;
                             /** Format: date-time */
@@ -4854,6 +4860,7 @@ export interface paths {
                             metadata?: ("text" | "non-text")[] | null;
                             comment?: null | string;
                             createdBy?: null | string;
+                            projectId?: null | string;
                             /** Format: date-time */
                             createdAt: string;
                             /** Format: date-time */
@@ -5010,6 +5017,7 @@ export interface paths {
                                 metadata?: ("text" | "non-text")[] | null;
                                 comment?: null | string;
                                 createdBy?: null | string;
+                                projectId?: null | string;
                                 /** Format: date-time */
                                 createdAt: string;
                                 /** Format: date-time */
@@ -5139,6 +5147,7 @@ export interface paths {
                             metadata?: ("text" | "non-text")[] | null;
                             comment?: null | string;
                             createdBy?: null | string;
+                            projectId?: null | string;
                             /** Format: date-time */
                             createdAt: string;
                             /** Format: date-time */
@@ -5292,6 +5301,7 @@ export interface paths {
                                 metadata?: ("text" | "non-text")[] | null;
                                 comment?: null | string;
                                 createdBy?: null | string;
+                                projectId?: null | string;
                                 /** Format: date-time */
                                 createdAt: string;
                                 /** Format: date-time */
@@ -6032,6 +6042,7 @@ export interface paths {
                                 metadata?: ("text" | "non-text")[] | null;
                                 comment?: null | string;
                                 createdBy?: null | string;
+                                projectId?: null | string;
                                 /** Format: date-time */
                                 createdAt: string;
                                 /** Format: date-time */
@@ -11469,6 +11480,7 @@ export interface components {
             metadata?: ("text" | "non-text")[] | null;
             comment?: null | string;
             createdBy?: null | string;
+            projectId?: null | string;
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */
