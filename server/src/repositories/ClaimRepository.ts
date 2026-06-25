@@ -172,11 +172,24 @@ export class ClaimRepository {
    * Upserts a video summary for a (videoId, personaId) pair, creating an empty
    * one if absent and leaving an existing one untouched.
    *
+   * A freshly created summary is stamped with the caller's id and the persona's
+   * project scope so it is owned and project-visible from birth. Without this
+   * the auto-created parent summary would be NULL-scoped and unreadable, which
+   * 403s project collaborators adding claims under it (and orphans the summary
+   * from its own creator).
+   *
    * @param videoId - the video ID
    * @param personaId - the persona UUID
+   * @param projectId - the persona's project scope (null for personal personas)
+   * @param createdBy - the id of the user the summary is created for
    * @returns the existing or newly created summary
    */
-  async upsertEmptyVideoSummary(videoId: string, personaId: string): Promise<VideoSummary> {
+  async upsertEmptyVideoSummary(
+    videoId: string,
+    personaId: string,
+    projectId: string | null,
+    createdBy: string,
+  ): Promise<VideoSummary> {
     return this.prisma.videoSummary.upsert({
       where: {
         videoId_personaId: {
@@ -188,6 +201,8 @@ export class ClaimRepository {
         videoId,
         personaId,
         summary: [],
+        projectId: projectId ?? undefined,
+        createdBy,
       },
       update: {},
     })

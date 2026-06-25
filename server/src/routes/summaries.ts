@@ -46,6 +46,7 @@ interface AudioOverridesJob {
 interface SummarizeJobData {
   videoId: string;
   personaId: string;
+  createdBy: string;
   frameSampleRate: number;
   maxFrames: number;
   enableAudio?: boolean;
@@ -113,6 +114,10 @@ const VideoSummarySchema = Type.Object({
   processingTimeFusion: Type.Optional(Type.Number()),
   comment: Type.Optional(Type.Union([Type.String(), Type.Null()])),
   createdBy: Type.Optional(Type.String()),
+  // The project the summary is scoped to (null for personal personas).
+  // Exposed so clients can reflect project scope and so the scope is
+  // observable (its prior absence helped hide a stamping defect).
+  projectId: Type.Optional(Type.Union([Type.String(), Type.Null()])),
   createdAt: Type.String({ format: 'date-time' }),
   updatedAt: Type.String({ format: 'date-time' }),
 })
@@ -390,6 +395,7 @@ const summariesRoute: FastifyPluginAsync = async (fastify) => {
       const jobData: SummarizeJobData = {
         videoId,
         personaId,
+        createdBy: userId,
         frameSampleRate,
         maxFrames,
       }
@@ -658,6 +664,10 @@ const summariesRoute: FastifyPluginAsync = async (fastify) => {
           processingTimeAudio: processingTimeAudio || undefined,
           processingTimeVisual: processingTimeVisual || undefined,
           processingTimeFusion: processingTimeFusion || undefined,
+          // Re-stamp the project scope from the persona on every save. The
+          // summary's project is always its persona's project; restamping
+          // also heals any row created before projectId was stamped.
+          projectId: persona.projectId,
           updatedAt: new Date(),
         },
         create: {
@@ -678,6 +688,11 @@ const summariesRoute: FastifyPluginAsync = async (fastify) => {
           processingTimeVisual: processingTimeVisual || undefined,
           processingTimeFusion: processingTimeFusion || undefined,
           createdBy: userId,
+          // Stamp the persona's project so the summary is born in the right
+          // project scope. Without this the row is NULL-scoped and project
+          // collaborators (read rule { projectId: { in: [...] } }) cannot see
+          // it, which 403s their attempts to add claims under it.
+          projectId: persona.projectId,
         },
       })
 
