@@ -10,7 +10,6 @@ export type {
   UseAutoSaveOptions,
   UseAutoSaveReturn,
 } from './useAutoSave'
-export { useAutoSaveAnnotations } from './useAutoSaveAnnotations'
 export { useUnsavedChangesPrompt } from './useUnsavedChangesPrompt'
 export type {
   UseUnsavedChangesPromptOptions,

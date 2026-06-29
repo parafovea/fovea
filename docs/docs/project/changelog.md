@@ -11,6 +11,62 @@ All notable changes to the Fovea project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.5] - 2026-06-29
+
+The 0.5.5 patch is an audit-driven hardening release ([#186](https://github.com/parafovea/fovea/pull/186)). It closes two higher-severity defects — a former group member kept the group's permissions until the server restarted, and concurrent edits to the world graph silently overwrote one another — together with a set of data-scope, idempotency, and cache-staleness gaps. Nothing is breaking; the API additively gains explicit DELETE endpoints for world collections and relations, an optional client-supplied `id` on claim creation, and a `409` on a duplicate video assignment.
+
+### Fixed
+
+#### Deleting a Group Clears Its Former Members' Cached Abilities
+
+- Both group-delete handlers (`server/src/routes/groups.ts`) removed the group without invalidating its former members' in-memory ability cache. A group-scope, non-own-only permission compiles into a globally unconditioned CASL rule, so a former member kept the group's system-wide access until the process restarted or they logged in again. Each handler now snapshots the membership before the cascade and calls `invalidateUserAbilities` for every former member, mirroring `ProjectService.delete`.
+
+#### Concurrent World-Graph Edits No Longer Overwrite One Another
+
+- Every world add and update went through a whole-blob read-modify-write `PUT /api/world` with no serialization, so two edits in quick succession — or a Wikidata import racing a manual edit — read the same stale base and the last writer silently dropped the other's entities, events, or relations. Writes are now safe on two fronts: the client (`annotation-tool/src/store/queries/useWorld.ts`) funnels mutations through a single-flight chain that threads the latest server state into the next write, and the server (`server/src/services/world-state-service.ts`, `server/src/repositories/WorldStateRepository.ts`) merges each of the seven object arrays by `id` under an optimistic-concurrency guard rather than replacing them wholesale. Because merge-by-id makes removal-by-omission a no-op, every object removal — entities, events, times, the three collection kinds, and relations — now goes through an explicit DELETE endpoint; the client delete hooks call the graceful `DELETE /api/world/...` routes, which also clean up dependent relations, collection memberships, and gloss references.
+
+#### Personaless Object Annotations Inherit the Video's Project Scope
+
+- Object annotations carry no persona, so the create path (`server/src/routes/annotations.ts`) had no project to stamp and persisted them with `projectId = NULL`, invisible to every project reviewer but the creator. When the caller is a member of exactly one project the video is assigned to, the annotation now inherits that project; an ambiguous (multiple) or absent assignment stays personal, and the existing CASL pre-authorization still validates the resolved scope.
+
+#### Claim Creation Is Idempotent on a Client-Supplied ID
+
+- Neither claim-create route accepted a client `id`, so a network retry or programmatic resend minted a duplicate claim. Both routes (`server/src/routes/claims.ts`, `server/src/services/claim-service.ts`) now accept an optional `id`; a resend carrying an existing id re-authorizes against the stored row and returns it instead of creating a duplicate, with a `P2002` race fallback. This mirrors the annotation idempotent-create hardening from 0.5.4.
+
+#### Duplicate Video Assignment Returns 409 Instead of 500
+
+- Re-assigning a video already assigned to a project violated the `@@unique([projectId, videoId])` constraint and surfaced as an unhandled `500`. The route (`server/src/routes/video-assignments.ts`) now catches the constraint violation and returns a `409 Conflict`.
+
+#### The Summary Editor Autosaves Comment-Only Edits
+
+- The video summary editor's autosave watched only the summary body, so editing the comment without touching the summary never triggered a save and the edit was lost on navigation. Autosave now compares a snapshot that includes the comment (`annotation-tool/src/components/video/VideoSummaryEditor.tsx`).
+
+#### Relating Claims Refreshes Both Endpoints' Relation Panels
+
+- Creating or deleting a claim relation invalidated only the source claim's relation query, leaving the target claim's relation panel stale until a manual refetch. Both mutations (`annotation-tool/src/store/queries/useClaims.ts`) now invalidate the target as well.
+
+#### Membership and Role Changes Refresh the Client Ability Mirror
+
+- The client ability cache carried a five-minute stale time and no mutation invalidated it, so a user's own role or membership change took up to five minutes to reflect in the UI even though the server always enforced it correctly. The six self-affecting project- and group-membership mutations (`annotation-tool/src/store/queries/useProjects.ts`, `useGroups.ts`) now invalidate the ability mirror on success.
+
+#### Admin isAdmin Changes Stay in Sync With systemRole
+
+- The admin user-update endpoint (`server/src/routes/users.ts`) wrote `isAdmin` but never `systemRole`, which is what CASL's `manage all` keys on, so a promotion or demotion left the two fields divergent and the cached abilities stale. The endpoint now sets `systemRole` to match and invalidates the affected user's abilities.
+
+#### Removed a Dead Auto-Save Hook
+
+- `useAutoSaveAnnotations` had no callers and re-armed the exact save-loop footgun the live autosave was hardened against; it has been deleted.
+
+### Added
+
+#### Explicit DELETE Endpoints for World Collections and Relations
+
+- `server/src/routes/world.ts` gains `DELETE` routes for entity collections, event collections, time collections, and relations, so these objects are removed explicitly rather than by omission from a whole-blob `PUT`. This is what lets the non-clobbering merge-by-id persistence be safe (see Fixed).
+
+#### Optional Client-Supplied ID on Claim Creation
+
+- Both claim-create endpoints accept an optional `id`, enabling idempotent retries; the `Claim` response already echoes it.
+
 ## [0.5.4] - 2026-06-25
 
 The 0.5.4 patch fixes project-scope and ownership stamping on video summaries and claims ([#181](https://github.com/parafovea/fovea/pull/181)). Project collaborators could not see a teammate's summary or add claims under it because summaries were persisted without their persona's project, and model-generated summaries and extracted claims were left unowned. Nothing is breaking; the API additively gains a `projectId` field on summary and claim responses.

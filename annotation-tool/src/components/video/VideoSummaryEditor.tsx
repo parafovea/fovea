@@ -164,6 +164,11 @@ const VideoSummaryEditor = forwardRef<VideoSummaryEditorRef, VideoSummaryEditorP
     forceSave,
   } = useAutoSave({
     data: localSummary,
+    // The comment lives in separate state from the summary `data`, so include
+    // it in the change-detection snapshot — otherwise a comment-only edit never
+    // trips the debounce and is silently dropped (handleAutoSave already sends
+    // the comment, it just was never triggered).
+    getComparisonSnapshot: (summary) => ({ summary, comment: localComment }),
     // Autosave is enabled as soon as videoId + personaId resolve. The
     // previous gate (&& !!summaryId) meant the dialog could only
     // autosave AFTER a row already existed for this video/persona —

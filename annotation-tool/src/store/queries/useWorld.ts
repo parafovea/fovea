@@ -84,7 +84,7 @@ export async function fetchWorldState(): Promise<WorldState> {
  * Save world state to the API.
  * Exported for use in non-component contexts (e.g., seedTestData).
  */
-export async function saveWorldState(worldState: Partial<WorldState>): Promise<WorldState> {
+async function putWorldState(worldState: Partial<WorldState>): Promise<WorldState> {
   const response = await fetch('/api/world', {
     method: 'PUT',
     headers: {
@@ -97,6 +97,41 @@ export async function saveWorldState(worldState: Partial<WorldState>): Promise<W
     throw new Error(`Failed to save world state: ${response.statusText}`)
   }
   return response.json()
+}
+
+/**
+ * Single-flight chain so world-state PUTs never overlap. Each world mutation
+ * reads the cache, mutates one slice, and PUTs the whole blob; without
+ * serialization two rapid mutations (or a Wikidata batch import) issue
+ * overlapping PUTs that race. Chaining them — combined with the server's
+ * merge-by-id under optimistic concurrency — guarantees no add is dropped.
+ */
+let worldWriteChain: Promise<unknown> = Promise.resolve()
+
+/**
+ * Save (a partial of) the world state. Serialized: the actual PUT runs only
+ * after the previous one settles. Exported for non-component contexts.
+ */
+export async function saveWorldState(worldState: Partial<WorldState>): Promise<WorldState> {
+  const run = worldWriteChain.then(() => putWorldState(worldState))
+  // Keep the chain alive even if a write rejects, so one failure doesn't wedge
+  // every subsequent world write.
+  worldWriteChain = run.catch(() => undefined)
+  return run
+}
+
+/**
+ * DELETE a single world object (collection or relation) from the caller's
+ * personal world. Used instead of removing it via the whole-blob PUT, which the
+ * server now merges by id — so omitting an object from the PUT no longer
+ * removes it; removal must be an explicit DELETE.
+ */
+async function deleteWorldObject(path: string, label: string): Promise<void> {
+  const response = await fetch(path, { method: 'DELETE', credentials: 'include' })
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}))
+    throw new Error(error.error || `Failed to delete ${label}`)
+  }
 }
 
 // ============= Query Hooks =============
@@ -258,22 +293,10 @@ export function useDeleteEntity() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: async (entityId: string) => {
-      const currentState = queryClient.getQueryData<WorldState>(worldKeys.state())
-      const newState = {
-        ...currentState,
-        entities: currentState?.entities.filter((e) => e.id !== entityId) ?? [],
-        // Clean up relations involving this entity
-        relations: currentState?.relations.filter(
-          (r) =>
-            !(r.sourceType === 'entity' && r.sourceId === entityId) &&
-            !(r.targetType === 'entity' && r.targetId === entityId)
-        ) ?? [],
-      }
-      return saveWorldState(newState)
-    },
-    onSuccess: (data) => {
-      queryClient.setQueryData(worldKeys.state(), data)
+    mutationFn: (entityId: string) =>
+      deleteWorldObject(`/api/world/entities/${entityId}`, 'entity'),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: worldKeys.state() })
     },
   })
 }
@@ -341,21 +364,10 @@ export function useDeleteEvent() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: async (eventId: string) => {
-      const currentState = queryClient.getQueryData<WorldState>(worldKeys.state())
-      const newState = {
-        ...currentState,
-        events: currentState?.events.filter((e) => e.id !== eventId) ?? [],
-        relations: currentState?.relations.filter(
-          (r) =>
-            !(r.sourceType === 'event' && r.sourceId === eventId) &&
-            !(r.targetType === 'event' && r.targetId === eventId)
-        ) ?? [],
-      }
-      return saveWorldState(newState)
-    },
-    onSuccess: (data) => {
-      queryClient.setQueryData(worldKeys.state(), data)
+    mutationFn: (eventId: string) =>
+      deleteWorldObject(`/api/world/events/${eventId}`, 'event'),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: worldKeys.state() })
     },
   })
 }
@@ -417,21 +429,10 @@ export function useDeleteTime() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: async (timeId: string) => {
-      const currentState = queryClient.getQueryData<WorldState>(worldKeys.state())
-      const newState = {
-        ...currentState,
-        times: currentState?.times.filter((t) => t.id !== timeId) ?? [],
-        relations: currentState?.relations.filter(
-          (r) =>
-            !(r.sourceType === 'time' && r.sourceId === timeId) &&
-            !(r.targetType === 'time' && r.targetId === timeId)
-        ) ?? [],
-      }
-      return saveWorldState(newState)
-    },
-    onSuccess: (data) => {
-      queryClient.setQueryData(worldKeys.state(), data)
+    mutationFn: (timeId: string) =>
+      deleteWorldObject(`/api/world/times/${timeId}`, 'time'),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: worldKeys.state() })
     },
   })
 }
@@ -499,16 +500,10 @@ export function useDeleteEntityCollection() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: async (collectionId: string) => {
-      const currentState = queryClient.getQueryData<WorldState>(worldKeys.state())
-      const newState = {
-        ...currentState,
-        entityCollections: currentState?.entityCollections.filter((c) => c.id !== collectionId) ?? [],
-      }
-      return saveWorldState(newState)
-    },
-    onSuccess: (data) => {
-      queryClient.setQueryData(worldKeys.state(), data)
+    mutationFn: (collectionId: string) =>
+      deleteWorldObject(`/api/world/entity-collections/${collectionId}`, 'entity collection'),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: worldKeys.state() })
     },
   })
 }
@@ -574,16 +569,10 @@ export function useDeleteEventCollection() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: async (collectionId: string) => {
-      const currentState = queryClient.getQueryData<WorldState>(worldKeys.state())
-      const newState = {
-        ...currentState,
-        eventCollections: currentState?.eventCollections.filter((c) => c.id !== collectionId) ?? [],
-      }
-      return saveWorldState(newState)
-    },
-    onSuccess: (data) => {
-      queryClient.setQueryData(worldKeys.state(), data)
+    mutationFn: (collectionId: string) =>
+      deleteWorldObject(`/api/world/event-collections/${collectionId}`, 'event collection'),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: worldKeys.state() })
     },
   })
 }
@@ -643,16 +632,10 @@ export function useDeleteTimeCollection() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: async (collectionId: string) => {
-      const currentState = queryClient.getQueryData<WorldState>(worldKeys.state())
-      const newState = {
-        ...currentState,
-        timeCollections: currentState?.timeCollections.filter((c) => c.id !== collectionId) ?? [],
-      }
-      return saveWorldState(newState)
-    },
-    onSuccess: (data) => {
-      queryClient.setQueryData(worldKeys.state(), data)
+    mutationFn: (collectionId: string) =>
+      deleteWorldObject(`/api/world/time-collections/${collectionId}`, 'time collection'),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: worldKeys.state() })
     },
   })
 }
@@ -693,16 +676,10 @@ export function useDeleteRelation() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: async (relationId: string) => {
-      const currentState = queryClient.getQueryData<WorldState>(worldKeys.state())
-      const newState = {
-        ...currentState,
-        relations: currentState?.relations.filter((r) => r.id !== relationId) ?? [],
-      }
-      return saveWorldState(newState)
-    },
-    onSuccess: (data) => {
-      queryClient.setQueryData(worldKeys.state(), data)
+    mutationFn: (relationId: string) =>
+      deleteWorldObject(`/api/world/relations/${relationId}`, 'relation'),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: worldKeys.state() })
     },
   })
 }
