@@ -129,6 +129,43 @@ export class WorldStateRepository {
   }
 
   /**
+   * Applies an optimistic-concurrency update to a user's personal world state.
+   *
+   * Reads the current row, lets `transform` compute the new column values from
+   * it, then writes them guarded by the row's `updatedAt`. If a concurrent
+   * writer committed first the guard misses (count 0) and we retry against the
+   * freshly-read row, so both writes land instead of one silently clobbering
+   * the other. This is what makes the whole-blob PUT a safe per-id merge under
+   * concurrent writers (the transform re-runs on fresh state each attempt).
+   *
+   * @param userId - owning user ID
+   * @param transform - computes the Prisma update input from the current row
+   * @returns the updated world state
+   * @throws when no personal row exists or the write keeps conflicting
+   */
+  async updatePersonalWorldStateOptimistic(
+    userId: string,
+    transform: (current: WorldState) => Prisma.WorldStateUpdateInput,
+  ): Promise<WorldState> {
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const current = await this.prisma.worldState.findFirst({
+        where: { userId, projectId: null },
+      })
+      if (!current) {
+        throw new Error('No personal world state to update')
+      }
+      const result = await this.prisma.worldState.updateMany({
+        where: { id: current.id, updatedAt: current.updatedAt },
+        data: { ...transform(current), updatedAt: new Date() },
+      })
+      if (result.count === 1) {
+        return this.prisma.worldState.findUniqueOrThrow({ where: { id: current.id } })
+      }
+    }
+    throw new Error('Personal world state update conflicted after retries')
+  }
+
+  /**
    * Finds all of a user's personas with their ontologies included.
    *
    * Used by the object-reference cleanup paths to scan and rewrite every

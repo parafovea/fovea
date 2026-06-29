@@ -178,6 +178,31 @@ describe('useWorld hooks', () => {
 
         await waitFor(() => expect(result.current.isSuccess).toBe(true))
       })
+
+      // Regression guard: deletion must hit the graceful DELETE endpoint, not a
+      // whole-blob PUT. Removing by omission from a PUT is silently undone by the
+      // server's merge-by-id, so a deleted object would reappear.
+      it('calls the DELETE endpoint and not a whole-blob PUT', async () => {
+        let deleteHit = false
+        let putHit = false
+        server.use(
+          http.delete('*/api/world/entities/:entityId', () => {
+            deleteHit = true
+            return HttpResponse.json({ message: 'Entity deleted successfully' })
+          }),
+          http.put('*/api/world', () => {
+            putHit = true
+            return HttpResponse.json({})
+          })
+        )
+
+        const { result } = renderHook(() => useDeleteEntity(), { wrapper: createWrapper() })
+        result.current.mutate('entity-1')
+        await waitFor(() => expect(result.current.isSuccess).toBe(true))
+
+        expect(deleteHit).toBe(true)
+        expect(putHit).toBe(false)
+      })
     })
   })
 
@@ -226,6 +251,28 @@ describe('useWorld hooks', () => {
 
         await waitFor(() => expect(result.current.isSuccess).toBe(true))
       })
+
+      it('calls the DELETE endpoint and not a whole-blob PUT', async () => {
+        let deleteHit = false
+        let putHit = false
+        server.use(
+          http.delete('*/api/world/events/:eventId', () => {
+            deleteHit = true
+            return HttpResponse.json({ message: 'Event deleted successfully' })
+          }),
+          http.put('*/api/world', () => {
+            putHit = true
+            return HttpResponse.json({})
+          })
+        )
+
+        const { result } = renderHook(() => useDeleteEvent(), { wrapper: createWrapper() })
+        result.current.mutate('event-1')
+        await waitFor(() => expect(result.current.isSuccess).toBe(true))
+
+        expect(deleteHit).toBe(true)
+        expect(putHit).toBe(false)
+      })
     })
   })
 
@@ -273,6 +320,28 @@ describe('useWorld hooks', () => {
         result.current.mutate('time-1')
 
         await waitFor(() => expect(result.current.isSuccess).toBe(true))
+      })
+
+      it('calls the DELETE endpoint and not a whole-blob PUT', async () => {
+        let deleteHit = false
+        let putHit = false
+        server.use(
+          http.delete('*/api/world/times/:timeId', () => {
+            deleteHit = true
+            return HttpResponse.json({ message: 'Time deleted successfully' })
+          }),
+          http.put('*/api/world', () => {
+            putHit = true
+            return HttpResponse.json({})
+          })
+        )
+
+        const { result } = renderHook(() => useDeleteTime(), { wrapper: createWrapper() })
+        result.current.mutate('time-1')
+        await waitFor(() => expect(result.current.isSuccess).toBe(true))
+
+        expect(deleteHit).toBe(true)
+        expect(putHit).toBe(false)
       })
     })
   })

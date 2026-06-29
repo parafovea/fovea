@@ -118,6 +118,8 @@ const ClaimSchema: any = Type.Recursive(This => Type.Object({
  * Create claim request schema
  */
 const CreateClaimSchema = Type.Object({
+  // Optional client-supplied id so a retried create is idempotent (no duplicate).
+  id: Type.Optional(Type.String({ format: 'uuid' })),
   summaryType: Type.Union([Type.Literal('video'), Type.Literal('collection')]),
   text: Type.String({ minLength: 1 }),
   gloss: Type.Optional(Type.Array(GlossItemSchema)),
@@ -752,6 +754,8 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
           personaId: Type.String({ format: 'uuid' })
         }),
         body: Type.Object({
+          // Optional client-supplied id so a retried create is idempotent.
+          id: Type.Optional(Type.String({ format: 'uuid' })),
           text: Type.String({ minLength: 1 }),
           gloss: Type.Optional(Type.Array(GlossItemSchema)),
           parentClaimId: Type.Optional(Type.String({ format: 'uuid' })),

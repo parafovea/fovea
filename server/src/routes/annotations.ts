@@ -256,6 +256,30 @@ const annotationsRoute: FastifyPluginAsync = async (fastify) => {
         throw new ForbiddenError('Cannot create an annotation under this Persona')
       }
       projectId = persona.projectId
+    } else {
+      // Personaless object annotations have no persona to inherit scope from.
+      // Fall back to the video's project so the annotation lands in the project
+      // its reviewers share — without this it is born projectId = NULL and
+      // project members (read rule { projectId: { in: [...] } }) cannot see it.
+      // A video can be assigned to several projects, so disambiguate by the
+      // caller's membership and only adopt a project when exactly one of the
+      // caller's projects has this video assigned (zero or ambiguous -> null,
+      // i.e. personal scope).
+      const callerProjectIds = (
+        await fastify.prisma.projectMembership.findMany({
+          where: { userId },
+          select: { projectId: true },
+        })
+      ).map((m) => m.projectId)
+      if (callerProjectIds.length > 0) {
+        const assignments = await fastify.prisma.projectVideoAssignment.findMany({
+          where: { videoId: data.videoId, projectId: { in: callerProjectIds } },
+          select: { projectId: true },
+        })
+        if (assignments.length === 1) {
+          projectId = assignments[0].projectId
+        }
+      }
     }
 
     const toResponse = (a: Annotation) => ({

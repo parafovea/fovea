@@ -67,6 +67,8 @@ export type MetadataModality = ('text' | 'non-text')[]
 
 /** Validated fields for creating a claim under a summary. */
 export interface CreateClaimInput {
+  /** Optional client-supplied id; makes create idempotent on retry. */
+  id?: string
   summaryType: 'video' | 'collection'
   text: string
   gloss?: GlossItemInput[]
@@ -133,6 +135,8 @@ export interface ClaimSynthesisConfigInput {
 
 /** Validated fields for creating a claim from a video + persona pair. */
 export interface CreateVideoPersonaClaimInput {
+  /** Optional client-supplied id; makes create idempotent on retry. */
+  id?: string
   text: string
   gloss?: GlossItemInput[]
   parentClaimId?: string
@@ -389,7 +393,7 @@ export class ClaimService {
    * @throws {ValidationError} when the parent claim is invalid
    */
   async createClaim(summaryId: string, input: CreateClaimInput): Promise<ClaimWithSubclaimTree[]> {
-    const { text, gloss, parentClaimId, summaryType, audio, video, metadata, comment, ...rest } = input
+    const { id, text, gloss, parentClaimId, summaryType, audio, video, metadata, comment, ...rest } = input
     const ability = this.requireAbility()
     const userId = this.userId!
 
@@ -434,9 +438,24 @@ export class ClaimService {
       }
     }
 
+    // Idempotent create on a client-supplied id: a network retry / resend
+    // carrying the same id must not mint a duplicate. If the claim already
+    // exists, re-authorize against it (so a caller cannot hijack another
+    // user's claim by supplying its id) and return the current tree.
+    if (id) {
+      const existing = await this.repository.findClaimById(id)
+      if (existing) {
+        if (!ability.can('update', subject('Claim', existing))) {
+          throw new ForbiddenError('Cannot create this Claim')
+        }
+        return this.repository.findClaimTree(summaryId, summaryType)
+      }
+    }
+
     // Convert null JSON fields to Prisma.JsonNull. Never trust request body
     // for createdBy; always stamp from authenticated session.
     const claimData: Prisma.ClaimUncheckedCreateInput = {
+      id: id || undefined,
       summaryId,
       summaryType,
       text,
@@ -452,8 +471,19 @@ export class ClaimService {
       createdBy: userId,
     }
 
-    // Create claim
-    await this.repository.createClaim(claimData)
+    // Create claim. On a concurrent same-id insert (P2002), collapse to the
+    // idempotent path instead of surfacing a 500.
+    try {
+      await this.repository.createClaim(claimData)
+    } catch (err) {
+      if (id && err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        const existing = await this.repository.findClaimById(id)
+        if (existing && ability.can('update', subject('Claim', existing))) {
+          return this.repository.findClaimTree(summaryId, summaryType)
+        }
+      }
+      throw err
+    }
 
     // Update denormalized claimsJson
     await this.updateSummaryClaimsJson(summaryId, summaryType)
@@ -906,7 +936,7 @@ export class ClaimService {
     personaId: string,
     input: CreateVideoPersonaClaimInput
   ): Promise<VideoPersonaClaimResponse> {
-    const { text, gloss, parentClaimId, audio, video: videoModality, metadata, comment, ...rest } = input
+    const { id, text, gloss, parentClaimId, audio, video: videoModality, metadata, comment, ...rest } = input
     const ability = this.requireAbility()
     const userId = this.userId!
 
@@ -930,6 +960,20 @@ export class ClaimService {
     })
     if (!ability.can('create', candidate)) {
       throw new ForbiddenError('Cannot create this Claim')
+    }
+
+    // Idempotent create on a client-supplied id: a retry carrying the same id
+    // must not mint a duplicate. Re-authorize against the existing row (so a
+    // caller can't hijack another user's claim by supplying its id) and return
+    // it, skipping the summary upsert.
+    if (id) {
+      const existing = await this.repository.findClaimById(id)
+      if (existing) {
+        if (!ability.can('update', subject('Claim', existing))) {
+          throw new ForbiddenError('Cannot create this Claim')
+        }
+        return { claim: existing, summaryId: existing.summaryId }
+      }
     }
 
     // If an existing summary is present, the caller must also be able to
@@ -965,6 +1009,7 @@ export class ClaimService {
     // Convert null JSON fields to Prisma.JsonNull. Never trust request
     // body for createdBy; always stamp from the authenticated session.
     const claimData: Prisma.ClaimUncheckedCreateInput = {
+      id: id || undefined,
       summaryId: summary.id,
       summaryType: 'video',
       text,
@@ -980,8 +1025,20 @@ export class ClaimService {
       createdBy: userId,
     }
 
-    // Create claim
-    const claim = await this.repository.createClaim(claimData)
+    // Create claim. On a concurrent same-id insert (P2002), collapse to the
+    // idempotent path instead of surfacing a 500.
+    let claim
+    try {
+      claim = await this.repository.createClaim(claimData)
+    } catch (err) {
+      if (id && err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        const existing = await this.repository.findClaimById(id)
+        if (existing && ability.can('update', subject('Claim', existing))) {
+          return { claim: existing, summaryId: existing.summaryId }
+        }
+      }
+      throw err
+    }
 
     return {
       claim,

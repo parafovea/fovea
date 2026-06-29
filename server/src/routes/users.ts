@@ -3,6 +3,7 @@ import { FastifyPluginAsync } from 'fastify'
 import { z } from 'zod'
 import bcrypt from 'bcrypt'
 import { requireAuth, requireAdmin } from '../middleware/auth.js'
+import { invalidateUserAbilities } from '../middleware/abilities.js'
 import { NotFoundError, UnauthorizedError, ForbiddenError, ConflictError } from '../lib/errors.js'
 
 /**
@@ -375,6 +376,7 @@ const usersRoute: FastifyPluginAsync = async (fastify) => {
       email?: string | null
       displayName?: string
       isAdmin?: boolean
+      systemRole?: string
       passwordHash?: string
     } = {}
 
@@ -386,6 +388,10 @@ const usersRoute: FastifyPluginAsync = async (fastify) => {
     }
     if (validatedData.isAdmin !== undefined) {
       updateData.isAdmin = validatedData.isAdmin
+      // Keep systemRole (which drives CASL `manage all`) in sync with isAdmin
+      // so the two admin signals cannot diverge: requireAdmin gates on isAdmin
+      // while CASL super-powers gate on systemRole.
+      updateData.systemRole = validatedData.isAdmin ? 'system_admin' : 'user'
     }
     if (validatedData.password) {
       updateData.passwordHash = await bcrypt.hash(validatedData.password, 12)
@@ -405,6 +411,12 @@ const usersRoute: FastifyPluginAsync = async (fastify) => {
           updatedAt: true
         }
       })
+      // The ability cache keys on systemRole; clear this user's cached
+      // abilities so an admin promotion/demotion takes effect immediately
+      // rather than lingering until restart/re-login.
+      if (validatedData.isAdmin !== undefined) {
+        invalidateUserAbilities(userId)
+      }
       return reply.send(user)
     } catch (error: unknown) {
       if (error && typeof error === 'object' && 'code' in error && error.code === 'P2025') {
