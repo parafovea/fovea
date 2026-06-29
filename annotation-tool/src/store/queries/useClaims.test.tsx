@@ -13,6 +13,7 @@ import {
   useDeleteClaim,
   useCreateClaimRelation,
   useDeleteClaimRelation,
+  claimsQueryKeys,
 } from './useClaims'
 import { server } from '@test/setup'
 import { http, HttpResponse } from 'msw'
@@ -257,6 +258,32 @@ describe('useClaims hooks', () => {
       await waitFor(() => expect(result.current.isSuccess).toBe(true))
     })
 
+    it('invalidates both the source and target claim relation queries', async () => {
+      const queryClient = new QueryClient({
+        defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+      })
+      const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
+      const wrapper = ({ children }: { children: ReactNode }) => (
+        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+      )
+      const { result } = renderHook(() => useCreateClaimRelation(), { wrapper })
+
+      result.current.mutate({
+        summaryId: 'summary-1',
+        sourceClaimId: 'claim-1',
+        relation: { targetClaimId: 'claim-2', relationTypeId: 'supports' },
+      })
+      await waitFor(() => expect(result.current.isSuccess).toBe(true))
+
+      // A relation shows in both endpoints' panels, so both keys must refresh.
+      expect(invalidateSpy).toHaveBeenCalledWith({
+        queryKey: claimsQueryKeys.relations('summary-1', 'claim-1'),
+      })
+      expect(invalidateSpy).toHaveBeenCalledWith({
+        queryKey: claimsQueryKeys.relations('summary-1', 'claim-2'),
+      })
+    })
+
     it('handles errors', async () => {
       server.use(
         http.post('/api/summaries/:summaryId/claims/:sourceClaimId/relations', () => {
@@ -298,6 +325,26 @@ describe('useClaims hooks', () => {
       })
 
       await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    })
+
+    it('invalidates all relation queries for the summary (source and target)', async () => {
+      const queryClient = new QueryClient({
+        defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+      })
+      const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
+      const wrapper = ({ children }: { children: ReactNode }) => (
+        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+      )
+      const { result } = renderHook(() => useDeleteClaimRelation(), { wrapper })
+
+      result.current.mutate({ summaryId: 'summary-1', relationId: 'relation-1', sourceClaimId: 'claim-1' })
+      await waitFor(() => expect(result.current.isSuccess).toBe(true))
+
+      // The delete vars lack the target id, so it invalidates the summary-wide
+      // relations prefix (which covers both endpoints).
+      expect(invalidateSpy).toHaveBeenCalledWith({
+        queryKey: claimsQueryKeys.relationsBySummary('summary-1'),
+      })
     })
 
     it('handles errors', async () => {

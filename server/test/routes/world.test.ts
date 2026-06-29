@@ -289,7 +289,7 @@ describe('World State API', () => {
       expect(worldState.entities[1].name).toBe('New Entity')
     })
 
-    it('allows partial updates (only entities)', async () => {
+    it('merges the provided field by id and leaves other fields unchanged', async () => {
       // Create initial world state
       await prisma.worldState.create({
         data: {
@@ -304,7 +304,7 @@ describe('World State API', () => {
         }
       })
 
-      // Update only entities
+      // Update only entities, adding a new one
       const updateData = {
         entities: [{ id: 'entity-2', name: 'Entity 2' }]
       }
@@ -318,9 +318,12 @@ describe('World State API', () => {
 
       expect(response.statusCode).toBe(200)
       const worldState = response.json()
-      expect(worldState.entities).toHaveLength(1)
-      expect(worldState.entities[0].name).toBe('Entity 2')
-      // Events should remain unchanged
+      // Entities merge by id: the pre-existing entity-1 is kept and entity-2 is
+      // added (the PUT no longer replaces the whole array). Removal is done via
+      // the per-object DELETE routes, not by omission.
+      expect(worldState.entities).toHaveLength(2)
+      expect(worldState.entities.map((e: { id: string }) => e.id).sort()).toEqual(['entity-1', 'entity-2'])
+      // Events (a field not provided in the PUT) remain unchanged.
       expect(worldState.events).toHaveLength(1)
       expect(worldState.events[0].name).toBe('Event 1')
     })

@@ -30,6 +30,28 @@ function toJson(value: unknown): Prisma.InputJsonValue {
 }
 
 /**
+ * Merge an incoming array of `{ id }` objects into an existing one by id:
+ * existing items keep their position, a matching id is overwritten, and new
+ * ids are appended. This turns the whole-blob PUT into an upsert so a writer
+ * carrying a stale view (it never saw a concurrently-added item) no longer
+ * drops it — the merge re-runs against the freshly-read row via optimistic
+ * concurrency. Removals go through the explicit DELETE routes, never omission.
+ */
+function mergeById(existing: Prisma.JsonValue | null | undefined, incoming: unknown[]): Prisma.InputJsonValue {
+  const byId = new Map<string, unknown>()
+  const order: string[] = []
+  const add = (item: unknown) => {
+    const id = (item as { id?: string } | null)?.id
+    if (!id) return
+    if (!byId.has(id)) order.push(id)
+    byId.set(id, item)
+  }
+  if (Array.isArray(existing)) existing.forEach(add)
+  incoming.forEach(add)
+  return order.map((id) => byId.get(id)) as Prisma.InputJsonValue
+}
+
+/**
  * Partial world state update fields. All fields are optional; only provided
  * fields are written.
  */
@@ -238,15 +260,18 @@ export class WorldStateService {
       if (this.ability && !this.ability.can('update', subject('WorldState', existing))) {
         throw new ForbiddenError('Cannot update this WorldState')
       }
-      worldState = await this.repository.updateWorldState(existing.id, {
-        entities: input.entities !== undefined ? toJson(input.entities) : undefined,
-        events: input.events !== undefined ? toJson(input.events) : undefined,
-        times: input.times !== undefined ? toJson(input.times) : undefined,
-        entityCollections: input.entityCollections !== undefined ? toJson(input.entityCollections) : undefined,
-        eventCollections: input.eventCollections !== undefined ? toJson(input.eventCollections) : undefined,
-        timeCollections: input.timeCollections !== undefined ? toJson(input.timeCollections) : undefined,
-        relations: input.relations !== undefined ? toJson(input.relations) : undefined
-      })
+      // Merge each provided array by id (upsert) instead of replacing it, under
+      // optimistic concurrency, so concurrent writers (rapid edits, a Wikidata
+      // import, or a second tab) cannot clobber each other's additions.
+      worldState = await this.repository.updatePersonalWorldStateOptimistic(userId, (current) => ({
+        entities: input.entities !== undefined ? mergeById(current.entities, input.entities) : undefined,
+        events: input.events !== undefined ? mergeById(current.events, input.events) : undefined,
+        times: input.times !== undefined ? mergeById(current.times, input.times) : undefined,
+        entityCollections: input.entityCollections !== undefined ? mergeById(current.entityCollections, input.entityCollections) : undefined,
+        eventCollections: input.eventCollections !== undefined ? mergeById(current.eventCollections, input.eventCollections) : undefined,
+        timeCollections: input.timeCollections !== undefined ? mergeById(current.timeCollections, input.timeCollections) : undefined,
+        relations: input.relations !== undefined ? mergeById(current.relations, input.relations) : undefined,
+      }))
     } else {
       if (this.ability) {
         const candidate = subject('WorldState', { userId, projectId: null })
@@ -267,6 +292,37 @@ export class WorldStateService {
     }
 
     return this.mapResponse(worldState)
+  }
+
+  /**
+   * Removes a single object (by id) from one of the personal world state's
+   * collection or relation arrays. These types have no graceful-delete route of
+   * their own and previously relied on removal-by-omission through the whole-
+   * blob PUT; now that the PUT merges by id, removal must be explicit so a merge
+   * cannot resurrect a deleted object. Uses optimistic concurrency so it is
+   * safe against concurrent writers.
+   *
+   * @param field - the array to remove from
+   * @param objectId - the id of the object to remove
+   * @throws {NotFoundError} when the user has no personal world state
+   * @throws {ForbiddenError} when update access is denied
+   */
+  async removeWorldObject(
+    field: 'entityCollections' | 'eventCollections' | 'timeCollections' | 'relations',
+    objectId: string,
+  ): Promise<void> {
+    const userId = await this.resolveUserId()
+    const existing = await this.repository.findPersonalWorldState(userId)
+    if (!existing) {
+      throw new NotFoundError('WorldState', userId)
+    }
+    if (this.ability && !this.ability.can('update', subject('WorldState', existing))) {
+      throw new ForbiddenError('Cannot update this WorldState')
+    }
+    await this.repository.updatePersonalWorldStateOptimistic(userId, (current) => {
+      const arr = Array.isArray(current[field]) ? (current[field] as Array<{ id?: string }>) : []
+      return { [field]: toJson(arr.filter((o) => o?.id !== objectId)) }
+    })
   }
 
   /**

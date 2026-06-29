@@ -9,7 +9,8 @@
 
 import { Type, Static } from '@sinclair/typebox'
 import { FastifyPluginAsync } from 'fastify'
-import { NotFoundError, ValidationError, ForbiddenError } from '../lib/errors.js'
+import { Prisma } from '@prisma/client'
+import { NotFoundError, ValidationError, ForbiddenError, ConflictError, ErrorResponseSchema } from '../lib/errors.js'
 import { videoAssignmentCounter } from '../metrics.js'
 import { requireAuth, requireAdmin } from '../middleware/auth.js'
 import { buildAbilities } from '../middleware/abilities.js'
@@ -285,6 +286,7 @@ const videoAssignmentsRoute: FastifyPluginAsync = async (fastify) => {
         body: AssignVideoBody,
         response: {
           201: AssignmentResponseSchema,
+          409: ErrorResponseSchema,
         },
       },
     },
@@ -334,16 +336,26 @@ const videoAssignmentsRoute: FastifyPluginAsync = async (fastify) => {
         }
       }
 
-      // Create assignment (unique constraint will prevent duplicates)
-      const assignment = await fastify.prisma.projectVideoAssignment.create({
-        data: {
-          projectId,
-          videoId,
-          assignedUserId: assignedUserId ?? null,
-          source: 'manual',
-          assignedBy: request.user!.id,
-        },
-      })
+      // Create assignment. The @@unique([projectId, videoId]) raises P2002 on a
+      // duplicate; surface it as a 409 rather than letting it become an
+      // unhandled 500 (re-assigning an already-assigned video is a user error,
+      // not a server fault).
+      const assignment = await fastify.prisma.projectVideoAssignment
+        .create({
+          data: {
+            projectId,
+            videoId,
+            assignedUserId: assignedUserId ?? null,
+            source: 'manual',
+            assignedBy: request.user!.id,
+          },
+        })
+        .catch((err) => {
+          if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+            throw new ConflictError('This video is already assigned to the project')
+          }
+          throw err
+        })
 
       videoAssignmentCounter.add(1, { operation: 'assign', source: 'manual' })
       return reply.status(201).send(assignment)

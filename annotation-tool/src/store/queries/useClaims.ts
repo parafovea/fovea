@@ -37,6 +37,9 @@ export const claimsQueryKeys = {
   bySummary: (summaryId: string) => [...claimsQueryKeys.all, 'summary', summaryId] as const,
   relations: (summaryId: string, claimId: string) =>
     [...claimsQueryKeys.all, 'relations', summaryId, claimId] as const,
+  /** Prefix matching every claim's relations within a summary (both endpoints). */
+  relationsBySummary: (summaryId: string) =>
+    [...claimsQueryKeys.all, 'relations', summaryId] as const,
   extractionJob: (jobId: string) => [...claimsQueryKeys.all, 'job', jobId] as const,
 }
 
@@ -403,10 +406,14 @@ export function useCreateClaimRelation() {
         notes?: string
       }
     }) => createClaimRelation(summaryId, sourceClaimId, relation),
-    onSuccess: (_, { summaryId, sourceClaimId }) => {
-      // Invalidate relations cache for this claim
+    onSuccess: (_, { summaryId, sourceClaimId, relation }) => {
+      // A relation appears in BOTH endpoints' panels (asSource / asTarget), so
+      // invalidate the source and the target claim's relation queries.
       queryClient.invalidateQueries({
         queryKey: claimsQueryKeys.relations(summaryId, sourceClaimId),
+      })
+      queryClient.invalidateQueries({
+        queryKey: claimsQueryKeys.relations(summaryId, relation.targetClaimId),
       })
     },
   })
@@ -427,9 +434,12 @@ export function useDeleteClaimRelation() {
       relationId: string
       sourceClaimId: string // For cache invalidation
     }) => deleteClaimRelation(summaryId, relationId),
-    onSuccess: (_, { summaryId, sourceClaimId }) => {
+    onSuccess: (_, { summaryId }) => {
+      // The delete variables don't carry the target claim id, so invalidate
+      // every relation query for this summary (prefix match) — this clears both
+      // the source and target endpoints' stale incoming/outgoing panels.
       queryClient.invalidateQueries({
-        queryKey: claimsQueryKeys.relations(summaryId, sourceClaimId),
+        queryKey: claimsQueryKeys.relationsBySummary(summaryId),
       })
     },
   })

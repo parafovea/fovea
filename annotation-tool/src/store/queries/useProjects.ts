@@ -6,6 +6,7 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { abilityKeys } from './useAbilities'
 
 /** Query key factory for projects. */
 export const projectKeys = {
@@ -313,6 +314,9 @@ export function useAddProjectMember() {
     onSuccess: (_, { projectId }) => {
       queryClient.invalidateQueries({ queryKey: projectKeys.detail(projectId) })
       queryClient.invalidateQueries({ queryKey: projectKeys.members(projectId) })
+      // Membership/role changes alter the caller's own permissions; refresh the
+      // client ability mirror so the UI reflects them without a staleTime lag.
+      queryClient.invalidateQueries({ queryKey: abilityKeys.all })
       queryClient.invalidateQueries({ queryKey: projectKeys.assignableUsers(projectId) })
       queryClient.invalidateQueries({ queryKey: projectKeys.lists() })
     },
@@ -343,6 +347,9 @@ export function useUpdateProjectMember() {
     onSuccess: (_, { projectId }) => {
       queryClient.invalidateQueries({ queryKey: projectKeys.detail(projectId) })
       queryClient.invalidateQueries({ queryKey: projectKeys.members(projectId) })
+      // Membership/role changes alter the caller's own permissions; refresh the
+      // client ability mirror so the UI reflects them without a staleTime lag.
+      queryClient.invalidateQueries({ queryKey: abilityKeys.all })
     },
   })
 }
@@ -368,6 +375,9 @@ export function useRemoveProjectMember() {
     onSuccess: (_, { projectId }) => {
       queryClient.invalidateQueries({ queryKey: projectKeys.detail(projectId) })
       queryClient.invalidateQueries({ queryKey: projectKeys.members(projectId) })
+      // Membership/role changes alter the caller's own permissions; refresh the
+      // client ability mirror so the UI reflects them without a staleTime lag.
+      queryClient.invalidateQueries({ queryKey: abilityKeys.all })
       queryClient.invalidateQueries({ queryKey: projectKeys.assignableUsers(projectId) })
       queryClient.invalidateQueries({ queryKey: projectKeys.lists() })
     },

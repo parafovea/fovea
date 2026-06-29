@@ -463,8 +463,18 @@ const groupsRoute: FastifyPluginAsync = async (fastify) => {
         throw new NotFoundError('UserGroup', groupId)
       }
 
+      // Snapshot members before the cascade so their cached abilities can be
+      // cleared afterward. Group-scope non-ownOnly rules are emitted globally
+      // unconditioned (lib/abilities.ts), so without this a former member keeps
+      // the group's permissions until restart/re-login. Mirrors
+      // ProjectService.delete (snapshot ids -> delete -> invalidate each).
+      const memberRows = await fastify.prisma.groupMembership.findMany({
+        where: { groupId },
+        select: { userId: true },
+      })
       // Memberships cascade-delete via onDelete: Cascade in the schema
       await fastify.prisma.userGroup.delete({ where: { id: groupId } })
+      for (const { userId } of memberRows) invalidateUserAbilities(userId)
 
       groupOperationCounter.add(1, { operation: 'delete', status: 'success' })
       return reply.send({ success: true })
@@ -957,7 +967,14 @@ const groupsRoute: FastifyPluginAsync = async (fastify) => {
         throw new NotFoundError('UserGroup', groupId)
       }
 
+      // Snapshot members before the cascade so their cached abilities can be
+      // cleared afterward (see the non-admin delete handler above for why).
+      const memberRows = await fastify.prisma.groupMembership.findMany({
+        where: { groupId },
+        select: { userId: true },
+      })
       await fastify.prisma.userGroup.delete({ where: { id: groupId } })
+      for (const { userId } of memberRows) invalidateUserAbilities(userId)
 
       groupOperationCounter.add(1, { operation: 'delete', status: 'success' })
       return reply.send({ success: true })
