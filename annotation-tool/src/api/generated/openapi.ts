@@ -285,6 +285,17 @@ export interface paths {
                         };
                     };
                 };
+                /** @description Default Response */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                        };
+                    };
+                };
             };
         };
         delete?: never;
@@ -771,6 +782,22 @@ export interface paths {
                         };
                     };
                 };
+                /** @description Default Response */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** @description Machine-readable error code */
+                            error: string;
+                            /** @description Human-readable error message */
+                            message: string;
+                            /** @description Additional error context */
+                            details?: unknown;
+                        };
+                    };
+                };
             };
         };
         post?: never;
@@ -816,6 +843,22 @@ export interface paths {
                     content: {
                         "application/json": {
                             error: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** @description Machine-readable error code */
+                            error: string;
+                            /** @description Human-readable error message */
+                            message: string;
+                            /** @description Additional error context */
+                            details?: unknown;
                         };
                     };
                 };

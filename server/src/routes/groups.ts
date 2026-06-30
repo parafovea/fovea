@@ -10,7 +10,7 @@
 
 import { Type, Static } from '@sinclair/typebox'
 import { FastifyPluginAsync } from 'fastify'
-import { PrismaClient } from '@prisma/client'
+import { Prisma, PrismaClient } from '@prisma/client'
 
 import { requireAuth, requireAdmin } from '../middleware/auth.js'
 import { groupOperationCounter } from '../metrics.js'
@@ -218,38 +218,48 @@ const groupsRoute: FastifyPluginAsync = async (fastify) => {
         )
       }
 
-      // Create group and owner membership in a transaction
-      const group = await fastify.prisma.$transaction(async (tx) => {
-        const created = await tx.userGroup.create({
-          data: {
-            name,
-            description: description ?? null,
-            slug,
-            createdBy: userId,
-          },
-        })
+      // Create group and owner membership in a transaction. The slug pre-check
+      // narrows the common case, but a concurrent create with the same slug can
+      // still race past it — translate the unique violation to 409 rather than 500.
+      let group
+      try {
+        group = await fastify.prisma.$transaction(async (tx) => {
+          const created = await tx.userGroup.create({
+            data: {
+              name,
+              description: description ?? null,
+              slug,
+              createdBy: userId,
+            },
+          })
 
-        await tx.groupMembership.create({
-          data: {
-            userId,
-            groupId: created.id,
-            role: 'group_owner',
-          },
-        })
+          await tx.groupMembership.create({
+            data: {
+              userId,
+              groupId: created.id,
+              role: 'group_owner',
+            },
+          })
 
-        return tx.userGroup.findUniqueOrThrow({
-          where: { id: created.id },
-          include: {
-            members: {
-              include: {
-                user: {
-                  select: { id: true, username: true, displayName: true, email: true },
+          return tx.userGroup.findUniqueOrThrow({
+            where: { id: created.id },
+            include: {
+              members: {
+                include: {
+                  user: {
+                    select: { id: true, username: true, displayName: true, email: true },
+                  },
                 },
               },
             },
-          },
+          })
         })
-      })
+      } catch (error) {
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+          throw new ConflictError(`A group with slug "${slug}" already exists. Choose a different slug.`)
+        }
+        throw error
+      }
 
       // Creator's abilities changed (they are now a group_owner)
       invalidateUserAbilities(userId)
@@ -835,37 +845,45 @@ const groupsRoute: FastifyPluginAsync = async (fastify) => {
         throw new NotFoundError('User', createdBy)
       }
 
-      const group = await fastify.prisma.$transaction(async (tx) => {
-        const created = await tx.userGroup.create({
-          data: {
-            name,
-            description: description ?? null,
-            slug,
-            createdBy,
-          },
-        })
+      let group
+      try {
+        group = await fastify.prisma.$transaction(async (tx) => {
+          const created = await tx.userGroup.create({
+            data: {
+              name,
+              description: description ?? null,
+              slug,
+              createdBy,
+            },
+          })
 
-        await tx.groupMembership.create({
-          data: {
-            userId: createdBy,
-            groupId: created.id,
-            role: 'group_owner',
-          },
-        })
+          await tx.groupMembership.create({
+            data: {
+              userId: createdBy,
+              groupId: created.id,
+              role: 'group_owner',
+            },
+          })
 
-        return tx.userGroup.findUniqueOrThrow({
-          where: { id: created.id },
-          include: {
-            members: {
-              include: {
-                user: {
-                  select: { id: true, username: true, displayName: true, email: true },
+          return tx.userGroup.findUniqueOrThrow({
+            where: { id: created.id },
+            include: {
+              members: {
+                include: {
+                  user: {
+                    select: { id: true, username: true, displayName: true, email: true },
+                  },
                 },
               },
             },
-          },
+          })
         })
-      })
+      } catch (error) {
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+          throw new ConflictError(`A group with slug "${slug}" already exists. Choose a different slug.`)
+        }
+        throw error
+      }
 
       // Admin-created group: the designated owner's abilities changed
       invalidateUserAbilities(createdBy)

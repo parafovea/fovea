@@ -138,6 +138,44 @@ export class PersonaRepository {
   }
 
   /**
+   * Applies an optimistic-concurrency update to a persona's ontology row.
+   *
+   * Reads the current ontology row (by personaId), lets `transform` compute the
+   * new column values from it, then writes them guarded by the row's
+   * `updatedAt`. If a concurrent writer committed first the guard misses (count
+   * 0) and we retry against the freshly-read row, so both writes land instead of
+   * one silently clobbering the other. This is what makes the whole-blob
+   * ontology PUT a safe per-id merge under concurrent writers (the transform
+   * re-runs on fresh state each attempt).
+   *
+   * @param personaId - Persona UUID owning the ontology
+   * @param transform - computes the Prisma update input from the current row
+   * @returns the updated ontology
+   * @throws when no ontology row exists or the write keeps conflicting
+   */
+  async updateOntologyOptimistic(
+    personaId: string,
+    transform: (current: Ontology) => Prisma.OntologyUpdateInput,
+  ): Promise<Ontology> {
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const current = await this.prisma.ontology.findUnique({
+        where: { personaId },
+      })
+      if (!current) {
+        throw new Error('No ontology to update')
+      }
+      const result = await this.prisma.ontology.updateMany({
+        where: { id: current.id, updatedAt: current.updatedAt },
+        data: { ...transform(current), updatedAt: new Date() },
+      })
+      if (result.count === 1) {
+        return this.prisma.ontology.findUniqueOrThrow({ where: { id: current.id } })
+      }
+    }
+    throw new Error('Ontology update conflicted after retries')
+  }
+
+  /**
    * Counts annotations matching a WHERE clause.
    *
    * @param where - Prisma annotation WHERE clause

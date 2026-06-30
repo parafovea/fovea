@@ -13,10 +13,11 @@
 
 import { PrismaClient, Prisma } from '@prisma/client'
 import { subject } from '@casl/ability'
-import { NotFoundError, ValidationError } from '../../lib/errors.js'
+import { NotFoundError, ValidationError, ForbiddenError } from '../../lib/errors.js'
 import type { AppAbility } from '../../lib/abilities.js'
 import { ImportLine, ImportOptions, ImportResult, Resolution } from '../import-types.js'
 import { SequenceValidator } from '../import-validator.js'
+import { mergeById } from '../world-state-service.js'
 import { validateLine } from './line-parser.js'
 import { AnnotationData } from './types.js'
 
@@ -177,6 +178,32 @@ export class EntityImporter {
       return
     }
 
+    // Authorize against the OWNING persona: importing an ontology overwrites that
+    // persona's types, so the caller must be allowed to update it. Without this,
+    // an import line carrying another user's personaId would clobber their
+    // ontology (IDOR). Checked before the write so the denial propagates cleanly
+    // rather than being swallowed by the generic import-error catch below.
+    const owningPersona = await tx.persona.findUnique({ where: { id: personaId } })
+    if (!owningPersona) {
+      result.errors.push({
+        line: line.lineNumber,
+        type: 'validation',
+        message: `Persona ${personaId} not found for ontology import`
+      })
+      return
+    }
+    if (this.ability && !this.ability.can('update', subject('Persona', owningPersona))) {
+      result.errors.push({
+        line: line.lineNumber,
+        type: 'authorization',
+        message: `Not authorized to import an ontology for persona ${personaId}`
+      })
+      if (options.transaction.atomic) {
+        throw new ForbiddenError(`Not authorized to import an ontology for persona ${personaId}`)
+      }
+      return
+    }
+
     try {
       // Check if ontology already exists for this persona
       const existingOntology = await tx.ontology.findUnique({ where: { personaId } })
@@ -248,12 +275,6 @@ export class EntityImporter {
     }
 
     try {
-      // Get current world state
-      const worldState = await tx.worldState.findUnique({ where: { id: worldStateId } })
-      if (!worldState) {
-        throw new NotFoundError('World state', worldStateId)
-      }
-
       // Determine which array to update
       const fieldMap: Record<string, string> = {
         'entity': 'entities',
@@ -266,32 +287,55 @@ export class EntityImporter {
       }
       const fieldName = fieldMap[itemType]
 
-      // Get current array
-      const currentArray = (worldState[fieldName as keyof typeof worldState] as Prisma.JsonValue) || []
-      const items = Array.isArray(currentArray) ? [...currentArray] : []
-
-      // Check if item already exists
-      const existingIndex = items.findIndex(
-        (item) => item && typeof item === 'object' && 'id' in item && item.id === itemId
-      )
-
-      if (existingIndex >= 0) {
-        if (resolution?.action === 'replace') {
-          items[existingIndex] = line.data as Prisma.JsonValue
+      // Merge the imported item into the target array by id under optimistic
+      // concurrency, mirroring the personal world-state write path
+      // (WorldStateRepository.updatePersonalWorldStateOptimistic). The previous
+      // implementation read the row once, mutated one array in memory, and wrote
+      // the whole array back with no updatedAt guard, so a world object added via
+      // the UI during an import (or by a concurrent importer) could be silently
+      // clobbered by this stale snapshot. Here each attempt re-reads the current
+      // row, merges by id against the fresh array, and writes guarded by the
+      // row's updatedAt via updateMany, retrying when the guard misses (count 0).
+      let merged = false
+      for (let attempt = 0; attempt < 5 && !merged; attempt++) {
+        const worldState = await tx.worldState.findUnique({ where: { id: worldStateId } })
+        if (!worldState) {
+          throw new NotFoundError('World state', worldStateId)
         }
-        // Otherwise skip (already exists)
-      } else {
-        items.push(line.data as Prisma.JsonValue)
+
+        const currentArray = (worldState[fieldName as keyof typeof worldState] as Prisma.JsonValue) || []
+        const items = Array.isArray(currentArray) ? currentArray : []
+
+        // Decide what to merge in. mergeById overwrites a matching id with the
+        // incoming item, so only feed it the imported line when the item is new
+        // or the resolution says replace; otherwise feed an empty array so the
+        // existing item is preserved (skip-if-exists) while still merging by id
+        // against the freshly-read current array.
+        const existing = items.some(
+          (item) => item && typeof item === 'object' && 'id' in item && item.id === itemId
+        )
+        const incoming = !existing || resolution?.action === 'replace'
+          ? [line.data]
+          : []
+
+        const nextArray = mergeById(currentArray, incoming)
+
+        const writeResult = await tx.worldState.updateMany({
+          where: { id: worldStateId, updatedAt: worldState.updatedAt },
+          data: {
+            [fieldName]: nextArray,
+            updatedAt: new Date()
+          }
+        })
+
+        if (writeResult.count === 1) {
+          merged = true
+        }
       }
 
-      // Update world state
-      await tx.worldState.update({
-        where: { id: worldStateId },
-        data: {
-          [fieldName]: items as Prisma.InputJsonValue,
-          updatedAt: new Date()
-        }
-      })
+      if (!merged) {
+        throw new Error('World state update conflicted after retries')
+      }
 
       // Update result counts
       switch (itemType) {

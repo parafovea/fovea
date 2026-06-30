@@ -19,6 +19,7 @@ import {
   asWorldCollections,
 } from '../lib/prisma-json.js'
 import { WorldStateRepository } from '../repositories/WorldStateRepository.js'
+import { prisma } from '../lib/prisma.js'
 
 /**
  * Converts a typed array to Prisma.InputJsonValue for storage in JSON columns.
@@ -37,7 +38,7 @@ function toJson(value: unknown): Prisma.InputJsonValue {
  * drops it — the merge re-runs against the freshly-read row via optimistic
  * concurrency. Removals go through the explicit DELETE routes, never omission.
  */
-function mergeById(existing: Prisma.JsonValue | null | undefined, incoming: unknown[]): Prisma.InputJsonValue {
+export function mergeById(existing: Prisma.JsonValue | null | undefined, incoming: unknown[]): Prisma.InputJsonValue {
   const byId = new Map<string, unknown>()
   const order: string[] = []
   const add = (item: unknown) => {
@@ -218,16 +219,29 @@ export class WorldStateService {
           throw new ForbiddenError('Cannot create this WorldState')
         }
       }
-      worldState = await this.repository.createWorldState({
-        userId,
-        entities: [],
-        events: [],
-        times: [],
-        entityCollections: [],
-        eventCollections: [],
-        timeCollections: [],
-        relations: []
-      })
+      try {
+        worldState = await this.repository.createWorldState({
+          userId,
+          entities: [],
+          events: [],
+          times: [],
+          entityCollections: [],
+          eventCollections: [],
+          timeCollections: [],
+          relations: []
+        })
+      } catch (error) {
+        // Concurrent first access can race two creates; the personal-row partial
+        // unique index makes the loser hit P2002. Re-read the winner instead of
+        // 500ing or (pre-index) leaving the user with two personal rows.
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+          const winner = await this.repository.findPersonalWorldState(userId)
+          if (!winner) throw error
+          worldState = winner
+        } else {
+          throw error
+        }
+      }
     }
 
     return this.mapResponse(worldState)
@@ -255,23 +269,25 @@ export class WorldStateService {
     // row before mutating it.
     const existing = await this.repository.findPersonalWorldState(userId)
 
+    // Merge each provided array by id (upsert) instead of replacing it, under
+    // optimistic concurrency, so concurrent writers (rapid edits, a Wikidata
+    // import, or a second tab) cannot clobber each other's additions.
+    const mergeTransform = (current: PrismaWorldState) => ({
+      entities: input.entities !== undefined ? mergeById(current.entities, input.entities) : undefined,
+      events: input.events !== undefined ? mergeById(current.events, input.events) : undefined,
+      times: input.times !== undefined ? mergeById(current.times, input.times) : undefined,
+      entityCollections: input.entityCollections !== undefined ? mergeById(current.entityCollections, input.entityCollections) : undefined,
+      eventCollections: input.eventCollections !== undefined ? mergeById(current.eventCollections, input.eventCollections) : undefined,
+      timeCollections: input.timeCollections !== undefined ? mergeById(current.timeCollections, input.timeCollections) : undefined,
+      relations: input.relations !== undefined ? mergeById(current.relations, input.relations) : undefined,
+    })
+
     let worldState
     if (existing) {
       if (this.ability && !this.ability.can('update', subject('WorldState', existing))) {
         throw new ForbiddenError('Cannot update this WorldState')
       }
-      // Merge each provided array by id (upsert) instead of replacing it, under
-      // optimistic concurrency, so concurrent writers (rapid edits, a Wikidata
-      // import, or a second tab) cannot clobber each other's additions.
-      worldState = await this.repository.updatePersonalWorldStateOptimistic(userId, (current) => ({
-        entities: input.entities !== undefined ? mergeById(current.entities, input.entities) : undefined,
-        events: input.events !== undefined ? mergeById(current.events, input.events) : undefined,
-        times: input.times !== undefined ? mergeById(current.times, input.times) : undefined,
-        entityCollections: input.entityCollections !== undefined ? mergeById(current.entityCollections, input.entityCollections) : undefined,
-        eventCollections: input.eventCollections !== undefined ? mergeById(current.eventCollections, input.eventCollections) : undefined,
-        timeCollections: input.timeCollections !== undefined ? mergeById(current.timeCollections, input.timeCollections) : undefined,
-        relations: input.relations !== undefined ? mergeById(current.relations, input.relations) : undefined,
-      }))
+      worldState = await this.repository.updatePersonalWorldStateOptimistic(userId, mergeTransform)
     } else {
       if (this.ability) {
         const candidate = subject('WorldState', { userId, projectId: null })
@@ -279,16 +295,27 @@ export class WorldStateService {
           throw new ForbiddenError('Cannot create this WorldState')
         }
       }
-      worldState = await this.repository.createWorldState({
-        userId,
-        entities: toJson(input.entities || []),
-        events: toJson(input.events || []),
-        times: toJson(input.times || []),
-        entityCollections: toJson(input.entityCollections || []),
-        eventCollections: toJson(input.eventCollections || []),
-        timeCollections: toJson(input.timeCollections || []),
-        relations: toJson(input.relations || [])
-      })
+      try {
+        worldState = await this.repository.createWorldState({
+          userId,
+          entities: toJson(input.entities || []),
+          events: toJson(input.events || []),
+          times: toJson(input.times || []),
+          entityCollections: toJson(input.entityCollections || []),
+          eventCollections: toJson(input.eventCollections || []),
+          timeCollections: toJson(input.timeCollections || []),
+          relations: toJson(input.relations || [])
+        })
+      } catch (error) {
+        // Lost the create race against the personal-row partial unique index —
+        // the row now exists, so merge this input into it rather than 500ing or
+        // (pre-index) silently minting a duplicate personal world state.
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+          worldState = await this.repository.updatePersonalWorldStateOptimistic(userId, mergeTransform)
+        } else {
+          throw error
+        }
+      }
     }
 
     return this.mapResponse(worldState)
@@ -451,15 +478,30 @@ export class WorldStateService {
   /**
    * Converts every persona ontology's gloss references to a deleted world
    * object into plain text, and returns the total number of references found.
+   *
+   * Both the persona/ontology read and the per-persona ontology writes route
+   * through `tx` when one is supplied, so the gloss cleanup commits or rolls
+   * back atomically with the caller's world-state delete. When `tx` is omitted
+   * the read and writes go through the repository on the default client.
+   *
+   * @param userId - owning user ID
+   * @param objectId - id of the deleted world object
+   * @param refType - the kind of object reference to rewrite
+   * @param objectName - display name to substitute for the reference
+   * @param tx - optional transaction client to run reads/writes inside
+   * @returns the total number of gloss references converted
    */
   private async cleanupGlossReferences(
     userId: string,
     objectId: string,
     refType: 'entity-object' | 'event-object' | 'time-object',
-    objectName: string
+    objectName: string,
+    tx?: Prisma.TransactionClient
   ): Promise<number> {
     let glossReferences = 0
-    const personas = await this.repository.findPersonasWithOntology(userId)
+    const personas = tx
+      ? await tx.persona.findMany({ where: { userId }, include: { ontology: true } })
+      : await this.repository.findPersonasWithOntology(userId)
 
     for (const persona of personas) {
       if (!persona.ontology) continue
@@ -494,15 +536,59 @@ export class WorldStateService {
       }))
 
       // Update ontology
-      await this.repository.updateOntology(persona.id, {
+      const ontologyData = {
         entityTypes: toJson(cleanedEntityTypes),
         roleTypes: toJson(cleanedRoleTypes),
         eventTypes: toJson(cleanedEventTypes),
         relationTypes: toJson(cleanedRelationTypes)
-      })
+      }
+      if (tx) {
+        await tx.ontology.update({ where: { personaId: persona.id }, data: ontologyData })
+      } else {
+        await this.repository.updateOntology(persona.id, ontologyData)
+      }
     }
 
     return glossReferences
+  }
+
+  /**
+   * Applies an optimistic-concurrency update to the personal world state inside
+   * an existing transaction.
+   *
+   * Mirrors WorldStateRepository.updatePersonalWorldStateOptimistic, but reads
+   * and writes through the supplied transaction client so the guarded delete
+   * write and the gloss cleanup commit atomically. Reads the current row,
+   * lets `transform` compute the new column values from it, then writes them
+   * guarded by the row's `updatedAt`; a missed guard (count 0) retries against
+   * the freshly read row so a concurrent addition is not clobbered.
+   *
+   * @param tx - the transaction client to run the read/write inside
+   * @param userId - owning user ID
+   * @param transform - computes the Prisma update input from the current row
+   * @throws when no personal row exists or the write keeps conflicting
+   */
+  private async updatePersonalWorldStateOptimisticTx(
+    tx: Prisma.TransactionClient,
+    userId: string,
+    transform: (current: PrismaWorldState) => Prisma.WorldStateUpdateInput,
+  ): Promise<void> {
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const current = await tx.worldState.findFirst({
+        where: { userId, projectId: null },
+      })
+      if (!current) {
+        throw new Error('No personal world state to update')
+      }
+      const result = await tx.worldState.updateMany({
+        where: { id: current.id, updatedAt: current.updatedAt },
+        data: { ...transform(current), updatedAt: new Date() },
+      })
+      if (result.count === 1) {
+        return
+      }
+    }
+    throw new Error('Personal world state update conflicted after retries')
   }
 
   /**
@@ -527,10 +613,11 @@ export class WorldStateService {
     // Count gloss references in all personas' ontologies
     const glossReferences = await this.countGlossReferences(userId, entityId, 'entity-object')
 
-    // Count annotations linking to this entity
-    // Note: Annotations use JSON frames field, need raw query or scan
-    // For simplicity, count annotations that might reference this entity
-    const annotationCount = 0 // Would need to scan frames JSON field
+    // Count object annotations linking to this entity. Object annotations store
+    // the linked world-object id in `label` and its kind in `linkType`.
+    const annotationCount = await prisma.annotation.count({
+      where: { linkType: 'entity', label: entityId }
+    })
 
     // Count relations referencing this entity
     const relations = asWorldRelations(worldState.relations)
@@ -579,43 +666,52 @@ export class WorldStateService {
 
     const entityName = targetEntity.name || entityId
 
-    // Remove entity from list
-    const updatedEntities = entities.filter(e => e.id !== entityId)
-
-    // Remove relations referencing this entity
-    const relations = asWorldRelations(worldState.relations)
-    const relationsRemoved = relations.filter(
-      r => (r.sourceType === 'entity' && r.sourceId === entityId) ||
-           (r.targetType === 'entity' && r.targetId === entityId)
-    ).length
-    const updatedRelations = relations.filter(
-      r => !((r.sourceType === 'entity' && r.sourceId === entityId) ||
-             (r.targetType === 'entity' && r.targetId === entityId))
-    )
-
-    // Remove from collections
-    const entityCollections = asWorldCollections(worldState.entityCollections)
+    // Filter the entity, its relations, and its collection memberships out of
+    // the freshly read row under the updatedAt guard, then convert gloss
+    // references, all inside one transaction so the world-state delete and the
+    // ontology gloss cleanup commit or roll back together. The removed counts
+    // are computed against the fresh row the guarded write actually lands on.
+    let relationsRemoved = 0
     let collectionMemberships = 0
-    const updatedEntityCollections = entityCollections.map(collection => {
-      if (collection.members?.includes(entityId)) {
-        collectionMemberships++
+    const glossReferences = await prisma.$transaction(async (tx) => {
+      relationsRemoved = 0
+      collectionMemberships = 0
+      await this.updatePersonalWorldStateOptimisticTx(tx, userId, (current) => {
+        const currentEntities = asEntities(current.entities)
+        const updatedEntities = currentEntities.filter(e => e.id !== entityId)
+
+        const currentRelations = asWorldRelations(current.relations)
+        relationsRemoved = currentRelations.filter(
+          r => (r.sourceType === 'entity' && r.sourceId === entityId) ||
+               (r.targetType === 'entity' && r.targetId === entityId)
+        ).length
+        const updatedRelations = currentRelations.filter(
+          r => !((r.sourceType === 'entity' && r.sourceId === entityId) ||
+                 (r.targetType === 'entity' && r.targetId === entityId))
+        )
+
+        const currentEntityCollections = asWorldCollections(current.entityCollections)
+        collectionMemberships = 0
+        const updatedEntityCollections = currentEntityCollections.map(collection => {
+          if (collection.members?.includes(entityId)) {
+            collectionMemberships++
+            return {
+              ...collection,
+              members: collection.members.filter(id => id !== entityId)
+            }
+          }
+          return collection
+        })
+
         return {
-          ...collection,
-          members: collection.members.filter(id => id !== entityId)
+          entities: toJson(updatedEntities),
+          relations: toJson(updatedRelations),
+          entityCollections: toJson(updatedEntityCollections)
         }
-      }
-      return collection
-    })
+      })
 
-    // Update world state
-    await this.repository.updateWorldState(worldState.id, {
-      entities: toJson(updatedEntities),
-      relations: toJson(updatedRelations),
-      entityCollections: toJson(updatedEntityCollections)
+      return this.cleanupGlossReferences(userId, entityId, 'entity-object', entityName, tx)
     })
-
-    // Convert objectRefs in glosses
-    const glossReferences = await this.cleanupGlossReferences(userId, entityId, 'entity-object', entityName)
 
     return {
       message: `Entity "${entityName}" deleted successfully`,
@@ -649,6 +745,12 @@ export class WorldStateService {
     // Count gloss references
     const glossReferences = await this.countGlossReferences(userId, eventId, 'event-object')
 
+    // Count object annotations linking to this event. Object annotations store
+    // the linked world-object id in `label` and its kind in `linkType`.
+    const annotationCount = await prisma.annotation.count({
+      where: { linkType: 'event', label: eventId }
+    })
+
     // Count relations
     const relations = asWorldRelations(worldState.relations)
     const relationCount = relations.filter(
@@ -667,7 +769,7 @@ export class WorldStateService {
 
     return {
       glossReferences,
-      annotationCount: 0,
+      annotationCount,
       relationCount,
       collectionMemberships
     }
@@ -696,43 +798,52 @@ export class WorldStateService {
 
     const eventName = targetEvent.name || eventId
 
-    // Remove event
-    const updatedEvents = events.filter(e => e.id !== eventId)
-
-    // Remove relations
-    const relations = asWorldRelations(worldState.relations)
-    const relationsRemoved = relations.filter(
-      r => (r.sourceType === 'event' && r.sourceId === eventId) ||
-           (r.targetType === 'event' && r.targetId === eventId)
-    ).length
-    const updatedRelations = relations.filter(
-      r => !((r.sourceType === 'event' && r.sourceId === eventId) ||
-             (r.targetType === 'event' && r.targetId === eventId))
-    )
-
-    // Remove from collections
-    const eventCollections = asWorldCollections(worldState.eventCollections)
+    // Filter the event, its relations, and its collection memberships out of
+    // the freshly read row under the updatedAt guard, then convert gloss
+    // references, all inside one transaction so the world-state delete and the
+    // ontology gloss cleanup commit or roll back together. The removed counts
+    // are computed against the fresh row the guarded write actually lands on.
+    let relationsRemoved = 0
     let collectionMemberships = 0
-    const updatedEventCollections = eventCollections.map(collection => {
-      if (collection.members?.includes(eventId)) {
-        collectionMemberships++
+    const glossReferences = await prisma.$transaction(async (tx) => {
+      relationsRemoved = 0
+      collectionMemberships = 0
+      await this.updatePersonalWorldStateOptimisticTx(tx, userId, (current) => {
+        const currentEvents = asEvents(current.events)
+        const updatedEvents = currentEvents.filter(e => e.id !== eventId)
+
+        const currentRelations = asWorldRelations(current.relations)
+        relationsRemoved = currentRelations.filter(
+          r => (r.sourceType === 'event' && r.sourceId === eventId) ||
+               (r.targetType === 'event' && r.targetId === eventId)
+        ).length
+        const updatedRelations = currentRelations.filter(
+          r => !((r.sourceType === 'event' && r.sourceId === eventId) ||
+                 (r.targetType === 'event' && r.targetId === eventId))
+        )
+
+        const currentEventCollections = asWorldCollections(current.eventCollections)
+        collectionMemberships = 0
+        const updatedEventCollections = currentEventCollections.map(collection => {
+          if (collection.members?.includes(eventId)) {
+            collectionMemberships++
+            return {
+              ...collection,
+              members: collection.members.filter(id => id !== eventId)
+            }
+          }
+          return collection
+        })
+
         return {
-          ...collection,
-          members: collection.members.filter(id => id !== eventId)
+          events: toJson(updatedEvents),
+          relations: toJson(updatedRelations),
+          eventCollections: toJson(updatedEventCollections)
         }
-      }
-      return collection
-    })
+      })
 
-    // Update world state
-    await this.repository.updateWorldState(worldState.id, {
-      events: toJson(updatedEvents),
-      relations: toJson(updatedRelations),
-      eventCollections: toJson(updatedEventCollections)
+      return this.cleanupGlossReferences(userId, eventId, 'event-object', eventName, tx)
     })
-
-    // Convert objectRefs in glosses
-    const glossReferences = await this.cleanupGlossReferences(userId, eventId, 'event-object', eventName)
 
     return {
       message: `Event "${eventName}" deleted successfully`,
@@ -766,6 +877,12 @@ export class WorldStateService {
     // Count gloss references
     const glossReferences = await this.countGlossReferences(userId, timeId, 'time-object')
 
+    // Count object annotations linking to this time. Object annotations store
+    // the linked world-object id in `label` and its kind in `linkType`.
+    const annotationCount = await prisma.annotation.count({
+      where: { linkType: 'time', label: timeId }
+    })
+
     // Count relations
     const relations = asWorldRelations(worldState.relations)
     const relationCount = relations.filter(
@@ -784,7 +901,7 @@ export class WorldStateService {
 
     return {
       glossReferences,
-      annotationCount: 0,
+      annotationCount,
       relationCount,
       collectionMemberships
     }
@@ -814,43 +931,52 @@ export class WorldStateService {
     // Time objects don't have a name/label, use id for reference cleanup
     const timeName = timeId
 
-    // Remove time
-    const updatedTimes = times.filter(t => t.id !== timeId)
-
-    // Remove relations
-    const relations = asWorldRelations(worldState.relations)
-    const relationsRemoved = relations.filter(
-      r => (r.sourceType === 'time' && r.sourceId === timeId) ||
-           (r.targetType === 'time' && r.targetId === timeId)
-    ).length
-    const updatedRelations = relations.filter(
-      r => !((r.sourceType === 'time' && r.sourceId === timeId) ||
-             (r.targetType === 'time' && r.targetId === timeId))
-    )
-
-    // Remove from collections
-    const timeCollections = asWorldCollections(worldState.timeCollections)
+    // Filter the time, its relations, and its collection memberships out of the
+    // freshly read row under the updatedAt guard, then convert gloss
+    // references, all inside one transaction so the world-state delete and the
+    // ontology gloss cleanup commit or roll back together. The removed counts
+    // are computed against the fresh row the guarded write actually lands on.
+    let relationsRemoved = 0
     let collectionMemberships = 0
-    const updatedTimeCollections = timeCollections.map(collection => {
-      if (collection.members?.includes(timeId)) {
-        collectionMemberships++
+    const glossReferences = await prisma.$transaction(async (tx) => {
+      relationsRemoved = 0
+      collectionMemberships = 0
+      await this.updatePersonalWorldStateOptimisticTx(tx, userId, (current) => {
+        const currentTimes = asTimes(current.times)
+        const updatedTimes = currentTimes.filter(t => t.id !== timeId)
+
+        const currentRelations = asWorldRelations(current.relations)
+        relationsRemoved = currentRelations.filter(
+          r => (r.sourceType === 'time' && r.sourceId === timeId) ||
+               (r.targetType === 'time' && r.targetId === timeId)
+        ).length
+        const updatedRelations = currentRelations.filter(
+          r => !((r.sourceType === 'time' && r.sourceId === timeId) ||
+                 (r.targetType === 'time' && r.targetId === timeId))
+        )
+
+        const currentTimeCollections = asWorldCollections(current.timeCollections)
+        collectionMemberships = 0
+        const updatedTimeCollections = currentTimeCollections.map(collection => {
+          if (collection.members?.includes(timeId)) {
+            collectionMemberships++
+            return {
+              ...collection,
+              members: collection.members.filter(id => id !== timeId)
+            }
+          }
+          return collection
+        })
+
         return {
-          ...collection,
-          members: collection.members.filter(id => id !== timeId)
+          times: toJson(updatedTimes),
+          relations: toJson(updatedRelations),
+          timeCollections: toJson(updatedTimeCollections)
         }
-      }
-      return collection
-    })
+      })
 
-    // Update world state
-    await this.repository.updateWorldState(worldState.id, {
-      times: toJson(updatedTimes),
-      relations: toJson(updatedRelations),
-      timeCollections: toJson(updatedTimeCollections)
+      return this.cleanupGlossReferences(userId, timeId, 'time-object', timeName, tx)
     })
-
-    // Convert objectRefs in glosses
-    const glossReferences = await this.cleanupGlossReferences(userId, timeId, 'time-object', timeName)
 
     return {
       message: `Time "${timeName}" deleted successfully`,

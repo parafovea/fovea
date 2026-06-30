@@ -16,6 +16,7 @@
  */
 
 import { Type, Static } from '@sinclair/typebox'
+import type { Prisma } from '@prisma/client'
 
 /**
  * Standard error response schema for OpenAPI documentation.
@@ -152,6 +153,41 @@ export class ConflictError extends AppError {
   constructor(message: string, details?: unknown) {
     super(409, 'CONFLICT', message, details)
   }
+}
+
+/**
+ * Build a human-readable 409 message from a Prisma `P2002` unique-constraint
+ * violation. `error.meta.target` names the conflicting column(s) (or, for a
+ * named index, the constraint name); pass `labels` to map a field substring to
+ * a friendly message (e.g. `{ email: 'A user with this email already exists' }`).
+ *
+ * @example
+ * ```typescript
+ * catch (e) {
+ *   if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
+ *     throw new ConflictError(conflictMessageFromP2002(e, { email: 'Email already in use' }))
+ *   }
+ * }
+ * ```
+ */
+export function conflictMessageFromP2002(
+  error: Prisma.PrismaClientKnownRequestError,
+  labels: Record<string, string> = {}
+): string {
+  const target = error.meta?.target
+  const fields = Array.isArray(target)
+    ? target.map(String)
+    : typeof target === 'string'
+      ? [target]
+      : []
+  for (const [key, message] of Object.entries(labels)) {
+    if (fields.some((f) => f.toLowerCase().includes(key.toLowerCase()))) {
+      return message
+    }
+  }
+  return fields.length
+    ? `A record with this ${fields.join(', ')} already exists`
+    : 'A record with these values already exists'
 }
 
 /**
