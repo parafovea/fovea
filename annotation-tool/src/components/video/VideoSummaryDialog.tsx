@@ -77,7 +77,7 @@ export default function VideoSummaryDialog({
   }, [open, initialPersonaId, videoId, timestampCapture])
 
   return (
-    <Dialog open={open && !timestampCapture} onOpenChange={(isOpen) => { if (!isOpen && !timestampCapture) onClose() }}>
+    <Dialog open={open && !timestampCapture} onOpenChange={(isOpen) => { if (!isOpen && !timestampCapture) void handleDone() }}>
       <DialogContent className="sm:max-w-2xl min-h-[60vh] max-h-[80vh]">
         <DialogHeader>
           <DialogTitle>Edit Video Summary</DialogTitle>

@@ -5,6 +5,27 @@ All notable changes to the Fovea project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.7] - 2026-06-30
+
+The 0.5.7 patch is the second of three audit-driven hardening releases — the frontend slice — fixing data-loss and stale-cache defects in the annotation UI ([#190](https://github.com/parafovea/fovea/pull/190)). Nothing is breaking.
+
+### Fixed
+
+#### Auto-Save No Longer Drops Edits
+
+- A comment-only edit in the video summary editor was never auto-saved: the auto-save change-detection keyed on the summary body alone, so editing only the comment never armed the debounce and the edit was lost on dialog dismiss or navigation. (The 0.5.6 line's predecessor fix folded the comment into the comparison snapshot but did not make the debounce *fire* on it — a passing test masked the gap.) `useAutoSave` now keys change detection on the serialized comparison snapshot's VALUE, so an edit to any compared field — including a sibling field such as the comment — schedules a save (`annotation-tool/src/hooks/data/useAutoSave.ts`, `VideoSummaryEditor.tsx`).
+- Dismissing the summary dialog with Escape or a click outside bypassed the save-on-close flow, dropping edits made in the last second. The dialog now routes Escape/backdrop dismiss through the same `forceSave` flush as the Done button (`annotation-tool/src/components/video/VideoSummaryDialog.tsx`).
+- After a transient save failure, the in-progress guard was released immediately even though a retry was scheduled, allowing a second save to run concurrently with the retry (duplicate writes / last-writer-wins). The guard is now held through the backoff and released only on a terminal outcome (`annotation-tool/src/hooks/data/useAutoSave.ts`).
+- The session-expiry emergency save was a no-op stub that logged but saved nothing. It now flushes every mounted editor's pending edits through a registry of their `forceSave` callbacks (`annotation-tool/src/hooks/auth/useEmergencySave.ts`, `annotation-tool/src/hooks/data/autoSaveRegistry.ts`).
+
+#### Ontology Type Deletion Persists Again
+
+- Deleting an entity, role, event, or relation type from a persona stopped taking effect after 0.5.6: the client deleted by PUTting the ontology with the type omitted, but 0.5.6 changed the ontology write to merge by id, so the omitted type was kept and re-appeared on the next refetch. These deletions now call the dedicated DELETE endpoint (which also cleans up gloss references, world assignments, and annotations) (`annotation-tool/src/store/queries/usePersonas.ts`).
+
+#### Stale Caches Refreshed After Mutations
+
+- Creating and sharing a persona did not refresh the Sent Shares panel; a self-role change in a project or group left the list's own-role field stale; the summary save/generate/delete mutations skipped the batch summaries-lookup cache; and deleting an ontology type (or a persona) left annotation lists and world panels showing entries that no longer exist server-side. Each of these mutations now invalidates the additional query keys it affects (`annotation-tool/src/store/queries/{usePersonas,useProjects,useGroups,useSummaries}.ts`).
+
 ## [0.5.6] - 2026-06-30
 
 The 0.5.6 patch is the first of three audit-driven hardening releases — the backend slice — fixing a batch of authorization, data-integrity, idempotency, and concurrency defects surfaced by a code audit ([#188](https://github.com/parafovea/fovea/pull/188)). Nothing is breaking; the API additively gains `409` conflict responses on duplicate creates and the resource-fork now produces correctly-scoped resources.
