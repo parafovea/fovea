@@ -512,6 +512,17 @@ export class ProjectService {
       throw new NotFoundError('ProjectMembership', targetUserId)
     }
 
+    // Cannot demote the last project_owner — `project_owner` is not an assignable
+    // role (it is set only at creation), so any role change applied to a current
+    // owner is necessarily a demotion that would leave a user-owned project with
+    // no owner. Mirror the last-owner rule enforced on removal.
+    if (targetMembership.role === 'project_owner') {
+      const ownerCount = await this.repository.countMembershipsWithRole(projectId, 'project_owner')
+      if (ownerCount <= 1) {
+        throw new ValidationError('Cannot demote the last project owner')
+      }
+    }
+
     const updated = await this.repository.updateMembershipRole(targetUserId, projectId, role)
 
     // Role change alters the member's effective permissions.

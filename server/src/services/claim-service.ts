@@ -857,32 +857,24 @@ export class ClaimService {
       throw new ForbiddenError('Cannot read this Claim')
     }
 
-    // Filter relations to those whose OTHER endpoint claim is also
-    // readable; otherwise we'd leak existence of claims the caller can't
-    // see via relation payloads.
+    // Filter relations to those whose OTHER endpoint claim is also readable;
+    // otherwise we'd leak the existence and metadata of claims the caller can't
+    // see via relation payloads. The known endpoint (claimId) is already proven
+    // readable above, so an OR over either endpoint would always pass and filter
+    // nothing — each query must require the OPPOSITE endpoint to be accessible.
     const accessibleClaims = accessibleBy(ability, 'read').Claim
 
     const asSource = await this.repository.findClaimRelations({
       AND: [
         { sourceClaimId: claimId },
-        {
-          OR: [
-            { sourceClaim: accessibleClaims },
-            { targetClaim: accessibleClaims },
-          ],
-        },
+        { targetClaim: accessibleClaims },
       ],
     })
 
     const asTarget = await this.repository.findClaimRelations({
       AND: [
         { targetClaimId: claimId },
-        {
-          OR: [
-            { sourceClaim: accessibleClaims },
-            { targetClaim: accessibleClaims },
-          ],
-        },
+        { sourceClaim: accessibleClaims },
       ],
     })
 

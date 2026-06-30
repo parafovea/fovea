@@ -13,7 +13,7 @@
 
 import { PrismaClient, Prisma } from '@prisma/client'
 import { subject } from '@casl/ability'
-import { NotFoundError, ValidationError } from '../../lib/errors.js'
+import { NotFoundError, ValidationError, ForbiddenError } from '../../lib/errors.js'
 import type { AppAbility } from '../../lib/abilities.js'
 import { ImportLine, ImportOptions, ImportResult, Resolution } from '../import-types.js'
 import { SequenceValidator } from '../import-validator.js'
@@ -174,6 +174,32 @@ export class EntityImporter {
         type: 'validation',
         message: 'Ontology missing required personaId field'
       })
+      return
+    }
+
+    // Authorize against the OWNING persona: importing an ontology overwrites that
+    // persona's types, so the caller must be allowed to update it. Without this,
+    // an import line carrying another user's personaId would clobber their
+    // ontology (IDOR). Checked before the write so the denial propagates cleanly
+    // rather than being swallowed by the generic import-error catch below.
+    const owningPersona = await tx.persona.findUnique({ where: { id: personaId } })
+    if (!owningPersona) {
+      result.errors.push({
+        line: line.lineNumber,
+        type: 'validation',
+        message: `Persona ${personaId} not found for ontology import`
+      })
+      return
+    }
+    if (this.ability && !this.ability.can('update', subject('Persona', owningPersona))) {
+      result.errors.push({
+        line: line.lineNumber,
+        type: 'authorization',
+        message: `Not authorized to import an ontology for persona ${personaId}`
+      })
+      if (options.transaction.atomic) {
+        throw new ForbiddenError(`Not authorized to import an ontology for persona ${personaId}`)
+      }
       return
     }
 

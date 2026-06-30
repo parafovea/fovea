@@ -14,6 +14,7 @@ import { apiRequestCounter, apiRequestDuration } from './metrics.js'
 import { config } from './config.js'
 import { prisma } from './lib/prisma.js'
 import { AppError, TooManyRequestsError } from './lib/errors.js'
+import { requireAdmin } from './middleware/auth.js'
 import { recordApiError } from './lib/errorMetrics.js'
 
 /**
@@ -39,7 +40,7 @@ import { recordApiError } from './lib/errorMetrics.js'
  */
 export async function buildApp() {
   const app = Fastify({
-    trustProxy: true,
+    trustProxy: config.server.trustProxy,
     logger: {
       level: config.server.logLevel,
       transport: !config.server.isProduction ? {
@@ -116,7 +117,11 @@ export async function buildApp() {
     }
   })
 
-  // Bull Board queue monitoring
+  // Bull Board queue monitoring. The dashboard exposes job payloads (video and
+  // persona ids, model prompts, error stacks) and Bull Board's mutating actions
+  // (retry/promote/clean/remove), so it MUST NOT be world-readable. Register it
+  // inside an encapsulated child context whose onRequest hook requires admin —
+  // the only authorization that applies to the bull-board plugin's own routes.
   const serverAdapter = new FastifyAdapter()
   createBullBoard({
     queues: [
@@ -126,7 +131,10 @@ export async function buildApp() {
     serverAdapter,
   })
   serverAdapter.setBasePath('/admin/queues')
-  await app.register(serverAdapter.registerPlugin(), { prefix: '/admin/queues' })
+  await app.register(async (queueScope) => {
+    queueScope.addHook('onRequest', requireAdmin)
+    await queueScope.register(serverAdapter.registerPlugin(), { prefix: '/admin/queues' })
+  })
 
   // Decorate Fastify instance with Prisma client
   app.decorate('prisma', prisma)

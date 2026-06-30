@@ -6,6 +6,7 @@ import {
   selectProjectForVideo,
   ManifestValidationError,
 } from './videoManifest.js'
+import { invalidatePermissionCache } from '../middleware/abilities.js'
 
 /**
  * Logger interface for dependency injection
@@ -252,6 +253,14 @@ async function applyVideoManifest(
       })
       result.videosAssigned += toCreate.length
     }
+  }
+
+  // Manifest reconciliation can change group memberships/roles and project
+  // ownership, all of which feed the in-memory CASL ability cache. Clear it so
+  // a downgrade (e.g. group_admin -> group_member) or ownership change takes
+  // effect immediately rather than lingering until restart/re-login.
+  if (result.membersReconciled > 0 || result.projectsUpserted > 0 || result.groupsUpserted > 0) {
+    invalidatePermissionCache()
   }
 
   logger.info({ ...result }, 'Applied corpus manifest')
