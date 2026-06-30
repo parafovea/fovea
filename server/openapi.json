@@ -857,6 +857,24 @@
                 }
               }
             }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       }
@@ -1633,6 +1651,33 @@
                 }
               }
             }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error",
+                    "message"
+                  ],
+                  "properties": {
+                    "error": {
+                      "description": "Machine-readable error code",
+                      "type": "string"
+                    },
+                    "message": {
+                      "description": "Human-readable error message",
+                      "type": "string"
+                    },
+                    "details": {
+                      "description": "Additional error context"
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       },
@@ -1702,6 +1747,33 @@
                   "properties": {
                     "error": {
                       "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error",
+                    "message"
+                  ],
+                  "properties": {
+                    "error": {
+                      "description": "Machine-readable error code",
+                      "type": "string"
+                    },
+                    "message": {
+                      "description": "Human-readable error message",
+                      "type": "string"
+                    },
+                    "details": {
+                      "description": "Additional error context"
                     }
                   }
                 }
