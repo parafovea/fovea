@@ -16,6 +16,120 @@ import { Prisma, PrismaClient } from '@prisma/client'
 function toJson(value: unknown): Prisma.InputJsonValue {
   return JSON.parse(JSON.stringify(value))
 }
+
+/**
+ * Deep-forks a persona (and its ontology) into a new persona owned by
+ * `ownerUserId`.
+ *
+ * The forked persona is a fresh row: it copies the source's name, role,
+ * information need, details, and ontology arrays, but is marked
+ * non-system-generated and visible. The new persona is what lets summary,
+ * claim, and annotation forks land in the forker's own scope instead of
+ * pointing back at the sharer's persona (which would either collide on a
+ * unique constraint or orphan the forked resource under another user).
+ *
+ * @param tx - the Prisma transaction client running the fork
+ * @param sourcePersonaId - UUID of the persona to copy
+ * @param ownerUserId - UUID of the user who will own the forked persona
+ * @returns the id of the newly created persona
+ * @throws {NotFoundError} when the source persona does not exist
+ */
+async function forkPersona(
+  tx: Prisma.TransactionClient,
+  sourcePersonaId: string,
+  ownerUserId: string
+): Promise<{ id: string }> {
+  const source = await tx.persona.findUnique({
+    where: { id: sourcePersonaId },
+    include: { ontology: true },
+  })
+  if (!source) {
+    throw new NotFoundError('Persona', sourcePersonaId)
+  }
+  return tx.persona.create({
+    data: {
+      userId: ownerUserId,
+      name: source.name,
+      role: source.role,
+      informationNeed: source.informationNeed,
+      details: source.details,
+      isSystemGenerated: false,
+      hidden: false,
+      ontology: source.ontology
+        ? {
+            create: {
+              entityTypes: toJson(source.ontology.entityTypes),
+              eventTypes: toJson(source.ontology.eventTypes),
+              roleTypes: toJson(source.ontology.roleTypes),
+              relationTypes: toJson(source.ontology.relationTypes),
+            },
+          }
+        : {
+            create: {
+              entityTypes: [],
+              eventTypes: [],
+              roleTypes: [],
+              relationTypes: [],
+            },
+          },
+    },
+    select: { id: true },
+  })
+}
+
+/**
+ * Deep-forks a video summary into the forker's own scope.
+ *
+ * The source summary's persona belongs to the sharer, and VideoSummary carries
+ * a unique constraint on (videoId, personaId). Reusing the source's personaId
+ * would therefore collide with the source row. This helper forks the persona
+ * first (a new persona owned by `ownerUserId`) and then creates the forked
+ * summary against the NEW personaId, keeping the same videoId; the new
+ * (videoId, personaId) pair is unique, so no collision occurs. The schema
+ * requires personaId, so a summary always has a persona to fork.
+ *
+ * @param tx - the Prisma transaction client running the fork
+ * @param sourceSummaryId - UUID of the summary to copy
+ * @param ownerUserId - UUID of the user who will own the forked summary
+ * @returns the id of the newly created summary
+ * @throws {NotFoundError} when the source summary does not exist
+ */
+async function forkSummary(
+  tx: Prisma.TransactionClient,
+  sourceSummaryId: string,
+  ownerUserId: string
+): Promise<{ id: string }> {
+  const source = await tx.videoSummary.findUnique({
+    where: { id: sourceSummaryId },
+  })
+  if (!source) {
+    throw new NotFoundError('VideoSummary', sourceSummaryId)
+  }
+
+  // A summary's persona belongs to the sharer; fork it so the forked summary
+  // lands in the forker's scope under a NEW personaId, keeping the same videoId.
+  const forkedPersona = await forkPersona(tx, source.personaId, ownerUserId)
+
+  return tx.videoSummary.create({
+    data: {
+      videoId: source.videoId,
+      personaId: forkedPersona.id,
+      summary: toJson(source.summary ?? []),
+      visualAnalysis: source.visualAnalysis,
+      audioTranscript: source.audioTranscript,
+      keyFrames: source.keyFrames ? toJson(source.keyFrames) : Prisma.JsonNull,
+      confidence: source.confidence,
+      transcriptJson: source.transcriptJson
+        ? toJson(source.transcriptJson)
+        : Prisma.JsonNull,
+      audioLanguage: source.audioLanguage,
+      speakerCount: source.speakerCount,
+      comment: source.comment,
+      createdBy: ownerUserId,
+    },
+    select: { id: true },
+  })
+}
 import { trace } from '@opentelemetry/api'
 import { requireAuth } from '@middleware/auth.js'
 import { sharingOperationCounter } from '../metrics.js'
@@ -704,12 +818,20 @@ const sharingRoute: FastifyPluginAsync = async (fastify) => {
             if (!source) {
               throw new NotFoundError('Annotation', share.resourceId)
             }
+            // Type annotations carry a persona (the sharer's); fork it so the
+            // forked annotation points at the forker's own persona. Object
+            // annotations are persona-agnostic (personaId null); keep them null
+            // and just re-own them under the forker.
+            const forkedPersonaId = source.personaId
+              ? (await forkPersona(tx, source.personaId, userId)).id
+              : null
             return tx.annotation.create({
               data: {
                 videoId: source.videoId,
-                personaId: source.personaId,
+                personaId: forkedPersonaId,
                 type: source.type,
                 label: source.label,
+                linkType: source.linkType,
                 frames: toJson(source.frames),
                 confidence: source.confidence,
                 source: source.source,
@@ -719,32 +841,22 @@ const sharingRoute: FastifyPluginAsync = async (fastify) => {
           }
 
           case 'summary': {
-            const source = await tx.videoSummary.findUnique({
-              where: { id: share.resourceId },
+            // Deep-fork: fork the source summary's persona into the forker's
+            // scope, then create the forked summary against the NEW personaId.
+            // Reusing the source's (videoId, personaId) would collide on the
+            // VideoSummary unique constraint, so the persona must be new.
+            const { id: forkedSummaryId } = await forkSummary(
+              tx,
+              share.resourceId,
+              userId
+            )
+            const forked = await tx.videoSummary.findUnique({
+              where: { id: forkedSummaryId },
             })
-            if (!source) {
-              throw new NotFoundError('VideoSummary', share.resourceId)
+            if (!forked) {
+              throw new NotFoundError('VideoSummary', forkedSummaryId)
             }
-            return tx.videoSummary.create({
-              data: {
-                videoId: source.videoId,
-                personaId: source.personaId,
-                summary: toJson(source.summary ?? []),
-                visualAnalysis: source.visualAnalysis,
-                audioTranscript: source.audioTranscript,
-                keyFrames: source.keyFrames
-                  ? toJson(source.keyFrames)
-                  : Prisma.JsonNull,
-                confidence: source.confidence,
-                transcriptJson: source.transcriptJson
-                  ? toJson(source.transcriptJson)
-                  : Prisma.JsonNull,
-                audioLanguage: source.audioLanguage,
-                speakerCount: source.speakerCount,
-                comment: source.comment,
-                createdBy: userId,
-              },
-            })
+            return forked
           }
 
           case 'claim': {
@@ -754,9 +866,21 @@ const sharingRoute: FastifyPluginAsync = async (fastify) => {
             if (!source) {
               throw new NotFoundError('Claim', share.resourceId)
             }
-            return tx.claim.create({
+
+            // Deep-fork: fork the source claim's parent summary into the
+            // forker's scope (which forks its persona), then create the forked
+            // claim under the NEW summaryId. Reusing the sharer's summaryId
+            // would orphan the claim under another user's summary, so it would
+            // never appear in the forker's tree.
+            const { id: forkedSummaryId } = await forkSummary(
+              tx,
+              source.summaryId,
+              userId
+            )
+
+            const forkedClaim = await tx.claim.create({
               data: {
-                summaryId: source.summaryId,
+                summaryId: forkedSummaryId,
                 summaryType: source.summaryType,
                 text: source.text,
                 gloss: toJson(source.gloss),
@@ -788,45 +912,51 @@ const sharingRoute: FastifyPluginAsync = async (fastify) => {
                 createdBy: userId,
               },
             })
+
+            // Rebuild the forked summary's denormalized claimsJson so the
+            // forked claim is visible in the forker's tree. This version forks
+            // a single root claim (no subclaims), so the tree holds exactly one
+            // root with an empty subclaim list, mirroring the shape produced by
+            // ClaimService.updateSummaryClaimsJson.
+            const treeNode = { ...forkedClaim, subclaims: [] }
+            const claimsJson = {
+              version: '1.0',
+              claims: [treeNode],
+              metadata: {
+                extractedAt: new Date().toISOString(),
+                totalClaims: 1,
+                totalSubclaims: 0,
+                maxDepth: 0,
+              },
+            }
+            await tx.videoSummary.update({
+              where: { id: forkedSummaryId },
+              data: {
+                claimsJson: toJson(claimsJson),
+                claimsExtractedAt: new Date(),
+              },
+            })
+
+            return forkedClaim
           }
 
           case 'persona': {
-            const source = await tx.persona.findUnique({
-              where: { id: share.resourceId },
+            // Reuse the shared persona-copy helper so the copy logic lives in
+            // one place, then load the forked persona with its ontology to
+            // return the full resource.
+            const { id: forkedPersonaId } = await forkPersona(
+              tx,
+              share.resourceId,
+              userId
+            )
+            const forked = await tx.persona.findUnique({
+              where: { id: forkedPersonaId },
               include: { ontology: true },
             })
-            if (!source) {
-              throw new NotFoundError('Persona', share.resourceId)
+            if (!forked) {
+              throw new NotFoundError('Persona', forkedPersonaId)
             }
-            return tx.persona.create({
-              data: {
-                userId,
-                name: source.name,
-                role: source.role,
-                informationNeed: source.informationNeed,
-                details: source.details,
-                isSystemGenerated: false,
-                hidden: false,
-                ontology: source.ontology
-                  ? {
-                      create: {
-                        entityTypes: toJson(source.ontology.entityTypes),
-                        eventTypes: toJson(source.ontology.eventTypes),
-                        roleTypes: toJson(source.ontology.roleTypes),
-                        relationTypes: toJson(source.ontology.relationTypes),
-                      },
-                    }
-                  : {
-                      create: {
-                        entityTypes: [],
-                        eventTypes: [],
-                        roleTypes: [],
-                        relationTypes: [],
-                      },
-                    },
-              },
-              include: { ontology: true },
-            })
+            return forked
           }
 
           case 'world_state': {

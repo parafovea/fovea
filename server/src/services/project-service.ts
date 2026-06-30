@@ -1,4 +1,4 @@
-import { Persona, Prisma } from '@prisma/client'
+import { Persona, Prisma, type WorldState as PrismaWorldState } from '@prisma/client'
 import { subject } from '@casl/ability'
 import type { AppAbility } from '../lib/abilities.js'
 import {
@@ -12,6 +12,7 @@ import {
   ProjectRepository,
   AssignableUser,
 } from '../repositories/ProjectRepository.js'
+import { mergeById } from './world-state-service.js'
 
 /** Convert a value to Prisma JSON without type assertions. */
 function toJson(value: unknown): Prisma.InputJsonValue {
@@ -634,20 +635,11 @@ export class ProjectService {
       throw new ForbiddenError('You must be a project member to access world state')
     }
 
-    let worldState = await this.repository.findWorldState(userId, projectId)
-    if (!worldState) {
-      worldState = await this.repository.createWorldState({
-        userId,
-        projectId,
-        entities: [],
-        events: [],
-        times: [],
-        entityCollections: [],
-        eventCollections: [],
-        timeCollections: [],
-        relations: [],
-      })
-    }
+    // Get-or-create on the compound unique (userId, projectId). Upsert keyed on
+    // the unique avoids the find-then-create race: a concurrent first access
+    // would otherwise have both callers miss the find, both create, and the
+    // second hit the @@unique([userId, projectId]) constraint (P2002 -> 500).
+    const worldState = await this.repository.upsertEmptyWorldState(userId, projectId)
 
     return this.mapWorldState(worldState)
   }
@@ -682,17 +674,24 @@ export class ProjectService {
 
     const existing = await this.repository.findWorldState(userId, projectId)
 
+    // Merge each provided array by id (upsert) instead of replacing it, under
+    // optimistic concurrency. Project world state is multi-user (every project
+    // member shares the (userId, projectId) row), so whole-blob replacement
+    // would let concurrent writers clobber each other's additions; the merge
+    // re-runs against the freshly-read row on each retry.
+    const mergeTransform = (current: PrismaWorldState): Prisma.WorldStateUpdateInput => ({
+      entities: input.entities !== undefined ? mergeById(current.entities, input.entities) : undefined,
+      events: input.events !== undefined ? mergeById(current.events, input.events) : undefined,
+      times: input.times !== undefined ? mergeById(current.times, input.times) : undefined,
+      entityCollections: input.entityCollections !== undefined ? mergeById(current.entityCollections, input.entityCollections) : undefined,
+      eventCollections: input.eventCollections !== undefined ? mergeById(current.eventCollections, input.eventCollections) : undefined,
+      timeCollections: input.timeCollections !== undefined ? mergeById(current.timeCollections, input.timeCollections) : undefined,
+      relations: input.relations !== undefined ? mergeById(current.relations, input.relations) : undefined,
+    })
+
     let worldState
     if (existing) {
-      worldState = await this.repository.updateWorldState(userId, projectId, {
-        entities: input.entities !== undefined ? toJson(input.entities) : undefined,
-        events: input.events !== undefined ? toJson(input.events) : undefined,
-        times: input.times !== undefined ? toJson(input.times) : undefined,
-        entityCollections: input.entityCollections !== undefined ? toJson(input.entityCollections) : undefined,
-        eventCollections: input.eventCollections !== undefined ? toJson(input.eventCollections) : undefined,
-        timeCollections: input.timeCollections !== undefined ? toJson(input.timeCollections) : undefined,
-        relations: input.relations !== undefined ? toJson(input.relations) : undefined,
-      })
+      worldState = await this.repository.updateProjectWorldStateOptimistic(userId, projectId, mergeTransform)
     } else {
       worldState = await this.repository.createWorldState({
         userId,

@@ -409,21 +409,76 @@ export class ProjectRepository {
   }
 
   /**
-   * Updates the caller's world state in a project.
+   * Gets-or-creates the caller's empty world state for a project, keyed on the
+   * compound unique (userId, projectId).
+   *
+   * Using upsert (rather than find-then-create) makes concurrent first access
+   * safe: two callers that both miss the row would, with a separate create,
+   * race into the `@@unique([userId, projectId])` constraint (P2002). The
+   * upsert collapses that into a single atomic statement, leaving the existing
+   * row untouched on a hit and creating the empty arrays on a miss.
    *
    * @param userId - the caller
    * @param projectId - Project UUID
-   * @param data - Prisma world state update input
-   * @returns the updated world state
+   * @returns the existing or newly-created world state
    */
-  async updateWorldState(
+  async upsertEmptyWorldState(userId: string, projectId: string): Promise<WorldState> {
+    return this.prisma.worldState.upsert({
+      where: { userId_projectId: { userId, projectId } },
+      create: {
+        userId,
+        projectId,
+        entities: [],
+        events: [],
+        times: [],
+        entityCollections: [],
+        eventCollections: [],
+        timeCollections: [],
+        relations: [],
+      },
+      update: {},
+    })
+  }
+
+  /**
+   * Applies an optimistic-concurrency update to the caller's project world
+   * state.
+   *
+   * Reads the current (userId, projectId) row, lets `transform` compute the new
+   * column values from it, then writes them guarded by the row's `updatedAt`.
+   * If a concurrent writer committed first the guard misses (count 0) and we
+   * retry against the freshly-read row, so both writes land instead of one
+   * silently clobbering the other. Project world state is multi-user (every
+   * member shares the row), which makes this guard essential for the whole-blob
+   * PUT to be a safe per-id merge under concurrent writers (the transform
+   * re-runs on fresh state each attempt).
+   *
+   * @param userId - the caller
+   * @param projectId - Project UUID
+   * @param transform - computes the Prisma update input from the current row
+   * @returns the updated world state
+   * @throws when no project row exists or the write keeps conflicting
+   */
+  async updateProjectWorldStateOptimistic(
     userId: string,
     projectId: string,
-    data: Prisma.WorldStateUpdateInput
+    transform: (current: WorldState) => Prisma.WorldStateUpdateInput,
   ): Promise<WorldState> {
-    return this.prisma.worldState.update({
-      where: { userId_projectId: { userId, projectId } },
-      data,
-    })
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const current = await this.prisma.worldState.findUnique({
+        where: { userId_projectId: { userId, projectId } },
+      })
+      if (!current) {
+        throw new Error('No project world state to update')
+      }
+      const result = await this.prisma.worldState.updateMany({
+        where: { userId, projectId, updatedAt: current.updatedAt },
+        data: { ...transform(current), updatedAt: new Date() },
+      })
+      if (result.count === 1) {
+        return this.prisma.worldState.findUniqueOrThrow({ where: { id: current.id } })
+      }
+    }
+    throw new Error('Project world state update conflicted after retries')
   }
 }

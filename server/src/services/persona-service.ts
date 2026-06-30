@@ -18,6 +18,7 @@ import {
   countEventInterpretations
 } from '../lib/reference-cleanup.js'
 import { asTypesWithGloss, asEntities, asEvents } from '../lib/prisma-json.js'
+import { mergeById } from '../services/world-state-service.js'
 
 /**
  * Converts a typed array to Prisma.InputJsonValue for storage in JSON columns.
@@ -505,12 +506,17 @@ export class PersonaService {
       throw new ForbiddenError('Cannot update this Persona')
     }
 
-    const updated = await this.repository.updateOntology(id, {
-      entityTypes: input.entities !== undefined ? (input.entities as Prisma.InputJsonValue) : (persona.ontology.entityTypes ?? undefined),
-      roleTypes: input.roles !== undefined ? (input.roles as Prisma.InputJsonValue) : (persona.ontology.roleTypes ?? undefined),
-      eventTypes: input.events !== undefined ? (input.events as Prisma.InputJsonValue) : (persona.ontology.eventTypes ?? undefined),
-      relationTypes: input.relationTypes !== undefined ? (input.relationTypes as Prisma.InputJsonValue) : (persona.ontology.relationTypes ?? undefined)
-    })
+    // Merge each provided array by id (upsert) instead of replacing it, under
+    // optimistic concurrency, so concurrent writers (rapid edits, an AI
+    // augmentation, or a second tab) cannot clobber each other's additions.
+    // Undefined fields are left untouched. Removals go through the explicit
+    // type-deletion routes, never omission.
+    const updated = await this.repository.updateOntologyOptimistic(id, (current) => ({
+      entityTypes: input.entities !== undefined ? mergeById(current.entityTypes, input.entities) : undefined,
+      roleTypes: input.roles !== undefined ? mergeById(current.roleTypes, input.roles) : undefined,
+      eventTypes: input.events !== undefined ? mergeById(current.eventTypes, input.events) : undefined,
+      relationTypes: input.relationTypes !== undefined ? mergeById(current.relationTypes, input.relationTypes) : undefined,
+    }))
 
     return this.mapOntologyResponse(updated)
   }
