@@ -5,6 +5,7 @@ This module contains tests for model loading, unloading, memory management,
 and configuration validation.
 """
 
+import asyncio
 import tempfile
 from pathlib import Path
 from unittest.mock import patch
@@ -412,6 +413,35 @@ class TestModelManager:
         """Test loading model with invalid task type."""
         with pytest.raises(ValueError, match="Invalid task type"):
             await model_manager.load_model("invalid_task")
+
+    @pytest.mark.asyncio
+    async def test_concurrent_load_of_same_task_loads_once(self, model_manager):
+        """Two concurrent loads of the same not-yet-loaded task must serialize on
+        the model lock and re-check after acquiring, so the underlying model is
+        loaded exactly once and both callers receive the same instance. Guards the
+        load-model TOCTOU (without the lock + re-check, a second loader could
+        double-load and risk OOM)."""
+        load_calls = 0
+
+        def fake_impl(task_type, model_config):
+            nonlocal load_calls
+            load_calls += 1
+            return {"model": f"instance-{load_calls}"}
+
+        with (
+            patch.object(model_manager, "_load_model_implementation", side_effect=fake_impl),
+            patch.object(model_manager, "check_memory_available", return_value=True),
+            patch("torch.cuda.is_available", return_value=True),
+            patch("torch.cuda.memory_allocated", return_value=0),
+        ):
+            first, second = await asyncio.gather(
+                model_manager.load_model("video_summarization"),
+                model_manager.load_model("video_summarization"),
+            )
+
+        assert load_calls == 1
+        assert first is second
+        assert model_manager.loaded_models["video_summarization"] is first
 
     @pytest.mark.asyncio
     async def test_load_model_with_eviction(self, model_manager):

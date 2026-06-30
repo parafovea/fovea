@@ -117,31 +117,39 @@ async def detect_objects(
             )
 
             cap = cv2.VideoCapture(str(video_path))
-            fps = cap.get(cv2.CAP_PROP_FPS)
-            total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-
-            frame_numbers = list(request.frame_numbers)
-            if not frame_numbers:
-                frame_numbers = [0, total_frames // 2, max(total_frames - 1, 0)]
-
-            frame_inputs: list[DetectObjectsFrameInput] = []
-            for frame_num in frame_numbers:
-                if frame_num >= total_frames:
-                    continue
-                cap.set(cv2.CAP_PROP_POS_FRAMES, frame_num)
-                ret, frame = cap.read()
-                if not ret:
-                    continue
-                frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB).astype(np.uint8)
-                timestamp = frame_num / fps if fps > 0 else 0.0
-                frame_inputs.append(
-                    DetectObjectsFrameInput(
-                        frame_number=frame_num,
-                        timestamp=timestamp,
-                        image=frame_rgb,
+            try:
+                if not cap.isOpened():
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Failed to open video for decoding: {request.video_id}",
                     )
-                )
-            cap.release()
+
+                fps = cap.get(cv2.CAP_PROP_FPS)
+                total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+
+                frame_numbers = list(request.frame_numbers)
+                if not frame_numbers:
+                    frame_numbers = [0, total_frames // 2, max(total_frames - 1, 0)]
+
+                frame_inputs: list[DetectObjectsFrameInput] = []
+                for frame_num in frame_numbers:
+                    if frame_num >= total_frames:
+                        continue
+                    cap.set(cv2.CAP_PROP_POS_FRAMES, frame_num)
+                    ret, frame = cap.read()
+                    if not ret:
+                        continue
+                    frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB).astype(np.uint8)
+                    timestamp = frame_num / fps if fps > 0 else 0.0
+                    frame_inputs.append(
+                        DetectObjectsFrameInput(
+                            frame_number=frame_num,
+                            timestamp=timestamp,
+                            image=frame_rgb,
+                        )
+                    )
+            finally:
+                cap.release()
 
             dto_request = detection_request_schema_to_dto(request, video_path)
             execution_input = DetectObjectsExecutionInput(request=dto_request, frames=frame_inputs)

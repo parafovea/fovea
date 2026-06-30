@@ -5,6 +5,19 @@ All notable changes to the Fovea project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.8] - 2026-06-30
+
+The 0.5.8 patch is the third and final audit-driven hardening release — the model-service slice — fixing resource and concurrency defects in the Python inference service ([#192](https://github.com/parafovea/fovea/pull/192)). Nothing is breaking.
+
+### Fixed
+
+- The `/detection/detect` and `/tracking/track` routes leaked an OpenCV `VideoCapture` handle (and decoder memory) whenever a frame read or mask decode failed, since the capture was released only on the success path. The capture is now released in a `try/finally` on every exit path, and an open failure raises a clean error (`model-service/.../routes/detection.py`, `tracking.py`).
+- Synchronous VLM, transcription, and diarization inference ran on the asyncio event loop, so a single request froze all concurrent requests, the `/health` probe, and telemetry export until it finished. The blocking calls are now offloaded with `asyncio.to_thread` (`model-service/.../use_cases/summarize_video.py`, `routes/transcribe.py`, `routes/diarize.py`).
+- ffprobe/ffmpeg subprocesses were awaited with no timeout, so a malformed or slow media file could wedge a request indefinitely and leak the child process. These calls now go through a shared helper that bounds the wait and kills and reaps the process on timeout (`model-service/.../services/audio_processing.py`).
+- `ModelManager` had no concurrency guard, so two requests loading the same not-yet-loaded model could both pass the "already loaded?" check and double-load (risking OOM). Load, unload, and eviction are now serialized by a reentrant model lock with a post-acquire re-check (`model-service/.../services/model_management.py`).
+- Id-based video resolution hardcoded `/videos`, returning 404 on any deployment whose video volume is mounted elsewhere; it now reads the configured `video_data_root` (`model-service/.../use_cases/summarize_video.py`).
+- The admin reconfigure token is now compared with `hmac.compare_digest` (constant-time) instead of `!=` (`model-service/.../routes/admin.py`).
+
 ## [0.5.7] - 2026-06-30
 
 The 0.5.7 patch is the second of three audit-driven hardening releases — the frontend slice — fixing data-loss and stale-cache defects in the annotation UI ([#190](https://github.com/parafovea/fovea/pull/190)). Nothing is breaking.

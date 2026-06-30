@@ -9,6 +9,7 @@ the parsed result and on the argument list the helper built.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import subprocess
 from typing import Any
@@ -19,6 +20,7 @@ import pytest
 
 from src.application.services.audio_processing import (
     AudioProcessingError,
+    _communicate_with_timeout,
     check_ffmpeg_available,
     check_ffprobe_available,
     chunk_audio_file,
@@ -41,6 +43,35 @@ def _fake_process(
     proc.returncode = returncode
     proc.communicate = AsyncMock(return_value=(stdout, stderr))
     return proc
+
+
+@pytest.mark.asyncio
+async def test_communicate_with_timeout_kills_hung_process():
+    """A subprocess whose communicate() never returns must be killed and reaped,
+    and surface AudioProcessingError, rather than hanging the request forever."""
+    proc = MagicMock()
+
+    async def never_returns() -> tuple[bytes, bytes]:
+        await asyncio.sleep(10)
+        return (b"", b"")
+
+    proc.communicate = never_returns
+    proc.kill = MagicMock()
+    proc.wait = AsyncMock()
+
+    with pytest.raises(AudioProcessingError, match="timed out"):
+        await _communicate_with_timeout(proc, timeout=0.01)
+
+    proc.kill.assert_called_once()
+    proc.wait.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_communicate_with_timeout_returns_output_when_fast():
+    """When the subprocess finishes within the timeout, its output is returned."""
+    proc = MagicMock()
+    proc.communicate = AsyncMock(return_value=(b"out", b"err"))
+    assert await _communicate_with_timeout(proc, timeout=5) == (b"out", b"err")
 
 
 @pytest.fixture
