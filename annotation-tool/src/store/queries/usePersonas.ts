@@ -533,19 +533,11 @@ export function useDeleteEntityFromPersona() {
         updatedAt: new Date().toISOString(),
       }
 
-      const response = await fetch(`/api/personas/${personaId}/ontology`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          entities: updatedOntology.entities,
-          roles: updatedOntology.roles,
-          events: updatedOntology.events,
-          relationTypes: updatedOntology.relationTypes,
-          relations: updatedOntology.relations,
-        }),
-      })
-      if (!response.ok) throw new Error('Failed to delete entity')
+      // Delete via the dedicated endpoint. A PUT that merely omits the type is a
+      // no-op now that the per-persona ontology PUT merges by id (the omitted
+      // type would be kept and re-seeded on the next refetch), so the removal
+      // must be explicit; this also performs gloss/world/annotation cleanup.
+      await deleteTypeGracefully(personaId, 'entities', entityId)
 
       return { personaId, ontology: updatedOntology }
     },
@@ -660,19 +652,8 @@ export function useDeleteRoleFromPersona() {
         updatedAt: new Date().toISOString(),
       }
 
-      const response = await fetch(`/api/personas/${personaId}/ontology`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          entities: updatedOntology.entities,
-          roles: updatedOntology.roles,
-          events: updatedOntology.events,
-          relationTypes: updatedOntology.relationTypes,
-          relations: updatedOntology.relations,
-        }),
-      })
-      if (!response.ok) throw new Error('Failed to delete role')
+      // Explicit delete — an omission PUT is now a no-op under merge-by-id.
+      await deleteTypeGracefully(personaId, 'roles', roleId)
 
       return { personaId, ontology: updatedOntology }
     },
@@ -787,19 +768,8 @@ export function useDeleteEventFromPersona() {
         updatedAt: new Date().toISOString(),
       }
 
-      const response = await fetch(`/api/personas/${personaId}/ontology`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          entities: updatedOntology.entities,
-          roles: updatedOntology.roles,
-          events: updatedOntology.events,
-          relationTypes: updatedOntology.relationTypes,
-          relations: updatedOntology.relations,
-        }),
-      })
-      if (!response.ok) throw new Error('Failed to delete event')
+      // Explicit delete — an omission PUT is now a no-op under merge-by-id.
+      await deleteTypeGracefully(personaId, 'events', eventId)
 
       return { personaId, ontology: updatedOntology }
     },
@@ -916,19 +886,8 @@ export function useDeleteRelationTypeFromPersona() {
         updatedAt: new Date().toISOString(),
       }
 
-      const response = await fetch(`/api/personas/${personaId}/ontology`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          entities: updatedOntology.entities,
-          roles: updatedOntology.roles,
-          events: updatedOntology.events,
-          relationTypes: updatedOntology.relationTypes,
-          relations: updatedOntology.relations,
-        }),
-      })
-      if (!response.ok) throw new Error('Failed to delete relation type')
+      // Explicit delete — an omission PUT is now a no-op under merge-by-id.
+      await deleteTypeGracefully(personaId, 'relation-types', relationTypeId)
 
       return { personaId, ontology: updatedOntology }
     },
