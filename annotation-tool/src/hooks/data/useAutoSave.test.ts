@@ -222,6 +222,54 @@ describe('useAutoSave', () => {
     })
   })
 
+  describe('change detection', () => {
+    // Regression guard for the comment-autosave bug: a field folded into
+    // getComparisonSnapshot but living OUTSIDE `data` (e.g. a sibling comment)
+    // must still schedule a save when it changes. The debounce effect keys on
+    // the serialized snapshot, not on `data`, so a snapshot-only change re-arms
+    // it. Fails on the prior code, which keyed the effect on `data` alone.
+    it('schedules a save when only a getComparisonSnapshot field changes (not `data`)', async () => {
+      vi.useFakeTimers()
+      try {
+        const onSave = vi.fn().mockResolvedValue(undefined)
+        // Stable `data` reference across renders, so only the comment changes.
+        const data = { summary: ['unchanged'] }
+
+        const { rerender } = renderHook(
+          ({ comment }: { comment: string }) =>
+            useAutoSave({
+              data,
+              isEnabled: true,
+              onSave,
+              debounceMs: 100,
+              periodicMs: 0,
+              entityType: 'summary',
+              getComparisonSnapshot: (d) => ({ d, comment }),
+            }),
+          { initialProps: { comment: 'first' } },
+        )
+
+        // Flush the initial mount save so it cannot mask the change below.
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(150)
+        })
+        onSave.mockClear()
+
+        // Change ONLY the comment; `data` is the same object reference.
+        rerender({ comment: 'edited' })
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(150)
+        })
+
+        expect(onSave).toHaveBeenCalledTimes(1)
+        // And it persists with the latest comment in the saved snapshot.
+        expect(onSave).toHaveBeenLastCalledWith(data)
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+  })
+
   describe('error handling', () => {
     it('sets error status when save fails after all retries', async () => {
       const error = new Error('Save failed')

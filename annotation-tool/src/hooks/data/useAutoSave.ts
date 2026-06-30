@@ -10,6 +10,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { logWarning, logCritical } from '@services/errorLogging'
 import { withSpan } from '@telemetry/tracing'
+import { registerAutoSaveFlush } from './autoSaveRegistry'
 
 /**
  * Status of the auto-save operation.
@@ -148,20 +149,27 @@ export function useAutoSave<T>({
 
   // Serialize `data` to the string used for change detection. When a caller
   // supplies getComparisonSnapshot, serialize the snapshot it derives (which
-  // strips server-managed fields the editor never writes); otherwise fall
-  // back to serializing the whole `data`. Held in a ref for the same reason
-  // performSave is (see performSaveRef below): the caller's
-  // getComparisonSnapshot closure can change identity on every render, and we
-  // must not let that churn re-arm the debounce/periodic effects.
+  // strips server-managed fields the editor never writes, and can fold in a
+  // sibling field such as a comment); otherwise fall back to serializing the
+  // whole `data`. The closure is held in a ref and updated DURING render (not in
+  // an effect) so the change key computed below reflects the latest snapshot
+  // this same render — otherwise an edit to a getComparisonSnapshot-only field
+  // (e.g. a comment that lives outside `data`) would lag a render and the
+  // debounce effect, keyed on the change key's string VALUE, would never re-run.
   const getComparisonSnapshotRef = useRef(getComparisonSnapshot)
-  useEffect(() => {
-    getComparisonSnapshotRef.current = getComparisonSnapshot
-  }, [getComparisonSnapshot])
+  getComparisonSnapshotRef.current = getComparisonSnapshot
 
   const serialize = useCallback((value: T): string => {
     const snapshot = getComparisonSnapshotRef.current
     return JSON.stringify(snapshot ? snapshot(value) : value)
   }, [])
+
+  // Value-based change key: the serialized comparison snapshot of the current
+  // data. Because it is a string compared by VALUE, using it as the debounce
+  // effect's dependency re-arms a save on any change to a compared field
+  // (including getComparisonSnapshot-only fields) without churning every render
+  // when the snapshot closure's identity changes.
+  const changeKey = serialize(data)
 
   // Keep the data ref pointed at the latest `data` seen on render. Done during
   // render (not in an effect) so a forceSave fired from the same event handler
@@ -195,6 +203,12 @@ export function useAutoSave<T>({
       saveInProgressRef.current = true
       setSaveStatus(attempt > 0 ? 'retrying' : 'saving')
       setRetryCount(attempt)
+
+      // When a retry is scheduled below, the in-progress guard must stay held
+      // through the backoff delay so a debounce/periodic tick cannot start a
+      // second save concurrently with the pending retry (duplicate writes /
+      // last-writer-wins). The retry timeout releases and re-runs.
+      let retryScheduled = false
 
       try {
         await withSpan(
@@ -234,6 +248,7 @@ export function useAutoSave<T>({
         } else if (attempt < maxRetries - 1) {
           // Exponential backoff: 1s, 2s, 4s
           const delay = Math.pow(2, attempt) * 1000
+          retryScheduled = true
           logWarning(`${entityType} save failed, retrying`, {
             entityId,
             retryCount: attempt + 1,
@@ -241,6 +256,8 @@ export function useAutoSave<T>({
           })
 
           setTimeout(() => {
+            // Release and re-run synchronously: performSave re-acquires the guard
+            // before its first await, so no concurrent save can slip into the gap.
             saveInProgressRef.current = false
             performSave(attempt + 1, force, dataOverride)
           }, delay)
@@ -253,7 +270,9 @@ export function useAutoSave<T>({
           })
         }
       } finally {
-        if (attempt === 0 || attempt >= maxRetries - 1) {
+        // Release the guard on a terminal outcome (success or final failure),
+        // but NOT when a retry is pending — the retry timeout owns the release.
+        if (!retryScheduled) {
           saveInProgressRef.current = false
         }
       }
@@ -287,13 +306,23 @@ export function useAutoSave<T>({
     await performSaveRef.current(0, true, dataOverride)
   }, [])
 
-  // Debounced save on data change. Deps deliberately exclude
-  // performSave (held via ref above) — see the ref comment.
+  // Register this editor's flush so a global handler (emergency save on session
+  // expiry) can persist its pending edits. forceSave is stable, so this runs
+  // once; the cleanup deregisters on unmount.
+  useEffect(() => {
+    if (!isEnabled) return
+    return registerAutoSaveFlush(() => forceSave())
+  }, [isEnabled, forceSave])
+
+  // Debounced save on change. Keyed on `changeKey` (the serialized comparison
+  // snapshot) rather than `data` so an edit to ANY compared field — including a
+  // getComparisonSnapshot-only field such as a comment that lives outside `data`
+  // — re-arms the save. Deps deliberately exclude performSave (held via ref) —
+  // see the ref comment.
   useEffect(() => {
     if (!isEnabled) return
 
-    const serialized = serialize(data)
-    if (serialized !== lastSavedDataRef.current) {
+    if (changeKey !== lastSavedDataRef.current) {
       setPendingChanges(true)
     }
 
@@ -310,7 +339,7 @@ export function useAutoSave<T>({
         clearTimeout(debounceTimerRef.current)
       }
     }
-  }, [data, isEnabled, debounceMs, serialize])
+  }, [changeKey, isEnabled, debounceMs])
 
   // Periodic backup save. performSave intentionally NOT in deps for
   // the same reason — periodicTimer should NOT re-arm every render.
