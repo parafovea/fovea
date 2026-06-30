@@ -20,6 +20,7 @@ and otherwise ignored.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import time
@@ -144,7 +145,9 @@ async def diarize(
 
     start = time.time()
     try:
-        result: DiarizationResult = model.diarize(audio_path_real)
+        # Diarization is a blocking CPU/GPU call; offload to a worker
+        # thread so it does not stall the event loop.
+        result: DiarizationResult = await asyncio.to_thread(model.diarize, audio_path_real)
     except Exception as exc:
         logger.exception("Diarization failed")
         raise HTTPException(status_code=500, detail=f"Diarization failed: {exc}") from exc

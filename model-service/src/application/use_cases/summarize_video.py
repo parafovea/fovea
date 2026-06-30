@@ -8,6 +8,7 @@ composition root.
 
 from __future__ import annotations
 
+import asyncio
 import io
 import logging
 import os
@@ -287,14 +288,18 @@ class SummarizeVideoUseCase:
                 ) = await self._maybe_transcribe(request, video_path, span)
 
                 logger.info(f"Loading VLM model: {model_name}")
-                self._vlm.load()
+                # VLM load/generate/unload are blocking CPU/GPU calls; run
+                # them off the event loop so concurrent requests, /health,
+                # and OTLP export are not starved.
+                await asyncio.to_thread(self._vlm.load)
 
                 try:
                     prompt = get_persona_prompt(persona_role, information_need)
                     logger.info(f"Generating summary with {len(images)} frames")
                     visual_start_time = time.time()
                     overrides = request.generation_overrides
-                    reasoned = self._vlm.generate_reasoned_from_images(
+                    reasoned = await asyncio.to_thread(
+                        self._vlm.generate_reasoned_from_images,
                         images,
                         prompt,
                         max_tokens=(
@@ -361,7 +366,7 @@ class SummarizeVideoUseCase:
                         reasoning_trace=reasoned.thinking,
                     )
                 finally:
-                    self._vlm.unload()
+                    await asyncio.to_thread(self._vlm.unload)
                     logger.info("VLM model unloaded")
 
             except SummarizationError:
@@ -700,21 +705,28 @@ def _safe(value: str) -> str:
     return str(value).replace("\r", "").replace("\n", "")
 
 
-def get_video_path_for_id(video_id: str, data_dir: str = "/videos") -> str | None:
+def get_video_path_for_id(video_id: str, data_dir: str | None = None) -> str | None:
     """Resolve video ID to file path.
 
     Parameters
     ----------
     video_id : str
         Video identifier from request.
-    data_dir : str
-        Base directory containing video files.
+    data_dir : str | None
+        Base directory containing video files. When None, the configured
+        ``video_data_root`` setting is used so deployments whose videos do
+        not live at ``/videos`` resolve correctly.
 
     Returns
     -------
     str | None
         Full path to video file, or None if not found.
     """
+    if data_dir is None:
+        from src.infrastructure.config.settings import get_settings
+
+        data_dir = str(get_settings().video_data_root)
+
     # CodeQL sanitizer: ``re.fullmatch`` with a constant pattern restricts
     # ``video_id`` to a safe character set. The matched branch clears the
     # taint tracker's path-injection flag.
