@@ -30,6 +30,7 @@ import {
   ForbiddenError,
   ErrorResponseSchema,
 } from '@lib/errors.js'
+import { mergeById } from '../services/world-state-service.js'
 
 const tracer = trace.getTracer('fovea-rbac')
 
@@ -387,16 +388,45 @@ const sharingRoute: FastifyPluginAsync = async (fastify) => {
         }
       }
 
-      const share = await fastify.prisma.resourceShare.create({
-        data: {
-          resourceType,
-          resourceId,
-          sharedByUserId: userId,
-          sharedWithUserId: sharedWithUserId || null,
-          sharedWithGroupId: sharedWithGroupId || null,
-          permissionLevel,
-        },
-      })
+      // Sharing the same resource to the same target is idempotent: re-issuing a
+      // grant must not accumulate duplicate ResourceShare rows (which would make
+      // /received and /sent list the resource twice, leave it shared after one is
+      // revoked, and double-fire ability invalidation). Reuse an existing grant,
+      // updating only its permission level; a partial unique index backstops the
+      // concurrent-create race below.
+      const shareIdentity = {
+        resourceType,
+        resourceId,
+        sharedByUserId: userId,
+        sharedWithUserId: sharedWithUserId || null,
+        sharedWithGroupId: sharedWithGroupId || null,
+      }
+      const existingShare = await fastify.prisma.resourceShare.findFirst({ where: shareIdentity })
+      let share
+      if (existingShare) {
+        share = existingShare.permissionLevel === permissionLevel
+          ? existingShare
+          : await fastify.prisma.resourceShare.update({
+              where: { id: existingShare.id },
+              data: { permissionLevel },
+            })
+      } else {
+        try {
+          share = await fastify.prisma.resourceShare.create({
+            data: { ...shareIdentity, permissionLevel },
+          })
+        } catch (error) {
+          // Lost a concurrent create race against the partial unique index — the
+          // other writer's row is the canonical grant; re-read and return it.
+          if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+            const winner = await fastify.prisma.resourceShare.findFirst({ where: shareIdentity })
+            if (!winner) throw error
+            share = winner
+          } else {
+            throw error
+          }
+        }
+      }
 
       // Invalidate ability caches for the new grantee so access takes effect
       // immediately. Caches are keyed per user, so we expand group targets.
@@ -805,6 +835,27 @@ const sharingRoute: FastifyPluginAsync = async (fastify) => {
             })
             if (!source) {
               throw new NotFoundError('WorldState', share.resourceId)
+            }
+            // A user has exactly one personal world state (projectId NULL), so a
+            // fork cannot mint a second one — it would collide on the personal
+            // partial unique index. Merge the shared content into the forker's
+            // existing personal row by id (additive); create it only if absent.
+            const existing = await tx.worldState.findFirst({
+              where: { userId, projectId: null },
+            })
+            if (existing) {
+              return tx.worldState.update({
+                where: { id: existing.id },
+                data: {
+                  entities: mergeById(existing.entities, source.entities as unknown[]),
+                  events: mergeById(existing.events, source.events as unknown[]),
+                  times: mergeById(existing.times, source.times as unknown[]),
+                  entityCollections: mergeById(existing.entityCollections, source.entityCollections as unknown[]),
+                  eventCollections: mergeById(existing.eventCollections, source.eventCollections as unknown[]),
+                  timeCollections: mergeById(existing.timeCollections, source.timeCollections as unknown[]),
+                  relations: mergeById(existing.relations, source.relations as unknown[]),
+                },
+              })
             }
             return tx.worldState.create({
               data: {

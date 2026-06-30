@@ -213,17 +213,27 @@ export class ProjectService {
       throw new ForbiddenError('You do not have permission to create this project')
     }
 
-    const created = await this.repository.createWithOwnerMembership(
-      {
-        name: input.name,
-        description: input.description ?? null,
-        slug: input.slug,
-        ownerUserId: ownerGroupId ? null : userId,
-        ownerGroupId,
-        createdBy: userId,
-      },
-      userId
-    )
+    let created
+    try {
+      created = await this.repository.createWithOwnerMembership(
+        {
+          name: input.name,
+          description: input.description ?? null,
+          slug: input.slug,
+          ownerUserId: ownerGroupId ? null : userId,
+          ownerGroupId,
+          createdBy: userId,
+        },
+        userId
+      )
+    } catch (error) {
+      // The slug pre-check narrows the common case, but a concurrent create with
+      // the same slug can still race past it — surface 409, not 500.
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        throw new ConflictError(`Project slug "${input.slug}" is already taken`)
+      }
+      throw error
+    }
 
     // Creator is now a project_owner; their abilities have changed.
     invalidateUserAbilities(userId)

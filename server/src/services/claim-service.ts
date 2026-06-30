@@ -817,17 +817,32 @@ export class ClaimService {
       }
     }
 
-    // Create relation; stamp createdBy from the authenticated session.
-    return this.repository.createClaimRelation({
-      sourceClaimId: claimId,
-      targetClaimId,
-      relationTypeId,
-      sourceSpans: (sourceSpans || undefined) as unknown as Prisma.InputJsonValue | undefined,
-      targetSpans: (targetSpans || undefined) as unknown as Prisma.InputJsonValue | undefined,
-      confidence,
-      notes,
-      createdBy: userId,
-    })
+    // Create relation; stamp createdBy from the authenticated session. The
+    // (sourceClaimId, targetClaimId, relationTypeId) triple is unique, so a
+    // retry or double-submit is idempotent: on a duplicate, return the existing
+    // relation rather than minting a second identical row.
+    try {
+      return await this.repository.createClaimRelation({
+        sourceClaimId: claimId,
+        targetClaimId,
+        relationTypeId,
+        sourceSpans: (sourceSpans || undefined) as unknown as Prisma.InputJsonValue | undefined,
+        targetSpans: (targetSpans || undefined) as unknown as Prisma.InputJsonValue | undefined,
+        confidence,
+        notes,
+        createdBy: userId,
+      })
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        const existing = await this.repository.findClaimRelations({
+          sourceClaimId: claimId,
+          targetClaimId,
+          relationTypeId,
+        })
+        if (existing[0]) return existing[0]
+      }
+      throw error
+    }
   }
 
   /**

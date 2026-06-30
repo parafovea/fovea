@@ -37,7 +37,7 @@ function toJson(value: unknown): Prisma.InputJsonValue {
  * drops it — the merge re-runs against the freshly-read row via optimistic
  * concurrency. Removals go through the explicit DELETE routes, never omission.
  */
-function mergeById(existing: Prisma.JsonValue | null | undefined, incoming: unknown[]): Prisma.InputJsonValue {
+export function mergeById(existing: Prisma.JsonValue | null | undefined, incoming: unknown[]): Prisma.InputJsonValue {
   const byId = new Map<string, unknown>()
   const order: string[] = []
   const add = (item: unknown) => {
@@ -218,16 +218,29 @@ export class WorldStateService {
           throw new ForbiddenError('Cannot create this WorldState')
         }
       }
-      worldState = await this.repository.createWorldState({
-        userId,
-        entities: [],
-        events: [],
-        times: [],
-        entityCollections: [],
-        eventCollections: [],
-        timeCollections: [],
-        relations: []
-      })
+      try {
+        worldState = await this.repository.createWorldState({
+          userId,
+          entities: [],
+          events: [],
+          times: [],
+          entityCollections: [],
+          eventCollections: [],
+          timeCollections: [],
+          relations: []
+        })
+      } catch (error) {
+        // Concurrent first access can race two creates; the personal-row partial
+        // unique index makes the loser hit P2002. Re-read the winner instead of
+        // 500ing or (pre-index) leaving the user with two personal rows.
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+          const winner = await this.repository.findPersonalWorldState(userId)
+          if (!winner) throw error
+          worldState = winner
+        } else {
+          throw error
+        }
+      }
     }
 
     return this.mapResponse(worldState)
@@ -255,23 +268,25 @@ export class WorldStateService {
     // row before mutating it.
     const existing = await this.repository.findPersonalWorldState(userId)
 
+    // Merge each provided array by id (upsert) instead of replacing it, under
+    // optimistic concurrency, so concurrent writers (rapid edits, a Wikidata
+    // import, or a second tab) cannot clobber each other's additions.
+    const mergeTransform = (current: PrismaWorldState) => ({
+      entities: input.entities !== undefined ? mergeById(current.entities, input.entities) : undefined,
+      events: input.events !== undefined ? mergeById(current.events, input.events) : undefined,
+      times: input.times !== undefined ? mergeById(current.times, input.times) : undefined,
+      entityCollections: input.entityCollections !== undefined ? mergeById(current.entityCollections, input.entityCollections) : undefined,
+      eventCollections: input.eventCollections !== undefined ? mergeById(current.eventCollections, input.eventCollections) : undefined,
+      timeCollections: input.timeCollections !== undefined ? mergeById(current.timeCollections, input.timeCollections) : undefined,
+      relations: input.relations !== undefined ? mergeById(current.relations, input.relations) : undefined,
+    })
+
     let worldState
     if (existing) {
       if (this.ability && !this.ability.can('update', subject('WorldState', existing))) {
         throw new ForbiddenError('Cannot update this WorldState')
       }
-      // Merge each provided array by id (upsert) instead of replacing it, under
-      // optimistic concurrency, so concurrent writers (rapid edits, a Wikidata
-      // import, or a second tab) cannot clobber each other's additions.
-      worldState = await this.repository.updatePersonalWorldStateOptimistic(userId, (current) => ({
-        entities: input.entities !== undefined ? mergeById(current.entities, input.entities) : undefined,
-        events: input.events !== undefined ? mergeById(current.events, input.events) : undefined,
-        times: input.times !== undefined ? mergeById(current.times, input.times) : undefined,
-        entityCollections: input.entityCollections !== undefined ? mergeById(current.entityCollections, input.entityCollections) : undefined,
-        eventCollections: input.eventCollections !== undefined ? mergeById(current.eventCollections, input.eventCollections) : undefined,
-        timeCollections: input.timeCollections !== undefined ? mergeById(current.timeCollections, input.timeCollections) : undefined,
-        relations: input.relations !== undefined ? mergeById(current.relations, input.relations) : undefined,
-      }))
+      worldState = await this.repository.updatePersonalWorldStateOptimistic(userId, mergeTransform)
     } else {
       if (this.ability) {
         const candidate = subject('WorldState', { userId, projectId: null })
@@ -279,16 +294,27 @@ export class WorldStateService {
           throw new ForbiddenError('Cannot create this WorldState')
         }
       }
-      worldState = await this.repository.createWorldState({
-        userId,
-        entities: toJson(input.entities || []),
-        events: toJson(input.events || []),
-        times: toJson(input.times || []),
-        entityCollections: toJson(input.entityCollections || []),
-        eventCollections: toJson(input.eventCollections || []),
-        timeCollections: toJson(input.timeCollections || []),
-        relations: toJson(input.relations || [])
-      })
+      try {
+        worldState = await this.repository.createWorldState({
+          userId,
+          entities: toJson(input.entities || []),
+          events: toJson(input.events || []),
+          times: toJson(input.times || []),
+          entityCollections: toJson(input.entityCollections || []),
+          eventCollections: toJson(input.eventCollections || []),
+          timeCollections: toJson(input.timeCollections || []),
+          relations: toJson(input.relations || [])
+        })
+      } catch (error) {
+        // Lost the create race against the personal-row partial unique index —
+        // the row now exists, so merge this input into it rather than 500ing or
+        // (pre-index) silently minting a duplicate personal world state.
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+          worldState = await this.repository.updatePersonalWorldStateOptimistic(userId, mergeTransform)
+        } else {
+          throw error
+        }
+      }
     }
 
     return this.mapResponse(worldState)

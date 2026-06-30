@@ -544,6 +544,7 @@ model ClaimRelation {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
+  @@unique([sourceClaimId, targetClaimId, relationTypeId])
   @@index([sourceClaimId])
   @@index([targetClaimId])
   @@index([relationTypeId])
