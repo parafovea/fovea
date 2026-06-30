@@ -18,6 +18,9 @@ import type {
   ImportRequest,
 } from '@models/types'
 import { generateId } from '@utils/uuid'
+import { sharingKeys } from './useSharing'
+import { annotationKeys } from './useAnnotations'
+import { worldKeys } from './useWorld'
 
 /** Query keys for personas */
 export const personaKeys = {
@@ -268,11 +271,15 @@ export function useCreatePersona() {
 
       return { persona, ontology: { personaId: persona.id, ...ontology } }
     },
-    onSuccess: ({ persona, ontology }) => {
+    onSuccess: ({ persona, ontology }, variables) => {
       // Update personas list
       queryClient.setQueryData<Persona[]>(personaKeys.list(), (old = []) => [...old, persona])
       // Cache the ontology
       queryClient.setQueryData(personaKeys.ontology(persona.id), ontology)
+      // If the create also issued shares, the Sent Shares panel is now stale.
+      if (variables.shareWith && variables.shareWith.length > 0) {
+        queryClient.invalidateQueries({ queryKey: sharingKeys.sent() })
+      }
     },
   })
 }
@@ -337,6 +344,10 @@ export function useDeletePersona() {
       queryClient.removeQueries({ queryKey: personaKeys.ontology(personaId) })
       // Remove deletion preview from cache
       queryClient.removeQueries({ queryKey: personaKeys.deletionPreview(personaId) })
+      // Deleting a persona removes its annotations and world-object assignments;
+      // refresh those caches so the UI stops showing now-deleted entries.
+      queryClient.invalidateQueries({ queryKey: annotationKeys.all })
+      queryClient.invalidateQueries({ queryKey: worldKeys.all })
     },
   })
 }
@@ -522,19 +533,11 @@ export function useDeleteEntityFromPersona() {
         updatedAt: new Date().toISOString(),
       }
 
-      const response = await fetch(`/api/personas/${personaId}/ontology`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          entities: updatedOntology.entities,
-          roles: updatedOntology.roles,
-          events: updatedOntology.events,
-          relationTypes: updatedOntology.relationTypes,
-          relations: updatedOntology.relations,
-        }),
-      })
-      if (!response.ok) throw new Error('Failed to delete entity')
+      // Delete via the dedicated endpoint. A PUT that merely omits the type is a
+      // no-op now that the per-persona ontology PUT merges by id (the omitted
+      // type would be kept and re-seeded on the next refetch), so the removal
+      // must be explicit; this also performs gloss/world/annotation cleanup.
+      await deleteTypeGracefully(personaId, 'entities', entityId)
 
       return { personaId, ontology: updatedOntology }
     },
@@ -649,19 +652,8 @@ export function useDeleteRoleFromPersona() {
         updatedAt: new Date().toISOString(),
       }
 
-      const response = await fetch(`/api/personas/${personaId}/ontology`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          entities: updatedOntology.entities,
-          roles: updatedOntology.roles,
-          events: updatedOntology.events,
-          relationTypes: updatedOntology.relationTypes,
-          relations: updatedOntology.relations,
-        }),
-      })
-      if (!response.ok) throw new Error('Failed to delete role')
+      // Explicit delete — an omission PUT is now a no-op under merge-by-id.
+      await deleteTypeGracefully(personaId, 'roles', roleId)
 
       return { personaId, ontology: updatedOntology }
     },
@@ -776,19 +768,8 @@ export function useDeleteEventFromPersona() {
         updatedAt: new Date().toISOString(),
       }
 
-      const response = await fetch(`/api/personas/${personaId}/ontology`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          entities: updatedOntology.entities,
-          roles: updatedOntology.roles,
-          events: updatedOntology.events,
-          relationTypes: updatedOntology.relationTypes,
-          relations: updatedOntology.relations,
-        }),
-      })
-      if (!response.ok) throw new Error('Failed to delete event')
+      // Explicit delete — an omission PUT is now a no-op under merge-by-id.
+      await deleteTypeGracefully(personaId, 'events', eventId)
 
       return { personaId, ontology: updatedOntology }
     },
@@ -905,19 +886,8 @@ export function useDeleteRelationTypeFromPersona() {
         updatedAt: new Date().toISOString(),
       }
 
-      const response = await fetch(`/api/personas/${personaId}/ontology`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          entities: updatedOntology.entities,
-          roles: updatedOntology.roles,
-          events: updatedOntology.events,
-          relationTypes: updatedOntology.relationTypes,
-          relations: updatedOntology.relations,
-        }),
-      })
-      if (!response.ok) throw new Error('Failed to delete relation type')
+      // Explicit delete — an omission PUT is now a no-op under merge-by-id.
+      await deleteTypeGracefully(personaId, 'relation-types', relationTypeId)
 
       return { personaId, ontology: updatedOntology }
     },
@@ -1392,6 +1362,11 @@ export function useDeleteEntityTypeGracefully() {
       })
       // Invalidate all ontologies since glosses may have been modified
       queryClient.invalidateQueries({ queryKey: personaKeys.allOntologies() })
+      // The deleted type may be referenced by annotations and world-object
+      // assignments scoped to this persona; refresh those caches too so the UI
+      // does not keep showing entries that no longer exist server-side.
+      queryClient.invalidateQueries({ queryKey: annotationKeys.all })
+      queryClient.invalidateQueries({ queryKey: worldKeys.all })
       // Remove the deletion preview from cache
       queryClient.removeQueries({
         queryKey: personaKeys.typeDeletionPreview(personaId, 'entities', entityId),
@@ -1428,6 +1403,8 @@ export function useDeleteRoleTypeGracefully() {
         }
       })
       queryClient.invalidateQueries({ queryKey: personaKeys.allOntologies() })
+      queryClient.invalidateQueries({ queryKey: annotationKeys.all })
+      queryClient.invalidateQueries({ queryKey: worldKeys.all })
       queryClient.removeQueries({
         queryKey: personaKeys.typeDeletionPreview(personaId, 'roles', roleId),
       })
@@ -1458,6 +1435,8 @@ export function useDeleteEventTypeGracefully() {
         }
       })
       queryClient.invalidateQueries({ queryKey: personaKeys.allOntologies() })
+      queryClient.invalidateQueries({ queryKey: annotationKeys.all })
+      queryClient.invalidateQueries({ queryKey: worldKeys.all })
       queryClient.removeQueries({
         queryKey: personaKeys.typeDeletionPreview(personaId, 'events', eventId),
       })
@@ -1490,6 +1469,8 @@ export function useDeleteRelationTypeGracefully() {
         }
       })
       queryClient.invalidateQueries({ queryKey: personaKeys.allOntologies() })
+      queryClient.invalidateQueries({ queryKey: annotationKeys.all })
+      queryClient.invalidateQueries({ queryKey: worldKeys.all })
       queryClient.removeQueries({
         queryKey: personaKeys.typeDeletionPreview(personaId, 'relation-types', relationTypeId),
       })

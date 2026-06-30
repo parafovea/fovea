@@ -347,6 +347,9 @@ export function useUpdateProjectMember() {
     onSuccess: (_, { projectId }) => {
       queryClient.invalidateQueries({ queryKey: projectKeys.detail(projectId) })
       queryClient.invalidateQueries({ queryKey: projectKeys.members(projectId) })
+      // The list carries each project's `myRole`, which a self-role change makes
+      // stale; refresh it (the add/remove paths already do).
+      queryClient.invalidateQueries({ queryKey: projectKeys.lists() })
       // Membership/role changes alter the caller's own permissions; refresh the
       // client ability mirror so the UI reflects them without a staleTime lag.
       queryClient.invalidateQueries({ queryKey: abilityKeys.all })

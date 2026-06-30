@@ -145,6 +145,9 @@ export function useGenerateSummary(
       queryClient.invalidateQueries({
         queryKey: summaryKeys.video(variables.videoId),
       })
+      // The batch summaries-lookup cache (used by list/grid views) keys
+      // separately; refresh the whole lookup family so it reflects the change.
+      queryClient.invalidateQueries({ queryKey: [...summaryKeys.all, 'lookup'] })
     },
     ...options,
   })
@@ -174,6 +177,7 @@ export function useSaveSummary(
       queryClient.invalidateQueries({
         queryKey: summaryKeys.video(data.videoId),
       })
+      queryClient.invalidateQueries({ queryKey: [...summaryKeys.all, 'lookup'] })
     },
     ...options,
   })
@@ -207,6 +211,7 @@ export function useDeleteSummary(
       queryClient.invalidateQueries({
         queryKey: summaryKeys.video(variables.videoId),
       })
+      queryClient.invalidateQueries({ queryKey: [...summaryKeys.all, 'lookup'] })
     },
     ...options,
   })

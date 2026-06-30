@@ -281,6 +281,38 @@ describe('usePersonas hooks', () => {
 
         await waitFor(() => expect(result.current.isSuccess).toBe(true))
       })
+
+      // Regression guard: type deletion must hit the explicit DELETE endpoint,
+      // not a whole-ontology PUT that merely omits the type. The server's
+      // ontology PUT merges by id, so an omission would be a no-op (the type
+      // would be kept and re-seeded on the next refetch).
+      it('calls the DELETE endpoint and not a whole-ontology PUT', async () => {
+        let deleteHit = false
+        let putHit = false
+        server.use(
+          http.delete('/api/personas/:personaId/ontology/:category/:typeId', () => {
+            deleteHit = true
+            return HttpResponse.json({ message: 'deleted', glossReferencesConverted: 0, annotationsDeleted: 0, worldAssignmentsRemoved: 0 })
+          }),
+          http.put('/api/personas/:personaId/ontology', () => {
+            putHit = true
+            return HttpResponse.json({})
+          })
+        )
+        const ontologyWithEntity = {
+          ...emptyOntology,
+          entities: [{ id: 'entity-1', name: 'Vehicle', definition: 'x', wikidataId: null, parentId: null }],
+        }
+        const { result } = renderHook(() => useDeleteEntityFromPersona(), {
+          wrapper: createWrapper({ [ontologyCacheKey]: ontologyWithEntity }),
+        })
+
+        result.current.mutate({ personaId: 'persona-1', entityId: 'entity-1' })
+        await waitFor(() => expect(result.current.isSuccess).toBe(true))
+
+        expect(deleteHit).toBe(true)
+        expect(putHit).toBe(false)
+      })
     })
   })
 
