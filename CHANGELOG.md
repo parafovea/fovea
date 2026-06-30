@@ -5,6 +5,47 @@ All notable changes to the Fovea project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.6] - 2026-06-30
+
+The 0.5.6 patch is the first of three audit-driven hardening releases — the backend slice — fixing a batch of authorization, data-integrity, idempotency, and concurrency defects surfaced by a code audit ([#188](https://github.com/parafovea/fovea/pull/188)). Nothing is breaking; the API additively gains `409` conflict responses on duplicate creates and the resource-fork now produces correctly-scoped resources.
+
+### Fixed
+
+#### Authorization and Access Control
+
+- The Bull Board queue dashboard (`/admin/queues`) was mounted with no authentication, exposing queued job payloads and Bull Board's mutating actions to any client that could reach the server. It is now gated behind an admin `onRequest` hook (`server/src/app.ts`).
+- A password change did not revoke the user's existing sessions, so a stolen or shared token survived a reset. Both the self-service profile update and the admin user update now revoke all of the affected user's sessions (the self-update re-issues a fresh session so the acting client stays logged in) (`server/src/routes/users.ts`).
+- The ontology importer overwrote any persona's ontology with no ownership check, letting any authenticated user clobber another user's ontology by uploading a line targeting their persona. The importer now enforces the same instance-level CASL update check as the rest of the app (`server/src/services/import/entity-importers.ts`).
+- The claim-relation privacy filter on `getRelations` was a no-op (an `OR` over either endpoint, the known one of which is always readable), leaking the existence and metadata of relations to claims the caller cannot read. Each query now requires the opposite endpoint to be accessible (`server/src/services/claim-service.ts`).
+- The corpus-manifest sync changed group memberships/roles and project ownership without invalidating the in-memory CASL ability cache, so a downgrade lingered until restart. The sync now clears the ability cache when it reconciles memberships or ownership (`server/src/services/videoSync.ts`).
+- The last `project_owner` could be demoted (via change-role) or stranded (via admin user-deletion), leaving a project with no owner. Both paths now enforce the last-owner invariant (`server/src/services/project-service.ts`, `server/src/routes/users.ts`).
+- Per-IP rate limiting trusted a fully spoofable `X-Forwarded-For` because `trustProxy` was `true`; it is now configurable via `TRUST_PROXY` and defaults to trusting a single proxy hop (`server/src/app.ts`, `server/src/config.ts`).
+- The demo seed fixture loader interpolated an unconstrained `tourId` into a filename (path traversal); `tourId` is now constrained to a strict charset at the route boundary (`server/src/demo/seed.ts`).
+
+#### Idempotency and Conflict Handling
+
+- Creating a resource share, a claim relation, a user, or a group is now idempotent / conflict-safe: duplicate shares and claim relations no longer accumulate (a re-issue reuses the existing row), and a duplicate user email/username or group slug returns `409 Conflict` instead of a `500`. New uniqueness constraints back these (a `ClaimRelation` triple unique and partial unique indexes on `ResourceShare` and personal `WorldState`); a migration dedupes any pre-existing duplicates before adding them (`server/src/routes/{sharing,users,groups,auth}.ts`, `server/src/services/{claim-service,project-service}.ts`, `server/prisma/migrations`).
+- A user could end up with two personal world-state rows (the compound unique did not constrain a NULL `projectId`); the personal get-or-create/update paths are now race-safe and merge on conflict, backed by a partial unique index (`server/src/services/world-state-service.ts`).
+
+#### Concurrency — Lost Updates
+
+- Concurrent edits to a persona's ontology, a project's world state, or an import running alongside a UI edit silently overwrote each other (whole-blob replace, no guard). These writes now merge each array by id under optimistic concurrency, the same pattern that protects personal world-state writes (`server/src/services/{persona-service,project-service}.ts`, `server/src/repositories/{PersonaRepository,ProjectRepository}.ts`, `server/src/routes/ontology.ts`, `server/src/services/import/entity-importers.ts`).
+
+#### World-Object Deletion Integrity
+
+- Deleting a world entity/event/time wrote the world state and cleaned up dependent ontology gloss references in two un-transacted writes, orphaning glosses on a partial failure, and bypassed the optimistic-concurrency guard so a concurrent addition could be clobbered. Each deletion now runs the guarded world-state write and all gloss cleanups in a single transaction (`server/src/services/world-state-service.ts`).
+- The world-object deletion preview always reported `annotationCount: 0`; it now counts the object annotations that reference the object.
+
+### Added
+
+#### Deep-Fork of Shared Resources
+
+- Forking a shared summary always returned a `500` (it collided on the source's `(videoId, personaId)`), and forked claims/annotations were orphaned or lost their object link. Forking now deep-copies into the forker's own scope: the source persona is forked, the summary/claim is re-pointed at the forked persona/summary, `claimsJson` is rebuilt, and annotation `linkType` is preserved (`server/src/routes/sharing.ts`).
+
+#### Conflict Responses
+
+- The user, group, and project create/update endpoints document and return `409 Conflict` on a duplicate, reflected in the OpenAPI contract and generated client types.
+
 ## [0.5.5] - 2026-06-29
 
 The 0.5.5 patch is an audit-driven hardening release ([#186](https://github.com/parafovea/fovea/pull/186)). It closes two higher-severity defects — a former group member kept the group's permissions until the server restarted, and concurrent edits to the world graph silently overwrote one another — together with a set of data-scope, idempotency, and cache-staleness gaps. Nothing is breaking; the API additively gains explicit DELETE endpoints for world collections and relations, an optional client-supplied `id` on claim creation, and a `409` on a duplicate video assignment.
