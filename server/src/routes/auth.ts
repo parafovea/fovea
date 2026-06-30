@@ -1,6 +1,7 @@
 import { FastifyPluginAsync } from 'fastify'
 import bcrypt from 'bcrypt'
 import { Type } from '@sinclair/typebox'
+import { Prisma } from '@prisma/client'
 import { authService } from '../services/auth-service.js'
 import { lockoutService } from '../services/lockout-service.js'
 import { prisma } from '../lib/prisma.js'
@@ -9,6 +10,7 @@ import {
   ForbiddenError,
   ConflictError,
   TooManyRequestsError,
+  conflictMessageFromP2002,
 } from '../lib/errors.js'
 import {
   recordLoginAttempt,
@@ -334,6 +336,9 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
           403: Type.Object({
             error: Type.String(),
           }),
+          409: Type.Object({
+            error: Type.String(),
+          }),
         },
       },
     },
@@ -357,16 +362,29 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       // Hash password
       const passwordHash = await bcrypt.hash(password, 12)
 
-      // Create user
-      const user = await prisma.user.create({
-        data: {
-          username,
-          email: email || null,
-          passwordHash,
-          displayName,
-          isAdmin: false,
-        },
-      })
+      // Create user. The pre-check narrows the common case, but a duplicate
+      // username can still race past it, and a duplicate email is not pre-checked
+      // at all — translate the unique violation to 409 instead of a 500.
+      let user
+      try {
+        user = await prisma.user.create({
+          data: {
+            username,
+            email: email || null,
+            passwordHash,
+            displayName,
+            isAdmin: false,
+          },
+        })
+      } catch (error: unknown) {
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+          throw new ConflictError(conflictMessageFromP2002(error, {
+            email: 'An account with this email already exists',
+            username: 'Username already exists',
+          }))
+        }
+        throw error
+      }
 
       // Create session so the user is logged in immediately after registration
       const { token, expiresAt } = await authService.regenerateSession('', user.id, {

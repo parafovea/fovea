@@ -307,6 +307,23 @@ const config = Object.freeze({
     get logLevel(): string {
       return readStringWithDefault('LOG_LEVEL', 'info')
     },
+    /**
+     * Value passed to Fastify's `trustProxy`. Controls whether `X-Forwarded-For`
+     * is trusted for `request.ip` (which keys per-IP rate limiting and login
+     * throttling). `true` trusts ALL upstreams, making the header — and thus the
+     * rate-limit key — attacker-spoofable; default to trusting a single proxy
+     * hop instead. Set `TRUST_PROXY` to a hop count, a comma-separated list of
+     * trusted proxy IPs/CIDRs, or `true`/`false` to match the deployment.
+     */
+    get trustProxy(): boolean | number | string {
+      const raw = process.env.TRUST_PROXY
+      if (raw === undefined || raw === '') return 1
+      if (raw === 'true') return true
+      if (raw === 'false') return false
+      const n = Number.parseInt(raw, 10)
+      if (Number.isFinite(n) && String(n) === raw.trim()) return n
+      return raw
+    },
   }),
 
   redis: Object.freeze({
