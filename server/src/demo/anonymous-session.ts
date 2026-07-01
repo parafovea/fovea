@@ -26,6 +26,7 @@ import type { FastifyInstance, FastifyPluginAsync } from 'fastify'
 import { prisma } from '../lib/prisma.js'
 import { authService } from '../services/auth-service.js'
 import { config } from '../config.js'
+import { TooManyRequestsError } from '../lib/errors.js'
 import { isAnonymousAuthAllowed } from './config.js'
 
 interface AnonymousSessionResponse {
@@ -35,6 +36,17 @@ interface AnonymousSessionResponse {
 
 const ANON_USERNAME_PREFIX = 'demo-anonymous-'
 const ANON_SESSION_TTL_DAYS = 1
+
+/**
+ * Ceiling on the number of live anonymous demo users. The idle-reset sweeper
+ * reclaims idle users every minute, but a flood of create requests can mint
+ * rows faster than the sweeper deletes them. Refusing new sessions once this
+ * many anonymous users already exist bounds the population regardless of
+ * request rate, so the create path can never outrun the sweeper. Sized for
+ * booth-scale concurrency (well above the few hundred visitors a CVPR demo
+ * sees at once) while still capping a runaway create loop.
+ */
+const MAX_ANONYMOUS_USERS = 500
 
 const anonymousSessionPlugin: FastifyPluginAsync = async (app: FastifyInstance) => {
   if (!isAnonymousAuthAllowed()) {
@@ -59,6 +71,19 @@ const anonymousSessionPlugin: FastifyPluginAsync = async (app: FastifyInstance) 
               ttlSeconds: { type: 'number' },
             },
           },
+        },
+      },
+      // Tight per-route cap on top of the global limit, keyed by IP via the
+      // global @fastify/rate-limit keyGenerator. Minting a User + Session is
+      // far more expensive than a typical request, so a single visitor has no
+      // legitimate reason to hit this more than a few times a minute. The
+      // plugin is not registered in test mode (config.server.isTest), so this
+      // config is inert there and the count-ceiling guard below is the real
+      // protection.
+      config: {
+        rateLimit: {
+          max: 5,
+          timeWindow: '1 minute',
         },
       },
     },
@@ -86,6 +111,26 @@ const anonymousSessionPlugin: FastifyPluginAsync = async (app: FastifyInstance) 
             ),
           }
         }
+      }
+
+      // Cap the live anonymous-user population before minting a new one. This
+      // is the primary defense: it bounds the number of rows regardless of how
+      // fast the route is hit, so the create path cannot outrun the idle-reset
+      // sweeper even if the rate limit is disabled (as in test mode). Anonymous
+      // demo users are identified by the username prefix, the same predicate
+      // the sweeper uses.
+      const anonymousCount = await prisma.user.count({
+        where: { username: { startsWith: ANON_USERNAME_PREFIX } },
+      })
+      if (anonymousCount >= MAX_ANONYMOUS_USERS) {
+        request.log.warn(
+          { anonymousCount, ceiling: MAX_ANONYMOUS_USERS },
+          '[demo] anonymous-session refused: live anonymous-user ceiling reached',
+        )
+        throw new TooManyRequestsError(
+          'The demo is at capacity. Please try again in a few minutes.',
+          60,
+        )
       }
 
       const suffix = crypto.randomBytes(6).toString('hex')

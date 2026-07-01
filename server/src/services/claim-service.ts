@@ -478,7 +478,15 @@ export class ClaimService {
     } catch (err) {
       if (id && err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
         const existing = await this.repository.findClaimById(id)
-        if (existing && ability.can('update', subject('Claim', existing))) {
+        if (existing) {
+          // A concurrent insert with the same id won the race. Re-authorize
+          // against the existing row (so a caller cannot hijack another user's
+          // claim by supplying its id), then return the current tree
+          // idempotently — mirroring the pre-create idempotent path above. A
+          // denied update is a 403, never a raw P2002 surfacing as a 500.
+          if (!ability.can('update', subject('Claim', existing))) {
+            throw new ForbiddenError('Cannot create this Claim')
+          }
           return this.repository.findClaimTree(summaryId, summaryType)
         }
       }

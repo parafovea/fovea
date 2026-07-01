@@ -1,5 +1,6 @@
-import { PrismaClient, ApiKey } from '@prisma/client'
+import { PrismaClient, ApiKey, Prisma } from '@prisma/client'
 import { config } from '../config.js'
+import { ConflictError } from '../lib/errors.js'
 import { encryptApiKey, decryptApiKey } from '../lib/encryption.js'
 
 /**
@@ -67,6 +68,7 @@ export async function getApiKey(
  * @param data.keyName - Human-readable key name
  * @param data.apiKey - Plaintext API key to encrypt
  * @returns Created API key without encrypted data
+ * @throws {ConflictError} when an admin key already exists for the provider
  */
 export async function createApiKey(
   prisma: PrismaClient,
@@ -77,19 +79,50 @@ export async function createApiKey(
     apiKey: string
   }
 ): Promise<SafeApiKey> {
+  const isAdminKey = data.userId === null
+  const conflictMessage = isAdminKey
+    ? 'Admin API key for this provider already exists'
+    : 'API key for this provider already exists'
+
+  // The @@unique([userId, provider]) constraint does not prevent duplicate admin
+  // keys: Postgres treats NULL userIds as distinct, so two admin keys for the
+  // same provider both satisfy the index. A partial unique index on
+  // api_keys(provider) WHERE userId IS NULL (added by a separate migration)
+  // closes that gap; pre-check here so the conflict surfaces deterministically
+  // even before the index is in place.
+  if (isAdminKey) {
+    const existingAdminKey = await prisma.apiKey.findFirst({
+      where: { userId: null, provider: data.provider }
+    })
+    if (existingAdminKey) {
+      throw new ConflictError(conflictMessage)
+    }
+  }
+
   const { encrypted, mask } = encryptApiKey(data.apiKey)
 
-  const key = await prisma.apiKey.create({
-    data: {
-      userId: data.userId,
-      provider: data.provider,
-      keyName: data.keyName,
-      encryptedKey: encrypted,
-      keyMask: mask,
-      isActive: true,
-      usageCount: 0
+  let key
+  try {
+    key = await prisma.apiKey.create({
+      data: {
+        userId: data.userId,
+        provider: data.provider,
+        keyName: data.keyName,
+        encryptedKey: encrypted,
+        keyMask: mask,
+        isActive: true,
+        usageCount: 0
+      }
+    })
+  } catch (error) {
+    // A concurrent create can race past the pre-check into the unique
+    // constraint (the @@unique for user keys, the partial index for admin
+    // keys) — surface 409, not 500.
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      throw new ConflictError(conflictMessage)
     }
-  })
+    throw error
+  }
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { encryptedKey, ...rest } = key

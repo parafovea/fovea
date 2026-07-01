@@ -648,77 +648,6 @@ export const claimWorker = new Worker<
 
     await job.updateProgress(60);
 
-    // Save claims to database
-    async function saveClaim(
-      claimData: (typeof modelResponse.claims)[0],
-      parentClaimId?: string,
-    ): Promise<string> {
-      const claim = await prisma.claim.create({
-        data: {
-          summaryId,
-          summaryType,
-          // Inherit the parent summary's project scope so extracted claims are
-          // project-visible (mirrors the interactive claim-create paths).
-          projectId: summary?.projectId ?? undefined,
-          // Owned by the user who requested extraction, so it is readable by
-          // its creator (mirrors the interactive claim-create paths).
-          createdBy: createdBy ?? undefined,
-          text: claimData.text,
-          gloss: [],
-          parentClaimId,
-          textSpans: claimData.char_start
-            ? [
-                {
-                  sentenceIndex: claimData.sentence_index,
-                  charStart: claimData.char_start,
-                  charEnd: claimData.char_end,
-                },
-              ]
-            : undefined,
-          confidence: claimData.confidence,
-          modelUsed: modelResponse.model_used,
-          extractionStrategy: config.extractionStrategy,
-        },
-      });
-
-      // Recursively save subclaims
-      if (claimData.subclaims && claimData.subclaims.length > 0) {
-        for (const subclaimData of claimData.subclaims as (typeof modelResponse.claims)[0][]) {
-          await saveClaim(subclaimData, claim.id);
-        }
-      }
-
-      return claim.id;
-    }
-
-    // Save all root claims
-    for (const claimData of modelResponse.claims) {
-      await saveClaim(claimData);
-    }
-
-    await job.updateProgress(80);
-
-    // Update denormalized JSON
-    const allClaims = await prisma.claim.findMany({
-      where: {
-        summaryId,
-        summaryType,
-        parentClaimId: null,
-      },
-      include: {
-        subclaims: {
-          include: {
-            subclaims: {
-              include: {
-                subclaims: true,
-              },
-            },
-          },
-        },
-      },
-      orderBy: [{ createdAt: "asc" }],
-    });
-
     const countClaims = (claims: unknown[]): number => {
       let count = claims.length;
       for (const claim of claims as { subclaims?: unknown[] }[]) {
@@ -729,30 +658,131 @@ export const claimWorker = new Worker<
       return count;
     };
 
-    const totalClaims = countClaims(allClaims);
+    // Persist the extracted claims idempotently. A job retry or double-submit
+    // would otherwise duplicate every claim, since each create always inserts a
+    // new row. To keep extraction idempotent per summary, delete the summary's
+    // previously extracted claims, re-insert the fresh set, and rewrite the
+    // denormalized claimsJson in a single transaction so a partial failure
+    // never leaves the summary with a mix of old and new claims.
+    //
+    // The delete is scoped to model-extracted claims only (extractionStrategy
+    // other than "manual"); manually authored claims are stamped with
+    // extractionStrategy "manual" by the interactive create paths and must be
+    // preserved across re-extraction. Deleting the extracted root claims also
+    // removes their subclaims via the schema's onDelete: Cascade, but the
+    // extracted subclaims carry the same non-"manual" extractionStrategy and so
+    // fall within the delete scope regardless.
+    const { allClaims, totalClaims } = await prisma.$transaction(
+      async (tx) => {
+        // Remove the previously extracted claims for this summary, leaving any
+        // manually authored claims in place.
+        await tx.claim.deleteMany({
+          where: {
+            summaryId,
+            summaryType,
+            extractionStrategy: { not: "manual" },
+          },
+        });
 
-    const claimsJson = {
-      version: "1.0",
-      claims: allClaims,
-      metadata: {
-        extractedAt: new Date().toISOString(),
-        totalClaims,
-        totalSubclaims: totalClaims - allClaims.length,
-        maxDepth: config.maxSubclaimDepth || 3,
+        // Re-insert the freshly extracted claim tree.
+        const saveClaim = async (
+          claimData: (typeof modelResponse.claims)[0],
+          parentClaimId?: string,
+        ): Promise<string> => {
+          const claim = await tx.claim.create({
+            data: {
+              summaryId,
+              summaryType,
+              // Inherit the parent summary's project scope so extracted claims
+              // are project-visible (mirrors the interactive claim-create
+              // paths).
+              projectId: summary?.projectId ?? undefined,
+              // Owned by the user who requested extraction, so it is readable by
+              // its creator (mirrors the interactive claim-create paths).
+              createdBy: createdBy ?? undefined,
+              text: claimData.text,
+              gloss: [],
+              parentClaimId,
+              textSpans: claimData.char_start
+                ? [
+                    {
+                      sentenceIndex: claimData.sentence_index,
+                      charStart: claimData.char_start,
+                      charEnd: claimData.char_end,
+                    },
+                  ]
+                : undefined,
+              confidence: claimData.confidence,
+              modelUsed: modelResponse.model_used,
+              extractionStrategy: config.extractionStrategy,
+            },
+          });
+
+          // Recursively save subclaims
+          if (claimData.subclaims && claimData.subclaims.length > 0) {
+            for (const subclaimData of claimData.subclaims as (typeof modelResponse.claims)[0][]) {
+              await saveClaim(subclaimData, claim.id);
+            }
+          }
+
+          return claim.id;
+        };
+
+        // Save all root claims
+        for (const claimData of modelResponse.claims) {
+          await saveClaim(claimData);
+        }
+
+        // Rebuild the denormalized JSON from the current claim tree.
+        const rootClaims = await tx.claim.findMany({
+          where: {
+            summaryId,
+            summaryType,
+            parentClaimId: null,
+          },
+          include: {
+            subclaims: {
+              include: {
+                subclaims: {
+                  include: {
+                    subclaims: true,
+                  },
+                },
+              },
+            },
+          },
+          orderBy: [{ createdAt: "asc" }],
+        });
+
+        const treeTotalClaims = countClaims(rootClaims);
+
+        const claimsJson = {
+          version: "1.0",
+          claims: rootClaims,
+          metadata: {
+            extractedAt: new Date().toISOString(),
+            totalClaims: treeTotalClaims,
+            totalSubclaims: treeTotalClaims - rootClaims.length,
+            maxDepth: config.maxSubclaimDepth || 3,
+          },
+        };
+
+        if (summaryType === "video") {
+          await tx.videoSummary.update({
+            where: { id: summaryId },
+            data: {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma JSON type requires any
+              claimsJson: claimsJson as any,
+              claimsExtractedAt: new Date(),
+            },
+          });
+        }
+
+        return { allClaims: rootClaims, totalClaims: treeTotalClaims };
       },
-    };
+    );
 
-    if (summaryType === "video") {
-      await prisma.videoSummary.update({
-        where: { id: summaryId },
-        data: {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma JSON type requires any
-          claimsJson: claimsJson as any,
-          claimsExtractedAt: new Date(),
-        },
-      });
-    }
-
+    await job.updateProgress(80);
     await job.updateProgress(100);
 
     return {

@@ -51,8 +51,7 @@ const createUserSchema = z.object({
   email: z.string().email().optional().nullable(),
   password: z.string().min(6, 'Password must be at least 6 characters'),
   displayName: z.string().min(1, 'Display name is required'),
-  isAdmin: z.boolean().optional().default(false),
-  systemRole: z.enum(['user', 'system_admin']).optional()
+  isAdmin: z.boolean().optional().default(false)
 })
 
 /**
@@ -147,7 +146,8 @@ const usersRoute: FastifyPluginAsync = async (fastify) => {
         200: UserSchema,
         401: Type.Object({
           error: Type.String()
-        })
+        }),
+        409: ErrorResponseSchema
       }
     }
   }, async (request, reply) => {
@@ -174,19 +174,32 @@ const usersRoute: FastifyPluginAsync = async (fastify) => {
       updateData.passwordHash = await bcrypt.hash(validatedData.password, 12)
     }
 
-    const user = await fastify.prisma.user.update({
-      where: { id: request.user.id },
-      data: updateData,
-      select: {
-        id: true,
-        username: true,
-        email: true,
-        displayName: true,
-        isAdmin: true,
-        createdAt: true,
-        updatedAt: true
+    let user
+    try {
+      user = await fastify.prisma.user.update({
+        where: { id: request.user.id },
+        data: updateData,
+        select: {
+          id: true,
+          username: true,
+          email: true,
+          displayName: true,
+          isAdmin: true,
+          createdAt: true,
+          updatedAt: true
+        }
+      })
+    } catch (error: unknown) {
+      // A duplicate email/username is a client conflict, not a server fault —
+      // surface 409 with the offending field rather than letting it 500.
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        throw new ConflictError(conflictMessageFromP2002(error, {
+          email: 'A user with this email already exists',
+          username: 'A user with this username already exists',
+        }))
       }
-    })
+      throw error
+    }
 
     // A password change must invalidate every existing session so a stolen or
     // shared token cannot survive the reset. Revoke all of this user's sessions,
@@ -301,7 +314,10 @@ const usersRoute: FastifyPluginAsync = async (fastify) => {
           passwordHash,
           displayName: validatedData.displayName,
           isAdmin: validatedData.isAdmin,
-          ...(validatedData.systemRole ? { systemRole: validatedData.systemRole } : {})
+          // Derive systemRole from isAdmin so the two admin signals cannot
+          // diverge: requireAdmin gates on isAdmin while CASL `manage all`
+          // gates on systemRole. Mirrors the coupling in the update handler.
+          systemRole: validatedData.isAdmin ? 'system_admin' : 'user'
         },
         select: {
           id: true,
@@ -531,6 +547,9 @@ const usersRoute: FastifyPluginAsync = async (fastify) => {
       await fastify.prisma.user.delete({
         where: { id: userId }
       })
+      // Clear the deleted user's cached abilities so a lingering in-memory entry
+      // cannot outlive the account if its id is ever observed again.
+      invalidateUserAbilities(userId)
       return reply.send({ success: true })
     } catch (error: unknown) {
       if (error && typeof error === 'object' && 'code' in error && error.code === 'P2025') {

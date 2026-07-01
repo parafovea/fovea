@@ -1,4 +1,5 @@
 import { PrismaClient, Project, ProjectMembership, Persona, WorldState, Prisma } from '@prisma/client'
+import { ConflictError, NotFoundError } from '../lib/errors.js'
 
 /**
  * Project row joined with its members (each carrying the public user
@@ -445,10 +446,13 @@ export class ProjectRepository {
    * state.
    *
    * Reads the current (userId, projectId) row, lets `transform` compute the new
-   * column values from it, then writes them guarded by the row's `updatedAt`.
-   * If a concurrent writer committed first the guard misses (count 0) and we
-   * retry against the freshly-read row, so both writes land instead of one
-   * silently clobbering the other. Project world state is multi-user (every
+   * column values from it, then writes them guarded by the row's `version`. If
+   * a concurrent writer committed first the version has advanced, the guard
+   * misses (count 0), and we retry against the freshly-read row, so both writes
+   * land instead of one silently clobbering the other. The guard keys on the
+   * monotonic `version` rather than `updatedAt` because two writes landing in
+   * the same millisecond can share an `updatedAt`, which would let the second
+   * silently overwrite the first. Project world state is multi-user (every
    * member shares the row), which makes this guard essential for the whole-blob
    * PUT to be a safe per-id merge under concurrent writers (the transform
    * re-runs on fresh state each attempt).
@@ -457,7 +461,8 @@ export class ProjectRepository {
    * @param projectId - Project UUID
    * @param transform - computes the Prisma update input from the current row
    * @returns the updated world state
-   * @throws when no project row exists or the write keeps conflicting
+   * @throws {NotFoundError} when no project row exists
+   * @throws {ConflictError} when the write keeps conflicting after retries
    */
   async updateProjectWorldStateOptimistic(
     userId: string,
@@ -469,16 +474,16 @@ export class ProjectRepository {
         where: { userId_projectId: { userId, projectId } },
       })
       if (!current) {
-        throw new Error('No project world state to update')
+        throw new NotFoundError('Project world state', `${userId}:${projectId}`)
       }
       const result = await this.prisma.worldState.updateMany({
-        where: { userId, projectId, updatedAt: current.updatedAt },
-        data: { ...transform(current), updatedAt: new Date() },
+        where: { userId, projectId, version: current.version },
+        data: { ...transform(current), version: { increment: 1 } },
       })
       if (result.count === 1) {
         return this.prisma.worldState.findUniqueOrThrow({ where: { id: current.id } })
       }
     }
-    throw new Error('Project world state update conflicted after retries')
+    throw new ConflictError('Project world state update conflicted after retries')
   }
 }

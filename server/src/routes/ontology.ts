@@ -419,10 +419,10 @@ const ontologyRoute: FastifyPluginAsync = async (fastify) => {
           fastify.log.error(`Prisma error meta: ${JSON.stringify((error as Record<string, unknown>).meta)}`)
         }
       }
-      return reply.code(500).send({
-        error: 'Failed to save ontology data',
-        details: error instanceof Error ? error.message : 'Unknown error'
-      })
+      // Re-throw to the global handler, which returns a safe generic 500. The
+      // raw error message (which can carry DB/internal detail) is logged above
+      // but never sent to the client.
+      throw new InternalError('Failed to save ontology data')
     }
   })
 
