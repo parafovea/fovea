@@ -66,6 +66,19 @@ export default function VideoSummaryDialog({
     onClose()
   }
 
+  // Switching persona must first flush any unsaved edits made under the current
+  // persona — otherwise a mid-debounce edit is dropped, and worse, a debounce
+  // tick in the render window where the id has already changed could persist the
+  // previous persona's text against the new persona. Flush when dirty, then
+  // switch; the editor is also keyed by persona below, so it remounts cleanly
+  // for the new one rather than carrying the previous persona's local state.
+  const handlePersonaChange = async (value: string | null) => {
+    if (editorRef.current) {
+      await editorRef.current.flushIfDirty()
+    }
+    setSelectedPersonaId(value || null)
+  }
+
   // Update selected persona when initial persona changes (e.g., when dialog
   // opens). On a scrub-capture resume, prefer the draft's persona so the
   // in-progress claim re-opens under the persona it was authored with.
@@ -87,7 +100,7 @@ export default function VideoSummaryDialog({
           <Label htmlFor="summary-persona-select" className="mb-2 block">Select Persona</Label>
           <Select
             value={selectedPersonaId || ''}
-            onValueChange={(value) => setSelectedPersonaId(value || null)}
+            onValueChange={(value) => { void handlePersonaChange(value) }}
           >
             <SelectTrigger className="w-full" id="summary-persona-select">
               {/* Explicit child override: the base-ui Select reads its
@@ -131,6 +144,12 @@ export default function VideoSummaryDialog({
 
         {selectedPersonaId && videoId && (
           <VideoSummaryEditor
+            // Key by persona so the editor remounts cleanly for each one: its
+            // load/empty-create/baseline-seed sequence re-runs from a fresh
+            // state instead of transitioning in place, which otherwise leaves a
+            // window where the previous persona's loaded summary and refs bleed
+            // into the newly selected persona's save.
+            key={selectedPersonaId}
             ref={editorRef}
             videoId={videoId}
             personaId={selectedPersonaId}
