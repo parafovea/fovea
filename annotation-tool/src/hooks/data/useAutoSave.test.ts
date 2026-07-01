@@ -723,4 +723,91 @@ describe('useAutoSave', () => {
       }
     })
   })
+
+  describe('in-flight force queue, outcome, and baseline seeding', () => {
+    it('queues a forceSave issued while a save is in flight and drains it (never dropped)', async () => {
+      // Hold the first save open so a second forceSave lands while it runs.
+      let releaseFirst!: () => void
+      const first = new Promise<void>((resolve) => {
+        releaseFirst = resolve
+      })
+      const onSave = vi
+        .fn<(data: { v: string }) => Promise<void>>()
+        .mockImplementationOnce(() => first)
+        .mockResolvedValue(undefined)
+
+      const { result } = renderHook(() =>
+        useAutoSave({ data: { v: 'render' }, isEnabled: true, onSave, entityType: 'annotation' })
+      )
+
+      let firstOutcome!: Promise<unknown>
+      let secondOutcome!: Promise<unknown>
+      act(() => {
+        firstOutcome = result.current.forceSave({ v: 'first' })
+      })
+      // While the first is still in flight, force again with new data.
+      act(() => {
+        secondOutcome = result.current.forceSave({ v: 'second' })
+      })
+
+      await act(async () => {
+        releaseFirst()
+        await firstOutcome
+        await secondOutcome
+      })
+
+      // Both writes land — the second was queued, not silently dropped.
+      expect(onSave).toHaveBeenCalledTimes(2)
+      expect(onSave).toHaveBeenNthCalledWith(1, { v: 'first' })
+      expect(onSave).toHaveBeenNthCalledWith(2, { v: 'second' })
+    })
+
+    it('forceSave resolves to "saved" on a real write', async () => {
+      const onSave = vi.fn().mockResolvedValue(undefined)
+      const { result } = renderHook(() =>
+        useAutoSave({ data: { v: 'x' }, isEnabled: true, onSave, entityType: 'annotation' })
+      )
+      let outcome: unknown
+      await act(async () => {
+        outcome = await result.current.forceSave()
+      })
+      expect(outcome).toBe('saved')
+    })
+
+    it('markSaved seeds the baseline so a debounce tick with the same data does not save', async () => {
+      vi.useFakeTimers()
+      try {
+        const onSave = vi.fn().mockResolvedValue(undefined)
+        const { result } = renderHook(() =>
+          useAutoSave({ data: { v: 'loaded' }, isEnabled: true, onSave, debounceMs: 100, entityType: 'summary' })
+        )
+        // The editor adopts server content and seeds the baseline to it.
+        act(() => {
+          result.current.markSaved({ v: 'loaded' })
+        })
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(200)
+        })
+        expect(onSave).not.toHaveBeenCalled()
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('without markSaved, the initial debounce tick saves the just-loaded data (the spurious save markSaved fixes)', async () => {
+      vi.useFakeTimers()
+      try {
+        const onSave = vi.fn().mockResolvedValue(undefined)
+        renderHook(() =>
+          useAutoSave({ data: { v: 'loaded' }, isEnabled: true, onSave, debounceMs: 100, entityType: 'summary' })
+        )
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(200)
+        })
+        expect(onSave).toHaveBeenCalledTimes(1)
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+  })
 })

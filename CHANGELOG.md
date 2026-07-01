@@ -5,6 +5,26 @@ All notable changes to the Fovea project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.10] - 2026-07-01
+
+The 0.5.10 patch is the second of three releases remediating the second swarm audit — the frontend slice — fixing auto-save data-loss and stale-cache defects in the annotation UI (PR_PLACEHOLDER). Several were gaps in the first audit's own frontend fixes, which closed one instance of a defect class without closing every instance. Nothing is breaking.
+
+### Fixed
+
+#### Auto-save no longer drops edits
+
+- A forced save issued while another save was already in flight was silently dropped: the dialog's Done/Escape/backdrop flush, a keyframe override, and the session-expiry emergency flush could each return as if the write succeeded while persisting nothing. A forced save is now parked and drained once the in-flight save settles, and it reports whether it actually wrote (`annotation-tool/src/hooks/data/useAutoSave.ts`).
+- Switching the persona in an open video-summary editor dropped the unsaved edits made under the previous persona — and, in the render window where the id had already changed but the loaded content had not, could persist one persona's text against another. The dialog now flushes the editor before switching and keys the editor by persona so it remounts cleanly for the new one (`annotation-tool/src/components/video/VideoSummaryDialog.tsx`, `VideoSummaryEditor.tsx`).
+- The session-expiry emergency flush counted a no-op forced save (blocked by an in-flight save, skipped by change detection, or superseded) as a successful save, over-reporting preservation at the moment it matters most. It now counts only editors that actually persisted (`annotation-tool/src/hooks/data/autoSaveRegistry.ts`, `useAutoSave.ts`).
+- Opening the editor fired a redundant auto-save of the just-loaded content, because the change baseline started empty and the initial sync looked like an edit. The editor now seeds the baseline to the adopted server content, so the first debounce tick sees no change (`annotation-tool/src/hooks/data/useAutoSave.ts`, `VideoSummaryEditor.tsx`).
+
+#### Stale caches refreshed after mutations
+
+- Deleting an ontology type from the persona editor left open annotation views and world panels showing annotations and per-persona type-assignments the server had already removed, because the delete hooks wired to the buttons never invalidated the annotation and world caches (only their unused twins did). Those four hooks now invalidate both (`annotation-tool/src/store/queries/usePersonas.ts`).
+- A world collection or relation the user had just deleted could reappear after a quick follow-up add or edit: the add path built its whole-array PUT from a cache that still held the deleted object, and the merge-by-id server re-created it. The delete hooks now strip the object from the cache before any following write (`annotation-tool/src/store/queries/useWorld.ts`).
+- Creating or deleting a project-scoped persona did not refresh the project's persona list, so the project detail page showed a stale roster within its two-minute cache window. Both mutations now invalidate the project-personas cache (`annotation-tool/src/store/queries/usePersonas.ts`).
+- Accepting several AI ontology suggestions at once, or importing several Wikidata items quickly, left the ontology editor showing only a subset of the persisted types: the concurrent optimistic writes read the same base snapshot and the last one won. The add/update hooks now invalidate the per-persona ontology so the authoritative server state (merged by id) is refetched once the concurrent writes settle (`annotation-tool/src/store/queries/usePersonas.ts`).
+
 ## [0.5.9] - 2026-06-30
 
 The 0.5.9 patch is the first of three releases remediating a second swarm audit of the shipped 0.5.x line — the backend slice — fixing authorization, lost-update concurrency, idempotency, and data-fidelity defects in the Fastify server ([#194](https://github.com/parafovea/fovea/pull/194)). Roughly a third of the findings were gaps in the first audit's own fixes: a fix addressed specific instances of a defect class without closing every instance. Nothing is breaking.
