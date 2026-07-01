@@ -2,7 +2,7 @@ import { Prisma, type WorldState as PrismaWorldState } from '@prisma/client'
 import { subject } from '@casl/ability'
 import { accessibleBy } from '@casl/prisma'
 import type { AppAbility } from '../lib/abilities.js'
-import { NotFoundError, UnauthorizedError, InternalError, ForbiddenError } from '../lib/errors.js'
+import { NotFoundError, UnauthorizedError, InternalError, ForbiddenError, ConflictError } from '../lib/errors.js'
 import { demoWidensWorldState } from '../lib/demo-rbac.js'
 import { isSingleUserMode } from './user-service.js'
 import { config } from '../config.js'
@@ -385,7 +385,10 @@ export class WorldStateService {
       if (this.ability && !this.ability.can('delete', subject('WorldState', existingWorldState))) {
         throw new ForbiddenError('Cannot delete this WorldState')
       }
-      await this.repository.updateWorldState(existingWorldState.id, emptyData)
+      // Clear through the optimistic guard rather than a bare id update so the
+      // version advances and a concurrent writer cannot have half its blob
+      // survive the clear; the empty-arrays transform ignores the current row.
+      await this.repository.updatePersonalWorldStateOptimistic(userId, () => ({ ...emptyData }))
     } else {
       if (this.ability) {
         const candidate = subject('WorldState', { userId, projectId: null })
@@ -560,13 +563,17 @@ export class WorldStateService {
    * and writes through the supplied transaction client so the guarded delete
    * write and the gloss cleanup commit atomically. Reads the current row,
    * lets `transform` compute the new column values from it, then writes them
-   * guarded by the row's `updatedAt`; a missed guard (count 0) retries against
-   * the freshly read row so a concurrent addition is not clobbered.
+   * guarded by the row's `version`; a missed guard (count 0) retries against
+   * the freshly read row so a concurrent addition is not clobbered. The guard
+   * keys on the monotonic `version` rather than `updatedAt` because two writes
+   * landing in the same millisecond can share an `updatedAt`, which would let
+   * the second silently overwrite the first.
    *
    * @param tx - the transaction client to run the read/write inside
    * @param userId - owning user ID
    * @param transform - computes the Prisma update input from the current row
-   * @throws when no personal row exists or the write keeps conflicting
+   * @throws {NotFoundError} when no personal row exists
+   * @throws {ConflictError} when the write keeps conflicting after retries
    */
   private async updatePersonalWorldStateOptimisticTx(
     tx: Prisma.TransactionClient,
@@ -578,17 +585,17 @@ export class WorldStateService {
         where: { userId, projectId: null },
       })
       if (!current) {
-        throw new Error('No personal world state to update')
+        throw new NotFoundError('World state', userId)
       }
       const result = await tx.worldState.updateMany({
-        where: { id: current.id, updatedAt: current.updatedAt },
-        data: { ...transform(current), updatedAt: new Date() },
+        where: { id: current.id, version: current.version },
+        data: { ...transform(current), version: { increment: 1 } },
       })
       if (result.count === 1) {
         return
       }
     }
-    throw new Error('Personal world state update conflicted after retries')
+    throw new ConflictError('Personal world state update conflicted after retries')
   }
 
   /**

@@ -220,6 +220,11 @@ model Ontology {
   /// JSON structure: RelationType[]
   relationTypes  Json     @default("[]")
 
+  /// Monotonic optimistic-concurrency token. Incremented on every guarded
+  /// write; the compare-and-swap guard matches on it (not on updatedAt, which
+  /// can fail to advance for two writes landing in the same millisecond).
+  version        Int      @default(0)
+
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
@@ -248,6 +253,11 @@ model WorldState {
   timeCollections   Json     @default("[]")
   /// JSON structure: OntologyRelation[]
   relations         Json     @default("[]")
+
+  /// Monotonic optimistic-concurrency token. Incremented on every guarded
+  /// write; the compare-and-swap guard matches on it (not on updatedAt, which
+  /// can fail to advance for two writes landing in the same millisecond).
+  version           Int      @default(0)
 
   projectId         String?
   project           Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)

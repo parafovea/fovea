@@ -565,6 +565,22 @@ export interface paths {
                         };
                     };
                 };
+                /** @description Default Response */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** @description Machine-readable error code */
+                            error: string;
+                            /** @description Human-readable error message */
+                            message: string;
+                            /** @description Additional error context */
+                            details?: unknown;
+                        };
+                    };
+                };
             };
         };
         post?: never;

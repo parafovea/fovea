@@ -1,8 +1,9 @@
-import { Persona, Prisma } from '@prisma/client'
+import { Persona, Ontology, WorldState, Prisma } from '@prisma/client'
 import { accessibleBy } from '@casl/prisma'
 import { subject } from '@casl/ability'
 import type { AppAbility } from '../lib/abilities.js'
-import { NotFoundError, ForbiddenError } from '../lib/errors.js'
+import { NotFoundError, ForbiddenError, ConflictError } from '../lib/errors.js'
+import { prisma } from '../lib/prisma.js'
 import { demoPersonaListWhere, demoPermitsSystemPersonaRead } from '../lib/demo-rbac.js'
 import { isSingleUserMode } from './user-service.js'
 import {
@@ -130,6 +131,80 @@ export class PersonaService {
   }
 
   /**
+   * Applies a version-guarded optimistic update to a persona's ontology inside
+   * an existing transaction.
+   *
+   * Reads the current ontology row through `tx`, lets `transform` compute the
+   * new column values from it, then writes them guarded by the row's `version`;
+   * a missed guard (count 0) retries against the freshly read row so a
+   * concurrent edit (a rapid gloss change, a second tab) is not clobbered by the
+   * type-deletion cleanup. Running through `tx` lets the cleanup commit or roll
+   * back atomically with the annotation deletes and world-state cleanup.
+   *
+   * @param tx - the transaction client to run the read/write inside
+   * @param personaId - Persona UUID owning the ontology
+   * @param transform - computes the Prisma update input from the current row
+   * @throws {NotFoundError} when no ontology row exists
+   * @throws {ConflictError} when the write keeps conflicting after retries
+   */
+  private async updateOntologyOptimisticTx(
+    tx: Prisma.TransactionClient,
+    personaId: string,
+    transform: (current: Ontology) => Prisma.OntologyUpdateInput,
+  ): Promise<void> {
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const current = await tx.ontology.findUnique({ where: { personaId } })
+      if (!current) {
+        throw new NotFoundError('Ontology', personaId)
+      }
+      const result = await tx.ontology.updateMany({
+        where: { id: current.id, version: current.version },
+        data: { ...transform(current), version: { increment: 1 } },
+      })
+      if (result.count === 1) {
+        return
+      }
+    }
+    throw new ConflictError('Ontology update conflicted after retries')
+  }
+
+  /**
+   * Applies a version-guarded optimistic update to a user's personal world
+   * state inside an existing transaction.
+   *
+   * Mirrors {@link updateOntologyOptimisticTx} for the world-state row the
+   * type- and persona-deletion cleanup paths mutate, so the world-state write
+   * commits or rolls back atomically with the ontology cleanup and never
+   * clobbers a concurrent world edit.
+   *
+   * @param tx - the transaction client to run the read/write inside
+   * @param userId - owning user ID
+   * @param transform - computes the Prisma update input from the current row
+   * @throws {NotFoundError} when no personal world state row exists
+   * @throws {ConflictError} when the write keeps conflicting after retries
+   */
+  private async updatePersonalWorldStateOptimisticTx(
+    tx: Prisma.TransactionClient,
+    userId: string,
+    transform: (current: WorldState) => Prisma.WorldStateUpdateInput,
+  ): Promise<void> {
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const current = await tx.worldState.findFirst({ where: { userId, projectId: null } })
+      if (!current) {
+        throw new NotFoundError('World state', userId)
+      }
+      const result = await tx.worldState.updateMany({
+        where: { id: current.id, version: current.version },
+        data: { ...transform(current), version: { increment: 1 } },
+      })
+      if (result.count === 1) {
+        return
+      }
+    }
+    throw new ConflictError('Personal world state update conflicted after retries')
+  }
+
+  /**
    * Lists the personas visible to the caller.
    *
    * Applies the four mode branches in order:
@@ -183,6 +258,19 @@ export class PersonaService {
     const candidate = subject('Persona', { userId, projectId })
     if (!ability.can('create', candidate)) {
       throw new ForbiddenError('Cannot create Persona in this scope')
+    }
+
+    // A project-scoped persona may only be created by a member of that project.
+    // The generic create ability passes for any self-owned persona regardless
+    // of projectId, so a non-member could otherwise attach a persona to a
+    // project they cannot access; verify membership explicitly.
+    if (projectId) {
+      const membership = await prisma.projectMembership.findUnique({
+        where: { userId_projectId: { userId, projectId } },
+      })
+      if (!membership) {
+        throw new ForbiddenError('Cannot create a persona in this project')
+      }
     }
 
     // Only system_admin may flag a persona as system-generated, since system
@@ -362,61 +450,73 @@ export class PersonaService {
       throw new ForbiddenError('Cannot delete this Persona')
     }
 
-    const worldState = await this.repository.findPersonalWorldState(existing.userId)
-    if (worldState) {
-      interface EntityWithAssignments {
-        typeAssignments?: Array<{ personaId: string; [key: string]: unknown }>
-        [key: string]: unknown
-      }
-      interface EventWithInterpretations {
-        personaInterpretations?: Array<{ personaId: string; [key: string]: unknown }>
-        [key: string]: unknown
-      }
-      interface CollectionWithAssignments {
-        typeAssignments?: Array<{ personaId: string; [key: string]: unknown }>
-        [key: string]: unknown
-      }
+    interface EntityWithAssignments {
+      typeAssignments?: Array<{ personaId: string; [key: string]: unknown }>
+      [key: string]: unknown
+    }
+    interface EventWithInterpretations {
+      personaInterpretations?: Array<{ personaId: string; [key: string]: unknown }>
+      [key: string]: unknown
+    }
+    interface CollectionWithAssignments {
+      typeAssignments?: Array<{ personaId: string; [key: string]: unknown }>
+      [key: string]: unknown
+    }
 
-      const entities = (worldState.entities as EntityWithAssignments[]) || []
-      const cleanedEntities = entities.map(entity => ({
-        ...entity,
-        typeAssignments: (entity.typeAssignments || []).filter(a => a.personaId !== id)
-      }))
-
-      const events = (worldState.events as EventWithInterpretations[]) || []
-      const cleanedEvents = events.map(event => ({
-        ...event,
-        personaInterpretations: (event.personaInterpretations || []).filter(i => i.personaId !== id)
-      }))
-
-      const entityCollections = (worldState.entityCollections as CollectionWithAssignments[]) || []
-      const cleanedEntityCollections = entityCollections.map(collection => ({
-        ...collection,
-        typeAssignments: (collection.typeAssignments || []).filter(a => a.personaId !== id)
-      }))
-
-      const eventCollections = (worldState.eventCollections as CollectionWithAssignments[]) || []
-      const cleanedEventCollections = eventCollections.map(collection => ({
-        ...collection,
-        typeAssignments: (collection.typeAssignments || []).filter(a => a.personaId !== id)
-      }))
-
-      await this.repository.updateWorldState(worldState.id, {
-        entities: toJson(cleanedEntities),
-        events: toJson(cleanedEvents),
-        entityCollections: toJson(cleanedEntityCollections),
-        eventCollections: toJson(cleanedEventCollections)
+    // Clean the owner's personal world state of this persona's type assignments
+    // and interpretations, then delete the persona (cascading its ontology,
+    // summaries, and annotations) — both inside one transaction so a partial
+    // failure cannot leave the world state referencing a deleted persona. The
+    // world cleanup runs through the version guard so it does not clobber a
+    // concurrent world edit.
+    await prisma.$transaction(async (tx) => {
+      const worldState = await tx.worldState.findFirst({
+        where: { userId: existing.userId, projectId: null },
       })
-    }
+      if (worldState) {
+        await this.updatePersonalWorldStateOptimisticTx(tx, existing.userId, (current) => {
+          const entities = (current.entities as EntityWithAssignments[]) || []
+          const cleanedEntities = entities.map(entity => ({
+            ...entity,
+            typeAssignments: (entity.typeAssignments || []).filter(a => a.personaId !== id)
+          }))
 
-    try {
-      await this.repository.delete(id)
-    } catch (error: unknown) {
-      if (error && typeof error === 'object' && 'code' in error && error.code === 'P2025') {
-        throw new NotFoundError('Persona', id)
+          const events = (current.events as EventWithInterpretations[]) || []
+          const cleanedEvents = events.map(event => ({
+            ...event,
+            personaInterpretations: (event.personaInterpretations || []).filter(i => i.personaId !== id)
+          }))
+
+          const entityCollections = (current.entityCollections as CollectionWithAssignments[]) || []
+          const cleanedEntityCollections = entityCollections.map(collection => ({
+            ...collection,
+            typeAssignments: (collection.typeAssignments || []).filter(a => a.personaId !== id)
+          }))
+
+          const eventCollections = (current.eventCollections as CollectionWithAssignments[]) || []
+          const cleanedEventCollections = eventCollections.map(collection => ({
+            ...collection,
+            typeAssignments: (collection.typeAssignments || []).filter(a => a.personaId !== id)
+          }))
+
+          return {
+            entities: toJson(cleanedEntities),
+            events: toJson(cleanedEvents),
+            entityCollections: toJson(cleanedEntityCollections),
+            eventCollections: toJson(cleanedEventCollections)
+          }
+        })
       }
-      throw error
-    }
+
+      try {
+        await tx.persona.delete({ where: { id } })
+      } catch (error: unknown) {
+        if (error && typeof error === 'object' && 'code' in error && error.code === 'P2025') {
+          throw new NotFoundError('Persona', id)
+        }
+        throw error
+      }
+    })
   }
 
   /**
@@ -647,54 +747,62 @@ export class PersonaService {
     if (!targetType) {
       throw new NotFoundError('Entity type', typeId)
     }
-
     const typeName = targetType.name
-    const updatedEntityTypes = entityTypes.filter(t => t.id !== typeId)
 
-    const roleTypes = asTypesWithGloss(ontology.roleTypes)
-    const eventTypes = asTypesWithGloss(ontology.eventTypes)
-    const relationTypes = asTypesWithGloss(ontology.relationTypes)
-
+    // Delete the matching annotations, rewrite every ontology gloss that
+    // referenced the type to plain text, and strip the type's world-state
+    // assignments — all inside one transaction so a partial failure cannot
+    // leave annotations, glosses, and world state disagreeing. The ontology and
+    // world writes recompute from a fresh, version-guarded read so the cleanup
+    // does not clobber a concurrent edit. Counts are taken from the row each
+    // guarded write actually lands on.
     let glossReferences = 0
-    glossReferences += countTypeRefsInGlosses(updatedEntityTypes, typeId, personaId, 'entity')
-    glossReferences += countTypeRefsInGlosses(roleTypes, typeId, personaId, 'entity')
-    glossReferences += countTypeRefsInGlosses(eventTypes, typeId, personaId, 'entity')
-    glossReferences += countTypeRefsInGlosses(relationTypes, typeId, personaId, 'entity')
-
-    const cleanedEntityTypes = updateGlossesInTypes(updatedEntityTypes, typeId, personaId, 'entity', typeName)
-    const cleanedRoleTypes = updateGlossesInTypes(roleTypes, typeId, personaId, 'entity', typeName)
-    const cleanedEventTypes = updateGlossesInTypes(eventTypes, typeId, personaId, 'entity', typeName)
-    const cleanedRelationTypes = updateGlossesInTypes(relationTypes, typeId, personaId, 'entity', typeName)
-
-    const deleteResult = await this.repository.deleteAnnotations({
-      personaId,
-      type: 'entity',
-      label: typeId
-    })
-
     let worldAssignments = 0
-    const worldState = await this.repository.findPersonalWorldState(persona.userId)
-    if (worldState) {
-      const entities = asEntities(worldState.entities)
-      worldAssignments = countTypeAssignments(entities, typeId, personaId)
-      const cleanedEntities = removeTypeAssignmentsFromEntities(entities, typeId, personaId)
-      await this.repository.updateWorldState(worldState.id, {
-        entities: toJson(cleanedEntities)
+    let annotations = 0
+    await prisma.$transaction(async (tx) => {
+      const deleteResult = await tx.annotation.deleteMany({
+        where: { personaId, type: 'entity', label: typeId }
       })
-    }
+      annotations = deleteResult.count
 
-    await this.repository.updateOntology(personaId, {
-      entityTypes: toJson(cleanedEntityTypes),
-      roleTypes: toJson(cleanedRoleTypes),
-      eventTypes: toJson(cleanedEventTypes),
-      relationTypes: toJson(cleanedRelationTypes)
+      await this.updateOntologyOptimisticTx(tx, personaId, (current) => {
+        const currentEntityTypes = asTypesWithGloss(current.entityTypes)
+        const currentRoleTypes = asTypesWithGloss(current.roleTypes)
+        const currentEventTypes = asTypesWithGloss(current.eventTypes)
+        const currentRelationTypes = asTypesWithGloss(current.relationTypes)
+        const updatedEntityTypes = currentEntityTypes.filter(t => t.id !== typeId)
+
+        glossReferences = 0
+        glossReferences += countTypeRefsInGlosses(updatedEntityTypes, typeId, personaId, 'entity')
+        glossReferences += countTypeRefsInGlosses(currentRoleTypes, typeId, personaId, 'entity')
+        glossReferences += countTypeRefsInGlosses(currentEventTypes, typeId, personaId, 'entity')
+        glossReferences += countTypeRefsInGlosses(currentRelationTypes, typeId, personaId, 'entity')
+
+        return {
+          entityTypes: toJson(updateGlossesInTypes(updatedEntityTypes, typeId, personaId, 'entity', typeName)),
+          roleTypes: toJson(updateGlossesInTypes(currentRoleTypes, typeId, personaId, 'entity', typeName)),
+          eventTypes: toJson(updateGlossesInTypes(currentEventTypes, typeId, personaId, 'entity', typeName)),
+          relationTypes: toJson(updateGlossesInTypes(currentRelationTypes, typeId, personaId, 'entity', typeName)),
+        }
+      })
+
+      const worldState = await tx.worldState.findFirst({
+        where: { userId: persona.userId, projectId: null },
+      })
+      if (worldState) {
+        await this.updatePersonalWorldStateOptimisticTx(tx, persona.userId, (current) => {
+          const entities = asEntities(current.entities)
+          worldAssignments = countTypeAssignments(entities, typeId, personaId)
+          return { entities: toJson(removeTypeAssignmentsFromEntities(entities, typeId, personaId)) }
+        })
+      }
     })
 
     return {
       message: `Entity type "${typeName}" deleted successfully`,
       cleanedUp: {
         glossReferences,
-        annotations: deleteResult.count,
+        annotations,
         worldAssignments
       }
     }
@@ -752,64 +860,76 @@ export class PersonaService {
     if (!targetType) {
       throw new NotFoundError('Role type', typeId)
     }
-
     const typeName = targetType.name
-    const updatedRoleTypes = roleTypes.filter(t => t.id !== typeId)
 
-    const entityTypes = asTypesWithGloss(ontology.entityTypes)
-    const eventTypesForGloss = asTypesWithGloss(ontology.eventTypes)
-    const relationTypes = asTypesWithGloss(ontology.relationTypes)
-
+    // Delete the matching annotations and rewrite the ontology — dropping the
+    // role, converting its glosses to text, and removing it from every event
+    // type's role slots — inside one transaction so a partial failure cannot
+    // leave annotations and ontology disagreeing. The ontology write recomputes
+    // from a fresh, version-guarded read so the cleanup does not clobber a
+    // concurrent edit.
     let glossReferences = 0
-    glossReferences += countTypeRefsInGlosses(entityTypes, typeId, personaId, 'role')
-    glossReferences += countTypeRefsInGlosses(updatedRoleTypes, typeId, personaId, 'role')
-    glossReferences += countTypeRefsInGlosses(eventTypesForGloss, typeId, personaId, 'role')
-    glossReferences += countTypeRefsInGlosses(relationTypes, typeId, personaId, 'role')
-
-    const cleanedEntityTypes = updateGlossesInTypes(entityTypes, typeId, personaId, 'role', typeName)
-    const cleanedRoleTypes = updateGlossesInTypes(updatedRoleTypes, typeId, personaId, 'role', typeName)
-    const cleanedEventTypesGloss = updateGlossesInTypes(eventTypesForGloss, typeId, personaId, 'role', typeName)
-    const cleanedRelationTypes = updateGlossesInTypes(relationTypes, typeId, personaId, 'role', typeName)
-
-    // Remove the role from event-type role slots, preserving every other field
-    // on each event type. The raw event types carry the `roles` array, which
-    // the gloss-only mapping above does not.
-    const eventTypesRaw = ontology.eventTypes
-    const eventRoleReferences = this.countEventRoleReferences(eventTypesRaw, typeId)
-    let cleanedEventTypes = cleanedEventTypesGloss
-    if (Array.isArray(eventTypesRaw)) {
-      cleanedEventTypes = cleanedEventTypesGloss.map(et => {
-        const rawEvent = eventTypesRaw.find(raw =>
-          raw && typeof raw === 'object' && 'id' in raw && (raw as { id: string }).id === et.id
-        )
-        if (rawEvent && typeof rawEvent === 'object' && 'roles' in rawEvent) {
-          const roles = (rawEvent as { roles?: Array<{ roleTypeId: string }> }).roles
-          if (roles) {
-            return { ...et, roles: roles.filter(r => r.roleTypeId !== typeId) }
-          }
-        }
-        return et
+    let eventRoleReferences = 0
+    let annotations = 0
+    await prisma.$transaction(async (tx) => {
+      const deleteResult = await tx.annotation.deleteMany({
+        where: { personaId, type: 'role', label: typeId }
       })
-    }
+      annotations = deleteResult.count
 
-    const deleteResult = await this.repository.deleteAnnotations({
-      personaId,
-      type: 'role',
-      label: typeId
-    })
+      await this.updateOntologyOptimisticTx(tx, personaId, (current) => {
+        const currentEntityTypes = asTypesWithGloss(current.entityTypes)
+        const currentRoleTypes = asTypesWithGloss(current.roleTypes)
+        const currentEventTypesForGloss = asTypesWithGloss(current.eventTypes)
+        const currentRelationTypes = asTypesWithGloss(current.relationTypes)
+        const updatedRoleTypes = currentRoleTypes.filter(t => t.id !== typeId)
 
-    await this.repository.updateOntology(personaId, {
-      entityTypes: toJson(cleanedEntityTypes),
-      roleTypes: toJson(cleanedRoleTypes),
-      eventTypes: toJson(cleanedEventTypes),
-      relationTypes: toJson(cleanedRelationTypes)
+        glossReferences = 0
+        glossReferences += countTypeRefsInGlosses(currentEntityTypes, typeId, personaId, 'role')
+        glossReferences += countTypeRefsInGlosses(updatedRoleTypes, typeId, personaId, 'role')
+        glossReferences += countTypeRefsInGlosses(currentEventTypesForGloss, typeId, personaId, 'role')
+        glossReferences += countTypeRefsInGlosses(currentRelationTypes, typeId, personaId, 'role')
+
+        const cleanedEntityTypes = updateGlossesInTypes(currentEntityTypes, typeId, personaId, 'role', typeName)
+        const cleanedRoleTypes = updateGlossesInTypes(updatedRoleTypes, typeId, personaId, 'role', typeName)
+        const cleanedEventTypesGloss = updateGlossesInTypes(currentEventTypesForGloss, typeId, personaId, 'role', typeName)
+        const cleanedRelationTypes = updateGlossesInTypes(currentRelationTypes, typeId, personaId, 'role', typeName)
+
+        // Remove the role from event-type role slots, preserving every other
+        // field on each event type. The raw event types carry the `roles`
+        // array, which the gloss-only mapping above does not.
+        const eventTypesRaw = current.eventTypes
+        eventRoleReferences = this.countEventRoleReferences(eventTypesRaw, typeId)
+        let cleanedEventTypes = cleanedEventTypesGloss
+        if (Array.isArray(eventTypesRaw)) {
+          cleanedEventTypes = cleanedEventTypesGloss.map(et => {
+            const rawEvent = eventTypesRaw.find(raw =>
+              raw && typeof raw === 'object' && 'id' in raw && (raw as { id: string }).id === et.id
+            )
+            if (rawEvent && typeof rawEvent === 'object' && 'roles' in rawEvent) {
+              const roles = (rawEvent as { roles?: Array<{ roleTypeId: string }> }).roles
+              if (roles) {
+                return { ...et, roles: roles.filter(r => r.roleTypeId !== typeId) }
+              }
+            }
+            return et
+          })
+        }
+
+        return {
+          entityTypes: toJson(cleanedEntityTypes),
+          roleTypes: toJson(cleanedRoleTypes),
+          eventTypes: toJson(cleanedEventTypes),
+          relationTypes: toJson(cleanedRelationTypes),
+        }
+      })
     })
 
     return {
       message: `Role type "${typeName}" deleted successfully`,
       cleanedUp: {
         glossReferences,
-        annotations: deleteResult.count,
+        annotations,
         eventRoleReferences
       }
     }
@@ -892,54 +1012,61 @@ export class PersonaService {
     if (!targetType) {
       throw new NotFoundError('Event type', typeId)
     }
-
     const typeName = targetType.name
-    const updatedEventTypes = eventTypes.filter(t => t.id !== typeId)
 
-    const entityTypes = asTypesWithGloss(ontology.entityTypes)
-    const roleTypes = asTypesWithGloss(ontology.roleTypes)
-    const relationTypes = asTypesWithGloss(ontology.relationTypes)
-
+    // Delete the matching annotations, rewrite every ontology gloss that
+    // referenced the type to plain text, and strip the type's world-state
+    // interpretations — all inside one transaction so a partial failure cannot
+    // leave annotations, glosses, and world state disagreeing. The ontology and
+    // world writes recompute from a fresh, version-guarded read so the cleanup
+    // does not clobber a concurrent edit.
     let glossReferences = 0
-    glossReferences += countTypeRefsInGlosses(entityTypes, typeId, personaId, 'event')
-    glossReferences += countTypeRefsInGlosses(roleTypes, typeId, personaId, 'event')
-    glossReferences += countTypeRefsInGlosses(updatedEventTypes, typeId, personaId, 'event')
-    glossReferences += countTypeRefsInGlosses(relationTypes, typeId, personaId, 'event')
-
-    const cleanedEntityTypes = updateGlossesInTypes(entityTypes, typeId, personaId, 'event', typeName)
-    const cleanedRoleTypes = updateGlossesInTypes(roleTypes, typeId, personaId, 'event', typeName)
-    const cleanedEventTypes = updateGlossesInTypes(updatedEventTypes, typeId, personaId, 'event', typeName)
-    const cleanedRelationTypes = updateGlossesInTypes(relationTypes, typeId, personaId, 'event', typeName)
-
-    const deleteResult = await this.repository.deleteAnnotations({
-      personaId,
-      type: 'event',
-      label: typeId
-    })
-
     let worldInterpretations = 0
-    const worldState = await this.repository.findPersonalWorldState(persona.userId)
-    if (worldState) {
-      const events = asEvents(worldState.events)
-      worldInterpretations = countEventInterpretations(events, typeId, personaId)
-      const cleanedEvents = removeEventInterpretationsFromEvents(events, typeId, personaId)
-      await this.repository.updateWorldState(worldState.id, {
-        events: toJson(cleanedEvents)
+    let annotations = 0
+    await prisma.$transaction(async (tx) => {
+      const deleteResult = await tx.annotation.deleteMany({
+        where: { personaId, type: 'event', label: typeId }
       })
-    }
+      annotations = deleteResult.count
 
-    await this.repository.updateOntology(personaId, {
-      entityTypes: toJson(cleanedEntityTypes),
-      roleTypes: toJson(cleanedRoleTypes),
-      eventTypes: toJson(cleanedEventTypes),
-      relationTypes: toJson(cleanedRelationTypes)
+      await this.updateOntologyOptimisticTx(tx, personaId, (current) => {
+        const currentEntityTypes = asTypesWithGloss(current.entityTypes)
+        const currentRoleTypes = asTypesWithGloss(current.roleTypes)
+        const currentEventTypes = asTypesWithGloss(current.eventTypes)
+        const currentRelationTypes = asTypesWithGloss(current.relationTypes)
+        const updatedEventTypes = currentEventTypes.filter(t => t.id !== typeId)
+
+        glossReferences = 0
+        glossReferences += countTypeRefsInGlosses(currentEntityTypes, typeId, personaId, 'event')
+        glossReferences += countTypeRefsInGlosses(currentRoleTypes, typeId, personaId, 'event')
+        glossReferences += countTypeRefsInGlosses(updatedEventTypes, typeId, personaId, 'event')
+        glossReferences += countTypeRefsInGlosses(currentRelationTypes, typeId, personaId, 'event')
+
+        return {
+          entityTypes: toJson(updateGlossesInTypes(currentEntityTypes, typeId, personaId, 'event', typeName)),
+          roleTypes: toJson(updateGlossesInTypes(currentRoleTypes, typeId, personaId, 'event', typeName)),
+          eventTypes: toJson(updateGlossesInTypes(updatedEventTypes, typeId, personaId, 'event', typeName)),
+          relationTypes: toJson(updateGlossesInTypes(currentRelationTypes, typeId, personaId, 'event', typeName)),
+        }
+      })
+
+      const worldState = await tx.worldState.findFirst({
+        where: { userId: persona.userId, projectId: null },
+      })
+      if (worldState) {
+        await this.updatePersonalWorldStateOptimisticTx(tx, persona.userId, (current) => {
+          const events = asEvents(current.events)
+          worldInterpretations = countEventInterpretations(events, typeId, personaId)
+          return { events: toJson(removeEventInterpretationsFromEvents(events, typeId, personaId)) }
+        })
+      }
     })
 
     return {
       message: `Event type "${typeName}" deleted successfully`,
       cleanedUp: {
         glossReferences,
-        annotations: deleteResult.count,
+        annotations,
         worldInterpretations
       }
     }
@@ -991,30 +1118,31 @@ export class PersonaService {
     if (!targetType) {
       throw new NotFoundError('Relation type', typeId)
     }
-
     const typeName = targetType.name
-    const updatedRelationTypes = relationTypes.filter(t => t.id !== typeId)
 
-    const entityTypes = asTypesWithGloss(ontology.entityTypes)
-    const roleTypes = asTypesWithGloss(ontology.roleTypes)
-    const eventTypes = asTypesWithGloss(ontology.eventTypes)
-
+    // Route the gloss cleanup through the version-guarded optimistic update so a
+    // concurrent ontology edit is not clobbered; recompute from the fresh row.
+    // A single write needs no enclosing transaction.
     let glossReferences = 0
-    glossReferences += countTypeRefsInGlosses(entityTypes, typeId, personaId, 'relation')
-    glossReferences += countTypeRefsInGlosses(roleTypes, typeId, personaId, 'relation')
-    glossReferences += countTypeRefsInGlosses(eventTypes, typeId, personaId, 'relation')
-    glossReferences += countTypeRefsInGlosses(updatedRelationTypes, typeId, personaId, 'relation')
+    await this.repository.updateOntologyOptimistic(personaId, (current) => {
+      const currentEntityTypes = asTypesWithGloss(current.entityTypes)
+      const currentRoleTypes = asTypesWithGloss(current.roleTypes)
+      const currentEventTypes = asTypesWithGloss(current.eventTypes)
+      const currentRelationTypes = asTypesWithGloss(current.relationTypes)
+      const updatedRelationTypes = currentRelationTypes.filter(t => t.id !== typeId)
 
-    const cleanedEntityTypes = updateGlossesInTypes(entityTypes, typeId, personaId, 'relation', typeName)
-    const cleanedRoleTypes = updateGlossesInTypes(roleTypes, typeId, personaId, 'relation', typeName)
-    const cleanedEventTypes = updateGlossesInTypes(eventTypes, typeId, personaId, 'relation', typeName)
-    const cleanedRelationTypes = updateGlossesInTypes(updatedRelationTypes, typeId, personaId, 'relation', typeName)
+      glossReferences = 0
+      glossReferences += countTypeRefsInGlosses(currentEntityTypes, typeId, personaId, 'relation')
+      glossReferences += countTypeRefsInGlosses(currentRoleTypes, typeId, personaId, 'relation')
+      glossReferences += countTypeRefsInGlosses(currentEventTypes, typeId, personaId, 'relation')
+      glossReferences += countTypeRefsInGlosses(updatedRelationTypes, typeId, personaId, 'relation')
 
-    await this.repository.updateOntology(personaId, {
-      entityTypes: toJson(cleanedEntityTypes),
-      roleTypes: toJson(cleanedRoleTypes),
-      eventTypes: toJson(cleanedEventTypes),
-      relationTypes: toJson(cleanedRelationTypes)
+      return {
+        entityTypes: toJson(updateGlossesInTypes(currentEntityTypes, typeId, personaId, 'relation', typeName)),
+        roleTypes: toJson(updateGlossesInTypes(currentRoleTypes, typeId, personaId, 'relation', typeName)),
+        eventTypes: toJson(updateGlossesInTypes(currentEventTypes, typeId, personaId, 'relation', typeName)),
+        relationTypes: toJson(updateGlossesInTypes(updatedRelationTypes, typeId, personaId, 'relation', typeName)),
+      }
     })
 
     return {

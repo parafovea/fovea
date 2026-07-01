@@ -423,7 +423,18 @@ export class ProjectService {
       throw new ConflictError('User is already a member of this project')
     }
 
-    const membership = await this.repository.createMembership(targetUserId, projectId, role)
+    let membership
+    try {
+      membership = await this.repository.createMembership(targetUserId, projectId, role)
+    } catch (error) {
+      // The pre-check narrows the common case, but a concurrent add of the same
+      // member can still race past it into the @@unique([userId, projectId])
+      // constraint — surface 409, not 500.
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        throw new ConflictError('User is already a member of this project')
+      }
+      throw error
+    }
 
     // Newly added member picks up project-scope role permissions.
     invalidateUserAbilities(targetUserId)
@@ -672,13 +683,20 @@ export class ProjectService {
       throw new ForbiddenError('You must be a project member to update world state')
     }
 
-    const existing = await this.repository.findWorldState(userId, projectId)
+    // Guarantee the (userId, projectId) row exists before merging. Upserting the
+    // empty row collapses the find-then-create race on concurrent first access:
+    // a plain create would have both callers miss the find, both create, and the
+    // second hit the @@unique([userId, projectId]) constraint (P2002 -> 500).
+    // With the row guaranteed, both the existing-row and first-access paths run
+    // through the same guarded optimistic merge below.
+    await this.repository.upsertEmptyWorldState(userId, projectId)
 
     // Merge each provided array by id (upsert) instead of replacing it, under
     // optimistic concurrency. Project world state is multi-user (every project
     // member shares the (userId, projectId) row), so whole-blob replacement
     // would let concurrent writers clobber each other's additions; the merge
-    // re-runs against the freshly-read row on each retry.
+    // re-runs against the freshly-read row on each retry. On a first-access row
+    // each `current` array is empty, so the merge yields exactly the input.
     const mergeTransform = (current: PrismaWorldState): Prisma.WorldStateUpdateInput => ({
       entities: input.entities !== undefined ? mergeById(current.entities, input.entities) : undefined,
       events: input.events !== undefined ? mergeById(current.events, input.events) : undefined,
@@ -689,22 +707,11 @@ export class ProjectService {
       relations: input.relations !== undefined ? mergeById(current.relations, input.relations) : undefined,
     })
 
-    let worldState
-    if (existing) {
-      worldState = await this.repository.updateProjectWorldStateOptimistic(userId, projectId, mergeTransform)
-    } else {
-      worldState = await this.repository.createWorldState({
-        userId,
-        projectId,
-        entities: toJson(input.entities || []),
-        events: toJson(input.events || []),
-        times: toJson(input.times || []),
-        entityCollections: toJson(input.entityCollections || []),
-        eventCollections: toJson(input.eventCollections || []),
-        timeCollections: toJson(input.timeCollections || []),
-        relations: toJson(input.relations || []),
-      })
-    }
+    const worldState = await this.repository.updateProjectWorldStateOptimistic(
+      userId,
+      projectId,
+      mergeTransform
+    )
 
     return this.mapWorldState(worldState)
   }

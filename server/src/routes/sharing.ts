@@ -8,6 +8,7 @@
  * @module
  */
 
+import { randomUUID } from 'node:crypto'
 import { Type, Static } from '@sinclair/typebox'
 import { FastifyPluginAsync } from 'fastify'
 import { Prisma, PrismaClient } from '@prisma/client'
@@ -15,6 +16,112 @@ import { Prisma, PrismaClient } from '@prisma/client'
 /** Convert a value to Prisma JSON without type assertions. */
 function toJson(value: unknown): Prisma.InputJsonValue {
   return JSON.parse(JSON.stringify(value))
+}
+
+/**
+ * Deep-copies a JSON value, replacing any string leaf that is a key in `idMap`
+ * with its mapped value. The fork re-points every claim-id reference at the
+ * new claim ids in one pass: row ids, `parentClaimId`, and the `$` claim
+ * references embedded in gloss arrays. Claim ids are UUIDs, so a non-id string
+ * cannot collide with a map key. Returns a fresh structure (the input is not
+ * mutated).
+ */
+function remapClaimIds(value: unknown, idMap: Map<string, string>): unknown {
+  if (typeof value === 'string') {
+    return idMap.get(value) ?? value
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => remapClaimIds(item, idMap))
+  }
+  if (value && typeof value === 'object') {
+    const out: Record<string, unknown> = {}
+    for (const [key, item] of Object.entries(value)) {
+      out[key] = remapClaimIds(item, idMap)
+    }
+    return out
+  }
+  return value
+}
+
+/** A claim's nullable JSON field copied through the id remap, or JSON null. */
+function remappedJsonOrNull(
+  value: Prisma.JsonValue | null,
+  idMap: Map<string, string>
+): Prisma.InputJsonValue | typeof Prisma.JsonNull {
+  return value === null || value === undefined
+    ? Prisma.JsonNull
+    : toJson(remapClaimIds(value, idMap))
+}
+
+/**
+ * Deep-copies a summary's claim rows under a new summary, re-pointing every
+ * claim id (and the references between claims) at fresh ids via `idMap`.
+ *
+ * Rows are inserted parents-before-children so each `parentClaimId` foreign key
+ * resolves at insert time. Every copied claim is stamped with the forker as
+ * `createdBy` and left in personal scope (no projectId), matching the forked
+ * summary and persona. World-object references (claimEventId/claimTimeId/
+ * claimLocationId) are not remapped: world state is not forked, so they keep
+ * pointing at the same object ids the source named.
+ *
+ * @param tx - the Prisma transaction client running the fork
+ * @param sourceClaims - the source summary's claim rows (flat list)
+ * @param idMap - source claim id to forked claim id
+ * @param newSummaryId - id of the forked summary the copies attach to
+ * @param ownerUserId - UUID of the user who will own the forked claims
+ */
+async function forkClaimRows(
+  tx: Prisma.TransactionClient,
+  sourceClaims: Array<Prisma.ClaimGetPayload<object>>,
+  idMap: Map<string, string>,
+  newSummaryId: string,
+  ownerUserId: string
+): Promise<void> {
+  const byOldId = new Map(sourceClaims.map((c) => [c.id, c]))
+  const inserted = new Set<string>()
+
+  const insert = async (claim: Prisma.ClaimGetPayload<object>): Promise<void> => {
+    if (inserted.has(claim.id)) {
+      return
+    }
+    // Ensure the parent row exists first so the FK resolves. Only intra-summary
+    // parents are remapped; an out-of-summary parent (should not occur) falls
+    // through to null rather than dangling.
+    if (claim.parentClaimId && byOldId.has(claim.parentClaimId)) {
+      await insert(byOldId.get(claim.parentClaimId)!)
+    }
+    await tx.claim.create({
+      data: {
+        id: idMap.get(claim.id)!,
+        summaryId: newSummaryId,
+        summaryType: claim.summaryType,
+        text: claim.text,
+        gloss: toJson(remapClaimIds(claim.gloss, idMap)),
+        parentClaimId: claim.parentClaimId ? idMap.get(claim.parentClaimId) ?? null : null,
+        textSpans: remappedJsonOrNull(claim.textSpans, idMap),
+        timeSpans: remappedJsonOrNull(claim.timeSpans, idMap),
+        claimerType: claim.claimerType,
+        claimerGloss: remappedJsonOrNull(claim.claimerGloss, idMap),
+        claimRelation: remappedJsonOrNull(claim.claimRelation, idMap),
+        claimEventId: claim.claimEventId,
+        claimTimeId: claim.claimTimeId,
+        claimLocationId: claim.claimLocationId,
+        confidence: claim.confidence,
+        modelUsed: claim.modelUsed,
+        extractionStrategy: claim.extractionStrategy,
+        audio: claim.audio === null ? Prisma.JsonNull : toJson(claim.audio),
+        video: claim.video === null ? Prisma.JsonNull : toJson(claim.video),
+        metadata: claim.metadata === null ? Prisma.JsonNull : toJson(claim.metadata),
+        comment: claim.comment,
+        createdBy: ownerUserId,
+      },
+    })
+    inserted.add(claim.id)
+  }
+
+  for (const claim of sourceClaims) {
+    await insert(claim)
+  }
 }
 
 /**
@@ -110,7 +217,19 @@ async function forkSummary(
   // lands in the forker's scope under a NEW personaId, keeping the same videoId.
   const forkedPersona = await forkPersona(tx, source.personaId, ownerUserId)
 
-  return tx.videoSummary.create({
+  // Build the claim id remap up front, from the source summary's claim rows, so
+  // the copied rows AND the denormalized claimsJson re-point at the same new
+  // ids. Without this the fork drops every extracted claim, leaving the forked
+  // summary's claim view empty.
+  const sourceClaims = await tx.claim.findMany({
+    where: { summaryId: sourceSummaryId, summaryType: 'video' },
+  })
+  const idMap = new Map<string, string>()
+  for (const claim of sourceClaims) {
+    idMap.set(claim.id, randomUUID())
+  }
+
+  const forked = await tx.videoSummary.create({
     data: {
       videoId: source.videoId,
       personaId: forkedPersona.id,
@@ -125,10 +244,23 @@ async function forkSummary(
       audioLanguage: source.audioLanguage,
       speakerCount: source.speakerCount,
       comment: source.comment,
+      // Carry the denormalized claim view (re-pointed at the forked claim ids)
+      // and its extraction metadata so the fork reads identically to the source.
+      claimsJson:
+        source.claimsJson === null
+          ? Prisma.JsonNull
+          : toJson(remapClaimIds(source.claimsJson, idMap)),
+      claimsVersion: source.claimsVersion,
+      claimsExtractedAt: source.claimsExtractedAt,
       createdBy: ownerUserId,
     },
     select: { id: true },
   })
+
+  // Deep-copy the claim rows themselves under the forked summary, parents first.
+  await forkClaimRows(tx, sourceClaims, idMap, forked.id, ownerUserId)
+
+  return forked
 }
 import { trace } from '@opentelemetry/api'
 import { requireAuth } from '@middleware/auth.js'

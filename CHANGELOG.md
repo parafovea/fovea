@@ -5,6 +5,46 @@ All notable changes to the Fovea project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.9] - 2026-06-30
+
+The 0.5.9 patch is the first of three releases remediating a second swarm audit of the shipped 0.5.x line — the backend slice — fixing authorization, lost-update concurrency, idempotency, and data-fidelity defects in the Fastify server ([#194](https://github.com/parafovea/fovea/pull/194)). Roughly a third of the findings were gaps in the first audit's own fixes: a fix addressed specific instances of a defect class without closing every instance. Nothing is breaking.
+
+### Fixed
+
+#### Authorization
+
+- The `/api/models/*` proxy routes were unauthenticated: any caller could read the model configuration and, worse, drive the shared inference service — selecting, loading, or unloading a model affects every user — with no credentials. The routes now require authentication, and the state-changing select/load/unload operations additionally require admin (`server/src/app.ts`, `server/src/routes/models.ts`).
+- A persona could be attached to a project by a non-member, since the create ability passed for any self-owned persona regardless of the target project. Project-scoped persona creation now verifies project membership and returns 403 otherwise (`server/src/services/persona-service.ts`).
+- The import "replace" paths overwrote or deleted an existing annotation, persona, summary, claim, or claim-relation found by id with no instance-level check, so a crafted import could clobber another user's row. Each replace now requires update (or delete) on the existing row, mirroring the ontology-import guard (`server/src/services/import/entity-importers.ts`).
+
+#### Concurrency — lost-update hardening
+
+- The optimistic-concurrency guard on world state and ontologies compared on `updatedAt`, which two writes landing in the same millisecond may share — letting the second silently overwrite the first. Both tables now carry a monotonic `version` column, and every guarded write compares-and-swaps on it; guard exhaustion now returns 409 and a missing row 404 rather than a generic 500 (`server/prisma/migrations/20260630120000_add_optimistic_version_and_admin_apikey_uniqueness`, `server/src/repositories/{WorldStateRepository,ProjectRepository,PersonaRepository}.ts`, `server/src/services/world-state-service.ts`).
+- Persona type-deletion and persona deletion wrote the annotation delete, the ontology gloss cleanup, and the world-state cleanup as separate unguarded statements, so a partial failure left them disagreeing and a concurrent edit could be clobbered. Each now runs in a single transaction with the ontology and world-state writes routed through the version guard, recomputing from a fresh read (`server/src/services/persona-service.ts`).
+- The admin "clear world state" path wrote through a bare id update that could half-survive a concurrent write; it now clears through the version guard (`server/src/services/world-state-service.ts`).
+- First-access creation of a project world state raced into the compound unique constraint and surfaced a 500; it now upserts the empty row and merges through the guard (`server/src/services/project-service.ts`).
+- The claim-extraction worker re-saved claims on every run with no dedup, so a job retry or double-submit duplicated every claim for a summary. Re-extraction is now idempotent: the prior extracted claims are replaced inside one transaction, preserving manually authored claims (`server/src/queues/setup.ts`).
+
+#### Idempotency and conflict status
+
+- Several create and update paths surfaced a duplicate as a 500 rather than a 409: the self-service profile email/username update, project and group membership adds, and admin API keys. Each now maps the unique-constraint violation to a 409 (`server/src/routes/{users,groups}.ts`, `server/src/services/{project-service,api-key-service}.ts`).
+- Admin API keys were unconstrained, since the compound `@@unique([userId, provider])` does not bind rows with a null userId in Postgres, so the advertised 409 never fired. A partial unique index now enforces one admin key per provider, deduping any existing duplicates first (`server/prisma/migrations/20260630120000_add_optimistic_version_and_admin_apikey_uniqueness`).
+- A claim create that lost the same-id race re-threw the raw unique violation as a 500 when the existing row was not updatable; it now returns 403, mirroring the pre-create authorization check (`server/src/services/claim-service.ts`).
+- A service-layer Zod validation failure — one that bypasses Fastify's schema validation — fell through to a generic 500; it now returns 400 with the field-level issues (`server/src/app.ts`).
+- The ontology-save handler returned a bespoke 500 that leaked the raw error message to the client; it now re-throws to the global handler for a safe generic 500, keeping the detail in the logs (`server/src/routes/ontology.ts`).
+
+#### Data fidelity
+
+- Forking a shared video summary copied the summary body but dropped every extracted claim, leaving the fork's claim view empty. The fork now deep-copies the claim tree under fresh ids and carries the denormalized `claimsJson`, re-pointing every claim reference — row ids, parent links, and the references embedded in glosses — at the new ids (`server/src/routes/sharing.ts`).
+- Cross-summary import conflict detection compared relation ids against the collection id set and read the world-state row with a narrower filter than the writer used, so it could miss or misreport conflicts. Both now key on the correct row and the relation id set (`server/src/services/import/conflict-resolver.ts`, `server/src/services/import-handler.ts`).
+- A merge-keyframes import resolution on an existing annotation fell through to an unconditional create and collided on the primary key; the create is now guarded by an existence check (`server/src/services/import/entity-importers.ts`).
+
+#### Demo and cache hygiene
+
+- The idle-demo-user sweeper deleted users but never evicted their cached abilities, leaking memory as anonymous demo sessions churned; it now invalidates each swept user's ability cache (`server/src/demo/idle-reset.ts`).
+- The anonymous-session mint endpoint had neither a per-route rate limit nor a population ceiling, so it could be driven to create users faster than the sweeper reclaims them; it now rate-limits per IP and refuses once a live-anonymous-user ceiling is reached (`server/src/demo/anonymous-session.ts`).
+- Admin user creation accepted an independent `systemRole` that could diverge from `isAdmin` (CASL keys on the former, the admin middleware on the latter); the two are now coupled. Admin user deletion now invalidates the deleted user's cached abilities (`server/src/routes/users.ts`).
+
 ## [0.5.8] - 2026-06-30
 
 The 0.5.8 patch is the third and final audit-driven hardening release — the model-service slice — fixing resource and concurrency defects in the Python inference service ([#192](https://github.com/parafovea/fovea/pull/192)). Nothing is breaking.
