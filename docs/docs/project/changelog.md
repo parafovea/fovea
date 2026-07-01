@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.5.9] - 2026-06-30
 
-The 0.5.9 patch is the first of three releases remediating a second swarm audit of the shipped 0.5.x line — the backend slice — fixing authorization, lost-update concurrency, idempotency, and data-fidelity defects in the Fastify server (PR_PLACEHOLDER). Roughly a third of the findings were gaps in the first audit's own fixes: a fix addressed specific instances of a defect class without closing every instance. Nothing is breaking.
+The 0.5.9 patch is the first of three releases remediating a second swarm audit of the shipped 0.5.x line — the backend slice — fixing authorization, lost-update concurrency, idempotency, and data-fidelity defects in the Fastify server ([#194](https://github.com/parafovea/fovea/pull/194)). Roughly a third of the findings were gaps in the first audit's own fixes: a fix addressed specific instances of a defect class without closing every instance. Nothing is breaking.
 
 ### Fixed
 
