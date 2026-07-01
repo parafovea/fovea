@@ -67,6 +67,18 @@ function remapInlineIds(text: string, pattern: RegExp, idMap: Map<string, string
 }
 
 /**
+ * ExistingData augmented with the set of world-state relation ids. Relations
+ * live in each world state's `relations` array rather than a dedicated table,
+ * so their ids are collected separately and supplied alongside ExistingData.
+ * The field is optional so callers that build a bare ExistingData (unit-test
+ * stubs) remain compatible; the relation case treats a missing set as "no
+ * existing relations".
+ */
+export interface ExistingDataWithRelations extends ExistingData {
+  relationIds?: Set<string>
+}
+
+/**
  * Detect conflicts between import data and existing database data.
  *
  * @param lines - the import lines
@@ -74,7 +86,7 @@ function remapInlineIds(text: string, pattern: RegExp, idMap: Map<string, string
  * @param userId - the importing user's id
  * @returns array of detected conflicts
  */
-export function detectConflicts(lines: ImportLine[], existingData: ExistingData, userId: string): Conflict[] {
+export function detectConflicts(lines: ImportLine[], existingData: ExistingDataWithRelations, userId: string): Conflict[] {
   const conflicts: Conflict[] = []
 
   // Identify foreign persona IDs from import data: personas whose userId
@@ -265,7 +277,11 @@ export function detectConflicts(lines: ImportLine[], existingData: ExistingData,
 
       case 'relation': {
         const relationData = line.data as { id: string; [key: string]: unknown }
-        if (relationData.id && existingData.collectionIds.has(relationData.id)) {
+        // Test relation ids against the relation id set, not collectionIds.
+        // Relations and collections are disjoint id spaces; checking against
+        // collectionIds missed every real relation collision and could only
+        // ever fire on an accidental cross-space id match.
+        if (relationData.id && (existingData.relationIds?.has(relationData.id) ?? false)) {
           conflicts.push({
             type: 'duplicate-object',
             line: line.lineNumber,

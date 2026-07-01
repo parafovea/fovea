@@ -556,18 +556,28 @@ const groupsRoute: FastifyPluginAsync = async (fastify) => {
         throw new ConflictError('User is already a member of this group')
       }
 
-      const membership = await fastify.prisma.groupMembership.create({
-        data: {
-          userId: targetUserId,
-          groupId,
-          role: targetRole,
-        },
-        include: {
-          user: {
-            select: { id: true, username: true, displayName: true, email: true },
+      let membership
+      try {
+        membership = await fastify.prisma.groupMembership.create({
+          data: {
+            userId: targetUserId,
+            groupId,
+            role: targetRole,
           },
-        },
-      })
+          include: {
+            user: {
+              select: { id: true, username: true, displayName: true, email: true },
+            },
+          },
+        })
+      } catch (error: unknown) {
+        // The existence pre-check narrows the common case, but a concurrent add
+        // can race past it and hit the unique constraint — return 409, not 500.
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+          throw new ConflictError('User is already a member of this group')
+        }
+        throw error
+      }
 
       // Newly added member's abilities now include group-scope roles
       invalidateUserAbilities(targetUserId)
@@ -1053,18 +1063,28 @@ const groupsRoute: FastifyPluginAsync = async (fastify) => {
         throw new ConflictError('User is already a member of this group')
       }
 
-      const membership = await fastify.prisma.groupMembership.create({
-        data: {
-          userId: targetUserId,
-          groupId,
-          role: targetRole,
-        },
-        include: {
-          user: {
-            select: { id: true, username: true, displayName: true, email: true },
+      let membership
+      try {
+        membership = await fastify.prisma.groupMembership.create({
+          data: {
+            userId: targetUserId,
+            groupId,
+            role: targetRole,
           },
-        },
-      })
+          include: {
+            user: {
+              select: { id: true, username: true, displayName: true, email: true },
+            },
+          },
+        })
+      } catch (error: unknown) {
+        // A concurrent add can race past the existence pre-check and hit the
+        // unique constraint — return 409, not 500.
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+          throw new ConflictError('User is already a member of this group')
+        }
+        throw error
+      }
 
       // Admin-added member's abilities must pick up group-scope roles
       invalidateUserAbilities(targetUserId)

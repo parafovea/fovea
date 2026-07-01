@@ -106,6 +106,22 @@ export class EntityImporter {
       const existingPersona = await tx.persona.findUnique({ where: { id: personaId } })
 
       if (existingPersona && resolution?.action === 'replace') {
+        // Authorize the replace against the EXISTING row, not the importer's
+        // scope: overwriting a persona found by id requires permission to
+        // update THAT persona. Without this an import line carrying another
+        // user's persona id would clobber their persona (IDOR).
+        if (this.ability && !this.ability.can('update', subject('Persona', existingPersona))) {
+          result.errors.push({
+            line: line.lineNumber,
+            type: 'authorization',
+            message: `Not authorized to replace persona ${personaId}`,
+            data: line.data
+          })
+          if (options.transaction.atomic) {
+            throw new ForbiddenError(`Not authorized to replace persona ${personaId}`)
+          }
+          return
+        }
         await tx.persona.update({
           where: { id: personaId },
           data: {
@@ -439,6 +455,21 @@ export class EntityImporter {
       }
 
       if (existingSummary && resolution?.action === 'replace') {
+        // Authorize the replace against the EXISTING row: overwriting a
+        // summary found by id requires permission to update THAT summary,
+        // not merely to create one in the importer's scope (IDOR guard).
+        if (this.ability && !this.ability.can('update', subject('VideoSummary', existingSummary))) {
+          result.errors.push({
+            line: line.lineNumber,
+            type: 'authorization',
+            message: `Not authorized to replace summary ${summaryId}`,
+            data: line.data
+          })
+          if (options.transaction.atomic) {
+            throw new ForbiddenError(`Not authorized to replace summary ${summaryId}`)
+          }
+          return
+        }
         await tx.videoSummary.update({
           where: { id: summaryId },
           data: summaryData
@@ -575,6 +606,21 @@ export class EntityImporter {
       }
 
       if (existingClaim && resolution?.action === 'replace') {
+        // Authorize the replace against the EXISTING row: overwriting a claim
+        // found by id requires permission to update THAT claim, not merely to
+        // create one in the importer's scope (IDOR guard).
+        if (this.ability && !this.ability.can('update', subject('Claim', existingClaim))) {
+          result.errors.push({
+            line: line.lineNumber,
+            type: 'authorization',
+            message: `Not authorized to replace claim ${claimId}`,
+            data: line.data
+          })
+          if (options.transaction.atomic) {
+            throw new ForbiddenError(`Not authorized to replace claim ${claimId}`)
+          }
+          return
+        }
         await tx.claim.update({
           where: { id: claimId },
           data: claimData
@@ -699,6 +745,21 @@ export class EntityImporter {
       }
 
       if (existingRelation && resolution?.action === 'replace') {
+        // Authorize the replace against the EXISTING row: overwriting a claim
+        // relation found by id requires permission to update THAT relation,
+        // not merely to create one in the importer's scope (IDOR guard).
+        if (this.ability && !this.ability.can('update', subject('ClaimRelation', existingRelation))) {
+          result.errors.push({
+            line: line.lineNumber,
+            type: 'authorization',
+            message: `Not authorized to replace claim relation ${relationId}`,
+            data: line.data
+          })
+          if (options.transaction.atomic) {
+            throw new ForbiddenError(`Not authorized to replace claim relation ${relationId}`)
+          }
+          return
+        }
         await tx.claimRelation.update({
           where: { id: relationId },
           data: relationData
@@ -794,11 +855,50 @@ export class EntityImporter {
         result.summary.importedItems.singleKeyframeSequences++
       }
 
+      // Determine whether a row with this id already exists so the create
+      // below stays guarded. Without this, any non-replace resolution that
+      // reaches an existing id (e.g. merge-keyframes, which resolves to
+      // 'merge', not 'replace') falls through to an unconditional create and
+      // PK-collides (P2002).
+      const existingAnnotation = await tx.annotation.findUnique({
+        where: { id: annotation.id }
+      })
+
       // Create or update annotation
-      if (resolution && resolution.action === 'replace') {
+      if (existingAnnotation && resolution && resolution.action === 'replace') {
+        // Authorize the delete against the EXISTING row: replacing an
+        // annotation found by id requires permission to delete THAT row, not
+        // merely to create one in the importer's scope (IDOR guard).
+        if (this.ability && !this.ability.can('delete', subject('Annotation', existingAnnotation))) {
+          result.errors.push({
+            line: line.lineNumber,
+            type: 'authorization',
+            message: `Not authorized to replace annotation ${annotation.id}`,
+            data: line.data
+          })
+          if (options.transaction.atomic) {
+            throw new ForbiddenError(`Not authorized to replace annotation ${annotation.id}`)
+          }
+          return
+        }
         await tx.annotation.delete({
           where: { id: annotation.id }
         })
+      } else if (existingAnnotation) {
+        // A row with this id exists but the resolution is not 'replace'
+        // (e.g. merge-keyframes resolves to 'merge'). Creating here would
+        // PK-collide, so skip the create and record a clear error instead of
+        // letting a raw constraint violation surface.
+        result.errors.push({
+          line: line.lineNumber,
+          type: 'import',
+          message: `Annotation ${annotation.id} already exists; '${resolution?.action ?? 'none'}' resolution does not create a new row`,
+          data: line.data
+        })
+        if (options.transaction.atomic) {
+          throw new ValidationError(`Annotation ${annotation.id} already exists and cannot be recreated`)
+        }
+        return
       }
 
       if (!this.canCreate('Annotation', { createdByUserId: this.userId, projectId: this.projectId })) {

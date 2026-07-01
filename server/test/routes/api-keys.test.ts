@@ -577,10 +577,10 @@ describe('API Key Routes', () => {
         expect(dbKey!.userId).toBeNull()
       })
 
-      it('allows multiple admin keys for same provider', async () => {
-        // Note: PostgreSQL treats NULL as not equal to NULL in unique constraints,
-        // so multiple admin keys (userId: null) can exist for the same provider.
-        // This is a known limitation of the current schema design.
+      it('rejects a second admin key for the same provider with 409', async () => {
+        // A partial unique index (provider WHERE userId IS NULL) enforces one
+        // admin key per provider; the compound @@unique([userId, provider]) does
+        // not, because PostgreSQL treats NULL userIds as distinct.
 
         // Create first admin key
         const firstResponse = await app.inject({
@@ -595,7 +595,7 @@ describe('API Key Routes', () => {
         })
         expect(firstResponse.statusCode).toBe(201)
 
-        // Create second admin key for same provider (currently allowed)
+        // A second admin key for the same provider conflicts.
         const secondResponse = await app.inject({
           method: 'POST',
           url: '/api/admin/api-keys',
@@ -606,15 +606,13 @@ describe('API Key Routes', () => {
             apiKey: 'sk-openai-key-2'
           }
         })
+        expect(secondResponse.statusCode).toBe(409)
 
-        // Currently succeeds due to NULL != NULL in PostgreSQL
-        expect(secondResponse.statusCode).toBe(201)
-
-        // Verify both keys exist
+        // Only the first key persists.
         const keys = await prisma.apiKey.findMany({
           where: { userId: null, provider: 'OPENAI' }
         })
-        expect(keys).toHaveLength(2)
+        expect(keys).toHaveLength(1)
       })
 
       it('returns 403 for non-admin', async () => {

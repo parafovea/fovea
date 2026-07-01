@@ -1,4 +1,5 @@
 import { PrismaClient, User, WorldState, Prisma } from '@prisma/client'
+import { ConflictError, NotFoundError } from '../lib/errors.js'
 
 /**
  * Persona row joined with its ontology.
@@ -115,33 +116,23 @@ export class WorldStateRepository {
   }
 
   /**
-   * Updates a world state row by ID.
-   *
-   * @param id - World state ID
-   * @param data - Prisma world state update input
-   * @returns the updated world state
-   */
-  async updateWorldState(id: string, data: Prisma.WorldStateUpdateInput): Promise<WorldState> {
-    return this.prisma.worldState.update({
-      where: { id },
-      data
-    })
-  }
-
-  /**
    * Applies an optimistic-concurrency update to a user's personal world state.
    *
    * Reads the current row, lets `transform` compute the new column values from
-   * it, then writes them guarded by the row's `updatedAt`. If a concurrent
-   * writer committed first the guard misses (count 0) and we retry against the
-   * freshly-read row, so both writes land instead of one silently clobbering
-   * the other. This is what makes the whole-blob PUT a safe per-id merge under
+   * it, then writes them guarded by the row's `version`. If a concurrent writer
+   * committed first the version has advanced, the guard misses (count 0), and we
+   * retry against the freshly-read row, so both writes land instead of one
+   * silently clobbering the other. The guard keys on the monotonic `version`
+   * rather than `updatedAt` because two writes landing in the same millisecond
+   * can share an `updatedAt`, which would let the second silently overwrite the
+   * first. This is what makes the whole-blob PUT a safe per-id merge under
    * concurrent writers (the transform re-runs on fresh state each attempt).
    *
    * @param userId - owning user ID
    * @param transform - computes the Prisma update input from the current row
    * @returns the updated world state
-   * @throws when no personal row exists or the write keeps conflicting
+   * @throws {NotFoundError} when no personal row exists
+   * @throws {ConflictError} when the write keeps conflicting after retries
    */
   async updatePersonalWorldStateOptimistic(
     userId: string,
@@ -152,17 +143,17 @@ export class WorldStateRepository {
         where: { userId, projectId: null },
       })
       if (!current) {
-        throw new Error('No personal world state to update')
+        throw new NotFoundError('World state', userId)
       }
       const result = await this.prisma.worldState.updateMany({
-        where: { id: current.id, updatedAt: current.updatedAt },
-        data: { ...transform(current), updatedAt: new Date() },
+        where: { id: current.id, version: current.version },
+        data: { ...transform(current), version: { increment: 1 } },
       })
       if (result.count === 1) {
         return this.prisma.worldState.findUniqueOrThrow({ where: { id: current.id } })
       }
     }
-    throw new Error('Personal world state update conflicted after retries')
+    throw new ConflictError('Personal world state update conflicted after retries')
   }
 
   /**

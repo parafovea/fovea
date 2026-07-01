@@ -1,4 +1,5 @@
 import { PrismaClient, Persona, Ontology, Prisma } from '@prisma/client'
+import { ConflictError, NotFoundError } from '../lib/errors.js'
 
 /**
  * Persona row joined with its ontology.
@@ -124,34 +125,24 @@ export class PersonaRepository {
   }
 
   /**
-   * Updates a persona's ontology, keyed by personaId.
-   *
-   * @param personaId - Persona UUID owning the ontology
-   * @param data - Prisma ontology update input
-   * @returns the updated ontology
-   */
-  async updateOntology(personaId: string, data: Prisma.OntologyUpdateInput): Promise<Ontology> {
-    return this.prisma.ontology.update({
-      where: { personaId },
-      data
-    })
-  }
-
-  /**
    * Applies an optimistic-concurrency update to a persona's ontology row.
    *
    * Reads the current ontology row (by personaId), lets `transform` compute the
-   * new column values from it, then writes them guarded by the row's
-   * `updatedAt`. If a concurrent writer committed first the guard misses (count
-   * 0) and we retry against the freshly-read row, so both writes land instead of
-   * one silently clobbering the other. This is what makes the whole-blob
-   * ontology PUT a safe per-id merge under concurrent writers (the transform
-   * re-runs on fresh state each attempt).
+   * new column values from it, then writes them guarded by the row's `version`.
+   * If a concurrent writer committed first the version has advanced, the guard
+   * misses (count 0), and we retry against the freshly-read row, so both writes
+   * land instead of one silently clobbering the other. The guard keys on the
+   * monotonic `version` rather than `updatedAt` because two writes landing in
+   * the same millisecond can share an `updatedAt`, which would let the second
+   * silently overwrite the first. This is what makes the whole-blob ontology PUT
+   * a safe per-id merge under concurrent writers (the transform re-runs on fresh
+   * state each attempt).
    *
    * @param personaId - Persona UUID owning the ontology
    * @param transform - computes the Prisma update input from the current row
    * @returns the updated ontology
-   * @throws when no ontology row exists or the write keeps conflicting
+   * @throws {NotFoundError} when no ontology row exists
+   * @throws {ConflictError} when the write keeps conflicting after retries
    */
   async updateOntologyOptimistic(
     personaId: string,
@@ -162,17 +153,17 @@ export class PersonaRepository {
         where: { personaId },
       })
       if (!current) {
-        throw new Error('No ontology to update')
+        throw new NotFoundError('Ontology', personaId)
       }
       const result = await this.prisma.ontology.updateMany({
-        where: { id: current.id, updatedAt: current.updatedAt },
-        data: { ...transform(current), updatedAt: new Date() },
+        where: { id: current.id, version: current.version },
+        data: { ...transform(current), version: { increment: 1 } },
       })
       if (result.count === 1) {
         return this.prisma.ontology.findUniqueOrThrow({ where: { id: current.id } })
       }
     }
-    throw new Error('Ontology update conflicted after retries')
+    throw new ConflictError('Ontology update conflicted after retries')
   }
 
   /**
@@ -217,15 +208,5 @@ export class PersonaRepository {
     return this.prisma.worldState.findFirst({
       where: { userId, projectId: null }
     })
-  }
-
-  /**
-   * Updates a world state row by ID.
-   *
-   * @param id - World state ID
-   * @param data - Prisma world state update input
-   */
-  async updateWorldState(id: string, data: Prisma.WorldStateUpdateInput): Promise<void> {
-    await this.prisma.worldState.update({ where: { id }, data })
   }
 }

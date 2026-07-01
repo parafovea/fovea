@@ -22,8 +22,7 @@ import {
   Resolution,
   ImportOptions,
   ImportResult,
-  DependencyGraph,
-  ExistingData
+  DependencyGraph
 } from './import-types.js'
 import { SequenceValidator } from './import-validator.js'
 import { parseLine, validateLine } from './import/line-parser.js'
@@ -33,7 +32,8 @@ import {
   generateCrossUserResolutions,
   isCrossUserImport,
   remapIds,
-  resolveConflicts
+  resolveConflicts,
+  ExistingDataWithRelations
 } from './import/conflict-resolver.js'
 import { EntityImporter, ImportedIds } from './import/entity-importers.js'
 
@@ -93,7 +93,7 @@ export class ImportHandler {
    * @param existingData - existing data in database
    * @returns array of conflicts
    */
-  async detectConflicts(lines: ImportLine[], existingData: ExistingData): Promise<Conflict[]> {
+  async detectConflicts(lines: ImportLine[], existingData: ExistingDataWithRelations): Promise<Conflict[]> {
     return detectConflicts(lines, existingData, this.userId)
   }
 
@@ -147,12 +147,19 @@ export class ImportHandler {
    *
    * @returns existing data
    */
-  async loadExistingData(): Promise<ExistingData> {
+  async loadExistingData(): Promise<ExistingDataWithRelations> {
     const [personas, videos, allWorldStates, userWorldState, annotations, summaries, claims, claimRelations, ontologies] = await Promise.all([
       this.prisma.persona.findMany({ select: { id: true, userId: true } }),
       this.prisma.video.findMany({ select: { id: true } }),
       this.prisma.worldState.findMany(),
-      this.prisma.worldState.findFirst({ where: { userId: this.userId } }),
+      // Scope the read to the same (userId, projectId) row the importer WRITES
+      // in importLines, so ownership-based conflict detection reads the row
+      // that will actually be mutated rather than an unrelated personal one.
+      // orderBy gives a deterministic pick if duplicates ever exist.
+      this.prisma.worldState.findFirst({
+        where: { userId: this.userId, projectId: this.projectId },
+        orderBy: { createdAt: 'asc' }
+      }),
       this.prisma.annotation.findMany({ select: { id: true, personaId: true } }),
       this.prisma.videoSummary.findMany({ select: { id: true, personaId: true } }),
       this.prisma.claim.findMany({ select: { id: true, summaryId: true } }),
@@ -203,12 +210,13 @@ export class ImportHandler {
       }
     }
 
-    const existingData: ExistingData = {
+    const existingData: ExistingDataWithRelations = {
       personaIds: new Set(personas.map(p => p.id)),
       entityIds: new Set<string>(),
       eventIds: new Set<string>(),
       timeIds: new Set<string>(),
       collectionIds: new Set<string>(),
+      relationIds: new Set<string>(),
       annotationIds: new Set(annotations.map(a => a.id)),
       videoIds: new Set(videos.map(v => v.id)),
       summaryIds: new Set(summaries.map(s => s.id)),
@@ -256,6 +264,13 @@ export class ImportHandler {
             if (collection && typeof collection === 'object' && 'id' in collection) {
               existingData.collectionIds.add(collection.id as string)
             }
+          }
+        }
+      }
+      if (Array.isArray(worldState.relations)) {
+        for (const relation of worldState.relations) {
+          if (relation && typeof relation === 'object' && 'id' in relation) {
+            existingData.relationIds?.add(relation.id as string)
           }
         }
       }

@@ -13,8 +13,9 @@ import { videoSummarizationQueue, claimExtractionQueue, closeQueues } from './qu
 import { apiRequestCounter, apiRequestDuration } from './metrics.js'
 import { config } from './config.js'
 import { prisma } from './lib/prisma.js'
+import { ZodError } from 'zod'
 import { AppError, TooManyRequestsError } from './lib/errors.js'
-import { requireAdmin } from './middleware/auth.js'
+import { requireAdmin, requireAuth } from './middleware/auth.js'
 import { recordApiError } from './lib/errorMetrics.js'
 
 /**
@@ -214,6 +215,19 @@ export async function buildApp() {
       })
     }
 
+    // Handle Zod validation errors raised by service-layer `.parse()` calls
+    // that bypass Fastify's TypeBox schema validation (so they carry no
+    // `error.validation`). These are client input faults, not server failures —
+    // surface 400 with the field-level issues rather than a generic 500.
+    if (error instanceof ZodError) {
+      recordApiError(method, route, 400, 'VALIDATION_ERROR', 'warning')
+      return reply.code(400).send({
+        error: 'VALIDATION_ERROR',
+        message: 'Request validation failed',
+        details: error.issues
+      })
+    }
+
     // Handle rate limit errors from @fastify/rate-limit plugin
     // These are not AppError instances but have statusCode 429
     if (error.statusCode === 429) {
@@ -316,8 +330,16 @@ export async function buildApp() {
   const videosRoute = await import('./routes/videos/index.js')
   await app.register(videosRoute.default)
 
+  // The model routes proxy to the shared Python model-service and include
+  // state-changing operations (select/load/unload affect every user's
+  // inference). Register them in an encapsulated child context that requires
+  // authentication so they are never world-readable/-writable; the mutating
+  // routes additionally require admin (declared per-route in models.ts).
   const modelsRoute = await import('./routes/models.js')
-  await app.register(modelsRoute.default)
+  await app.register(async (modelsScope) => {
+    modelsScope.addHook('onRequest', requireAuth)
+    await modelsScope.register(modelsRoute.default)
+  })
 
   const annotationsRoute = await import('./routes/annotations.js')
   await app.register(annotationsRoute.default)
