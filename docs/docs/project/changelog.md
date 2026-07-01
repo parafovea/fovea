@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.5.10] - 2026-07-01
 
-The 0.5.10 patch is the second of three releases remediating the second swarm audit — the frontend slice — fixing auto-save data-loss and stale-cache defects in the annotation UI (PR_PLACEHOLDER). Several were gaps in the first audit's own frontend fixes, which closed one instance of a defect class without closing every instance. Nothing is breaking.
+The 0.5.10 patch is the second of three releases remediating the second swarm audit — the frontend slice — fixing auto-save data-loss and stale-cache defects in the annotation UI ([#196](https://github.com/parafovea/fovea/pull/196)). Several were gaps in the first audit's own frontend fixes, which closed one instance of a defect class without closing every instance. Nothing is breaking.
 
 ### Fixed
 
