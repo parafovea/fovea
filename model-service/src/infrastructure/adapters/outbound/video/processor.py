@@ -43,6 +43,40 @@ class VideoProcessingError(Exception):
     """Raised when video processing operations fail."""
 
 
+async def _communicate_with_timeout(
+    process: asyncio.subprocess.Process, timeout: float
+) -> tuple[bytes, bytes]:
+    """Await ``process.communicate()`` with a bounded timeout.
+
+    On timeout the process is killed and reaped before the error
+    propagates, so a wedged ffmpeg cannot leak a child process or hang the
+    request indefinitely.
+
+    Parameters
+    ----------
+    process : asyncio.subprocess.Process
+        The running subprocess.
+    timeout : float
+        Maximum seconds to wait for completion.
+
+    Returns
+    -------
+    tuple[bytes, bytes]
+        The process stdout and stderr.
+
+    Raises
+    ------
+    VideoProcessingError
+        If the process does not finish within ``timeout``.
+    """
+    try:
+        return await asyncio.wait_for(process.communicate(), timeout=timeout)
+    except TimeoutError as exc:
+        process.kill()
+        await process.wait()
+        raise VideoProcessingError(f"Video subprocess timed out after {timeout:g}s") from exc
+
+
 # Roots constrain where videos may be read from and where outputs may be
 # written. Sourced from the typed settings (which own every environment
 # read) and resolved here so later validation is symlink-safe. Override via
@@ -452,7 +486,7 @@ async def extract_audio(
                 stderr=asyncio.subprocess.PIPE,
             )
 
-            _stdout, stderr = await process.communicate()
+            _stdout, stderr = await _communicate_with_timeout(process, 300)
 
             if process.returncode != 0:
                 error_msg = stderr.decode() if stderr else "Unknown error"
@@ -470,6 +504,8 @@ async def extract_audio(
             raise VideoProcessingError(
                 "FFmpeg not found. Please install FFmpeg and ensure it's in your PATH."
             ) from e
+        except VideoProcessingError:
+            raise
         except Exception as e:
             raise VideoProcessingError(f"Audio extraction failed: {e!s}") from e
 
@@ -565,7 +601,7 @@ async def extract_thumbnail(
                 stderr=asyncio.subprocess.PIPE,
             )
 
-            _stdout, stderr = await process.communicate()
+            _stdout, stderr = await _communicate_with_timeout(process, 60)
 
             if process.returncode != 0:
                 error_msg = stderr.decode() if stderr else "Unknown error"
@@ -583,5 +619,7 @@ async def extract_thumbnail(
             raise VideoProcessingError(
                 "FFmpeg not found. Please install FFmpeg and ensure it's in your PATH."
             ) from e
+        except VideoProcessingError:
+            raise
         except Exception as e:
             raise VideoProcessingError(f"Thumbnail extraction failed: {e!s}") from e

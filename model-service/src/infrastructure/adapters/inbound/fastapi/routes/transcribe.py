@@ -23,6 +23,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from src.infrastructure.adapters.inbound.fastapi.dependencies import ModelManagerDep  # noqa: TC001
+from src.infrastructure.adapters.inbound.fastapi.routes.inference_locks import inference_lock
 from src.infrastructure.adapters.outbound.models.audio.base import (
     AudioTranscriptionLoader,
     TranscriptionResult,
@@ -130,9 +131,13 @@ async def transcribe(
         # requests, /health, and OTLP export). Pass language=None when the
         # caller did not specify one; some loaders (faster-whisper) treat
         # an empty string as a hard lookup miss rather than "auto-detect".
-        result: TranscriptionResult = await asyncio.to_thread(
-            model.transcribe, audio_path_real, language=request.language or None
-        )
+        # Serialize inference on the shared cached model: two concurrent
+        # transcriptions would otherwise call the same non-thread-safe object
+        # from two worker threads at once.
+        async with inference_lock("audio_transcription"):
+            result: TranscriptionResult = await asyncio.to_thread(
+                model.transcribe, audio_path_real, language=request.language or None
+            )
     except Exception as exc:
         logger.exception("Transcription failed")
         raise HTTPException(status_code=500, detail=f"Transcription failed: {exc}") from exc
