@@ -8,7 +8,9 @@
  * @module
  */
 
-type FlushFn = () => Promise<void>
+import type { SaveOutcome } from './useAutoSave'
+
+type FlushFn = () => Promise<SaveOutcome>
 
 const flushCallbacks = new Set<FlushFn>()
 
@@ -28,11 +30,13 @@ export function registerAutoSaveFlush(flush: FlushFn): () => void {
 
 /**
  * Flush every registered auto-save concurrently. Resolves with the count of
- * callbacks that flushed without throwing and the errors from those that did,
- * so a caller (e.g. emergency save) can report a real outcome rather than a
- * no-op. Never rejects.
+ * editors that ACTUALLY persisted a write and the errors from those that
+ * failed, so a caller (e.g. emergency save) reports a real outcome rather than a
+ * no-op. A forced save that was change-skipped, blocked, or superseded resolves
+ * without throwing but wrote nothing, so it is not counted as saved — otherwise
+ * the session-expiry flush would over-report data preservation. Never rejects.
  *
- * @returns the number flushed successfully and any errors encountered
+ * @returns the number that actually persisted and any errors encountered
  */
 export async function flushAllAutoSaves(): Promise<{ saved: number; errors: Error[] }> {
   const callbacks = Array.from(flushCallbacks)
@@ -40,5 +44,8 @@ export async function flushAllAutoSaves(): Promise<{ saved: number; errors: Erro
   const errors = results
     .filter((r): r is PromiseRejectedResult => r.status === 'rejected')
     .map((r) => (r.reason instanceof Error ? r.reason : new Error(String(r.reason))))
-  return { saved: results.length - errors.length, errors }
+  const saved = results.filter(
+    (r): r is PromiseFulfilledResult<SaveOutcome> => r.status === 'fulfilled' && r.value === 'saved'
+  ).length
+  return { saved, errors }
 }

@@ -21,6 +21,7 @@ import { generateId } from '@utils/uuid'
 import { sharingKeys } from './useSharing'
 import { annotationKeys } from './useAnnotations'
 import { worldKeys } from './useWorld'
+import { projectKeys } from './useProjects'
 
 /** Query keys for personas */
 export const personaKeys = {
@@ -276,6 +277,11 @@ export function useCreatePersona() {
       queryClient.setQueryData<Persona[]>(personaKeys.list(), (old = []) => [...old, persona])
       // Cache the ontology
       queryClient.setQueryData(personaKeys.ontology(persona.id), ontology)
+      // The server persisted a persona->project link; refresh that project's
+      // persona list so ProjectDetailPage shows the new persona.
+      if (variables.projectId) {
+        queryClient.invalidateQueries({ queryKey: projectKeys.personas(variables.projectId) })
+      }
       // If the create also issued shares, the Sent Shares panel is now stale.
       if (variables.shareWith && variables.shareWith.length > 0) {
         queryClient.invalidateQueries({ queryKey: sharingKeys.sent() })
@@ -348,6 +354,11 @@ export function useDeletePersona() {
       // refresh those caches so the UI stops showing now-deleted entries.
       queryClient.invalidateQueries({ queryKey: annotationKeys.all })
       queryClient.invalidateQueries({ queryKey: worldKeys.all })
+      // The persona may belong to one or more projects; the delete response does
+      // not carry the project id, so invalidate every project's persona list
+      // (projectKeys.personas builds [...all, 'personas', id], so this prefix
+      // matches them all).
+      queryClient.invalidateQueries({ queryKey: [...projectKeys.all, 'personas'] })
     },
   })
 }
@@ -471,6 +482,10 @@ export function useAddEntityToPersona() {
       queryClient.setQueryData(personaKeys.ontology(personaId), ontology)
       // Invalidate all-ontologies query so header Save button gets fresh data
       queryClient.invalidateQueries({ queryKey: personaKeys.allOntologies() })
+      // The optimistic setQueryData above was computed from a snapshot read at
+      // mutationFn entry; concurrent writes read the same snapshot, so refetch
+      // the authoritative server state (which merges by id) once writes settle.
+      queryClient.invalidateQueries({ queryKey: personaKeys.ontology(personaId) })
     },
   })
 }
@@ -512,6 +527,10 @@ export function useUpdateEntityInPersona() {
       queryClient.setQueryData(personaKeys.ontology(personaId), ontology)
       // Invalidate all-ontologies query so header Save button gets fresh data
       queryClient.invalidateQueries({ queryKey: personaKeys.allOntologies() })
+      // The optimistic setQueryData above was computed from a snapshot read at
+      // mutationFn entry; concurrent writes read the same snapshot, so refetch
+      // the authoritative server state (which merges by id) once writes settle.
+      queryClient.invalidateQueries({ queryKey: personaKeys.ontology(personaId) })
     },
   })
 }
@@ -545,6 +564,11 @@ export function useDeleteEntityFromPersona() {
       queryClient.setQueryData(personaKeys.ontology(personaId), ontology)
       // Invalidate all-ontologies query so header Save button gets fresh data
       queryClient.invalidateQueries({ queryKey: personaKeys.allOntologies() })
+      // The delete endpoint also removes annotations referencing this type and
+      // per-persona world-object assignments; refresh those caches so the UI
+      // stops showing entries that no longer exist server-side.
+      queryClient.invalidateQueries({ queryKey: annotationKeys.all })
+      queryClient.invalidateQueries({ queryKey: worldKeys.all })
     },
   })
 }
@@ -590,6 +614,10 @@ export function useAddRoleToPersona() {
       queryClient.setQueryData(personaKeys.ontology(personaId), ontology)
       // Invalidate all-ontologies query so header Save button gets fresh data
       queryClient.invalidateQueries({ queryKey: personaKeys.allOntologies() })
+      // The optimistic setQueryData above was computed from a snapshot read at
+      // mutationFn entry; concurrent writes read the same snapshot, so refetch
+      // the authoritative server state (which merges by id) once writes settle.
+      queryClient.invalidateQueries({ queryKey: personaKeys.ontology(personaId) })
     },
   })
 }
@@ -631,6 +659,10 @@ export function useUpdateRoleInPersona() {
       queryClient.setQueryData(personaKeys.ontology(personaId), ontology)
       // Invalidate all-ontologies query so header Save button gets fresh data
       queryClient.invalidateQueries({ queryKey: personaKeys.allOntologies() })
+      // The optimistic setQueryData above was computed from a snapshot read at
+      // mutationFn entry; concurrent writes read the same snapshot, so refetch
+      // the authoritative server state (which merges by id) once writes settle.
+      queryClient.invalidateQueries({ queryKey: personaKeys.ontology(personaId) })
     },
   })
 }
@@ -661,6 +693,11 @@ export function useDeleteRoleFromPersona() {
       queryClient.setQueryData(personaKeys.ontology(personaId), ontology)
       // Invalidate all-ontologies query so header Save button gets fresh data
       queryClient.invalidateQueries({ queryKey: personaKeys.allOntologies() })
+      // The delete endpoint also removes annotations referencing this type and
+      // per-persona world-object assignments; refresh those caches so the UI
+      // stops showing entries that no longer exist server-side.
+      queryClient.invalidateQueries({ queryKey: annotationKeys.all })
+      queryClient.invalidateQueries({ queryKey: worldKeys.all })
     },
   })
 }
@@ -706,6 +743,10 @@ export function useAddEventToPersona() {
       queryClient.setQueryData(personaKeys.ontology(personaId), ontology)
       // Invalidate all-ontologies query so header Save button gets fresh data
       queryClient.invalidateQueries({ queryKey: personaKeys.allOntologies() })
+      // The optimistic setQueryData above was computed from a snapshot read at
+      // mutationFn entry; concurrent writes read the same snapshot, so refetch
+      // the authoritative server state (which merges by id) once writes settle.
+      queryClient.invalidateQueries({ queryKey: personaKeys.ontology(personaId) })
     },
   })
 }
@@ -747,6 +788,10 @@ export function useUpdateEventInPersona() {
       queryClient.setQueryData(personaKeys.ontology(personaId), ontology)
       // Invalidate all-ontologies query so header Save button gets fresh data
       queryClient.invalidateQueries({ queryKey: personaKeys.allOntologies() })
+      // The optimistic setQueryData above was computed from a snapshot read at
+      // mutationFn entry; concurrent writes read the same snapshot, so refetch
+      // the authoritative server state (which merges by id) once writes settle.
+      queryClient.invalidateQueries({ queryKey: personaKeys.ontology(personaId) })
     },
   })
 }
@@ -777,6 +822,11 @@ export function useDeleteEventFromPersona() {
       queryClient.setQueryData(personaKeys.ontology(personaId), ontology)
       // Invalidate all-ontologies query so header Save button gets fresh data
       queryClient.invalidateQueries({ queryKey: personaKeys.allOntologies() })
+      // The delete endpoint also removes annotations referencing this type and
+      // per-persona world-object assignments; refresh those caches so the UI
+      // stops showing entries that no longer exist server-side.
+      queryClient.invalidateQueries({ queryKey: annotationKeys.all })
+      queryClient.invalidateQueries({ queryKey: worldKeys.all })
     },
   })
 }
@@ -822,6 +872,10 @@ export function useAddRelationTypeToPersona() {
       queryClient.setQueryData(personaKeys.ontology(personaId), ontology)
       // Invalidate all-ontologies query so header Save button gets fresh data
       queryClient.invalidateQueries({ queryKey: personaKeys.allOntologies() })
+      // The optimistic setQueryData above was computed from a snapshot read at
+      // mutationFn entry; concurrent writes read the same snapshot, so refetch
+      // the authoritative server state (which merges by id) once writes settle.
+      queryClient.invalidateQueries({ queryKey: personaKeys.ontology(personaId) })
     },
   })
 }
@@ -863,6 +917,10 @@ export function useUpdateRelationTypeInPersona() {
       queryClient.setQueryData(personaKeys.ontology(personaId), ontology)
       // Invalidate all-ontologies query so header Save button gets fresh data
       queryClient.invalidateQueries({ queryKey: personaKeys.allOntologies() })
+      // The optimistic setQueryData above was computed from a snapshot read at
+      // mutationFn entry; concurrent writes read the same snapshot, so refetch
+      // the authoritative server state (which merges by id) once writes settle.
+      queryClient.invalidateQueries({ queryKey: personaKeys.ontology(personaId) })
     },
   })
 }
@@ -895,6 +953,11 @@ export function useDeleteRelationTypeFromPersona() {
       queryClient.setQueryData(personaKeys.ontology(personaId), ontology)
       // Invalidate all-ontologies query so header Save button gets fresh data
       queryClient.invalidateQueries({ queryKey: personaKeys.allOntologies() })
+      // The delete endpoint also removes annotations referencing this type and
+      // per-persona world-object assignments; refresh those caches so the UI
+      // stops showing entries that no longer exist server-side.
+      queryClient.invalidateQueries({ queryKey: annotationKeys.all })
+      queryClient.invalidateQueries({ queryKey: worldKeys.all })
     },
   })
 }

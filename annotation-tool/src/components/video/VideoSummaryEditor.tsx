@@ -61,7 +61,10 @@ interface VideoSummaryEditorProps {
 }
 
 export interface VideoSummaryEditorRef {
+  /** Persist unconditionally (used on dialog close). */
   forceSave: () => Promise<void>
+  /** Persist only if there are unsaved edits (used before a persona switch). */
+  flushIfDirty: () => Promise<void>
 }
 
 const VideoSummaryEditor = forwardRef<VideoSummaryEditorRef, VideoSummaryEditorProps>(function VideoSummaryEditor({
@@ -133,25 +136,28 @@ const VideoSummaryEditor = forwardRef<VideoSummaryEditorRef, VideoSummaryEditorP
   // Fetch persona ontology via TanStack Query (auto-fetches when personaId changes)
   usePersonaOntology(personaId)
 
-  // Autosave callback - memoized to prevent useAutoSave from re-triggering
-  const handleAutoSave = useCallback(async (summary: GlossItem[]) => {
+  // Autosave callback - memoized to prevent useAutoSave from re-triggering. The
+  // summary and comment are carried together as the autosave `data` so change
+  // detection and baseline seeding cover both fields from one snapshot (no
+  // getComparisonSnapshot closure over the comment, which would lag a render).
+  const handleAutoSave = useCallback(async ({ summary, comment }: { summary: GlossItem[]; comment: string }) => {
     if (!currentSummary) {
       // Create new summary - only required fields
-      await saveSummaryMutation.mutateAsync({ videoId, personaId, summary, comment: localComment.trim() || null })
+      await saveSummaryMutation.mutateAsync({ videoId, personaId, summary, comment: comment.trim() || null })
     } else {
       // Update existing summary - spread only defined optional fields
       await saveSummaryMutation.mutateAsync({
         videoId: currentSummary.videoId,
         personaId: currentSummary.personaId,
         summary,
-        comment: localComment.trim() || null,
+        comment: comment.trim() || null,
         ...(currentSummary.visualAnalysis && { visualAnalysis: currentSummary.visualAnalysis }),
         ...(currentSummary.audioTranscript && { audioTranscript: currentSummary.audioTranscript }),
         ...(currentSummary.keyFrames && { keyFrames: currentSummary.keyFrames }),
         ...(currentSummary.confidence != null && { confidence: currentSummary.confidence }),
       })
     }
-  }, [videoId, personaId, currentSummary, saveSummaryMutation, localComment])
+  }, [videoId, personaId, currentSummary, saveSummaryMutation])
 
   // Use autosave hook for summary persistence
   // Note: isEnabled doesn't need the ref check - the ref is only for preventing
@@ -161,14 +167,14 @@ const VideoSummaryEditor = forwardRef<VideoSummaryEditorRef, VideoSummaryEditorP
     lastSavedAt,
     errorMessage: saveErrorMessage,
     retryCount,
+    pendingChanges,
     forceSave,
+    markSaved,
   } = useAutoSave({
-    data: localSummary,
-    // The comment lives in separate state from the summary `data`, so include
-    // it in the change-detection snapshot — otherwise a comment-only edit never
-    // trips the debounce and is silently dropped (handleAutoSave already sends
-    // the comment, it just was never triggered).
-    getComparisonSnapshot: (summary) => ({ summary, comment: localComment }),
+    // Summary and comment travel together so a comment-only edit trips the
+    // debounce (it lives in the compared snapshot) and the baseline can be
+    // seeded from one value on adoption. handleAutoSave receives both.
+    data: { summary: localSummary, comment: localComment },
     // Autosave is enabled as soon as videoId + personaId resolve. The
     // previous gate (&& !!summaryId) meant the dialog could only
     // autosave AFTER a row already existed for this video/persona —
@@ -188,10 +194,15 @@ const VideoSummaryEditor = forwardRef<VideoSummaryEditorRef, VideoSummaryEditorP
     entityId: `${videoId}-${personaId}`,
   })
 
-  // Expose forceSave to parent components via ref
+  // Expose flush controls to the parent via ref (void-returning: callers only
+  // need the write to complete, not its outcome). `forceSave` persists
+  // unconditionally (dialog close); `flushIfDirty` persists only when there are
+  // unsaved edits, so a persona switch does not post a redundant empty save on
+  // every change of the dropdown.
   useImperativeHandle(ref, () => ({
-    forceSave,
-  }), [forceSave])
+    forceSave: async () => { await forceSave() },
+    flushIfDirty: async () => { if (pendingChanges) await forceSave() },
+  }), [forceSave, pendingChanges])
 
   // Track if we've already tried to create an empty summary for this video/persona
   const creatingEmptySummaryRef = useRef<string | null>(null)
@@ -249,11 +260,15 @@ const VideoSummaryEditor = forwardRef<VideoSummaryEditorRef, VideoSummaryEditorP
       const summaryData = typeof currentSummary.summary === 'string'
         ? (currentSummary.summary ? JSON.parse(currentSummary.summary) : [])
         : (currentSummary.summary || [])
+      const commentData = currentSummary.comment || ''
       setLocalSummary(summaryData)
-      setLocalComment(currentSummary.comment || '')
+      setLocalComment(commentData)
       initializedForRef.current = key
+      // Seed the autosave baseline to the adopted server content so the initial
+      // sync is not mistaken for a user edit and does not fire a spurious save.
+      markSaved({ summary: summaryData, comment: commentData })
     }
-  }, [videoId, personaId, currentSummary])
+  }, [videoId, personaId, currentSummary, markSaved])
 
   // Separate effect for creating empty summary when none exists
   // This is separate to avoid the mutation object in deps causing re-runs
@@ -287,6 +302,9 @@ const VideoSummaryEditor = forwardRef<VideoSummaryEditorRef, VideoSummaryEditorP
           setLocalSummary([])
           setLocalComment('')
           initializedForRef.current = key
+          // The empty row is now persisted; seed the baseline so the next
+          // debounce tick does not re-POST the same empty content.
+          markSaved({ summary: [], comment: '' })
         },
         onError: () => {
           // Reset so we can try again if needed
@@ -294,7 +312,7 @@ const VideoSummaryEditor = forwardRef<VideoSummaryEditorRef, VideoSummaryEditorP
         },
       })
     }
-  }, [videoId, personaId, currentSummary, loading, queryError, saveSummaryMutation])
+  }, [videoId, personaId, currentSummary, loading, queryError, saveSummaryMutation, markSaved])
 
   // Handle extraction job status updates from TanStack Query
   useEffect(() => {

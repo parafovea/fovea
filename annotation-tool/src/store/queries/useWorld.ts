@@ -502,7 +502,16 @@ export function useDeleteEntityCollection() {
   return useMutation({
     mutationFn: (collectionId: string) =>
       deleteWorldObject(`/api/world/entity-collections/${collectionId}`, 'entity collection'),
-    onSuccess: () => {
+    onSuccess: (_data, collectionId) => {
+      // Strip the deleted collection from the cache before invalidating so an
+      // immediately-following add/update reads a cache that no longer contains
+      // it; otherwise its whole-array PUT would re-send the deleted collection
+      // and the server's merge-by-id would resurrect it.
+      queryClient.setQueryData<WorldState>(worldKeys.state(), (old) =>
+        old
+          ? { ...old, entityCollections: old.entityCollections.filter((c) => c.id !== collectionId) }
+          : old
+      )
       queryClient.invalidateQueries({ queryKey: worldKeys.state() })
     },
   })
@@ -571,7 +580,16 @@ export function useDeleteEventCollection() {
   return useMutation({
     mutationFn: (collectionId: string) =>
       deleteWorldObject(`/api/world/event-collections/${collectionId}`, 'event collection'),
-    onSuccess: () => {
+    onSuccess: (_data, collectionId) => {
+      // Strip the deleted collection from the cache before invalidating so an
+      // immediately-following add/update reads a cache that no longer contains
+      // it; otherwise its whole-array PUT would re-send the deleted collection
+      // and the server's merge-by-id would resurrect it.
+      queryClient.setQueryData<WorldState>(worldKeys.state(), (old) =>
+        old
+          ? { ...old, eventCollections: old.eventCollections.filter((c) => c.id !== collectionId) }
+          : old
+      )
       queryClient.invalidateQueries({ queryKey: worldKeys.state() })
     },
   })
@@ -634,7 +652,16 @@ export function useDeleteTimeCollection() {
   return useMutation({
     mutationFn: (collectionId: string) =>
       deleteWorldObject(`/api/world/time-collections/${collectionId}`, 'time collection'),
-    onSuccess: () => {
+    onSuccess: (_data, collectionId) => {
+      // Strip the deleted collection from the cache before invalidating so an
+      // immediately-following add/update reads a cache that no longer contains
+      // it; otherwise its whole-array PUT would re-send the deleted collection
+      // and the server's merge-by-id would resurrect it.
+      queryClient.setQueryData<WorldState>(worldKeys.state(), (old) =>
+        old
+          ? { ...old, timeCollections: old.timeCollections.filter((c) => c.id !== collectionId) }
+          : old
+      )
       queryClient.invalidateQueries({ queryKey: worldKeys.state() })
     },
   })
@@ -678,7 +705,16 @@ export function useDeleteRelation() {
   return useMutation({
     mutationFn: (relationId: string) =>
       deleteWorldObject(`/api/world/relations/${relationId}`, 'relation'),
-    onSuccess: () => {
+    onSuccess: (_data, relationId) => {
+      // Strip the deleted relation from the cache before invalidating so an
+      // immediately-following add/update reads a cache that no longer contains
+      // it; otherwise its whole-array PUT would re-send the deleted relation and
+      // the server's merge-by-id would resurrect it.
+      queryClient.setQueryData<WorldState>(worldKeys.state(), (old) =>
+        old
+          ? { ...old, relations: old.relations.filter((r) => r.id !== relationId) }
+          : old
+      )
       queryClient.invalidateQueries({ queryKey: worldKeys.state() })
     },
   })
