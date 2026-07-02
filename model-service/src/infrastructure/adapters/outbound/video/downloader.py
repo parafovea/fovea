@@ -135,9 +135,7 @@ class _PinnedResolver(AbstractResolver):
     def __init__(self, host: str, ip: str) -> None:
         self._host = host.lower()
         self._ip = ip
-        self._family = (
-            socket.AF_INET6 if ipaddress.ip_address(ip).version == 6 else socket.AF_INET
-        )
+        self._family = socket.AF_INET6 if ipaddress.ip_address(ip).version == 6 else socket.AF_INET
 
     async def resolve(
         self, host: str, port: int = 0, family: socket.AddressFamily = socket.AF_INET
@@ -296,7 +294,9 @@ async def download_video_if_needed(video_path: str) -> tuple[str, bool]:
     # between the check and the fetch cannot redirect it to a private host.
     # Localhost has no DNS to rebind, so it uses the default resolver.
     connector = (
-        aiohttp.TCPConnector(resolver=_PinnedResolver(urlparse(candidate_url).hostname or "", pinned_ip))
+        aiohttp.TCPConnector(
+            resolver=_PinnedResolver(urlparse(candidate_url).hostname or "", pinned_ip)
+        )
         if pinned_ip is not None
         else None
     )
