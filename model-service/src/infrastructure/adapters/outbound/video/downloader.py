@@ -30,6 +30,7 @@ from urllib.parse import urlparse
 
 import aiofiles
 import aiohttp
+from aiohttp.abc import AbstractResolver, ResolveResult
 
 logger = logging.getLogger(__name__)
 
@@ -118,12 +119,56 @@ def _resolve_host_addresses(host: str) -> list[str]:
     return addresses
 
 
-def _preflight_url(url: str) -> str:
+class _PinnedResolver(AbstractResolver):
+    """aiohttp resolver that pins a single host to a pre-vetted public IP.
+
+    ``_preflight_url`` resolves the host and verifies every address is public,
+    but the URL it returns still carries the hostname, so a plain
+    ``session.get`` re-resolves DNS at connect time — a window in which an
+    allow-listed host can be rebound to a private/internal address (a
+    DNS-rebinding TOCTOU). Pinning the connection to the address vetted during
+    preflight closes that window while still presenting the hostname for TLS
+    SNI and certificate validation. Any host other than the pinned one is
+    refused.
+    """
+
+    def __init__(self, host: str, ip: str) -> None:
+        self._host = host.lower()
+        self._ip = ip
+        self._family = socket.AF_INET6 if ipaddress.ip_address(ip).version == 6 else socket.AF_INET
+
+    async def resolve(
+        self, host: str, port: int = 0, family: socket.AddressFamily = socket.AF_INET
+    ) -> list[ResolveResult]:
+        """Return the pinned address for the pinned host; refuse any other."""
+        if host.lower() != self._host:
+            raise OSError(f"host {host!r} is not the pinned host")
+        return [
+            ResolveResult(
+                hostname=host,
+                host=self._ip,
+                port=port,
+                family=self._family,
+                proto=socket.IPPROTO_TCP,
+                flags=0,
+            )
+        ]
+
+    async def close(self) -> None:
+        """No resources to release."""
+
+
+def _preflight_url(url: str) -> tuple[str, str | None]:
     """Run defense-in-depth URL checks (scheme, host allow-list, DNS, IP).
 
     This is *not* the CodeQL-recognised sanitizer — the inline regex
     fullmatch at the sink is. This helper runs first so bad URLs fail fast
     with a descriptive error before any network I/O.
+
+    Returns the sanitized URL and, for non-localhost hosts, the single vetted
+    public IP the connection must be pinned to (defeating a DNS rebind between
+    this check and the fetch); ``None`` for localhost/127.0.0.1, where no DNS
+    resolution occurs.
     """
     parsed = urlparse(url)
     scheme = (parsed.scheme or "").lower()
@@ -145,17 +190,21 @@ def _preflight_url(url: str) -> str:
     if port is not None and port not in _ALLOWED_PORTS.get(scheme, frozenset()):
         raise ValueError(f"URL not allowed: port {port} is not permitted")
 
+    pinned_ip: str | None = None
     if host not in {"localhost", "127.0.0.1"}:
         addresses = _resolve_host_addresses(host)
         if not addresses:
             raise ValueError("URL not allowed: host did not resolve")
         if not all(_is_public_ip(addr) for addr in addresses):
             raise ValueError("URL not allowed: host resolves to a private or reserved IP")
+        # Pin to the first vetted address; the fetch connects here rather than
+        # re-resolving, so a rebind cannot redirect it to a private host.
+        pinned_ip = addresses[0]
 
     port_str = f":{port}" if port is not None else ""
     query = f"?{parsed.query}" if parsed.query else ""
     path = parsed.path or ""
-    return f"{scheme}://{host}{port_str}{path}{query}"
+    return f"{scheme}://{host}{port_str}{path}{query}", pinned_ip
 
 
 async def download_video_if_needed(video_path: str) -> tuple[str, bool]:
@@ -184,7 +233,7 @@ async def download_video_if_needed(video_path: str) -> tuple[str, bool]:
         return video_path, False
 
     try:
-        candidate_url = _preflight_url(video_path)
+        candidate_url, pinned_ip = _preflight_url(video_path)
     except ValueError:
         parsed_attempt = urlparse(video_path)
         # CodeQL log-injection sanitizer: ``.replace("\r","").replace("\n","")``
@@ -241,8 +290,19 @@ async def download_video_if_needed(video_path: str) -> tuple[str, bool]:
     if not temp_real.startswith(_TEMP_DIR_PREFIX):
         raise RuntimeError("tempfile returned a path outside the temp directory")
 
+    # Pin the connection to the address vetted in preflight so a DNS rebind
+    # between the check and the fetch cannot redirect it to a private host.
+    # Localhost has no DNS to rebind, so it uses the default resolver.
+    connector = (
+        aiohttp.TCPConnector(
+            resolver=_PinnedResolver(urlparse(candidate_url).hostname or "", pinned_ip)
+        )
+        if pinned_ip is not None
+        else None
+    )
+
     try:
-        async with aiohttp.ClientSession() as session:
+        async with aiohttp.ClientSession(connector=connector) as session:
             async with session.get(candidate_url) as response:
                 response.raise_for_status()
 

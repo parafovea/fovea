@@ -257,7 +257,7 @@ async def extract_audio_segment(
                 stderr=asyncio.subprocess.PIPE,
             )
 
-            _stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=60)
+            _stdout, stderr = await _communicate_with_timeout(process, 60)
 
             if process.returncode != 0:
                 error_msg = stderr.decode() if stderr else "Unknown error"
@@ -273,8 +273,8 @@ async def extract_audio_segment(
 
             return output_path
 
-        except TimeoutError as e:
-            raise AudioProcessingError("Segment extraction timed out after 60s") from e
+        except AudioProcessingError:
+            raise
         except Exception as e:
             raise AudioProcessingError(f"Segment extraction failed: {e}") from e
 
@@ -547,7 +547,7 @@ async def extract_audio_track(
                 stderr=asyncio.subprocess.PIPE,
             )
 
-            _stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=300)
+            _stdout, stderr = await _communicate_with_timeout(process, 300)
 
             if process.returncode != 0:
                 error_msg = stderr.decode() if stderr else "Unknown error"
@@ -562,8 +562,8 @@ async def extract_audio_track(
 
             return output_path
 
-        except TimeoutError as e:
-            raise AudioProcessingError("Audio extraction timed out after 300s") from e
+        except AudioProcessingError:
+            raise
         except Exception as e:
             raise AudioProcessingError(f"Audio extraction failed: {e}") from e
 
