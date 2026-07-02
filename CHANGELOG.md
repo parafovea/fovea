@@ -5,6 +5,18 @@ All notable changes to the Fovea project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.11] - 2026-07-02
+
+The 0.5.11 patch is the third and final release remediating the second swarm audit — the model-service slice — fixing event-loop starvation, ffmpeg subprocess leaks, a shared-model inference race, and a DNS-rebinding SSRF gap in the Python inference service (PR_PLACEHOLDER). Nothing is breaking. This completes the second-audit three-patch series (0.5.9 backend, 0.5.10 frontend, 0.5.11 model-service).
+
+### Fixed
+
+- The summarize-with-audio pipeline ran Whisper transcription and pyannote diarization directly on the asyncio event loop — the 0.5.8 offload reached the standalone `/transcribe` and `/diarize` routes and the VLM path but missed the summarizer's own audio path — so a `POST /summarize` with audio froze the `/health` probe, metric export, and every concurrent request for the tens of seconds to minutes the inference took. The load/transcribe/diarize/unload sequence now runs on a worker thread via `asyncio.to_thread` (`model-service/src/infrastructure/adapters/outbound/transcriber_whisper.py`).
+- Two ffmpeg extraction helpers on the transcription hot path (`extract_audio_track`, `extract_audio_segment`) awaited a timeout that cancelled only the coroutine, leaving the ffmpeg child running as an orphan; they now go through the shared kill-and-reap helper so the timeout path terminates and reaps the subprocess (`model-service/src/application/services/audio_processing.py`).
+- The video processor's `extract_audio` and `extract_thumbnail` awaited ffmpeg with no timeout at all, so a malformed or truncated video could wedge the request forever and leak the child; both now use a bounded timeout that kills and reaps on expiry (`model-service/src/infrastructure/adapters/outbound/video/processor.py`).
+- The standalone transcribe and diarize routes fetched the single cached model instance and ran its native inference in a worker thread with no serialization, so two concurrent requests called the same non-thread-safe object (faster-whisper / pyannote) at once, risking garbled output or a crash inside the native code. Inference is now serialized per task type by an `asyncio.Lock`, while distinct tasks still run in parallel (`model-service/src/infrastructure/adapters/inbound/fastapi/routes/transcribe.py`, `diarize.py`, `inference_locks.py`).
+- The video downloader's SSRF allow-list resolved the host and required a public IP but then fetched by hostname, so DNS could be rebound between the check and the connect (a TOCTOU). The connection is now pinned to the address vetted during preflight while still presenting the hostname for TLS, so a rebind cannot redirect it to a private or internal host (`model-service/src/infrastructure/adapters/outbound/video/downloader.py`).
+
 ## [0.5.10] - 2026-07-01
 
 The 0.5.10 patch is the second of three releases remediating the second swarm audit — the frontend slice — fixing auto-save data-loss and stale-cache defects in the annotation UI ([#196](https://github.com/parafovea/fovea/pull/196)). Several were gaps in the first audit's own frontend fixes, which closed one instance of a defect class without closing every instance. Nothing is breaking.

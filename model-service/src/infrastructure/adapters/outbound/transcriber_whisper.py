@@ -7,10 +7,12 @@ transformers) inside infrastructure.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import tempfile
 import time
+from typing import TYPE_CHECKING
 
 import torch
 
@@ -21,6 +23,9 @@ from src.application.ports.outbound.transcriber import (
 )
 from src.application.services.audio_processing import extract_audio_track, has_audio_stream
 from src.infrastructure.observability.telemetry import record_inference
+
+if TYPE_CHECKING:
+    from src.infrastructure.adapters.outbound.models.audio.loader import TranscriptionConfig
 
 logger = logging.getLogger(__name__)
 
@@ -40,11 +45,9 @@ class WhisperTranscriberAdapter(ITranscriber):
         enable_diarization: bool = False,
     ) -> TranscriptionResultDTO:
         """Transcribe audio from a video file."""
-        from src.domain.entities.architectures import Whisper  # noqa: PLC0415
         from src.infrastructure.adapters.outbound.models.audio.loader import (  # noqa: PLC0415
             AudioFramework,
             TranscriptionConfig,
-            WhisperLoader,
         )
 
         start = time.time()
@@ -67,38 +70,73 @@ class WhisperTranscriberAdapter(ITranscriber):
                 language=language,
                 device=device,
             )
-            loader = WhisperLoader(Whisper(), config)
-            loader.load()
-            try:
-                with record_inference(task="transcribe", model_id=self._model_id):
-                    result = loader.transcribe(audio_path)
-                segments = [
-                    TranscriptSegmentDTO(
-                        start=float(seg.start),
-                        end=float(seg.end),
-                        text=str(seg.text),
-                        confidence=float(getattr(seg, "confidence", 0.0) or 0.0),
-                    )
-                    for seg in result.segments
-                ]
+            # Whisper load/transcribe, pyannote diarization, and unload are heavy
+            # blocking (CPU/GPU) calls that would run for tens of seconds to
+            # minutes. Offload the whole sequence to a worker thread so the event
+            # loop — /health probes, OTLP metric export, other concurrent
+            # requests — is not frozen for the duration.
+            text, segments, language_out, speaker_count = await asyncio.to_thread(
+                _run_transcription,
+                config,
+                audio_path,
+                self._model_id,
+                device,
+                enable_diarization,
+            )
 
-                speaker_count: int | None = None
-                if enable_diarization:
-                    speaker_count = _apply_diarization(audio_path, segments, device)
-
-                return TranscriptionResultDTO(
-                    text=str(result.text),
-                    segments=segments,
-                    language=getattr(result, "language", None),
-                    speaker_count=speaker_count,
-                    processing_time=time.time() - start,
-                )
-            finally:
-                loader.unload()
+            return TranscriptionResultDTO(
+                text=text,
+                segments=segments,
+                language=language_out,
+                speaker_count=speaker_count,
+                processing_time=time.time() - start,
+            )
 
         finally:
             if os.path.exists(audio_path):
                 os.remove(audio_path)
+
+
+def _run_transcription(
+    config: TranscriptionConfig,
+    audio_path: str,
+    model_id: str,
+    device: str,
+    enable_diarization: bool,
+) -> tuple[str, list[TranscriptSegmentDTO], str | None, int | None]:
+    """Load Whisper, transcribe, optionally diarize, and unload — all blocking.
+
+    Runs on a worker thread (via ``asyncio.to_thread``) so the event loop is not
+    frozen for the duration of inference. Returns the transcript text, segments,
+    detected language, and speaker count.
+    """
+    from src.domain.entities.architectures import Whisper  # noqa: PLC0415
+    from src.infrastructure.adapters.outbound.models.audio.loader import (  # noqa: PLC0415
+        WhisperLoader,
+    )
+
+    loader = WhisperLoader(Whisper(), config)
+    loader.load()
+    try:
+        with record_inference(task="transcribe", model_id=model_id):
+            result = loader.transcribe(audio_path)
+        segments = [
+            TranscriptSegmentDTO(
+                start=float(seg.start),
+                end=float(seg.end),
+                text=str(seg.text),
+                confidence=float(getattr(seg, "confidence", 0.0) or 0.0),
+            )
+            for seg in result.segments
+        ]
+
+        speaker_count: int | None = None
+        if enable_diarization:
+            speaker_count = _apply_diarization(audio_path, segments, device)
+
+        return str(result.text), segments, getattr(result, "language", None), speaker_count
+    finally:
+        loader.unload()
 
 
 def _apply_diarization(
