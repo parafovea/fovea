@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.5.11] - 2026-07-02
 
-The 0.5.11 patch is the third and final release remediating the second swarm audit — the model-service slice — fixing event-loop starvation, ffmpeg subprocess leaks, a shared-model inference race, and a DNS-rebinding SSRF gap in the Python inference service (PR_PLACEHOLDER). Nothing is breaking. This completes the second-audit three-patch series (0.5.9 backend, 0.5.10 frontend, 0.5.11 model-service).
+The 0.5.11 patch is the third and final release remediating the second swarm audit — the model-service slice — fixing event-loop starvation, ffmpeg subprocess leaks, a shared-model inference race, and a DNS-rebinding SSRF gap in the Python inference service ([#198](https://github.com/parafovea/fovea/pull/198)). Nothing is breaking. This completes the second-audit three-patch series (0.5.9 backend, 0.5.10 frontend, 0.5.11 model-service).
 
 ### Fixed
 
