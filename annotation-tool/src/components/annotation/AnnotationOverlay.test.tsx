@@ -101,10 +101,10 @@ describe('AnnotationOverlay', () => {
           relations: [],
         })
       }),
-      http.get('/api/annotations/:videoId', () => {
+      http.get('/api/layers/videos/:videoId/annotations', () => {
         return HttpResponse.json([])
       }),
-      http.post('/api/annotations', async ({ request }) => {
+      http.post('/api/layers/videos/:videoId/annotations', async ({ request }) => {
         const body = await request.json() as Record<string, unknown>
         // Return in backend format which will be transformed
         return HttpResponse.json({
@@ -132,7 +132,7 @@ describe('AnnotationOverlay', () => {
       let savedAnnotation: any = null
 
       server.use(
-        http.post('/api/annotations', async ({ request }) => {
+        http.post('/api/layers/videos/:videoId/annotations', async ({ request }) => {
           savedAnnotation = await request.json()
           return HttpResponse.json({
             id: 'new-annotation-id',
@@ -224,7 +224,7 @@ describe('AnnotationOverlay', () => {
       let savedAnnotation: any = null
 
       server.use(
-        http.post('/api/annotations', async ({ request }) => {
+        http.post('/api/layers/videos/:videoId/annotations', async ({ request }) => {
           savedAnnotation = await request.json()
           return HttpResponse.json({
             id: 'new-annotation-id',
@@ -308,7 +308,7 @@ describe('AnnotationOverlay', () => {
             relations: [],
           })
         }),
-        http.post('/api/annotations', async ({ request }) => {
+        http.post('/api/layers/videos/:videoId/annotations', async ({ request }) => {
           savedAnnotation = await request.json()
           return HttpResponse.json({
             id: 'new-annotation-id',
@@ -368,7 +368,7 @@ describe('AnnotationOverlay', () => {
       let savedAnnotation: any = null
 
       server.use(
-        http.post('/api/annotations', async ({ request }) => {
+        http.post('/api/layers/videos/:videoId/annotations', async ({ request }) => {
           savedAnnotation = await request.json()
           return HttpResponse.json({
             id: 'new-annotation-id',
@@ -426,7 +426,7 @@ describe('AnnotationOverlay', () => {
     it('renders existing annotations with boundingBoxSequence', async () => {
       // Use backend format - the API transform will convert to frontend format
       server.use(
-        http.get('/api/annotations/:videoId', () => {
+        http.get('/api/layers/videos/:videoId/annotations', () => {
           return HttpResponse.json([
             {
               id: 'ann-1',
@@ -484,7 +484,7 @@ describe('AnnotationOverlay', () => {
     it('safely handles annotations without boundingBoxSequence', async () => {
       // Use backend format - frames being null should be handled safely
       server.use(
-        http.get('/api/annotations/:videoId', () => {
+        http.get('/api/layers/videos/:videoId/annotations', () => {
           return HttpResponse.json([
             {
               id: 'ann-invalid',
@@ -546,7 +546,7 @@ describe('AnnotationOverlay', () => {
             relations: [],
           })
         }),
-        http.get('/api/annotations/:videoId', () => {
+        http.get('/api/layers/videos/:videoId/annotations', () => {
           return HttpResponse.json([
             {
               id: 'ann-cross-user',
@@ -597,7 +597,7 @@ describe('AnnotationOverlay', () => {
     it('filters annotations by selected persona in type mode', async () => {
       // Use backend format
       server.use(
-        http.get('/api/annotations/:videoId', () => {
+        http.get('/api/layers/videos/:videoId/annotations', () => {
           return HttpResponse.json([
             {
               id: 'ann-1',

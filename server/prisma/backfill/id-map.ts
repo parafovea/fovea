@@ -17,6 +17,12 @@
  *      the legacy id(s) it fans out from, so the same legacy input always yields
  *      the same derived id.
  *
+ * The namespace and the derivations the video-annotation runtime also needs
+ * (`deriveId`, `Scope`, `mediaVideoId`, `expressionVideoId`, `annotationLayerId`,
+ * `layersOntologyForPersonaId`) live in `src/services/layers-id-map.ts` so the
+ * backfill and the layers endpoint derive identical ids; this module re-exports
+ * them and adds the backfill-only derivations.
+ *
  * Scope columns (`projectId`, `createdByUserId`) are resolved per source row from
  * the legacy owner fields so the backfilled rows land in the same CASL scope as
  * the data they mirror.
@@ -24,35 +30,16 @@
  * @module
  */
 
-import { v5 as uuidv5 } from 'uuid'
+import { deriveId } from '../../src/services/layers-id-map.js'
 
-/**
- * Fixed namespace for all derived backfill ids. Never change this: the derived
- * ids are the idempotency keys, so a new namespace would orphan every previously
- * backfilled row and re-mint duplicates on the next run.
- */
-const BACKFILL_NAMESPACE = 'b6f0a3d2-3c2b-4e5a-9f1c-7d8e5a2b1c00'
-
-/**
- * The scope columns every backfilled layers row carries. Resolved from the
- * legacy owner fields so a mirrored row is visible to exactly the principals who
- * could see its source.
- */
-export interface Scope {
-  projectId: string | null
-  createdByUserId: string | null
-}
-
-/**
- * Derives a stable uuid from a source kind and its legacy id parts.
- *
- * @param kind - the target row kind (e.g. `media:video`, `expr:transcript`)
- * @param parts - the legacy id(s) the derived row fans out from
- * @returns a deterministic uuid, identical for identical inputs
- */
-export function deriveId(kind: string, ...parts: string[]): string {
-  return uuidv5(`${kind}|${parts.join('|')}`, BACKFILL_NAMESPACE)
-}
+export {
+  deriveId,
+  type Scope,
+  mediaVideoId,
+  expressionVideoId,
+  annotationLayerId,
+  layersOntologyForPersonaId,
+} from '../../src/services/layers-id-map.js'
 
 // --- 1:1 reuse of legacy uuids -------------------------------------------
 
@@ -83,16 +70,6 @@ export function reuseClaimRelationEdgeId(claimRelationId: string): string {
 
 // --- Derived ids: video domain -------------------------------------------
 
-/** The Media(kind=video) id for a Video. */
-export function mediaVideoId(videoId: string): string {
-  return deriveId('media:video', videoId)
-}
-
-/** The Expression(kind=video) id for a Video. */
-export function expressionVideoId(videoId: string): string {
-  return deriveId('expr:video', videoId)
-}
-
 /** The Expression(kind=social-media, sourceKind=video-metadata-text) id for a Video. */
 export function expressionVideoMetadataTextId(videoId: string): string {
   return deriveId('expr:video-metadata-text', videoId)
@@ -106,25 +83,6 @@ export function segmentationVideoMetadataTextId(videoId: string): string {
 /** The Tokenization id for a Video's metadata text. */
 export function tokenizationVideoMetadataTextId(videoId: string): string {
   return deriveId('tok:video-metadata-text', videoId)
-}
-
-// --- Derived ids: ontology domain ----------------------------------------
-
-/** The LayersOntology id for a persona's legacy Ontology. */
-export function layersOntologyForPersonaId(personaId: string): string {
-  return deriveId('ontology:persona', personaId)
-}
-
-// --- Derived ids: annotation domain --------------------------------------
-
-/**
- * The AnnotationLayer id that groups a video expression's annotations for one
- * persona. Object annotations (null persona) share a single object layer keyed
- * by the `object` sentinel, so a video's type annotations and object annotations
- * land in distinct homogeneous layers.
- */
-export function annotationLayerId(videoId: string, personaId: string | null): string {
-  return deriveId('layer:annotation', videoId, personaId ?? 'object')
 }
 
 // --- Derived ids: summary/transcript domain ------------------------------

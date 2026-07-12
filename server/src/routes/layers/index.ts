@@ -4,6 +4,7 @@ import { buildAbilities } from '../../middleware/abilities.js'
 import expressionsRoutes from './expressions.js'
 import mediaRoutes from './media.js'
 import annotationLayersRoutes from './annotation-layers.js'
+import videoAnnotationsRoutes from './video-annotations.js'
 import graphRoutes from './graph.js'
 import ontologiesRoutes from './ontologies.js'
 import corporaRoutes from './corpora.js'
@@ -44,6 +45,7 @@ const layersRoute: FastifyPluginAsync = async (fastify) => {
   await fastify.register(expressionsRoutes)
   await fastify.register(mediaRoutes)
   await fastify.register(annotationLayersRoutes)
+  await fastify.register(videoAnnotationsRoutes)
   await fastify.register(graphRoutes)
   await fastify.register(ontologiesRoutes)
   await fastify.register(corporaRoutes)
