@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest'
 import { buildApp } from '../../src/app.js'
 import { hashPassword } from '../../src/lib/password.js'
@@ -7,7 +8,12 @@ import { PrismaClient } from '@prisma/client'
 
 /**
  * Integration tests for the World State API.
- * Tests GET and PUT operations for user world state.
+ *
+ * The `/api/world` contract is unchanged, but its store is now the layers graph:
+ * world objects persist as GraphNode rows and relations as GraphEdge rows, both
+ * scoped to the user. These tests round-trip the aggregate through the route and
+ * assert the data lands in graph_nodes / graph_edges, while confirming the legacy
+ * WorldState read-through bridge still surfaces rows written by legacy writers.
  */
 describe('World State API', () => {
   let app: FastifyInstance
@@ -24,8 +30,12 @@ describe('World State API', () => {
     await app.close()
   })
 
-  beforeEach(async () => {
-    // Clean database in dependency order
+  /** Removes all world/ontology data in reverse foreign-key order. */
+  async function cleanDatabase(): Promise<void> {
+    await prisma.typeDef.deleteMany()
+    await prisma.layersOntology.deleteMany()
+    await prisma.graphEdge.deleteMany()
+    await prisma.graphNode.deleteMany()
     await prisma.worldState.deleteMany()
     await prisma.apiKey.deleteMany()
     await prisma.session.deleteMany()
@@ -35,6 +45,10 @@ describe('World State API', () => {
     await prisma.persona.deleteMany()
     await prisma.user.deleteMany()
     await prisma.rolePermission.deleteMany()
+  }
+
+  beforeEach(async () => {
+    await cleanDatabase()
     await seedBaselinePermissions(prisma)
 
     // Create test user
@@ -60,7 +74,7 @@ describe('World State API', () => {
   })
 
   describe('GET /api/world', () => {
-    it('creates and returns empty world state when none exists', async () => {
+    it('returns empty world state when none exists', async () => {
       const response = await app.inject({
         method: 'GET',
         url: '/api/world',
@@ -80,8 +94,9 @@ describe('World State API', () => {
       expect(worldState.relations).toEqual([])
     })
 
-    it('returns existing world state with data', async () => {
-      // Create world state with data
+    it('surfaces a legacy WorldState row through the read-through bridge', async () => {
+      // Legacy writers (import) still populate the WorldState row; the route
+      // surfaces it until the next save materializes it into the layers graph.
       const testEntity = {
         id: 'entity-1',
         name: 'Test Entity',
@@ -138,71 +153,54 @@ describe('World State API', () => {
           isAdmin: false,
         }
       })
+      const login2 = await app.inject({
+        method: 'POST',
+        url: '/api/auth/login',
+        payload: { username: 'testuser2', password: 'testpass456' }
+      })
+      const sessionToken2 = login2.cookies.find(c => c.name === 'session_token')!.value
 
-      // Create world state for first user
-      await prisma.worldState.create({
-        data: {
-          userId: testUserId,
-          entities: [{ id: 'entity-1', name: 'User 1 Entity' }],
-          events: [],
-          times: [],
-          entityCollections: [],
-          eventCollections: [],
-          timeCollections: [],
-          relations: []
-        }
+      // Each user writes their own world through the route.
+      await app.inject({
+        method: 'PUT',
+        url: '/api/world',
+        cookies: { session_token: testSessionToken },
+        payload: { entities: [{ id: 'entity-1', name: 'User 1 Entity' }] }
+      })
+      await app.inject({
+        method: 'PUT',
+        url: '/api/world',
+        cookies: { session_token: sessionToken2 },
+        payload: { entities: [{ id: 'entity-2', name: 'User 2 Entity' }] }
       })
 
-      // Create world state for second user
-      await prisma.worldState.create({
-        data: {
-          userId: user2.id,
-          entities: [{ id: 'entity-2', name: 'User 2 Entity' }],
-          events: [],
-          times: [],
-          entityCollections: [],
-          eventCollections: [],
-          timeCollections: [],
-          relations: []
-        }
-      })
-
-      // Check first user gets their data
       const response1 = await app.inject({
         method: 'GET',
         url: '/api/world',
         cookies: { session_token: testSessionToken }
       })
-
       expect(response1.statusCode).toBe(200)
       const worldState1 = response1.json()
       expect(worldState1.entities).toHaveLength(1)
       expect(worldState1.entities[0].name).toBe('User 1 Entity')
 
-      // Login as second user
-      const loginResponse2 = await app.inject({
-        method: 'POST',
-        url: '/api/auth/login',
-        payload: { username: 'testuser2', password: 'testpass456' }
-      })
-      const sessionToken2 = loginResponse2.cookies.find(c => c.name === 'session_token')!.value
-
-      // Check second user gets their data
       const response2 = await app.inject({
         method: 'GET',
         url: '/api/world',
         cookies: { session_token: sessionToken2 }
       })
-
       expect(response2.statusCode).toBe(200)
       const worldState2 = response2.json()
       expect(worldState2.entities).toHaveLength(1)
       expect(worldState2.entities[0].name).toBe('User 2 Entity')
+
+      // Isolation is enforced by the scope columns on the graph rows.
+      expect(user2.id).not.toBe(testUserId)
     })
   })
 
   describe('PUT /api/world', () => {
-    it('creates new world state with provided data', async () => {
+    it('creates new world state with provided data and lands it in graph_nodes', async () => {
       const worldData = {
         entities: [
           {
@@ -233,13 +231,19 @@ describe('World State API', () => {
       expect(worldState.entities).toHaveLength(1)
       expect(worldState.entities[0].name).toBe('John Doe')
 
-      // Verify it was persisted
+      // The entity landed as an entity-typed GraphNode reusing its own id.
+      const node = await prisma.graphNode.findUnique({ where: { id: 'entity-1' } })
+      expect(node).not.toBeNull()
+      expect(node!.nodeType).toBe('entity')
+      expect(node!.label).toBe('John Doe')
+      expect(node!.createdByUserId).toBe(testUserId)
+
+      // Verify it was persisted through a fresh read.
       const getResponse = await app.inject({
         method: 'GET',
         url: '/api/world',
         cookies: { session_token: testSessionToken }
       })
-
       expect(getResponse.statusCode).toBe(200)
       const persistedState = getResponse.json()
       expect(persistedState.entities).toHaveLength(1)
@@ -247,32 +251,18 @@ describe('World State API', () => {
     })
 
     it('updates existing world state', async () => {
-      // Create initial world state
-      await prisma.worldState.create({
-        data: {
-          userId: testUserId,
-          entities: [{ id: 'entity-1', name: 'Old Entity' }],
-          events: [],
-          times: [],
-          entityCollections: [],
-          eventCollections: [],
-          timeCollections: [],
-          relations: []
-        }
+      await app.inject({
+        method: 'PUT',
+        url: '/api/world',
+        cookies: { session_token: testSessionToken },
+        payload: { entities: [{ id: 'entity-1', name: 'Old Entity' }] }
       })
 
-      // Update with new data
       const updateData = {
         entities: [
           { id: 'entity-1', name: 'Updated Entity' },
           { id: 'entity-2', name: 'New Entity' }
-        ],
-        events: [],
-        times: [],
-        entityCollections: [],
-        eventCollections: [],
-        timeCollections: [],
-        relations: []
+        ]
       }
 
       const response = await app.inject({
@@ -287,33 +277,27 @@ describe('World State API', () => {
       expect(worldState.entities).toHaveLength(2)
       expect(worldState.entities[0].name).toBe('Updated Entity')
       expect(worldState.entities[1].name).toBe('New Entity')
+
+      // The pruned entity is gone; the replacements landed.
+      expect(await prisma.graphNode.count({ where: { createdByUserId: testUserId, nodeType: 'entity' } })).toBe(2)
     })
 
     it('allows partial updates (only entities)', async () => {
-      // Create initial world state
-      await prisma.worldState.create({
-        data: {
-          userId: testUserId,
+      await app.inject({
+        method: 'PUT',
+        url: '/api/world',
+        cookies: { session_token: testSessionToken },
+        payload: {
           entities: [{ id: 'entity-1', name: 'Entity 1' }],
-          events: [{ id: 'event-1', name: 'Event 1' }],
-          times: [],
-          entityCollections: [],
-          eventCollections: [],
-          timeCollections: [],
-          relations: []
+          events: [{ id: 'event-1', name: 'Event 1' }]
         }
       })
-
-      // Update only entities
-      const updateData = {
-        entities: [{ id: 'entity-2', name: 'Entity 2' }]
-      }
 
       const response = await app.inject({
         method: 'PUT',
         url: '/api/world',
         cookies: { session_token: testSessionToken },
-        payload: updateData
+        payload: { entities: [{ id: 'entity-2', name: 'Entity 2' }] }
       })
 
       expect(response.statusCode).toBe(200)
@@ -331,23 +315,19 @@ describe('World State API', () => {
           { id: 'entity-1', name: 'Entity 1' },
           { id: 'entity-2', name: 'Entity 2' }
         ],
-        events: [
-          { id: 'event-1', name: 'Event 1' }
-        ],
-        times: [
-          { id: 'time-1', name: 'Time 1' }
-        ],
+        events: [{ id: 'event-1', name: 'Event 1' }],
+        times: [{ id: 'time-1', type: 'instant' }],
         entityCollections: [
-          { id: 'ecoll-1', name: 'Entity Collection 1', entityIds: ['entity-1', 'entity-2'] }
+          { id: 'ecoll-1', name: 'Entity Collection 1', members: ['entity-1', 'entity-2'] }
         ],
         eventCollections: [
-          { id: 'ecoll-2', name: 'Event Collection 1', eventIds: ['event-1'] }
+          { id: 'ecoll-2', name: 'Event Collection 1', members: ['event-1'] }
         ],
         timeCollections: [
-          { id: 'tcoll-1', name: 'Time Collection 1', timeIds: ['time-1'] }
+          { id: 'tcoll-1', name: 'Time Collection 1', members: ['time-1'] }
         ],
         relations: [
-          { id: 'rel-1', sourceId: 'entity-1', targetId: 'entity-2', relationType: 'knows' }
+          { id: 'rel-1', relationTypeId: 'knows', sourceType: 'entity', sourceId: 'entity-1', targetType: 'entity', targetId: 'entity-2' }
         ]
       }
 
@@ -380,7 +360,6 @@ describe('World State API', () => {
     })
 
     it('preserves world state isolation between users', async () => {
-      // Create second user
       const passwordHash = await hashPassword('testpass456')
       await prisma.user.create({
         data: {
@@ -392,17 +371,13 @@ describe('World State API', () => {
         }
       })
 
-      // User 1 creates world state
       await app.inject({
         method: 'PUT',
         url: '/api/world',
         cookies: { session_token: testSessionToken },
-        payload: {
-          entities: [{ id: 'entity-1', name: 'User 1 Entity' }]
-        }
+        payload: { entities: [{ id: 'entity-1', name: 'User 1 Entity' }] }
       })
 
-      // Login as user 2
       const loginResponse2 = await app.inject({
         method: 'POST',
         url: '/api/auth/login',
@@ -410,39 +385,128 @@ describe('World State API', () => {
       })
       const sessionToken2 = loginResponse2.cookies.find(c => c.name === 'session_token')!.value
 
-      // User 2 creates world state
       await app.inject({
         method: 'PUT',
         url: '/api/world',
         cookies: { session_token: sessionToken2 },
-        payload: {
-          entities: [{ id: 'entity-2', name: 'User 2 Entity' }]
-        }
+        payload: { entities: [{ id: 'entity-2', name: 'User 2 Entity' }] }
       })
 
-      // Verify user 1 still has their data
       const response1 = await app.inject({
         method: 'GET',
         url: '/api/world',
         cookies: { session_token: testSessionToken }
       })
-
       expect(response1.statusCode).toBe(200)
       const worldState1 = response1.json()
       expect(worldState1.entities).toHaveLength(1)
       expect(worldState1.entities[0].name).toBe('User 1 Entity')
 
-      // Verify user 2 has their data
       const response2 = await app.inject({
         method: 'GET',
         url: '/api/world',
         cookies: { session_token: sessionToken2 }
       })
-
       expect(response2.statusCode).toBe(200)
       const worldState2 = response2.json()
       expect(worldState2.entities).toHaveLength(1)
       expect(worldState2.entities[0].name).toBe('User 2 Entity')
+    })
+  })
+
+  describe('layers round-trip', () => {
+    it('round-trips a rich world state through the route and lands it in graph_nodes/graph_edges', async () => {
+      const world = {
+        entities: [
+          {
+            id: 'entity-alice',
+            name: 'Alice',
+            description: [{ type: 'text', content: 'The lead' }],
+            wikidataId: 'Q42',
+            typeAssignments: [{ personaId: 'p-1', entityTypeId: 'et-person', confidence: 0.9 }],
+            metadata: { alternateNames: ['Al'] }
+          },
+          {
+            id: 'entity-hall',
+            name: 'City Hall',
+            description: [],
+            typeAssignments: [],
+            locationType: 'point',
+            coordinateSystem: 'GPS',
+            coordinates: { latitude: 40.1, longitude: -80.2 },
+            metadata: {}
+          }
+        ],
+        events: [
+          {
+            id: 'event-meeting',
+            name: 'Meeting',
+            description: [],
+            personaInterpretations: [
+              { personaId: 'p-1', eventTypeId: 'et-meet', participants: [{ entityId: 'entity-alice', roleTypeId: 'rt-agent' }] }
+            ],
+            metadata: { certainty: 0.8 }
+          }
+        ],
+        times: [
+          { id: 'time-noon', label: 'Noon', type: 'instant' }
+        ],
+        entityCollections: [
+          { id: 'ec-people', name: 'People', description: [], members: ['entity-alice'], collectionType: 'group', typeAssignments: [] }
+        ],
+        eventCollections: [
+          { id: 'evc-agenda', name: 'Agenda', description: [], members: ['event-meeting'], collectionType: 'sequence', typeAssignments: [] }
+        ],
+        timeCollections: [
+          { id: 'tc-day', name: 'Day', description: [], members: ['time-noon'], collectionType: 'group' }
+        ],
+        relations: [
+          { id: 'rel-attends', relationTypeId: 'attends', sourceType: 'entity', sourceId: 'entity-alice', targetType: 'event', targetId: 'event-meeting', metadata: { note: 'chair' } },
+          { id: 'rel-when', relationTypeId: 'occurs-at', sourceType: 'event', sourceId: 'event-meeting', targetType: 'time', targetId: 'time-noon' }
+        ]
+      }
+
+      const putResponse = await app.inject({
+        method: 'PUT',
+        url: '/api/world',
+        cookies: { session_token: testSessionToken },
+        payload: world
+      })
+      expect(putResponse.statusCode).toBe(200)
+
+      const getResponse = await app.inject({
+        method: 'GET',
+        url: '/api/world',
+        cookies: { session_token: testSessionToken }
+      })
+      expect(getResponse.statusCode).toBe(200)
+      const got = getResponse.json()
+
+      // Every bucket deep-equals what went in.
+      expect(got.entities).toEqual(world.entities)
+      expect(got.events).toEqual(world.events)
+      expect(got.times).toEqual(world.times)
+      expect(got.entityCollections).toEqual(world.entityCollections)
+      expect(got.eventCollections).toEqual(world.eventCollections)
+      expect(got.timeCollections).toEqual(world.timeCollections)
+      expect(got.relations).toEqual(world.relations)
+
+      // The rows landed in the layers graph: 2 entities + 1 event + 1 time + 3
+      // collections = 7 nodes, 2 relation edges.
+      const nodeCount = await prisma.graphNode.count({ where: { createdByUserId: testUserId } })
+      expect(nodeCount).toBe(7)
+      const edgeCount = await prisma.graphEdge.count({ where: { createdByUserId: testUserId } })
+      expect(edgeCount).toBe(2)
+
+      // Node types are projected: entity -> entity, event -> situation, time -> time.
+      expect((await prisma.graphNode.findUnique({ where: { id: 'entity-alice' } }))!.nodeType).toBe('entity')
+      expect((await prisma.graphNode.findUnique({ where: { id: 'event-meeting' } }))!.nodeType).toBe('situation')
+      expect((await prisma.graphNode.findUnique({ where: { id: 'time-noon' } }))!.nodeType).toBe('time')
+      // The relation edge reuses the relation id and denormalizes its endpoints.
+      const edge = await prisma.graphEdge.findUnique({ where: { id: 'rel-attends' } })
+      expect(edge!.sourceLocalId).toBe('entity-alice')
+      expect(edge!.targetLocalId).toBe('event-meeting')
+      expect(edge!.edgeType).toBe('attends')
     })
   })
 
@@ -460,7 +524,7 @@ describe('World State API', () => {
       })
       const adminToken = adminLogin.cookies.find(c => c.name === 'session_token')!.value
 
-      // Target user with populated world state.
+      // Target user with a populated world written through the route.
       const passwordHash = await hashPassword('targetpass789')
       const targetUser = await prisma.user.create({
         data: {
@@ -471,18 +535,19 @@ describe('World State API', () => {
           isAdmin: false,
         }
       })
-      await prisma.worldState.create({
-        data: {
-          userId: targetUser.id,
-          entities: [{ id: 'entity-1', name: 'To Be Cleared' }],
-          events: [],
-          times: [],
-          entityCollections: [],
-          eventCollections: [],
-          timeCollections: [],
-          relations: []
-        }
+      const targetLogin = await app.inject({
+        method: 'POST',
+        url: '/api/auth/login',
+        payload: { username: 'targetuser', password: 'targetpass789' }
       })
+      const targetToken = targetLogin.cookies.find(c => c.name === 'session_token')!.value
+      await app.inject({
+        method: 'PUT',
+        url: '/api/world',
+        cookies: { session_token: targetToken },
+        payload: { entities: [{ id: 'entity-1', name: 'To Be Cleared' }] }
+      })
+      expect(await prisma.graphNode.count({ where: { createdByUserId: targetUser.id } })).toBe(1)
 
       const response = await app.inject({
         method: 'DELETE',
@@ -495,10 +560,14 @@ describe('World State API', () => {
       expect(body.message).toBe('World state cleared successfully')
       expect(body.userId).toBe(targetUser.id)
 
-      const cleared = await prisma.worldState.findFirst({
-        where: { userId: targetUser.id, projectId: null }
+      // The target's world objects are pruned from the layers graph.
+      expect(await prisma.graphNode.count({ where: { createdByUserId: targetUser.id } })).toBe(0)
+      const cleared = await app.inject({
+        method: 'GET',
+        url: '/api/world',
+        cookies: { session_token: targetToken }
       })
-      expect(cleared?.entities).toEqual([])
+      expect(cleared.json().entities).toEqual([])
     })
 
     it('returns 404 when the target user does not exist', async () => {
@@ -579,16 +648,19 @@ describe('World State API', () => {
 
   describe('world object deletion endpoints', () => {
     /**
-     * Seeds the test user's personal world state with an entity, event, time,
-     * relations pointing at each, and collections containing each, then a
-     * persona whose ontology gloss references the seeded objects.
+     * Seeds the test user's personal world (through the route, so it lands in
+     * the layers graph) with an entity, event, time, relations pointing at each,
+     * and collections containing each, plus a persona whose ontology gloss
+     * references the seeded objects.
      */
-    async function seedRichWorldState() {
-      await prisma.worldState.create({
-        data: {
-          userId: testUserId,
-          entities: [{ id: 'entity-1', name: 'Alice' }],
-          events: [{ id: 'event-1', name: 'Meeting', type: 'event' }],
+    async function seedRichWorldState(): Promise<string> {
+      await app.inject({
+        method: 'PUT',
+        url: '/api/world',
+        cookies: { session_token: testSessionToken },
+        payload: {
+          entities: [{ id: 'entity-1', name: 'Alice', description: [], typeAssignments: [] }],
+          events: [{ id: 'event-1', name: 'Meeting', description: [], personaInterpretations: [] }],
           times: [{ id: 'time-1', type: 'instant' }],
           entityCollections: [{ id: 'ec-1', name: 'People', members: ['entity-1'] }],
           eventCollections: [{ id: 'evc-1', name: 'Events', members: ['event-1'] }],
@@ -600,19 +672,16 @@ describe('World State API', () => {
         }
       })
 
-      const persona = await prisma.persona.create({
-        data: {
-          userId: testUserId,
-          name: 'Analyst',
-          role: 'analyst',
-          informationNeed: 'understand events',
-        }
-      })
-      await prisma.ontology.create({
-        data: {
-          personaId: persona.id,
-          entityTypes: [
-            {
+      const personaId = randomUUID()
+      await app.inject({
+        method: 'PUT',
+        url: '/api/ontology',
+        cookies: { session_token: testSessionToken },
+        payload: {
+          personas: [{ id: personaId, name: 'Analyst', role: 'analyst', informationNeed: 'understand events' }],
+          personaOntologies: [{
+            personaId,
+            entities: [{
               id: 'et-1',
               name: 'Person',
               gloss: [
@@ -621,15 +690,29 @@ describe('World State API', () => {
                 { type: 'objectRef', content: 'event-1', refType: 'event-object' },
                 { type: 'objectRef', content: 'time-1', refType: 'time-object' }
               ]
-            }
-          ],
-          roleTypes: [],
-          eventTypes: [],
-          relationTypes: []
+            }],
+            roles: [],
+            events: [],
+            relationTypes: []
+          }]
         }
       })
 
-      return persona.id
+      return personaId
+    }
+
+    /** Reads the entity type's gloss from the persona ontology via the route. */
+    async function readEntityTypeGloss(): Promise<Array<{ type: string; content: string }>> {
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/ontology',
+        cookies: { session_token: testSessionToken }
+      })
+      const bundle = response.json() as {
+        personaOntologies: Array<{ entities: Array<{ id: string; gloss: Array<{ type: string; content: string }> }> }>
+      }
+      const entityType = bundle.personaOntologies[0].entities.find(e => e.id === 'et-1')!
+      return entityType.gloss
     }
 
     it('previews entity deletion with reference counts', async () => {
@@ -671,7 +754,7 @@ describe('World State API', () => {
     })
 
     it('deletes an entity and converts gloss references to text', async () => {
-      const personaId = await seedRichWorldState()
+      await seedRichWorldState()
 
       const response = await app.inject({
         method: 'DELETE',
@@ -687,15 +770,22 @@ describe('World State API', () => {
       expect(body.cleanedUp.collectionMemberships).toBe(1)
 
       // Entity removed, relations referencing it removed, collection cleaned.
-      const ws = await prisma.worldState.findFirst({ where: { userId: testUserId, projectId: null } })
-      expect((ws!.entities as Array<{ id: string }>).find(e => e.id === 'entity-1')).toBeUndefined()
-      expect(ws!.relations).toHaveLength(0)
-      const ec = (ws!.entityCollections as Array<{ members: string[] }>)[0]
-      expect(ec.members).not.toContain('entity-1')
+      const world = (await app.inject({
+        method: 'GET',
+        url: '/api/world',
+        cookies: { session_token: testSessionToken }
+      })).json() as {
+        entities: Array<{ id: string }>
+        relations: unknown[]
+        entityCollections: Array<{ members: string[] }>
+      }
+      expect(world.entities.find(e => e.id === 'entity-1')).toBeUndefined()
+      expect(world.relations).toHaveLength(0)
+      expect(world.entityCollections[0].members).not.toContain('entity-1')
+      expect(await prisma.graphNode.findUnique({ where: { id: 'entity-1' } })).toBeNull()
 
       // The entity-object gloss ref became plain text with the entity name.
-      const ontology = await prisma.ontology.findUnique({ where: { personaId } })
-      const gloss = (ontology!.entityTypes as Array<{ gloss: Array<{ type: string; content: string }> }>)[0].gloss
+      const gloss = await readEntityTypeGloss()
       const converted = gloss.find(g => g.content === 'Alice')
       expect(converted?.type).toBe('text')
     })
