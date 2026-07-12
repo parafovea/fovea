@@ -231,3 +231,43 @@ export {
   useEvaluateAllRules,
   videoAssignmentKeys,
 } from './useVideoAssignments'
+
+// Layers Annotations (token span-annotation model). The delete hooks alias to
+// avoid collision with the video-annotation and world-relation delete hooks.
+export {
+  useLayersAnnotations,
+  useUpsertLayer,
+  useUpsertAnnotation as useUpsertLayersAnnotation,
+  useDeleteAnnotation as useDeleteLayersAnnotation,
+  useCreateRelation as useCreateLayersRelation,
+  useDeleteRelation as useDeleteLayersRelation,
+  layersAnnotationKeys,
+  type LayersExpressionDetail,
+  type LayersAnnotationLayerRow,
+  type LayersAnnotationRow,
+  type TextAnnotationRelationRow,
+  type UpsertLayerInput,
+  type UpsertAnnotationInput,
+  type CreateRelationInput,
+} from './useLayersAnnotations'
+
+// Layers Expressions
+export {
+  useExpression,
+  useCreateExpression,
+  useVideoTextExpressions,
+  expressionKeys,
+  type LayersExpressionWithTokens,
+  type CreateExpressionInput,
+} from './useExpressions'
+
+// Layers Documents
+export {
+  useDocuments,
+  useCreateDocument,
+  documentKeys,
+  type DocumentListResponse,
+  type DocumentListOptions,
+  type LayersDocumentRow,
+  type CreateDocumentInput,
+} from './useDocuments'
