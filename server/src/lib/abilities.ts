@@ -24,6 +24,14 @@ import type { PrismaQuery } from '@casl/prisma'
 export type SubjectName =
   | 'Annotation' | 'Claim' | 'Persona' | 'WorldState' | 'Video'
   | 'VideoSummary' | 'Project' | 'UserGroup' | 'User'
+  // Layers-shaped annotation store. Every content model scopes on
+  // createdByUserId (+ optional projectId); Tokenization and CorpusMembership
+  // carry no scope columns of their own and are authorized via their parent
+  // (the tokenization's expression, the membership's corpus).
+  | 'Media' | 'Expression' | 'Segmentation' | 'Tokenization'
+  | 'AnnotationLayer' | 'LayersAnnotation' | 'TextAnnotationRelation'
+  | 'GraphNode' | 'GraphEdge' | 'LayersOntology' | 'TypeDef'
+  | 'Corpus' | 'CorpusMembership' | 'ClusterSet' | 'Alignment'
 
 /**
  * All actions that can be performed on resources.
@@ -215,6 +223,25 @@ export function defineAbilitiesFor(
   rules.push({ action: 'update', subject: 'WorldState', conditions: { userId } })
   rules.push({ action: 'delete', subject: 'WorldState', conditions: { userId } })
 
+  // Layers-shaped store: every user can always CRUD the layers content they
+  // own, mirroring the Annotation baseline. Each of these models carries a
+  // createdByUserId column, so the ownership condition resolves against real
+  // Prisma rows both in accessibleBy() WHERE clauses and in single-row
+  // ability.can() checks. Tokenization and CorpusMembership are intentionally
+  // excluded — they hold no scope column and are authorized through their
+  // parent (the tokenization's expression, the membership's corpus).
+  const layersOwnedSubjects: SubjectName[] = [
+    'Media', 'Expression', 'Segmentation', 'AnnotationLayer', 'LayersAnnotation',
+    'TextAnnotationRelation', 'GraphNode', 'GraphEdge', 'LayersOntology',
+    'TypeDef', 'Corpus', 'ClusterSet', 'Alignment',
+  ]
+  for (const layerSubject of layersOwnedSubjects) {
+    rules.push({ action: 'create', subject: layerSubject, conditions: { createdByUserId: userId } })
+    rules.push({ action: 'read', subject: layerSubject, conditions: { createdByUserId: userId } })
+    rules.push({ action: 'update', subject: layerSubject, conditions: { createdByUserId: userId } })
+    rules.push({ action: 'delete', subject: layerSubject, conditions: { createdByUserId: userId } })
+  }
+
   // Projects: every user can fully manage projects they personally own
   // (ownerUserId === userId). The create baseline is load-bearing — personal
   // project creation has no pre-existing project_memberships row to authorize
@@ -250,6 +277,22 @@ function mapResourceTypeToModelName(resourceType: string): Prisma.ModelName | nu
     project: 'Project',
     group: 'UserGroup',
     user: 'User',
+    // Layers-shaped annotation store.
+    media: 'Media',
+    expression: 'Expression',
+    segmentation: 'Segmentation',
+    tokenization: 'Tokenization',
+    annotation_layer: 'AnnotationLayer',
+    layers_annotation: 'LayersAnnotation',
+    text_annotation_relation: 'TextAnnotationRelation',
+    graph_node: 'GraphNode',
+    graph_edge: 'GraphEdge',
+    layers_ontology: 'LayersOntology',
+    type_def: 'TypeDef',
+    corpus: 'Corpus',
+    corpus_membership: 'CorpusMembership',
+    cluster_set: 'ClusterSet',
+    alignment: 'Alignment',
   }
   return map[resourceType] ?? null
 }

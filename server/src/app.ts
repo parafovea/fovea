@@ -314,6 +314,11 @@ export async function buildApp() {
   const annotationsRoute = await import('./routes/annotations.js')
   await app.register(annotationsRoute.default)
 
+  // Layers-shaped annotation store. The aggregator applies requireAuth +
+  // buildAbilities once and mounts every resource sub-module under /api/layers.
+  const layersRoute = await import('./routes/layers/index.js')
+  await app.register(layersRoute.default, { prefix: '/api/layers' })
+
   const exportRoute = await import('./routes/export.js')
   await app.register(exportRoute.default)
 
