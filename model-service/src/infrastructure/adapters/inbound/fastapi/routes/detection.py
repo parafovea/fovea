@@ -119,6 +119,8 @@ async def detect_objects(
             cap = cv2.VideoCapture(str(video_path))
             fps = cap.get(cv2.CAP_PROP_FPS)
             total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+            video_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+            video_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
             frame_numbers = list(request.frame_numbers)
             if not frame_numbers:
@@ -144,7 +146,12 @@ async def detect_objects(
             cap.release()
 
             dto_request = detection_request_schema_to_dto(request, video_path)
-            execution_input = DetectObjectsExecutionInput(request=dto_request, frames=frame_inputs)
+            execution_input = DetectObjectsExecutionInput(
+                request=dto_request,
+                video_width=video_width,
+                video_height=video_height,
+                frames=frame_inputs,
+            )
             response_dto = await use_case.execute(execution_input)
 
             span.set_attribute("total_detections", response_dto.total_detections)

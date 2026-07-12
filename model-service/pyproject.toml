@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "fovea-model-service"
 version = "0.5.1"
 description = "Model service for fovea video annotation tool"
-requires-python = ">=3.12"
+requires-python = ">=3.14"
 dependencies = [
     "fastapi>=0.115.0",
     # All transitively-shared deps use `>=` lower bounds rather than
@@ -16,8 +16,17 @@ dependencies = [
     # spent 50+ minutes downloading per-version metadata before
     # converging. `>=` bounds let pip pick a single set in one pass.
     "uvicorn[standard]>=0.27",
-    "pydantic>=2.9",
-    "pydantic-settings>=2.5",
+    # Annotation types + lens engine. The model-service authors no first-party
+    # Pydantic models: every domain entity, DTO, and route body is a didactic
+    # dx.Model, config is didactic-settings, and routes bridge to FastAPI via
+    # didactic-fastapi (FastAPI still uses Pydantic transitively through that
+    # bridge). lairs provides the generated pub.layers.* record models + codec
+    # registry + corpus IO; panproto is the underlying schema/lens engine.
+    "panproto>=0.56,<0.57",
+    "didactic>=0.9,<0.10",
+    "didactic-fastapi>=0.9,<0.10",
+    "didactic-settings>=0.9,<0.10",
+    "lairs>=0.5,<0.6",
     "python-multipart>=0.0.9",
     # opentelemetry was previously pinned to 1.28.0 (instrumentation
     # 0.49b0) across the board. That collides with pyannote.audio 4.x,
@@ -130,9 +139,15 @@ docs = [
     "pydoc-markdown>=4.8.0",
 ]
 
+# Register the fovea codec with lairs so `lairs.codec("fovea")` resolves it once
+# this distribution is installed. The value points at the FoveaCodec class under
+# the `src` import root (the model-service package layout).
+[project.entry-points."lairs.codecs"]
+fovea = "src.infrastructure.adapters.outbound.layers.codec:FoveaCodec"
+
 [tool.ruff]
 line-length = 100
-target-version = "py312"
+target-version = "py314"
 
 [tool.ruff.lint]
 select = [
@@ -195,7 +210,7 @@ ignore = [
 "scripts/*.py" = ["PLC0415"]
 
 [tool.mypy]
-python_version = "3.12"
+python_version = "3.14"
 strict = true
 warn_return_any = true
 warn_unused_configs = true
