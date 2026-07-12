@@ -11,6 +11,8 @@ import {
   Save,
   Download,
   Upload,
+  PackagePlus,
+  PackageOpen,
   Keyboard,
   X,
 } from 'lucide-react'
@@ -61,6 +63,8 @@ import { KeyboardShortcutsDialog } from '@components/shared/KeyboardShortcutsDia
 import { BreadcrumbNavigation } from '@components/shared/BreadcrumbNavigation'
 import { ImportDataDialog } from '@components/data-management/ImportDataDialog'
 import { ExportDialog } from '@components/data-management/ExportDialog'
+import { ImportCorpusDialog } from '@components/data-management/ImportCorpusDialog'
+import { ExportLayersDialog } from '@components/data-management/ExportLayersDialog'
 import { UserMenu } from '@components/auth/UserMenu'
 import UserSettingsDialog from '@components/settings/UserSettingsDialog'
 import ModelSettingsDialog from '@components/settings/ModelSettingsDialog'
@@ -88,6 +92,8 @@ export default function Layout() {
   // Use Zustand dialogStore for dialog state management
   const exportDialog = useDialog('export')
   const importDialog = useDialog('import')
+  const importCorpusDialog = useDialog('importCorpus')
+  const exportLayersDialog = useDialog('exportLayers')
   const shortcutsDialog = useDialog('keyboardShortcuts')
   const userSettingsDialog = useDialog('userSettings')
   const modelSettingsDialog = useDialog('modelSettings')
@@ -424,6 +430,40 @@ export default function Layout() {
               </TooltipTrigger>
               <TooltipContent>Import Data</TooltipContent>
             </Tooltip>
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={importCorpusDialog.openDialog}
+                    aria-label="Import Corpus"
+                    data-tour-id="import-corpus-trigger"
+                  />
+                }
+              >
+                <PackagePlus className="h-4 w-4" />
+              </TooltipTrigger>
+              <TooltipContent>Import Corpus</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={exportLayersDialog.openDialog}
+                    aria-label="Export Corpus"
+                    data-tour-id="export-layers-trigger"
+                  />
+                }
+              >
+                <PackageOpen className="h-4 w-4" />
+              </TooltipTrigger>
+              <TooltipContent>Export Corpus</TooltipContent>
+            </Tooltip>
             <Separator orientation="vertical" className="mx-1 h-4" />
             <Tooltip>
               <TooltipTrigger
@@ -473,6 +513,16 @@ export default function Layout() {
       <ExportDialog
         open={exportDialog.open}
         onClose={exportDialog.close}
+      />
+
+      <ImportCorpusDialog
+        open={importCorpusDialog.open}
+        onClose={importCorpusDialog.close}
+      />
+
+      <ExportLayersDialog
+        open={exportLayersDialog.open}
+        onClose={exportLayersDialog.close}
       />
 
       <UserSettingsDialog

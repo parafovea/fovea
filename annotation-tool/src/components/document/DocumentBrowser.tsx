@@ -11,7 +11,7 @@
 
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { FileText, Plus, Search } from 'lucide-react'
+import { FileText, PackageOpen, PackagePlus, Plus, Search } from 'lucide-react'
 
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
@@ -27,6 +27,7 @@ import { Label } from '@/components/ui/label'
 import { Spinner } from '@/components/ui/spinner'
 import { Textarea } from '@/components/ui/textarea'
 import { useCreateDocument, useDocuments } from '@store/queries'
+import { useDialog } from '@store/zustand/dialogStore'
 
 import { DocumentCard, documentTitle } from './DocumentCard'
 
@@ -39,6 +40,8 @@ export function DocumentBrowser(): JSX.Element {
   const navigate = useNavigate()
   const { data, isLoading } = useDocuments()
   const createDocument = useCreateDocument()
+  const importCorpusDialog = useDialog('importCorpus')
+  const exportLayersDialog = useDialog('exportLayers')
 
   const [search, setSearch] = useState('')
   const [createOpen, setCreateOpen] = useState(false)
@@ -76,10 +79,20 @@ export function DocumentBrowser(): JSX.Element {
     <div className="space-y-6" data-testid="document-browser">
       <div className="flex items-center justify-between gap-4">
         <h2 className="text-xl font-semibold">Documents</h2>
-        <Button onClick={() => setCreateOpen(true)}>
-          <Plus className="mr-2 size-4" />
-          New document
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={importCorpusDialog.openDialog}>
+            <PackagePlus className="mr-2 size-4" />
+            Import corpus
+          </Button>
+          <Button variant="outline" onClick={exportLayersDialog.openDialog}>
+            <PackageOpen className="mr-2 size-4" />
+            Export corpus
+          </Button>
+          <Button onClick={() => setCreateOpen(true)}>
+            <Plus className="mr-2 size-4" />
+            New document
+          </Button>
+        </div>
       </div>
 
       <div className="relative">
