@@ -1,0 +1,29 @@
+{
+  "name": "@fovea/layers-schema",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Generated TypeScript types and JSON Schema for the pub.layers.* annotation vocabulary. Single source of annotation types across the Fovea server and frontend, generated from the layers lexicons via layers-codegen (panproto).",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./json-schema/openapi.json": "./json-schema/openapi.json",
+    "./json-schema/components.json": "./json-schema/components.json"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "src",
+    "json-schema"
+  ],
+  "scripts": {
+    "gen:layers-schema": "bash scripts/regenerate.sh",
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "devDependencies": {
+    "typescript": "catalog:"
+  }
+}

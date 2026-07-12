@@ -1,3 +1,15 @@
 packages:
   - annotation-tool
   - server
+  - packages/*
+
+# Shared dependency versions, defined once and referenced from each package via
+# "catalog:". Consolidates versions that previously diverged between the server
+# and the frontend.
+catalog:
+  typescript: ^5.3.3
+  zod: ^4.3.5
+  axios: ^1.12.2
+  '@opentelemetry/exporter-trace-otlp-http': ^0.211.0
+  '@opentelemetry/resources': ^2.5.0
+  '@opentelemetry/semantic-conventions': ^1.39.0
