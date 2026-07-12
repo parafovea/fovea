@@ -1,6 +1,8 @@
-import { useEffect, useMemo, useCallback } from 'react'
+import { useEffect, useMemo, useCallback, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
+import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible'
 import { Badge } from '@/components/ui/badge'
 import { Slider } from '@/components/ui/slider'
 import { Separator } from '@/components/ui/separator'
@@ -36,6 +38,8 @@ import {
   ArrowLeft,
   Pencil,
   Mic,
+  FileText,
+  ChevronDown,
 } from 'lucide-react'
 import './AnnotationWorkspace.css'
 import { VideoPlayer } from './VideoPlayer'
@@ -53,6 +57,7 @@ import AnnotationEditor from './AnnotationEditor'
 import AnnotationAutocomplete from './AnnotationAutocomplete'
 import VideoSummaryDialog from '@components/video/VideoSummaryDialog'
 import { AnnotationCandidatesList } from './AnnotationCandidatesList'
+import { VideoTextPanel } from '@components/document'
 import { DetectionDialog } from '@components/dialogs/DetectionDialog'
 import type { DetectionRequest } from '@components/dialogs/DetectionDialog'
 import { formatTimestamp } from '@utils/formatters'
@@ -84,6 +89,9 @@ const DRAWER_WIDTH = 300
 export default function AnnotationWorkspace() {
   const { videoId } = useParams()
   const navigate = useNavigate()
+
+  // Whether the associated-text span-annotation panel is expanded.
+  const [textPanelOpen, setTextPanelOpen] = useState(false)
 
   const { data: modelConfig } = useModelConfig()
   const modelsDisabled = !modelConfig?.cudaAvailable && !modelConfig?.cpuModelsAvailable
@@ -982,6 +990,29 @@ export default function AnnotationWorkspace() {
               )}
             </div>
           </div>
+        </div>
+
+        {/* Associated-text span annotation (token spans + relations over the
+            video's post text and transcript). Additive panel; it does not touch
+            the video timeline or the drawing surface. */}
+        <div className="rounded-lg ring-1 ring-foreground/10 bg-card p-4 mt-4 shadow-sm">
+          <Collapsible open={textPanelOpen} onOpenChange={setTextPanelOpen}>
+            <CollapsibleTrigger className="flex w-full items-center gap-2 text-left">
+              <FileText className="size-4 text-muted-foreground" />
+              <span className="text-sm font-semibold">Associated Text</span>
+              <ChevronDown
+                className={cn(
+                  'ml-auto size-4 text-muted-foreground transition-transform',
+                  textPanelOpen && 'rotate-180',
+                )}
+              />
+            </CollapsibleTrigger>
+            <CollapsibleContent className="pt-4">
+              {videoId && textPanelOpen && (
+                <VideoTextPanel videoId={videoId} personaId={selectedPersonaId} />
+              )}
+            </CollapsibleContent>
+          </Collapsible>
         </div>
 
       </div>

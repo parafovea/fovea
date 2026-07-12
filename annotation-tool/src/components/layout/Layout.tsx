@@ -4,6 +4,7 @@ import {
   Video,
   Fingerprint,
   Globe,
+  FileText,
   Users,
   Folder,
   Share2,
@@ -70,6 +71,7 @@ const menuItems = [
   { text: 'Video Browser', icon: Video, path: '/', shortcut: 'Cmd/Ctrl+1' },
   { text: 'Persona Builder', icon: Fingerprint, path: '/ontology', shortcut: 'Cmd/Ctrl+2' },
   { text: 'World Builder', icon: Globe, path: '/objects', shortcut: 'Cmd/Ctrl+3' },
+  { text: 'Documents', icon: FileText, path: '/documents', shortcut: 'Cmd/Ctrl+4' },
 ]
 
 const collaborationItems = [
@@ -196,6 +198,9 @@ export default function Layout() {
     if (location.pathname === '/') return 'videoBrowser'
     if (location.pathname === '/ontology') return 'ontologyWorkspace'
     if (location.pathname === '/objects') return 'objectWorkspace'
+    // The document workspace has no dedicated keyboard-shortcut context in the
+    // shortcuts dialog yet, so it falls through to the default help view.
+    if (location.pathname.startsWith('/documents')) return undefined
     return undefined
   }
 

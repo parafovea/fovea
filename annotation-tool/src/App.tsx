@@ -27,6 +27,7 @@ const DEMO_PUBLIC = config.deploymentMode.publicBooth
 import AnnotationWorkspace from '@components/annotation/AnnotationWorkspace'
 import OntologyWorkspace from './components/workspaces/OntologyWorkspace'
 import ObjectWorkspace from './components/workspaces/ObjectWorkspace'
+import { DocumentWorkspace } from './components/document'
 import Settings from './pages/Settings'
 import GroupsPage from './pages/GroupsPage'
 import GroupDetailPage from './pages/GroupDetailPage'
@@ -289,6 +290,22 @@ function App() {
               }
             />
             <Route
+              path="documents"
+              element={
+                <ErrorBoundary context={{ route: 'DocumentWorkspace' }}>
+                  <DocumentWorkspace />
+                </ErrorBoundary>
+              }
+            />
+            <Route
+              path="documents/:documentId"
+              element={
+                <ErrorBoundary context={{ route: 'DocumentWorkspace' }}>
+                  <DocumentWorkspace />
+                </ErrorBoundary>
+              }
+            />
+            <Route
               path="groups"
               element={
                 <ErrorBoundary context={{ route: 'GroupsPage' }}>
@@ -379,6 +396,22 @@ function App() {
               element={
                 <ErrorBoundary context={{ route: 'ObjectWorkspace' }}>
                   <ObjectWorkspace />
+                </ErrorBoundary>
+              }
+            />
+            <Route
+              path="documents"
+              element={
+                <ErrorBoundary context={{ route: 'DocumentWorkspace' }}>
+                  <DocumentWorkspace />
+                </ErrorBoundary>
+              }
+            />
+            <Route
+              path="documents/:documentId"
+              element={
+                <ErrorBoundary context={{ route: 'DocumentWorkspace' }}>
+                  <DocumentWorkspace />
                 </ErrorBoundary>
               }
             />
