@@ -69,3 +69,18 @@ export function annotationLayerId(videoId: string, personaId: string | null): st
 export function layersOntologyForPersonaId(personaId: string): string {
   return deriveId('ontology:persona', personaId)
 }
+
+/** The Expression(kind=transcript) id for a VideoSummary's transcript. */
+export function expressionTranscriptId(summaryId: string): string {
+  return deriveId('expr:transcript', summaryId)
+}
+
+/** The span AnnotationLayer id grouping a summary's claim text spans. */
+export function claimSpanLayerId(summaryId: string): string {
+  return deriveId('layer:claim-span', summaryId)
+}
+
+/** The span LayersAnnotation id for one text span of a claim. */
+export function claimSpanAnnotationId(claimId: string, spanIndex: number): string {
+  return deriveId('ann:claim-span', claimId, String(spanIndex))
+}

@@ -29,16 +29,29 @@ describe('Claims API', () => {
   }, 30000)
 
   beforeEach(async () => {
-    // Clean database in dependency order
+    // Clean database in dependency order: legacy claim tables, then the layers
+    // store rows the claims now materialize into (child -> parent), then the
+    // remaining legacy tables.
     await prisma.claimRelation.deleteMany()
     await prisma.claim.deleteMany()
+    await prisma.textAnnotationRelation.deleteMany()
+    await prisma.layersAnnotation.deleteMany()
+    await prisma.clusterSet.deleteMany()
+    await prisma.alignment.deleteMany()
+    await prisma.tokenization.deleteMany()
+    await prisma.segmentation.deleteMany()
+    await prisma.annotationLayer.deleteMany()
+    await prisma.graphEdge.deleteMany()
+    await prisma.graphNode.deleteMany()
+    await prisma.expression.deleteMany()
+    await prisma.media.deleteMany()
     await prisma.apiKey.deleteMany()
     await prisma.session.deleteMany()
     await prisma.annotation.deleteMany()
     await prisma.videoSummary.deleteMany()
-    await prisma.video.deleteMany()
     await prisma.ontology.deleteMany()
     await prisma.persona.deleteMany()
+    await prisma.video.deleteMany()
     await prisma.user.deleteMany()
     await prisma.rolePermission.deleteMany()
     await seedBaselinePermissions(prisma)
@@ -851,9 +864,14 @@ describe('Claims API', () => {
       expect(response.statusCode).toBe(200)
       expect(response.json().success).toBe(true)
 
-      // Verify claim was deleted
-      const deletedClaim = await prisma.claim.findUnique({ where: { id: claim.id } })
-      expect(deletedClaim).toBeNull()
+      // Verify claim no longer surfaces through the layers-backed read path.
+      const afterList = await app.inject({
+        method: 'GET',
+        url: `/api/summaries/${testSummaryId}/claims`,
+        cookies: { session_token: testSessionToken },
+      })
+      expect(afterList.statusCode).toBe(200)
+      expect(afterList.json().map((c: { id: string }) => c.id)).not.toContain(claim.id)
     })
 
     it('should cascade delete subclaims', async () => {
@@ -886,11 +904,16 @@ describe('Claims API', () => {
         cookies: { session_token: testSessionToken }
       })
 
-      // Verify both are deleted
-      const deletedParent = await prisma.claim.findUnique({ where: { id: parentClaim.id } })
-      const deletedSub = await prisma.claim.findUnique({ where: { id: subClaim.id } })
-      expect(deletedParent).toBeNull()
-      expect(deletedSub).toBeNull()
+      // Verify neither the parent nor its subclaim surfaces through the read path.
+      const afterList = await app.inject({
+        method: 'GET',
+        url: `/api/summaries/${testSummaryId}/claims`,
+        cookies: { session_token: testSessionToken },
+      })
+      expect(afterList.statusCode).toBe(200)
+      const remainingIds = afterList.json().map((c: { id: string }) => c.id)
+      expect(remainingIds).not.toContain(parentClaim.id)
+      expect(remainingIds).not.toContain(subClaim.id)
     })
   })
 
@@ -1269,8 +1292,13 @@ describe('Claims API', () => {
       })
       expect(putRes.statusCode).toBe(200)
 
-      const reloaded = await prisma.claim.findUnique({ where: { id: created.id } })
-      expect(reloaded?.timeSpans).toEqual(newSpans)
+      const getRes = await app.inject({
+        method: 'GET',
+        url: `/api/summaries/${testSummaryId}/claims/${created.id}`,
+        cookies: { session_token: testSessionToken },
+      })
+      expect(getRes.statusCode).toBe(200)
+      expect(getRes.json().timeSpans).toEqual(newSpans)
     })
 
     it('rejects a negative time span value', async () => {
@@ -1404,6 +1432,190 @@ describe('Claims API', () => {
 
       expect(response.statusCode).toBe(200)
       expect(response.json().success).toBe(true)
+    })
+  })
+
+  describe('layers-backed round trip', () => {
+    beforeEach(async () => {
+      // A claim-to-claim relation type the relation create validates against.
+      await prisma.ontology.create({
+        data: {
+          personaId: testPersonaId,
+          relationTypes: [
+            {
+              id: 'supports',
+              name: 'Supports',
+              gloss: [{ type: 'text', content: 'Backs another claim' }],
+              sourceTypes: ['claim'],
+              targetTypes: ['claim'],
+            },
+          ],
+        },
+      })
+    })
+
+    it('round-trips a hierarchical claim + relation through the layers store', async () => {
+      const eventId = '11111111-1111-4111-8111-111111111111'
+      const timeId = '22222222-2222-4222-8222-222222222222'
+      const locationId = '33333333-3333-4333-8333-333333333333'
+
+      // Parent claim: gloss with a typeRef + objectRef, two text spans (one with
+      // a sentence index), a time span, claimer fields, world-object references,
+      // modality arrays, and confidence.
+      const parentPayload = {
+        summaryType: 'video',
+        text: 'The rocket launch was a success',
+        gloss: [
+          { type: 'text', content: 'The ' },
+          { type: 'objectRef', content: 'rocket', refType: 'entity' },
+          { type: 'text', content: ' ' },
+          { type: 'typeRef', content: 'launch', refType: 'event' },
+          { type: 'text', content: ' was a success' },
+        ],
+        textSpans: [
+          { sentenceIndex: 0, charStart: 0, charEnd: 15 },
+          { charStart: 16, charEnd: 31 },
+        ],
+        timeSpans: [{ start: 1.5, end: 3.0, source: 'scrub' }],
+        claimerType: 'author',
+        claimerGloss: [{ type: 'text', content: 'The reporter' }],
+        claimRelation: [{ type: 'text', content: 'states that' }],
+        claimEventId: eventId,
+        claimTimeId: timeId,
+        claimLocationId: locationId,
+        confidence: 0.87,
+        audio: ['speech'],
+        video: ['non-text'],
+        metadata: ['text'],
+        comment: 'Round-trip parent',
+      }
+
+      const parentRes = await app.inject({
+        method: 'POST',
+        url: `/api/summaries/${testSummaryId}/claims`,
+        cookies: { session_token: testSessionToken },
+        payload: parentPayload,
+      })
+      expect(parentRes.statusCode).toBe(201)
+      const parentId = parentRes.json().claims[0].id as string
+
+      const sub1Res = await app.inject({
+        method: 'POST',
+        url: `/api/summaries/${testSummaryId}/claims`,
+        cookies: { session_token: testSessionToken },
+        payload: {
+          summaryType: 'video',
+          text: 'The rocket left the pad',
+          gloss: [{ type: 'text', content: 'The rocket left the pad' }],
+          parentClaimId: parentId,
+          textSpans: [{ charStart: 0, charEnd: 23 }],
+          confidence: 0.91,
+        },
+      })
+      expect(sub1Res.statusCode).toBe(201)
+
+      const sub2Res = await app.inject({
+        method: 'POST',
+        url: `/api/summaries/${testSummaryId}/claims`,
+        cookies: { session_token: testSessionToken },
+        payload: {
+          summaryType: 'video',
+          text: 'The rocket reached orbit',
+          gloss: [{ type: 'text', content: 'The rocket reached orbit' }],
+          parentClaimId: parentId,
+          textSpans: [{ charStart: 0, charEnd: 24 }],
+          confidence: 0.8,
+        },
+      })
+      expect(sub2Res.statusCode).toBe(201)
+
+      // The create response already reflects the full tree; capture it so the
+      // subsequent GET can be deep-equaled against it.
+      const treeAfterCreate = sub2Res.json().claims
+      const root = treeAfterCreate[0]
+      const sub1Id = root.subclaims[0].id as string
+      const sub2Id = root.subclaims[1].id as string
+
+      // A relation between the two subclaims with source/target spans.
+      const relationRes = await app.inject({
+        method: 'POST',
+        url: `/api/summaries/${testSummaryId}/claims/${sub1Id}/relations`,
+        cookies: { session_token: testSessionToken },
+        payload: {
+          targetClaimId: sub2Id,
+          relationTypeId: 'supports',
+          sourceSpans: [{ charStart: 0, charEnd: 10 }],
+          targetSpans: [{ charStart: 4, charEnd: 10 }],
+          confidence: 0.76,
+          notes: 'launch precedes orbit',
+        },
+      })
+      expect(relationRes.statusCode).toBe(201)
+      const createdRelation = relationRes.json()
+
+      // GET the tree and deep-equal it against the create response: every claim
+      // field round-trips verbatim through the layers store.
+      const getRes = await app.inject({
+        method: 'GET',
+        url: `/api/summaries/${testSummaryId}/claims`,
+        cookies: { session_token: testSessionToken },
+      })
+      expect(getRes.statusCode).toBe(200)
+      expect(getRes.json()).toEqual(treeAfterCreate)
+
+      // Explicit losslessness checks on the parent's rich fields.
+      const gotRoot = getRes.json()[0]
+      expect(gotRoot.gloss).toEqual(parentPayload.gloss)
+      expect(gotRoot.textSpans).toEqual(parentPayload.textSpans)
+      expect(gotRoot.timeSpans).toEqual(parentPayload.timeSpans)
+      expect(gotRoot.claimerType).toBe('author')
+      expect(gotRoot.claimerGloss).toEqual(parentPayload.claimerGloss)
+      expect(gotRoot.claimRelation).toEqual(parentPayload.claimRelation)
+      expect(gotRoot.claimEventId).toBe(eventId)
+      expect(gotRoot.claimTimeId).toBe(timeId)
+      expect(gotRoot.claimLocationId).toBe(locationId)
+      expect(gotRoot.confidence).toBe(0.87)
+      expect(gotRoot.audio).toEqual(['speech'])
+      expect(gotRoot.video).toEqual(['non-text'])
+      expect(gotRoot.metadata).toEqual(['text'])
+      expect(gotRoot.subclaims.map((c: { id: string }) => c.id)).toEqual([sub1Id, sub2Id])
+
+      // Relation round-trips through GET (asSource on the source, asTarget on the target).
+      const relFromSource = await app.inject({
+        method: 'GET',
+        url: `/api/summaries/${testSummaryId}/claims/${sub1Id}/relations`,
+        cookies: { session_token: testSessionToken },
+      })
+      expect(relFromSource.statusCode).toBe(200)
+      expect(relFromSource.json().asSource).toHaveLength(1)
+      expect(relFromSource.json().asSource[0]).toEqual(createdRelation)
+      expect(relFromSource.json().asSource[0].sourceSpans).toEqual([{ charStart: 0, charEnd: 10 }])
+      expect(relFromSource.json().asSource[0].targetSpans).toEqual([{ charStart: 4, charEnd: 10 }])
+
+      const relFromTarget = await app.inject({
+        method: 'GET',
+        url: `/api/summaries/${testSummaryId}/claims/${sub2Id}/relations`,
+        cookies: { session_token: testSessionToken },
+      })
+      expect(relFromTarget.statusCode).toBe(200)
+      expect(relFromTarget.json().asTarget).toHaveLength(1)
+      expect(relFromTarget.json().asTarget[0].id).toBe(createdRelation.id)
+
+      // The data lives in the layers store: three claim nodes, one relation
+      // edge, and one text-span annotation per span (2 + 1 + 1).
+      const claimNodes = await prisma.graphNode.findMany({ where: { nodeType: 'claim' } })
+      expect(claimNodes.map(n => n.id).sort()).toEqual([parentId, sub1Id, sub2Id].sort())
+
+      const relationEdges = await prisma.graphEdge.count()
+      expect(relationEdges).toBe(1)
+      const edge = await prisma.graphEdge.findUnique({ where: { id: createdRelation.id } })
+      expect(edge?.sourceLocalId).toBe(sub1Id)
+      expect(edge?.targetLocalId).toBe(sub2Id)
+
+      const spanAnnotations = await prisma.layersAnnotation.findMany()
+      expect(spanAnnotations).toHaveLength(4)
+      const denoted = new Set(spanAnnotations.map(a => a.denotesNodeId))
+      expect(denoted).toEqual(new Set([parentId, sub1Id, sub2Id]))
     })
   })
 })

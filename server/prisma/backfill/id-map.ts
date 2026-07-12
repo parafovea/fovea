@@ -39,6 +39,9 @@ export {
   expressionVideoId,
   annotationLayerId,
   layersOntologyForPersonaId,
+  expressionTranscriptId,
+  claimSpanLayerId,
+  claimSpanAnnotationId,
 } from '../../src/services/layers-id-map.js'
 
 // --- 1:1 reuse of legacy uuids -------------------------------------------
@@ -92,11 +95,6 @@ export function mediaAudioId(summaryId: string): string {
   return deriveId('media:audio', summaryId)
 }
 
-/** The Expression(kind=transcript) id for a VideoSummary's transcript. */
-export function expressionTranscriptId(summaryId: string): string {
-  return deriveId('expr:transcript', summaryId)
-}
-
 /** The Segmentation id for a VideoSummary's transcript. */
 export function segmentationTranscriptId(summaryId: string): string {
   return deriveId('seg:transcript', summaryId)
@@ -132,14 +130,3 @@ export function summaryGlossAnnotationId(summaryId: string): string {
   return deriveId('ann:summary-gloss', summaryId)
 }
 
-// --- Derived ids: claim domain -------------------------------------------
-
-/** The span AnnotationLayer id grouping a summary's claim spans. */
-export function claimSpanLayerId(summaryId: string): string {
-  return deriveId('layer:claim-span', summaryId)
-}
-
-/** The span LayersAnnotation id for one text span of a claim. */
-export function claimSpanAnnotationId(claimId: string, spanIndex: number): string {
-  return deriveId('ann:claim-span', claimId, String(spanIndex))
-}
