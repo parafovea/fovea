@@ -400,7 +400,7 @@ export class PersonaService {
         typeAssignments: (collection.typeAssignments || []).filter(a => a.personaId !== id)
       }))
 
-      await this.repository.updateWorldState(worldState.id, {
+      await this.repository.updateWorldState(worldState.userId, {
         entities: toJson(cleanedEntities),
         events: toJson(cleanedEvents),
         entityCollections: toJson(cleanedEntityCollections),
@@ -672,7 +672,7 @@ export class PersonaService {
       const entities = asEntities(worldState.entities)
       worldAssignments = countTypeAssignments(entities, typeId, personaId)
       const cleanedEntities = removeTypeAssignmentsFromEntities(entities, typeId, personaId)
-      await this.repository.updateWorldState(worldState.id, {
+      await this.repository.updateWorldState(worldState.userId, {
         entities: toJson(cleanedEntities)
       })
     }
@@ -917,7 +917,7 @@ export class PersonaService {
       const events = asEvents(worldState.events)
       worldInterpretations = countEventInterpretations(events, typeId, personaId)
       const cleanedEvents = removeEventInterpretationsFromEvents(events, typeId, personaId)
-      await this.repository.updateWorldState(worldState.id, {
+      await this.repository.updateWorldState(worldState.userId, {
         events: toJson(cleanedEvents)
       })
     }

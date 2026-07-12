@@ -99,6 +99,22 @@ describe('layers backfill', () => {
 
   beforeAll(async () => {
     prisma = new PrismaClient()
+    // Other test files in the shared run write to the layers store (import,
+    // claims, world, annotations); those rows land inside this fixture's
+    // `since` window and would inflate the verify counts. Clear the store (and
+    // the legacy tables the verify counts) so the window contains only the
+    // fixture.
+    const order = [
+      'textAnnotationRelation', 'layersAnnotation', 'annotationLayer',
+      'graphEdge', 'graphNode', 'typeDef', 'layersOntology',
+      'tokenization', 'segmentation', 'expression', 'media',
+      'claimRelation', 'claim', 'annotation', 'videoSummary', 'ontology',
+      'persona', 'worldState', 'video',
+    ] as const
+    for (const model of order) {
+      // @ts-expect-error indexed delete over a fixed model-name list
+      await prisma[model].deleteMany()
+    }
     fixture = await seedLegacyFixture(prisma)
   })
 

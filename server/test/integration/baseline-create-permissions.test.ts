@@ -204,10 +204,13 @@ describe('Baseline create permissions for owned resources', () => {
     expect(claimRes.statusCode, `body=${claimRes.body.slice(0, 300)}`).toBe(201)
     const body = claimRes.json() as { claims: Array<{ id: string }> }
     expect(body.claims).toHaveLength(1)
-    const row = await prisma.claim.findUnique({ where: { id: body.claims[0].id } })
-    expect(row).not.toBeNull()
-    expect(row!.createdBy).toBe(u.userId)
-    expect(row!.summaryId).toBe(summary.id)
+    // The claim lives in the layers store as a claim graph node whose stash
+    // carries the created claim.
+    const node = await prisma.graphNode.findUnique({ where: { id: body.claims[0].id } })
+    expect(node).not.toBeNull()
+    const stash = (node!.properties as { foveaClaim: { object: { createdBy: string; summaryId: string } } }).foveaClaim.object
+    expect(stash.createdBy).toBe(u.userId)
+    expect(stash.summaryId).toBe(summary.id)
   })
 
   it('cross-user creates are still denied: A cannot create a summary as B', async () => {

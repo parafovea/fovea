@@ -8,14 +8,36 @@
  * @module
  */
 
+import { randomUUID } from 'node:crypto'
 import { Type, Static } from '@sinclair/typebox'
 import { FastifyPluginAsync } from 'fastify'
 import { Prisma, PrismaClient } from '@prisma/client'
-
-/** Convert a value to Prisma JSON without type assertions. */
-function toJson(value: unknown): Prisma.InputJsonValue {
-  return JSON.parse(JSON.stringify(value))
-}
+import {
+  annotationExists,
+  annotationOwner,
+  readAnnotationById,
+  writeVideoAnnotation,
+} from '../services/layers-bridge/annotation-bridge.js'
+import {
+  claimExists,
+  claimOwner,
+  readClaimById,
+  writeClaim,
+  type ClaimSummaryContext,
+} from '../services/layers-bridge/claim-bridge.js'
+import {
+  readWorldAggregate,
+  resolvePersonalWorldOwner,
+  writeWorldAggregate,
+} from '../services/layers-bridge/world-bridge.js'
+import {
+  readOntologyAggregate,
+  writeOntologyAggregate,
+} from '../services/layers-bridge/ontology-bridge.js'
+import { emptyOntology } from '../services/ontology-layers-mapper.js'
+import { personalWorldStateId, type WorldStateAggregate } from '../services/world-layers-mapper.js'
+import type { VideoAnnotationInput } from '../services/video-annotation-mapper.js'
+import type { StoredClaim } from '../services/claim-layers-mapper.js'
 import { trace } from '@opentelemetry/api'
 import { requireAuth } from '@middleware/auth.js'
 import { sharingOperationCounter } from '../metrics.js'
@@ -45,6 +67,44 @@ const NullableDatetime = Type.Unsafe<string | null>({
   type: ['string', 'null'],
   format: 'date-time',
 })
+
+/**
+ * Merges the world objects of an incoming aggregate into a base aggregate,
+ * appending only objects whose id is not already present in the base bucket.
+ * Used to fork a world into a user who already has a personal world without
+ * clobbering their existing objects.
+ */
+function mergeWorldAggregates(
+  base: WorldStateAggregate,
+  incoming: WorldStateAggregate,
+): WorldStateAggregate {
+  const buckets: (keyof WorldStateAggregate)[] = [
+    'entities',
+    'events',
+    'times',
+    'entityCollections',
+    'eventCollections',
+    'timeCollections',
+    'relations',
+  ]
+  const merged = { ...base } as WorldStateAggregate
+  for (const bucket of buckets) {
+    const baseItems = (base[bucket] as Array<Record<string, unknown>>) ?? []
+    const seen = new Set(
+      baseItems
+        .map((item) => (item && typeof item === 'object' ? item.id : undefined))
+        .filter((id): id is string => typeof id === 'string'),
+    )
+    const result = [...baseItems]
+    for (const item of incoming[bucket] as Array<Record<string, unknown>>) {
+      const id = item && typeof item === 'object' ? item.id : undefined
+      if (typeof id === 'string' && seen.has(id)) continue
+      result.push(item)
+    }
+    merged[bucket] = result
+  }
+  return merged
+}
 
 /** Valid resource types that can be shared. */
 const ResourceTypeEnum = Type.Union([
@@ -138,29 +198,29 @@ async function verifyResourceExists(
   resourceType: string,
   resourceId: string,
 ): Promise<boolean> {
-  let resource = null
+  let exists = false
 
   switch (resourceType) {
     case 'annotation':
-      resource = await prisma.annotation.findUnique({ where: { id: resourceId } })
+      exists = await annotationExists(prisma, resourceId)
       break
     case 'summary':
-      resource = await prisma.videoSummary.findUnique({ where: { id: resourceId } })
+      exists = (await prisma.videoSummary.findUnique({ where: { id: resourceId } })) !== null
       break
     case 'claim':
-      resource = await prisma.claim.findUnique({ where: { id: resourceId } })
+      exists = await claimExists(prisma, resourceId)
       break
     case 'persona':
-      resource = await prisma.persona.findUnique({ where: { id: resourceId } })
+      exists = (await prisma.persona.findUnique({ where: { id: resourceId } })) !== null
       break
     case 'world_state':
-      resource = await prisma.worldState.findUnique({ where: { id: resourceId } })
+      exists = (await resolvePersonalWorldOwner(prisma, resourceId)) !== null
       break
     default:
       throw new ValidationError(`Unknown resource type: ${resourceType}`)
   }
 
-  if (!resource) {
+  if (!exists) {
     throw new NotFoundError(resourceType, resourceId)
   }
 
@@ -214,8 +274,7 @@ async function verifySharePermission(
 
   switch (resourceType) {
     case 'annotation': {
-      const annotation = await prisma.annotation.findUnique({ where: { id: resourceId } })
-      isOwner = annotation?.createdByUserId === userId
+      isOwner = (await annotationOwner(prisma, resourceId)) === userId
       break
     }
     case 'summary': {
@@ -224,8 +283,7 @@ async function verifySharePermission(
       break
     }
     case 'claim': {
-      const claim = await prisma.claim.findUnique({ where: { id: resourceId } })
-      isOwner = claim?.createdBy === userId
+      isOwner = (await claimOwner(prisma, resourceId)) === userId
       break
     }
     case 'persona': {
@@ -234,8 +292,7 @@ async function verifySharePermission(
       break
     }
     case 'world_state': {
-      const worldState = await prisma.worldState.findUnique({ where: { id: resourceId } })
-      isOwner = worldState?.userId === userId
+      isOwner = (await resolvePersonalWorldOwner(prisma, resourceId)) === userId
       break
     }
   }
@@ -664,28 +721,33 @@ const sharingRoute: FastifyPluginAsync = async (fastify) => {
         throw new ForbiddenError('You are not a recipient of this share')
       }
 
-      // Fork the resource within a transaction
+      // Fork the resource within a transaction. Annotations, claims, and world
+      // objects are forked in the layers store via the bridge; summaries and
+      // personas remain their own models (a forked persona's ontology is written
+      // to the layers store).
       const forkedResource = await fastify.prisma.$transaction(async (tx) => {
+        const db = tx as unknown as PrismaClient
         switch (share.resourceType) {
           case 'annotation': {
-            const source = await tx.annotation.findUnique({
-              where: { id: share.resourceId },
-            })
+            const source = await readAnnotationById(db, share.resourceId)
             if (!source) {
               throw new NotFoundError('Annotation', share.resourceId)
             }
-            return tx.annotation.create({
-              data: {
-                videoId: source.videoId,
-                personaId: source.personaId,
-                type: source.type,
-                label: source.label,
-                frames: toJson(source.frames),
-                confidence: source.confidence,
-                source: source.source,
-                createdByUserId: userId,
-              },
-            })
+            const newId = randomUUID()
+            const input: VideoAnnotationInput = {
+              id: newId,
+              videoId: source.videoId,
+              personaId: source.personaId,
+              type: source.type,
+              label: source.label,
+              linkType: source.linkType,
+              frames: source.frames,
+              confidence: source.confidence,
+              source: source.source,
+            }
+            await writeVideoAnnotation(db, input, { userId, projectId: null })
+            const created = await readAnnotationById(db, newId)
+            return created ?? { id: newId }
           }
 
           case 'summary': {
@@ -699,16 +761,12 @@ const sharingRoute: FastifyPluginAsync = async (fastify) => {
               data: {
                 videoId: source.videoId,
                 personaId: source.personaId,
-                summary: toJson(source.summary ?? []),
+                summary: source.summary as Prisma.InputJsonValue,
                 visualAnalysis: source.visualAnalysis,
                 audioTranscript: source.audioTranscript,
-                keyFrames: source.keyFrames
-                  ? toJson(source.keyFrames)
-                  : Prisma.JsonNull,
+                keyFrames: source.keyFrames as Prisma.InputJsonValue ?? Prisma.JsonNull,
                 confidence: source.confidence,
-                transcriptJson: source.transcriptJson
-                  ? toJson(source.transcriptJson)
-                  : Prisma.JsonNull,
+                transcriptJson: source.transcriptJson as Prisma.InputJsonValue ?? Prisma.JsonNull,
                 audioLanguage: source.audioLanguage,
                 speakerCount: source.speakerCount,
                 comment: source.comment,
@@ -718,106 +776,83 @@ const sharingRoute: FastifyPluginAsync = async (fastify) => {
           }
 
           case 'claim': {
-            const source = await tx.claim.findUnique({
-              where: { id: share.resourceId },
-            })
+            const source = await readClaimById(db, share.resourceId)
             if (!source) {
               throw new NotFoundError('Claim', share.resourceId)
             }
-            return tx.claim.create({
-              data: {
-                summaryId: source.summaryId,
-                summaryType: source.summaryType,
-                text: source.text,
-                gloss: toJson(source.gloss),
-                textSpans: source.textSpans
-                  ? toJson(source.textSpans)
-                  : Prisma.JsonNull,
-                claimerType: source.claimerType,
-                claimerGloss: source.claimerGloss
-                  ? toJson(source.claimerGloss)
-                  : Prisma.JsonNull,
-                claimRelation: source.claimRelation
-                  ? toJson(source.claimRelation)
-                  : Prisma.JsonNull,
-                claimEventId: source.claimEventId,
-                claimTimeId: source.claimTimeId,
-                claimLocationId: source.claimLocationId,
-                confidence: source.confidence,
-                extractionStrategy: source.extractionStrategy,
-                audio: source.audio
-                  ? toJson(source.audio)
-                  : Prisma.JsonNull,
-                video: source.video
-                  ? toJson(source.video)
-                  : Prisma.JsonNull,
-                metadata: source.metadata
-                  ? (toJson(source.metadata))
-                  : Prisma.JsonNull,
-                comment: source.comment,
-                createdBy: userId,
-              },
-            })
+            const summary = await tx.videoSummary.findUnique({ where: { id: source.summaryId } })
+            if (!summary) {
+              throw new NotFoundError('VideoSummary', source.summaryId)
+            }
+            const newId = randomUUID()
+            const now = new Date().toISOString()
+            const claim: StoredClaim = {
+              ...source,
+              id: newId,
+              parentClaimId: null,
+              createdBy: userId,
+              projectId: null,
+              createdAt: now,
+              updatedAt: now,
+            }
+            const summaryCtx: ClaimSummaryContext = {
+              id: summary.id,
+              videoId: summary.videoId,
+              projectId: null,
+              createdBy: userId,
+            }
+            await writeClaim(db, summaryCtx, claim)
+            return claim
           }
 
           case 'persona': {
-            const source = await tx.persona.findUnique({
-              where: { id: share.resourceId },
-              include: { ontology: true },
-            })
+            const source = await tx.persona.findUnique({ where: { id: share.resourceId } })
             if (!source) {
               throw new NotFoundError('Persona', share.resourceId)
             }
-            return tx.persona.create({
+            const newPersona = await tx.persona.create({
               data: {
                 userId,
                 name: source.name,
                 role: source.role,
                 informationNeed: source.informationNeed,
                 details: source.details,
+                domain: source.domain,
                 isSystemGenerated: false,
                 hidden: false,
-                ontology: source.ontology
-                  ? {
-                      create: {
-                        entityTypes: toJson(source.ontology.entityTypes),
-                        eventTypes: toJson(source.ontology.eventTypes),
-                        roleTypes: toJson(source.ontology.roleTypes),
-                        relationTypes: toJson(source.ontology.relationTypes),
-                      },
-                    }
-                  : {
-                      create: {
-                        entityTypes: [],
-                        eventTypes: [],
-                        roleTypes: [],
-                        relationTypes: [],
-                      },
-                    },
               },
-              include: { ontology: true },
             })
+            const { aggregate, exists } = await readOntologyAggregate(db, source.id)
+            await writeOntologyAggregate(
+              db,
+              newPersona.id,
+              exists ? aggregate : emptyOntology(),
+              {
+                name: `${newPersona.name} ontology`,
+                description: newPersona.informationNeed,
+                domain: newPersona.domain,
+              },
+              { projectId: null, createdByUserId: userId },
+            )
+            return newPersona
           }
 
           case 'world_state': {
-            const source = await tx.worldState.findUnique({
-              where: { id: share.resourceId },
-            })
-            if (!source) {
+            const owner = await resolvePersonalWorldOwner(db, share.resourceId)
+            if (!owner) {
               throw new NotFoundError('WorldState', share.resourceId)
             }
-            return tx.worldState.create({
-              data: {
-                userId,
-                entities: toJson(source.entities),
-                events: toJson(source.events),
-                times: toJson(source.times),
-                entityCollections: toJson(source.entityCollections),
-                eventCollections: toJson(source.eventCollections),
-                timeCollections: toJson(source.timeCollections),
-                relations: toJson(source.relations),
-              },
+            const { aggregate: sourceWorld } = await readWorldAggregate(db, {
+              userId: owner,
+              projectId: null,
             })
+            const { aggregate: existing } = await readWorldAggregate(db, {
+              userId,
+              projectId: null,
+            })
+            const merged = mergeWorldAggregates(existing, sourceWorld)
+            await writeWorldAggregate(db, { userId, projectId: null }, merged)
+            return { id: personalWorldStateId(userId), userId, ...merged }
           }
 
           default:

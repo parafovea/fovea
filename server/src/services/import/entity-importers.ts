@@ -1,12 +1,14 @@
 /**
  * Stateful per-type entity importers for the import pipeline.
  *
- * EntityImporter writes parsed import lines into the database within the
- * transaction owned by ImportHandler.importLines. Each importer enforces the
- * CASL create check via canCreate, scopes new rows to the importing user and
- * active project, and records counts on the shared ImportResult. The
- * transaction client is passed per call so the same instance works for both
- * atomic and non-atomic imports.
+ * EntityImporter writes parsed import lines into the layers store within the
+ * transaction owned by ImportHandler.importLines. Ontologies, world objects,
+ * claims, claim relations, and annotations are materialized into the unified
+ * layers store via the layers bridge; personas and video summaries remain their
+ * own models. Each importer enforces the CASL create check via canCreate, scopes
+ * new rows to the importing user and active project, and records counts on the
+ * shared ImportResult. The transaction client is passed per call so the same
+ * instance works for both atomic and non-atomic imports.
  *
  * @module
  */
@@ -19,6 +21,16 @@ import { ImportLine, ImportOptions, ImportResult, Resolution } from '../import-t
 import { SequenceValidator } from '../import-validator.js'
 import { validateLine } from './line-parser.js'
 import { AnnotationData } from './types.js'
+import type { WorldStateAggregate } from '../world-layers-mapper.js'
+import { writeOntologyAggregate } from '../layers-bridge/ontology-bridge.js'
+import { writeClaim, writeClaimRelation, type ClaimSummaryContext } from '../layers-bridge/claim-bridge.js'
+import { writeVideoAnnotation } from '../layers-bridge/annotation-bridge.js'
+import { nodeToClaim } from '../claim-layers-mapper.js'
+import type {
+  VideoAnnotationInput,
+  VideoAnnotationLinkType,
+} from '../video-annotation-mapper.js'
+import type { BoundingBoxSequence } from '../layers-conversion-service.js'
 
 /**
  * Accumulator of ids imported so far, used for dependency resolution
@@ -30,8 +42,34 @@ export interface ImportedIds {
   claims: Set<string>
 }
 
+/** The world-object item kinds that merge into the world aggregate. */
+type WorldItemType =
+  | 'entity'
+  | 'event'
+  | 'time'
+  | 'entityCollection'
+  | 'eventCollection'
+  | 'timeCollection'
+  | 'relation'
+
+/** Maps a world-item kind to the aggregate bucket it merges into. */
+const WORLD_BUCKET: Record<WorldItemType, keyof WorldStateAggregate> = {
+  entity: 'entities',
+  event: 'events',
+  time: 'times',
+  entityCollection: 'entityCollections',
+  eventCollection: 'eventCollections',
+  timeCollection: 'timeCollections',
+  relation: 'relations',
+}
+
+/** Reads a string field off a raw import payload, or undefined. */
+function str(value: unknown): string | undefined {
+  return typeof value === 'string' ? value : undefined
+}
+
 /**
- * Writes import lines into the database, one entity type per method.
+ * Writes import lines into the layers store, one entity type per method.
  */
 export class EntityImporter {
   private validator: SequenceValidator
@@ -157,7 +195,8 @@ export class EntityImporter {
   }
 
   /**
-   * Import an ontology.
+   * Import an ontology, materialized into the layers store (LayersOntology +
+   * TypeDefs) keyed by the persona.
    */
   async importOntology(
     line: ImportLine,
@@ -168,7 +207,7 @@ export class EntityImporter {
     _importedIds: ImportedIds
   ): Promise<void> {
     const personaId = line.data.personaId
-    if (!personaId) {
+    if (!personaId || typeof personaId !== 'string') {
       result.errors.push({
         line: line.lineNumber,
         type: 'validation',
@@ -178,32 +217,29 @@ export class EntityImporter {
     }
 
     try {
-      // Check if ontology already exists for this persona
-      const existingOntology = await tx.ontology.findUnique({ where: { personaId } })
-
-      const ontologyData = {
-        entityTypes: (line.data.entityTypes as Prisma.InputJsonValue) || [],
-        eventTypes: (line.data.eventTypes as Prisma.InputJsonValue) || [],
-        roleTypes: (line.data.roleTypes as Prisma.InputJsonValue) || [],
-        relationTypes: (line.data.relationTypes as Prisma.InputJsonValue) || [],
-        updatedAt: new Date()
+      const persona = await tx.persona.findUnique({ where: { id: personaId } })
+      if (!persona) {
+        throw new NotFoundError('Persona', personaId)
       }
 
-      if (existingOntology) {
-        // Merge or replace based on strategy
-        await tx.ontology.update({
-          where: { personaId },
-          data: ontologyData
-        })
-      } else {
-        await tx.ontology.create({
-          data: {
-            personaId,
-            ...ontologyData,
-            createdAt: new Date()
-          }
-        })
+      const aggregate = {
+        entityTypes: Array.isArray(line.data.entityTypes) ? line.data.entityTypes : [],
+        eventTypes: Array.isArray(line.data.eventTypes) ? line.data.eventTypes : [],
+        roleTypes: Array.isArray(line.data.roleTypes) ? line.data.roleTypes : [],
+        relationTypes: Array.isArray(line.data.relationTypes) ? line.data.relationTypes : [],
       }
+
+      await writeOntologyAggregate(
+        tx,
+        personaId,
+        aggregate,
+        {
+          name: `${persona.name} ontology`,
+          description: persona.informationNeed,
+          domain: persona.domain,
+        },
+        { projectId: this.projectId, createdByUserId: this.userId },
+      )
 
       result.summary.importedItems.ontologies++
       result.summary.processedLines++
@@ -220,19 +256,19 @@ export class EntityImporter {
   }
 
   /**
-   * Import a world state item (entity, event, time, collection, relation).
+   * Merge a world-state item (entity, event, time, collection, relation) into
+   * the in-memory world aggregate. The aggregate is materialized into the layers
+   * store once, after every world line is merged (see ImportHandler.importLines).
    */
-  async importWorldStateItem(
+  mergeWorldStateItem(
     line: ImportLine,
-    itemType: 'entity' | 'event' | 'time' | 'entityCollection' | 'eventCollection' | 'timeCollection' | 'relation',
-    worldStateId: string,
+    itemType: WorldItemType,
+    aggregate: WorldStateAggregate,
     resolutionMap: Map<string, Resolution>,
     result: ImportResult,
-    options: ImportOptions,
-    tx: PrismaClient
-  ): Promise<void> {
+  ): void {
     const itemId = line.data.id
-    if (!itemId) {
+    if (!itemId || typeof itemId !== 'string') {
       result.errors.push({
         line: line.lineNumber,
         type: 'validation',
@@ -247,87 +283,43 @@ export class EntityImporter {
       return
     }
 
-    try {
-      // Get current world state
-      const worldState = await tx.worldState.findUnique({ where: { id: worldStateId } })
-      if (!worldState) {
-        throw new NotFoundError('World state', worldStateId)
+    const bucketKey = WORLD_BUCKET[itemType]
+    const items = aggregate[bucketKey] as Array<Record<string, unknown>>
+    const existingIndex = items.findIndex(
+      (item) => item && typeof item === 'object' && 'id' in item && item.id === itemId,
+    )
+    if (existingIndex >= 0) {
+      if (resolution?.action === 'replace') {
+        items[existingIndex] = line.data
       }
-
-      // Determine which array to update
-      const fieldMap: Record<string, string> = {
-        'entity': 'entities',
-        'event': 'events',
-        'time': 'times',
-        'entityCollection': 'entityCollections',
-        'eventCollection': 'eventCollections',
-        'timeCollection': 'timeCollections',
-        'relation': 'relations'
-      }
-      const fieldName = fieldMap[itemType]
-
-      // Get current array
-      const currentArray = (worldState[fieldName as keyof typeof worldState] as Prisma.JsonValue) || []
-      const items = Array.isArray(currentArray) ? [...currentArray] : []
-
-      // Check if item already exists
-      const existingIndex = items.findIndex(
-        (item) => item && typeof item === 'object' && 'id' in item && item.id === itemId
-      )
-
-      if (existingIndex >= 0) {
-        if (resolution?.action === 'replace') {
-          items[existingIndex] = line.data as Prisma.JsonValue
-        }
-        // Otherwise skip (already exists)
-      } else {
-        items.push(line.data as Prisma.JsonValue)
-      }
-
-      // Update world state
-      await tx.worldState.update({
-        where: { id: worldStateId },
-        data: {
-          [fieldName]: items as Prisma.InputJsonValue,
-          updatedAt: new Date()
-        }
-      })
-
-      // Update result counts
-      switch (itemType) {
-        case 'entity':
-          result.summary.importedItems.entities++
-          break
-        case 'event':
-          result.summary.importedItems.events++
-          break
-        case 'time':
-          result.summary.importedItems.times++
-          break
-        case 'entityCollection':
-          result.summary.importedItems.entityCollections++
-          break
-        case 'eventCollection':
-          result.summary.importedItems.eventCollections++
-          break
-        case 'timeCollection':
-          result.summary.importedItems.timeCollections++
-          break
-        case 'relation':
-          result.summary.importedItems.relations++
-          break
-      }
-      result.summary.processedLines++
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-      result.errors.push({
-        line: line.lineNumber,
-        type: 'import',
-        message: `Failed to import ${itemType}: ${errorMessage}`,
-        data: line.data
-      })
-      if (options.transaction.atomic) throw error
+    } else {
+      items.push(line.data)
     }
+
+    switch (itemType) {
+      case 'entity':
+        result.summary.importedItems.entities++
+        break
+      case 'event':
+        result.summary.importedItems.events++
+        break
+      case 'time':
+        result.summary.importedItems.times++
+        break
+      case 'entityCollection':
+        result.summary.importedItems.entityCollections++
+        break
+      case 'eventCollection':
+        result.summary.importedItems.eventCollections++
+        break
+      case 'timeCollection':
+        result.summary.importedItems.timeCollections++
+        break
+      case 'relation':
+        result.summary.importedItems.relations++
+        break
+    }
+    result.summary.processedLines++
   }
 
   /**
@@ -450,7 +442,8 @@ export class EntityImporter {
   }
 
   /**
-   * Import a claim.
+   * Import a claim, materialized into the layers store as a claim GraphNode with
+   * its text-span LayersAnnotations under the summary's claim-span layer.
    */
   async importClaim(
     line: ImportLine,
@@ -461,7 +454,7 @@ export class EntityImporter {
     importedIds: ImportedIds
   ): Promise<void> {
     const claimId = line.data.id
-    if (!claimId) {
+    if (!claimId || typeof claimId !== 'string') {
       result.errors.push({
         line: line.lineNumber,
         type: 'validation',
@@ -491,96 +484,68 @@ export class EntityImporter {
         return
       }
 
-      // Check if claim already exists
-      const existingClaim = await tx.claim.findUnique({ where: { id: claimId } })
-
-      const claimData: Prisma.ClaimUncheckedUpdateInput = {
-        summaryId: line.data.summaryId as string,
-        summaryType: (line.data.summaryType as string) || 'video',
-        text: line.data.text as string,
-        gloss: (line.data.gloss as Prisma.InputJsonValue) || [],
-        parentClaimId: (line.data.parentClaimId as string) || undefined,
-        textSpans: line.data.textSpans ? (line.data.textSpans as Prisma.InputJsonValue) : Prisma.JsonNull,
-        timeSpans: line.data.timeSpans ? (line.data.timeSpans as Prisma.InputJsonValue) : Prisma.JsonNull,
-        claimerType: (line.data.claimerType as string) || undefined,
-        claimerGloss: line.data.claimerGloss ? (line.data.claimerGloss as Prisma.InputJsonValue) : Prisma.JsonNull,
-        claimRelation: (line.data.claimRelation as string) || undefined,
-        claimEventId: (line.data.claimEventId as string) || undefined,
-        claimTimeId: (line.data.claimTimeId as string) || undefined,
-        claimLocationId: (line.data.claimLocationId as string) || undefined,
-        confidence: (line.data.confidence as number) || undefined,
-        modelUsed: (line.data.modelUsed as string) || undefined,
-        extractionStrategy: (line.data.extractionStrategy as string) || undefined,
-        // Preserve any JSON-valued audio/video/metadata payload — array,
-        // object, string, number, boolean. The previous `Array.isArray`
-        // guard wiped object-shaped payloads to JsonNull, a fidelity bug
-        // surfaced by import-export-fidelity.test.ts. Columns are typed
-        // `Json?` and accept any shape.
-        audio: line.data.audio !== undefined && line.data.audio !== null
-          ? (line.data.audio as Prisma.InputJsonValue)
-          : Prisma.JsonNull,
-        video: line.data.video !== undefined && line.data.video !== null
-          ? (line.data.video as Prisma.InputJsonValue)
-          : Prisma.JsonNull,
-        metadata: line.data.metadata !== undefined && line.data.metadata !== null
-          ? (line.data.metadata as Prisma.InputJsonValue)
-          : Prisma.JsonNull,
-        comment: (line.data.comment as string) || undefined,
-        createdBy: (line.data.createdBy as string) || undefined,
-        updatedAt: new Date()
+      const summaryId = line.data.summaryId as string
+      const summary = await tx.videoSummary.findUnique({ where: { id: summaryId } })
+      if (!summary) {
+        throw new NotFoundError('Summary', summaryId)
       }
 
-      if (existingClaim && resolution?.action === 'replace') {
-        await tx.claim.update({
-          where: { id: claimId },
-          data: claimData
+      if (!this.canCreate('Claim', { createdBy: this.userId, projectId: this.projectId })) {
+        result.errors.push({
+          line: line.lineNumber,
+          type: 'authorization',
+          message: 'Cannot create Claim in this scope',
+          data: line.data
         })
-      } else if (!existingClaim) {
-        if (!this.canCreate('Claim', { createdBy: this.userId, projectId: this.projectId })) {
-          result.errors.push({
-            line: line.lineNumber,
-            type: 'authorization',
-            message: 'Cannot create Claim in this scope',
-            data: line.data
-          })
-          if (options.transaction.atomic) throw new ValidationError('Cannot create Claim in this scope')
-          return
+        if (options.transaction.atomic) throw new ValidationError('Cannot create Claim in this scope')
+        return
+      }
+
+      const now = new Date().toISOString()
+      const claim = {
+        id: claimId,
+        summaryId,
+        summaryType: (line.data.summaryType as string) || 'video',
+        text: line.data.text as string,
+        gloss: line.data.gloss ?? [],
+        parentClaimId: (line.data.parentClaimId as string) ?? null,
+        textSpans: line.data.textSpans ?? null,
+        timeSpans: line.data.timeSpans ?? null,
+        claimerType: (line.data.claimerType as string) ?? null,
+        claimerGloss: line.data.claimerGloss ?? null,
+        claimRelation: line.data.claimRelation ?? null,
+        claimEventId: (line.data.claimEventId as string) ?? null,
+        claimTimeId: (line.data.claimTimeId as string) ?? null,
+        claimLocationId: (line.data.claimLocationId as string) ?? null,
+        confidence: (line.data.confidence as number) ?? null,
+        modelUsed: (line.data.modelUsed as string) ?? null,
+        extractionStrategy: (line.data.extractionStrategy as string) ?? null,
+        audio: line.data.audio ?? null,
+        video: line.data.video ?? null,
+        metadata: line.data.metadata ?? null,
+        comment: (line.data.comment as string) ?? null,
+        createdBy: this.userId,
+        projectId: this.projectId,
+        createdAt: line.data.createdAt ? new Date(line.data.createdAt as string).toISOString() : now,
+        updatedAt: now,
+      }
+
+      const summaryCtx: ClaimSummaryContext = {
+        id: summary.id,
+        videoId: summary.videoId,
+        projectId: summary.projectId,
+        createdBy: summary.createdBy,
+      }
+
+      const existing = await tx.graphNode.count({ where: { id: claimId, nodeType: 'claim' } })
+      if (existing > 0) {
+        if (resolution?.action === 'replace') {
+          await tx.layersAnnotation.deleteMany({ where: { denotesNodeId: claimId } })
+          await tx.graphNode.delete({ where: { id: claimId } })
+          await writeClaim(tx, summaryCtx, claim)
         }
-        await tx.claim.create({
-          data: {
-            id: claimId,
-            summaryId: line.data.summaryId as string,
-            summaryType: (line.data.summaryType as string) || 'video',
-            text: line.data.text as string,
-            gloss: (line.data.gloss as Prisma.InputJsonValue) || [],
-            parentClaimId: (line.data.parentClaimId as string) || undefined,
-            textSpans: line.data.textSpans ? (line.data.textSpans as Prisma.InputJsonValue) : Prisma.JsonNull,
-            timeSpans: line.data.timeSpans ? (line.data.timeSpans as Prisma.InputJsonValue) : Prisma.JsonNull,
-            claimerType: (line.data.claimerType as string) || undefined,
-            claimerGloss: line.data.claimerGloss ? (line.data.claimerGloss as Prisma.InputJsonValue) : Prisma.JsonNull,
-            claimRelation: (line.data.claimRelation as string) || undefined,
-            claimEventId: (line.data.claimEventId as string) || undefined,
-            claimTimeId: (line.data.claimTimeId as string) || undefined,
-            claimLocationId: (line.data.claimLocationId as string) || undefined,
-            confidence: (line.data.confidence as number) || undefined,
-            modelUsed: (line.data.modelUsed as string) || undefined,
-            extractionStrategy: (line.data.extractionStrategy as string) || undefined,
-            // See note above: preserve any JSON value, not just arrays.
-            audio: line.data.audio !== undefined && line.data.audio !== null
-              ? (line.data.audio as Prisma.InputJsonValue)
-              : Prisma.JsonNull,
-            video: line.data.video !== undefined && line.data.video !== null
-              ? (line.data.video as Prisma.InputJsonValue)
-              : Prisma.JsonNull,
-            metadata: line.data.metadata !== undefined && line.data.metadata !== null
-              ? (line.data.metadata as Prisma.InputJsonValue)
-              : Prisma.JsonNull,
-            comment: (line.data.comment as string) || undefined,
-            createdBy: this.userId,
-            projectId: this.projectId,
-            createdAt: line.data.createdAt ? new Date(line.data.createdAt as string) : new Date()
-          }
-        })
+      } else {
+        await writeClaim(tx, summaryCtx, claim)
       }
 
       importedIds.claims.add(claimId)
@@ -599,7 +564,8 @@ export class EntityImporter {
   }
 
   /**
-   * Import a claim relation.
+   * Import a claim relation, materialized into the layers store as a GraphEdge
+   * between the two claim nodes.
    */
   async importClaimRelation(
     line: ImportLine,
@@ -610,7 +576,7 @@ export class EntityImporter {
     _importedIds: ImportedIds
   ): Promise<void> {
     const relationId = line.data.id
-    if (!relationId) {
+    if (!relationId || typeof relationId !== 'string') {
       result.errors.push({
         line: line.lineNumber,
         type: 'validation',
@@ -639,41 +605,36 @@ export class EntityImporter {
         return
       }
 
-      // Check if claim relation already exists
-      const existingRelation = await tx.claimRelation.findUnique({ where: { id: relationId } })
-
-      const relationData: Prisma.ClaimRelationUncheckedUpdateInput = {
-        sourceClaimId: line.data.sourceClaimId as string,
+      const sourceClaimId = line.data.sourceClaimId as string
+      const now = new Date().toISOString()
+      const relation = {
+        id: relationId,
+        sourceClaimId,
         targetClaimId: line.data.targetClaimId as string,
         relationTypeId: line.data.relationTypeId as string,
-        sourceSpans: line.data.sourceSpans ? (line.data.sourceSpans as Prisma.InputJsonValue) : Prisma.JsonNull,
-        targetSpans: line.data.targetSpans ? (line.data.targetSpans as Prisma.InputJsonValue) : Prisma.JsonNull,
-        confidence: (line.data.confidence as number) || undefined,
-        notes: (line.data.notes as string) || undefined,
-        createdBy: (line.data.createdBy as string) || undefined,
-        updatedAt: new Date()
+        sourceSpans: line.data.sourceSpans ?? null,
+        targetSpans: line.data.targetSpans ?? null,
+        confidence: (line.data.confidence as number) ?? null,
+        notes: (line.data.notes as string) ?? null,
+        createdBy: this.userId,
+        createdAt: line.data.createdAt ? new Date(line.data.createdAt as string).toISOString() : now,
+        updatedAt: now,
       }
 
-      if (existingRelation && resolution?.action === 'replace') {
-        await tx.claimRelation.update({
-          where: { id: relationId },
-          data: relationData
-        })
-      } else if (!existingRelation) {
-        await tx.claimRelation.create({
-          data: {
-            id: relationId,
-            sourceClaimId: line.data.sourceClaimId as string,
-            targetClaimId: line.data.targetClaimId as string,
-            relationTypeId: line.data.relationTypeId as string,
-            sourceSpans: line.data.sourceSpans ? (line.data.sourceSpans as Prisma.InputJsonValue) : Prisma.JsonNull,
-            targetSpans: line.data.targetSpans ? (line.data.targetSpans as Prisma.InputJsonValue) : Prisma.JsonNull,
-            confidence: (line.data.confidence as number) || undefined,
-            notes: (line.data.notes as string) || undefined,
-            createdBy: this.userId,
-            createdAt: line.data.createdAt ? new Date(line.data.createdAt as string) : new Date()
-          }
-        })
+      // Resolve the source claim's summary and project scope for edge denormalization.
+      const sourceNode = await tx.graphNode.findUnique({ where: { id: sourceClaimId } })
+      const sourceClaim = sourceNode ? nodeToClaim(sourceNode) : null
+      const summaryId = sourceClaim?.summaryId ?? ''
+      const projectId = sourceClaim?.projectId ?? this.projectId
+
+      const existing = await tx.graphEdge.count({ where: { id: relationId } })
+      if (existing > 0) {
+        if (resolution?.action === 'replace') {
+          await tx.graphEdge.delete({ where: { id: relationId } })
+          await writeClaimRelation(tx, relation, summaryId, projectId)
+        }
+      } else {
+        await writeClaimRelation(tx, relation, summaryId, projectId)
       }
 
       result.summary.importedItems.claimRelations++
@@ -691,7 +652,8 @@ export class EntityImporter {
   }
 
   /**
-   * Import an annotation.
+   * Import an annotation, materialized into the layers store as a LayersAnnotation
+   * under its per-(video, persona) grouping AnnotationLayer.
    */
   async importAnnotation(
     line: ImportLine,
@@ -750,13 +712,6 @@ export class EntityImporter {
         result.summary.importedItems.singleKeyframeSequences++
       }
 
-      // Create or update annotation
-      if (resolution && resolution.action === 'replace') {
-        await tx.annotation.delete({
-          where: { id: annotation.id }
-        })
-      }
-
       if (!this.canCreate('Annotation', { createdByUserId: this.userId, projectId: this.projectId })) {
         result.errors.push({
           line: line.lineNumber,
@@ -768,16 +723,11 @@ export class EntityImporter {
         return
       }
 
-      // Store the boundingBoxSequence in the frames field. Force ownership
-      // and project scope to the importer; never honour the payload's values.
-      //
-      // Picks `label` and `linkType` from whichever `linked*Id` field the
-      // export carries, so event/time/location-linked object annotations
-      // round-trip correctly. Previously only `linkedEntityId` was honoured,
-      // which silently flattened every object annotation into entity-linked.
+      // Pick `label` and `linkType` from whichever `linked*Id` field the export
+      // carries, so event/time/location-linked object annotations round-trip.
       const annotationType = annotation.annotationType ?? 'type'
       let label: string
-      let linkType: string | null = null
+      let linkType: VideoAnnotationLinkType | null = null
       if (annotationType === 'object') {
         if (annotation.linkedEntityId) {
           label = annotation.linkedEntityId
@@ -795,27 +745,25 @@ export class EntityImporter {
           label = ''
         }
       } else {
-        label = annotation.typeId ?? ''
+        label = str(annotation.typeId) ?? ''
       }
 
-      await tx.annotation.create({
-        data: {
-          id: annotation.id,
-          videoId: annotation.videoId,
-          personaId: annotation.personaId || null,
-          userId: this.userId,
-          createdByUserId: this.userId,
-          projectId: this.projectId,
-          type: annotationType,
-          label,
-          linkType,
-          frames: annotation.boundingBoxSequence as Prisma.InputJsonValue,
-          confidence: annotation.confidence,
-          source: 'import',
-          createdAt: annotation.createdAt ? new Date(annotation.createdAt) : new Date(),
-          updatedAt: annotation.updatedAt ? new Date(annotation.updatedAt) : new Date()
-        }
-      })
+      const input: VideoAnnotationInput = {
+        id: annotation.id,
+        videoId: annotation.videoId,
+        personaId: annotation.personaId ?? null,
+        type: annotationType,
+        label,
+        linkType: annotationType === 'object' ? linkType : null,
+        frames: annotation.boundingBoxSequence as unknown as BoundingBoxSequence,
+        confidence: annotation.confidence ?? null,
+        source: 'import',
+      }
+
+      // Forces ownership + project scope to the importer; the payload's values
+      // are never honoured. The write upserts by id, so a `replace` resolution
+      // overwrites the existing layers row in place.
+      await writeVideoAnnotation(tx, input, { userId: this.userId, projectId: this.projectId })
 
       result.summary.importedItems.annotations++
       result.summary.processedLines++

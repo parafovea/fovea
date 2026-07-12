@@ -155,7 +155,7 @@ describe('cross-user import of a foreign-annotator fixture', () => {
     // Walk the All Annotations tab path
     const annotationsResp = await app.inject({
       method: 'GET',
-      url: `/api/annotations/${VIDEO_ID}`,
+      url: `/api/layers/videos/${VIDEO_ID}/annotations`,
       cookies: { session_token: importer.token },
     })
     expect(annotationsResp.statusCode).toBe(200)

@@ -310,8 +310,10 @@ describe('Cross-user import/export round-trip', () => {
       expect(originalPersonaIds).not.toContain(persona.id)
     }
 
-    const userBAnnotations = await prisma.annotation.findMany({
-      where: { personaId: { in: userBPersonas.map(p => p.id) } },
+    // Imported annotations live in the layers store; read the layers rows under
+    // the importer's persona layers.
+    const userBAnnotations = await prisma.layersAnnotation.findMany({
+      where: { layer: { personaId: { in: userBPersonas.map(p => p.id) } } },
     })
     expect(userBAnnotations.length).toBeGreaterThanOrEqual(1)
     for (const annotation of userBAnnotations) {

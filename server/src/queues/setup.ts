@@ -1,7 +1,16 @@
+import { randomUUID } from "node:crypto";
 import { Queue, Worker, QueueEvents } from "bullmq";
 import { Redis } from "ioredis";
 import { PrismaClient, Prisma } from "@prisma/client";
 import snakecaseKeys from "snakecase-keys";
+import { readOntologyAggregate } from "../services/layers-bridge/ontology-bridge.js";
+import { readVideoPersonaAnnotations } from "../services/layers-bridge/annotation-bridge.js";
+import {
+  readSummaryClaims,
+  writeClaim,
+  type ClaimSummaryContext,
+} from "../services/layers-bridge/claim-bridge.js";
+import { nestClaims, type StoredClaim, type StoredClaimNode } from "../services/claim-layers-mapper.js";
 import {
   queueJobCounter,
   queueJobDuration,
@@ -561,26 +570,24 @@ export const claimWorker = new Worker<
 
     // Add ontology context if requested
     if (config.inputSources.includeOntology && summary.personaId) {
-      const ontology = await prisma.ontology.findUnique({
-        where: { personaId: summary.personaId },
-      });
+      const { aggregate: ontology, exists } = await readOntologyAggregate(
+        prisma,
+        summary.personaId,
+      );
 
-      if (ontology) {
-        const entityTypes = ontology.entityTypes as unknown[];
-        const eventTypes = ontology.eventTypes as unknown[];
-        requestBody.ontology_types = [...entityTypes, ...eventTypes];
+      if (exists) {
+        requestBody.ontology_types = [...ontology.entityTypes, ...ontology.eventTypes];
       }
     }
 
     // Add annotation context if requested
     if (config.inputSources.includeAnnotations && summary.videoId) {
-      const annotations = await prisma.annotation.findMany({
-        where: {
-          videoId: summary.videoId,
-          personaId: summary.personaId,
-        },
-        take: 15,
-      });
+      const annotations = await readVideoPersonaAnnotations(
+        prisma,
+        summary.videoId,
+        summary.personaId,
+        15,
+      );
 
       requestBody.annotations = annotations.map((ann) => ({
         name: ann.label,
@@ -632,41 +639,55 @@ export const claimWorker = new Worker<
 
     await job.updateProgress(60);
 
-    // Save claims to database
+    // Persist claims into the layers store under the summary's claim-span layer.
+    const summaryCtx: ClaimSummaryContext = {
+      id: summary.id,
+      videoId: summary.videoId,
+      projectId: summary.projectId,
+      createdBy: summary.createdBy,
+    };
+
     async function saveClaim(
       claimData: (typeof modelResponse.claims)[0],
       parentClaimId?: string,
     ): Promise<string> {
-      const claim = await prisma.claim.create({
-        data: {
-          summaryId,
-          summaryType,
-          text: claimData.text,
-          gloss: [],
-          parentClaimId,
-          textSpans: claimData.char_start
-            ? [
-                {
-                  sentenceIndex: claimData.sentence_index,
-                  charStart: claimData.char_start,
-                  charEnd: claimData.char_end,
-                },
-              ]
-            : undefined,
-          confidence: claimData.confidence,
-          modelUsed: modelResponse.model_used,
-          extractionStrategy: config.extractionStrategy,
-        },
-      });
+      const claimId = randomUUID();
+      const now = new Date().toISOString();
+      const claim: StoredClaim = {
+        id: claimId,
+        summaryId,
+        summaryType,
+        text: claimData.text,
+        gloss: [],
+        parentClaimId: parentClaimId ?? null,
+        textSpans: claimData.char_start
+          ? [
+              {
+                sentenceIndex: claimData.sentence_index,
+                charStart: claimData.char_start,
+                charEnd: claimData.char_end,
+              },
+            ]
+          : null,
+        timeSpans: null,
+        confidence: claimData.confidence,
+        modelUsed: modelResponse.model_used,
+        extractionStrategy: config.extractionStrategy,
+        createdBy: summaryCtx.createdBy,
+        projectId: summaryCtx.projectId,
+        createdAt: now,
+        updatedAt: now,
+      };
+      await writeClaim(prisma, summaryCtx, claim);
 
       // Recursively save subclaims
       if (claimData.subclaims && claimData.subclaims.length > 0) {
         for (const subclaimData of claimData.subclaims as (typeof modelResponse.claims)[0][]) {
-          await saveClaim(subclaimData, claim.id);
+          await saveClaim(subclaimData, claimId);
         }
       }
 
-      return claim.id;
+      return claimId;
     }
 
     // Save all root claims
@@ -676,30 +697,13 @@ export const claimWorker = new Worker<
 
     await job.updateProgress(80);
 
-    // Update denormalized JSON
-    const allClaims = await prisma.claim.findMany({
-      where: {
-        summaryId,
-        summaryType,
-        parentClaimId: null,
-      },
-      include: {
-        subclaims: {
-          include: {
-            subclaims: {
-              include: {
-                subclaims: true,
-              },
-            },
-          },
-        },
-      },
-      orderBy: [{ createdAt: "asc" }],
-    });
+    // Rebuild the denormalized claim tree from the layers store.
+    const { claims: flatClaims } = await readSummaryClaims(prisma, summaryId);
+    const allClaims = nestClaims(flatClaims);
 
-    const countClaims = (claims: unknown[]): number => {
+    const countClaims = (claims: StoredClaimNode[]): number => {
       let count = claims.length;
-      for (const claim of claims as { subclaims?: unknown[] }[]) {
+      for (const claim of claims) {
         if (claim.subclaims && claim.subclaims.length > 0) {
           count += countClaims(claim.subclaims);
         }
@@ -866,28 +870,12 @@ export const synthesisWorker = new Worker<
 
     await job.updateProgress(10);
 
-    // Fetch summary with claims
+    // Fetch summary and persona; claims are reconstructed from the layers store.
     const summary =
       summaryType === "video"
         ? await prisma.videoSummary.findUnique({
             where: { id: summaryId },
-            include: {
-              claims: {
-                where: { parentClaimId: null },
-                include: {
-                  subclaims: {
-                    include: {
-                      subclaims: {
-                        include: {
-                          subclaims: true,
-                        },
-                      },
-                    },
-                  },
-                },
-              },
-              persona: true,
-            },
+            include: { persona: true },
           })
         : null; // Future: Add collection summary support
 
@@ -895,7 +883,10 @@ export const synthesisWorker = new Worker<
       throw new Error(`Summary not found: ${summaryId}`);
     }
 
-    if (!summary.claims || summary.claims.length === 0) {
+    const { claims: flatClaims } = await readSummaryClaims(prisma, summaryId);
+    const rootClaims = nestClaims(flatClaims);
+
+    if (rootClaims.length === 0) {
       throw new Error(`No claims found for summary: ${summaryId}`);
     }
 
@@ -907,7 +898,7 @@ export const synthesisWorker = new Worker<
         {
           sourceId: summary.videoId,
           sourceType: "video",
-          claims: summary.claims,
+          claims: rootClaims,
           metadata: {
             persona: summary.persona.name,
           },
@@ -925,16 +916,15 @@ export const synthesisWorker = new Worker<
       }),
     };
 
-    const ontology = await prisma.ontology.findUnique({
-      where: { personaId: summary.personaId },
-    });
+    const { aggregate: ontology, exists: ontologyExists } = await readOntologyAggregate(
+      prisma,
+      summary.personaId,
+    );
 
-    if (ontology) {
-      const entityTypes = ontology.entityTypes as unknown[];
-      const eventTypes = ontology.eventTypes as unknown[];
+    if (ontologyExists) {
       Object.assign(camelCaseRequestBody, {
         ontologyContext: {
-          types: [...entityTypes, ...eventTypes],
+          types: [...ontology.entityTypes, ...ontology.eventTypes],
         },
       });
     }

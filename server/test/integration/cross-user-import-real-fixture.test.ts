@@ -153,7 +153,7 @@ describe('cross-user import of a real Fovea export', () => {
 
     const aAnnsRes = await app.inject({
       method: 'GET',
-      url: `/api/annotations/${ANNOTATION_VIDEO_ID}`,
+      url: `/api/layers/videos/${ANNOTATION_VIDEO_ID}/annotations`,
       cookies: { session_token: A.sessionToken },
     })
     expect(aAnnsRes.statusCode).toBe(200)
@@ -253,12 +253,16 @@ describe('cross-user import of a real Fovea export', () => {
     const aTypeRef = aSecondClaim.gloss.find(g => g.type === 'typeRef')
     expect(aTypeRef, 'second claim should preserve its gloss typeRef item').toBeDefined()
 
-    const aPersona = await prisma.persona.findFirst({
-      where: { userId: A.userId },
-      include: { ontology: true },
+    // Read user A's ontology through the API (it lives in the layers store; the
+    // response renames entityTypes -> entities).
+    const aOntologyRes = await app.inject({
+      method: 'GET',
+      url: `/api/personas/${aSummaryPersonaId}/ontology`,
+      cookies: { session_token: A.sessionToken },
     })
-    const aEntityTypes = (aPersona?.ontology?.entityTypes as Array<{ id: string; name: string }>) || []
-    const aFireType = aEntityTypes.find(t => t.id === aTypeRef!.content)
+    expect(aOntologyRes.statusCode).toBe(200)
+    const aOntology = aOntologyRes.json() as { entities: Array<{ id: string; name: string }> }
+    const aFireType = aOntology.entities.find(t => t.id === aTypeRef!.content)
     expect(aFireType, `typeRef.content "${aTypeRef!.content}" should resolve to a type in user A's ontology`).toBeDefined()
     expect(aFireType!.name).toBe('fire')
 
@@ -275,7 +279,7 @@ describe('cross-user import of a real Fovea export', () => {
 
     const bAnnsRes = await app.inject({
       method: 'GET',
-      url: `/api/annotations/${ANNOTATION_VIDEO_ID}`,
+      url: `/api/layers/videos/${ANNOTATION_VIDEO_ID}/annotations`,
       cookies: { session_token: B.sessionToken },
     })
     const bAnns = bAnnsRes.json() as Array<{ id: string; type: string; label: string }>
@@ -408,7 +412,7 @@ describe('cross-user import of a real Fovea export', () => {
     // Walk B's annotations and confirm linkType survived.
     const annsRes = await app.inject({
       method: 'GET',
-      url: `/api/annotations/${ANNOTATION_VIDEO_ID}`,
+      url: `/api/layers/videos/${ANNOTATION_VIDEO_ID}/annotations`,
       cookies: { session_token: B.sessionToken },
     })
     const anns = annsRes.json() as Array<{ id: string; type: string; label: string; linkType: string | null }>

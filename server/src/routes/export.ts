@@ -1,14 +1,139 @@
 import { Type } from '@sinclair/typebox'
 import { FastifyPluginAsync } from 'fastify'
+import { PrismaClient, Prisma } from '@prisma/client'
 import { accessibleBy } from '@casl/prisma'
+import { subject } from '@casl/ability'
+import type { AppAbility } from '../lib/abilities.js'
 import { AnnotationExporter } from '../services/export-handler.js'
+import type { VideoAnnotationOutput } from '../services/video-annotation-mapper.js'
+import { readOntologyAggregate } from '../services/layers-bridge/ontology-bridge.js'
+import { readWorldAggregate } from '../services/layers-bridge/world-bridge.js'
+import { readSummaryClaims } from '../services/layers-bridge/claim-bridge.js'
+import type { StoredClaim, StoredRelation } from '../services/claim-layers-mapper.js'
 import { requireAuth } from '../middleware/auth.js'
 import { buildAbilities } from '../middleware/abilities.js'
 import { ForbiddenError } from '../lib/errors.js'
 
+/** The ontology export shape reconstructed from the layers store. */
+interface OntologyExportRow {
+  personaId: string
+  entityTypes: unknown[]
+  eventTypes: unknown[]
+  roleTypes: unknown[]
+  relationTypes: unknown[]
+}
+
+/**
+ * Reconstructs each persona's ontology from the layers store, skipping personas
+ * that have no ontology in either store.
+ */
+async function collectOntologies(
+  prisma: PrismaClient,
+  personaIds: string[],
+): Promise<OntologyExportRow[]> {
+  const rows: OntologyExportRow[] = []
+  for (const personaId of personaIds) {
+    const { aggregate, exists } = await readOntologyAggregate(prisma, personaId)
+    if (!exists) continue
+    rows.push({
+      personaId,
+      entityTypes: aggregate.entityTypes,
+      eventTypes: aggregate.eventTypes,
+      roleTypes: aggregate.roleTypes,
+      relationTypes: aggregate.relationTypes,
+    })
+  }
+  return rows
+}
+
+/**
+ * Reconstructs the readable claims and relations for a set of summaries from the
+ * layers store. Claims are filtered by the caller's CASL read ability, and
+ * relations are kept only when both endpoints reference readable claims.
+ */
+async function collectClaims(
+  prisma: PrismaClient,
+  ability: AppAbility,
+  summaryIds: string[],
+): Promise<{ claims: StoredClaim[]; relations: StoredRelation[] }> {
+  const claims: StoredClaim[] = []
+  const relations: StoredRelation[] = []
+  for (const summaryId of summaryIds) {
+    const summary = await readSummaryClaims(prisma, summaryId)
+    for (const claim of summary.claims) {
+      if (ability.can('read', subject('Claim', { ...claim }))) claims.push(claim)
+    }
+    relations.push(...summary.relations)
+  }
+  const readableClaimIds = new Set(claims.map(c => c.id))
+  const keptRelations = relations.filter(
+    r => readableClaimIds.has(r.sourceClaimId) || readableClaimIds.has(r.targetClaimId),
+  )
+  return { claims, relations: keptRelations }
+}
+
+/**
+ * Reconstructs a scope's annotations from the layers store unioned with any
+ * legacy rows, filtered by the caller's CASL read ability. The layers and legacy
+ * WHERE clauses are composed from the persona/video/user scoping plus the CASL
+ * read filter for each store.
+ */
+async function collectAnnotationOutputs(
+  exporter: AnnotationExporter,
+  prisma: PrismaClient,
+  ability: AppAbility,
+  scope: {
+    personaIds: string[]
+    userPersonaIds: string[]
+    userId: string
+    videoIds?: string[]
+  },
+): Promise<VideoAnnotationOutput[]> {
+  let layersScope: Prisma.LayersAnnotationWhereInput
+  let legacyScope: Prisma.AnnotationWhereInput
+  if (scope.personaIds.length > 0) {
+    const scopedIds = scope.personaIds.filter(id => scope.userPersonaIds.includes(id))
+    layersScope = { layer: { personaId: { in: scopedIds } } }
+    legacyScope = { personaId: { in: scopedIds } }
+  } else {
+    layersScope = {
+      OR: [
+        { layer: { personaId: { in: scope.userPersonaIds } } },
+        { layer: { personaId: null }, createdByUserId: scope.userId },
+      ],
+    }
+    legacyScope = {
+      OR: [{ personaId: { in: scope.userPersonaIds } }, { personaId: null, userId: scope.userId }],
+    }
+  }
+
+  const layersAnd: Prisma.LayersAnnotationWhereInput[] = [
+    layersScope,
+    accessibleBy(ability, 'read').LayersAnnotation,
+  ]
+  const legacyAnd: Prisma.AnnotationWhereInput[] = [
+    legacyScope,
+    accessibleBy(ability, 'read').Annotation,
+  ]
+  if (scope.videoIds && scope.videoIds.length > 0) {
+    layersAnd.push({ layer: { expression: { videoId: { in: scope.videoIds } } } })
+    legacyAnd.push({ videoId: { in: scope.videoIds } })
+  }
+
+  return exporter.readAnnotationOutputs(prisma, {
+    layersWhere: { AND: layersAnd },
+    legacyWhere: { AND: legacyAnd },
+  })
+}
+
 /**
  * Fastify plugin for export-related routes.
  * Provides endpoints for exporting all user data.
+ *
+ * Every export reconstructs the legacy bundle shape from the unified layers
+ * store: ontologies, world state, claims, and annotations are read back through
+ * the layers bridge (which falls through to the legacy tables only when no
+ * layers rows exist yet), so the export format is unchanged.
  *
  * Routes:
  * - GET /api/export - Export all user data in JSON Lines format
@@ -64,7 +189,7 @@ const exportRoute: FastifyPluginAsync = async (fastify) => {
     }
 
     // Parse filter parameters for annotations
-    const personaIdArray = personaIds ? personaIds.split(',').filter(Boolean) : undefined
+    const personaIdArray = personaIds ? personaIds.split(',').filter(Boolean) : []
     const videoIdArray = videoIds ? videoIds.split(',').filter(Boolean) : undefined
     const annotationTypeArray = annotationTypes
       ? annotationTypes.split(',').filter(Boolean) as ('type' | 'object')[]
@@ -86,25 +211,18 @@ const exportRoute: FastifyPluginAsync = async (fastify) => {
       orderBy: { createdAt: 'asc' }
     })
     const userPersonaIds = personas.map(p => p.id)
-    const ontologies = await fastify.prisma.ontology.findMany({
-      where: { personaId: { in: userPersonaIds } },
-      orderBy: { createdAt: 'asc' }
-    })
+    const ontologies = await collectOntologies(fastify.prisma, userPersonaIds)
     if (personas.length > 0) {
       lines.push(exporter.exportPersonasWithOntologies(personas, ontologies))
     }
 
     // 2. Export world state
-    const worldState = await fastify.prisma.worldState.findFirst({
-      where: {
-        AND: [
-          { userId: request.user!.id },
-          accessibleBy(ability, 'read').WorldState,
-        ],
-      },
-    })
-    if (worldState) {
-      const worldLines = exporter.exportWorldState(worldState)
+    const { aggregate: worldAggregate, exists: worldExists } = await readWorldAggregate(
+      fastify.prisma,
+      { userId: request.user!.id, projectId: null },
+    )
+    if (worldExists) {
+      const worldLines = exporter.exportWorldState(worldAggregate)
       if (worldLines) {
         lines.push(worldLines)
       }
@@ -121,59 +239,20 @@ const exportRoute: FastifyPluginAsync = async (fastify) => {
       orderBy: { createdAt: 'asc' }
     })
     const summaryIds = summaries.map(s => s.id)
-    const claims = summaryIds.length > 0 ? await fastify.prisma.claim.findMany({
-      where: {
-        AND: [
-          { summaryId: { in: summaryIds } },
-          accessibleBy(ability, 'read').Claim,
-        ],
-      },
-      orderBy: { createdAt: 'asc' }
-    }) : []
-    const claimIds = claims.map(c => c.id)
-    const claimRelations = claimIds.length > 0 ? await fastify.prisma.claimRelation.findMany({
-      where: {
-        OR: [
-          { sourceClaimId: { in: claimIds } },
-          { targetClaimId: { in: claimIds } }
-        ]
-      },
-      orderBy: { createdAt: 'asc' }
-    }) : []
+    const { claims, relations: claimRelations } = await collectClaims(fastify.prisma, ability, summaryIds)
     if (summaries.length > 0 || claims.length > 0) {
       lines.push(exporter.exportSummariesWithClaims(summaries, claims, claimRelations))
     }
 
     // 4. Export annotations with optional filtering
-    // Include annotations belonging to the user's personas AND the user's own object annotations
-    const annotationWhere: Record<string, unknown> = {}
-
-    if (personaIdArray && personaIdArray.length > 0) {
-      const scopedIds = personaIdArray.filter((id: string) => userPersonaIds.includes(id))
-      annotationWhere.personaId = { in: scopedIds }
-    } else {
-      annotationWhere.OR = [
-        { personaId: { in: userPersonaIds } },
-        { personaId: null, userId: request.user!.id }
-      ]
-    }
-    if (videoIdArray && videoIdArray.length > 0) {
-      annotationWhere.videoId = { in: videoIdArray }
-    }
-
-    const prismaAnnotations = await fastify.prisma.annotation.findMany({
-      where: {
-        AND: [
-          annotationWhere,
-          accessibleBy(ability, 'read').Annotation,
-        ],
-      },
-      orderBy: { createdAt: 'asc' }
+    const outputs = await collectAnnotationOutputs(exporter, fastify.prisma, ability, {
+      personaIds: personaIdArray,
+      userPersonaIds,
+      userId: request.user!.id,
+      videoIds: videoIdArray,
     })
 
-    let convertedAnnotations = prismaAnnotations
-      .map(a => exporter.convertPrismaAnnotation(a))
-      .filter((a): a is NonNullable<typeof a> => a !== null)
+    let convertedAnnotations = outputs.map(o => exporter.convertVideoAnnotationOutput(o))
 
     // Filter by annotation type if specified
     if (annotationTypeArray && annotationTypeArray.length > 0) {
@@ -204,10 +283,10 @@ const exportRoute: FastifyPluginAsync = async (fastify) => {
     const exportData = lines.filter(Boolean).join('\n')
 
     // Get world state counts for headers
-    const worldCounts = worldState ? {
-      entities: Array.isArray(worldState.entities) ? worldState.entities.length : 0,
-      events: Array.isArray(worldState.events) ? worldState.events.length : 0,
-      times: Array.isArray(worldState.times) ? worldState.times.length : 0,
+    const worldCounts = worldExists ? {
+      entities: worldAggregate.entities.length,
+      events: worldAggregate.events.length,
+      times: worldAggregate.times.length,
     } : { entities: 0, events: 0, times: 0 }
 
     // Set headers with export stats
@@ -305,7 +384,7 @@ const exportRoute: FastifyPluginAsync = async (fastify) => {
     }
 
     // Parse filter parameters for annotations
-    const personaIdArray = personaIds ? personaIds.split(',').filter(Boolean) : undefined
+    const personaIdArray = personaIds ? personaIds.split(',').filter(Boolean) : []
     const videoIdArray = videoIds ? videoIds.split(',').filter(Boolean) : undefined
     const annotationTypeArray = annotationTypes
       ? annotationTypes.split(',').filter(Boolean) as ('type' | 'object')[]
@@ -326,10 +405,7 @@ const exportRoute: FastifyPluginAsync = async (fastify) => {
     })
     const systemPersonaCount = personas.filter(p => p.isSystemGenerated).length
     const userPersonaIds = personas.map(p => p.id)
-    const ontologies = await fastify.prisma.ontology.findMany({
-      where: { personaId: { in: userPersonaIds } },
-      orderBy: { createdAt: 'asc' }
-    })
+    const ontologies = await collectOntologies(fastify.prisma, userPersonaIds)
 
     // Count ontology types
     let entityTypeCount = 0
@@ -337,29 +413,25 @@ const exportRoute: FastifyPluginAsync = async (fastify) => {
     let roleTypeCount = 0
     let relationTypeCount = 0
     for (const ontology of ontologies) {
-      entityTypeCount += Array.isArray(ontology.entityTypes) ? ontology.entityTypes.length : 0
-      eventTypeCount += Array.isArray(ontology.eventTypes) ? ontology.eventTypes.length : 0
-      roleTypeCount += Array.isArray(ontology.roleTypes) ? ontology.roleTypes.length : 0
-      relationTypeCount += Array.isArray(ontology.relationTypes) ? ontology.relationTypes.length : 0
+      entityTypeCount += ontology.entityTypes.length
+      eventTypeCount += ontology.eventTypes.length
+      roleTypeCount += ontology.roleTypes.length
+      relationTypeCount += ontology.relationTypes.length
     }
 
     // 2. Count world state objects
-    const worldState = await fastify.prisma.worldState.findFirst({
-      where: {
-        AND: [
-          { userId: request.user!.id },
-          accessibleBy(ability, 'read').WorldState,
-        ],
-      },
-    })
-    const worldCounts = worldState ? {
-      entities: Array.isArray(worldState.entities) ? worldState.entities.length : 0,
-      events: Array.isArray(worldState.events) ? worldState.events.length : 0,
-      times: Array.isArray(worldState.times) ? worldState.times.length : 0,
-      entityCollections: Array.isArray(worldState.entityCollections) ? worldState.entityCollections.length : 0,
-      eventCollections: Array.isArray(worldState.eventCollections) ? worldState.eventCollections.length : 0,
-      timeCollections: Array.isArray(worldState.timeCollections) ? worldState.timeCollections.length : 0,
-      relations: Array.isArray(worldState.relations) ? worldState.relations.length : 0,
+    const { aggregate: worldAggregate, exists: worldExists } = await readWorldAggregate(
+      fastify.prisma,
+      { userId: request.user!.id, projectId: null },
+    )
+    const worldCounts = worldExists ? {
+      entities: worldAggregate.entities.length,
+      events: worldAggregate.events.length,
+      times: worldAggregate.times.length,
+      entityCollections: worldAggregate.entityCollections.length,
+      eventCollections: worldAggregate.eventCollections.length,
+      timeCollections: worldAggregate.timeCollections.length,
+      relations: worldAggregate.relations.length,
     } : { entities: 0, events: 0, times: 0, entityCollections: 0, eventCollections: 0, timeCollections: 0, relations: 0 }
 
     // 3. Count summaries and claims (scoped to user's personas)
@@ -374,58 +446,22 @@ const exportRoute: FastifyPluginAsync = async (fastify) => {
       where: summaryWhere,
       select: { id: true }
     })
-    const userSummaryIds = userSummaries.map(s => s.id)
-    const claimWhere = {
-      AND: [
-        { summaryId: { in: userSummaryIds } },
-        accessibleBy(ability, 'read').Claim,
-      ],
-    }
-    const claimCount = await fastify.prisma.claim.count({ where: claimWhere })
-    const userClaims = await fastify.prisma.claim.findMany({
-      where: claimWhere,
-      select: { id: true }
-    })
-    const userClaimIds = userClaims.map(c => c.id)
-    const claimRelationCount = await fastify.prisma.claimRelation.count({
-      where: {
-        OR: [
-          { sourceClaimId: { in: userClaimIds } },
-          { targetClaimId: { in: userClaimIds } }
-        ]
-      }
-    })
+    const { claims, relations: claimRelations } = await collectClaims(
+      fastify.prisma,
+      ability,
+      userSummaries.map(s => s.id),
+    )
+    const claimCount = claims.length
+    const claimRelationCount = claimRelations.length
 
     // 4. Count and analyze annotations (with optional filtering)
-    // Include annotations belonging to the user's personas AND the user's own object annotations
-    const annotationWhere: Record<string, unknown> = {}
-
-    if (personaIdArray && personaIdArray.length > 0) {
-      const scopedIds = personaIdArray.filter((id: string) => userPersonaIds.includes(id))
-      annotationWhere.personaId = { in: scopedIds }
-    } else {
-      annotationWhere.OR = [
-        { personaId: { in: userPersonaIds } },
-        { personaId: null, userId: request.user!.id }
-      ]
-    }
-    if (videoIdArray && videoIdArray.length > 0) {
-      annotationWhere.videoId = { in: videoIdArray }
-    }
-
-    const prismaAnnotations = await fastify.prisma.annotation.findMany({
-      where: {
-        AND: [
-          annotationWhere,
-          accessibleBy(ability, 'read').Annotation,
-        ],
-      },
-      orderBy: { createdAt: 'asc' }
+    const outputs = await collectAnnotationOutputs(exporter, fastify.prisma, ability, {
+      personaIds: personaIdArray,
+      userPersonaIds,
+      userId: request.user!.id,
+      videoIds: videoIdArray,
     })
-
-    let annotations = prismaAnnotations
-      .map(a => exporter.convertPrismaAnnotation(a))
-      .filter((a): a is NonNullable<typeof a> => a !== null)
+    let annotations = outputs.map(o => exporter.convertVideoAnnotationOutput(o))
 
     if (annotationTypeArray && annotationTypeArray.length > 0) {
       annotations = annotations.filter(a =>
@@ -542,12 +578,8 @@ const exportRoute: FastifyPluginAsync = async (fastify) => {
       orderBy: { createdAt: 'asc' }
     })
 
-    // Fetch ontologies for user's personas
-    const personaIds = personas.map(p => p.id)
-    const ontologies = await fastify.prisma.ontology.findMany({
-      where: { personaId: { in: personaIds } },
-      orderBy: { createdAt: 'asc' }
-    })
+    // Reconstruct ontologies for user's personas
+    const ontologies = await collectOntologies(fastify.prisma, personas.map(p => p.id))
 
     // Export personas with ontologies
     const exportData = exporter.exportPersonasWithOntologies(personas, ontologies)
@@ -595,19 +627,14 @@ const exportRoute: FastifyPluginAsync = async (fastify) => {
   }, async (request, reply) => {
     const { format = 'jsonl' } = request.query as { format?: 'jsonl' | 'json' }
     if (!request.ability) throw new ForbiddenError('No abilities defined')
-    const ability = request.ability
 
-    // Fetch world state for the authenticated user
-    const worldState = await fastify.prisma.worldState.findFirst({
-      where: {
-        AND: [
-          { userId: request.user!.id },
-          accessibleBy(ability, 'read').WorldState,
-        ],
-      },
-    })
+    // Reconstruct world state for the authenticated user
+    const { aggregate: worldAggregate, exists: worldExists } = await readWorldAggregate(
+      fastify.prisma,
+      { userId: request.user!.id, projectId: null },
+    )
 
-    if (!worldState) {
+    if (!worldExists) {
       reply.code(404)
       return reply.send({
         error: 'Not found',
@@ -616,7 +643,7 @@ const exportRoute: FastifyPluginAsync = async (fastify) => {
     }
 
     // Export world state
-    const exportData = exporter.exportWorldState(worldState)
+    const exportData = exporter.exportWorldState(worldAggregate)
 
     // Set content type and disposition
     if (format === 'jsonl') {
@@ -716,29 +743,12 @@ const exportRoute: FastifyPluginAsync = async (fastify) => {
       orderBy: { createdAt: 'asc' }
     })
 
-    // Fetch claims for these summaries
-    const summaryIds = summaries.map(s => s.id)
-    const claims = await fastify.prisma.claim.findMany({
-      where: {
-        AND: [
-          { summaryId: { in: summaryIds } },
-          accessibleBy(ability, 'read').Claim,
-        ],
-      },
-      orderBy: { createdAt: 'asc' }
-    })
-
-    // Fetch claim relations
-    const claimIds = claims.map(c => c.id)
-    const claimRelations = await fastify.prisma.claimRelation.findMany({
-      where: {
-        OR: [
-          { sourceClaimId: { in: claimIds } },
-          { targetClaimId: { in: claimIds } }
-        ]
-      },
-      orderBy: { createdAt: 'asc' }
-    })
+    // Reconstruct claims and relations for these summaries
+    const { claims, relations: claimRelations } = await collectClaims(
+      fastify.prisma,
+      ability,
+      summaries.map(s => s.id),
+    )
 
     // Export summaries with claims
     const exportData = exporter.exportSummariesWithClaims(summaries, claims, claimRelations)

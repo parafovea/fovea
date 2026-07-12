@@ -261,7 +261,7 @@ describe('cross-user import of a rich real-world export (regression for #100)', 
     for (const videoId of annotationVideoIds) {
       const res = await app.inject({
         method: 'GET',
-        url: `/api/annotations/${videoId}`,
+        url: `/api/layers/videos/${videoId}/annotations`,
         cookies: { session_token: A.sessionToken },
       })
       expect(res.statusCode).toBe(200)

@@ -28,6 +28,16 @@ describe('Personas API', () => {
     // Clean database in dependency order
     await prisma.apiKey.deleteMany()
     await prisma.session.deleteMany()
+    // Layers-store tables the persona ontology/world/annotation cleanup writes to.
+    await prisma.textAnnotationRelation.deleteMany()
+    await prisma.layersAnnotation.deleteMany()
+    await prisma.annotationLayer.deleteMany()
+    await prisma.graphEdge.deleteMany()
+    await prisma.graphNode.deleteMany()
+    await prisma.typeDef.deleteMany()
+    await prisma.layersOntology.deleteMany()
+    await prisma.expression.deleteMany()
+    await prisma.media.deleteMany()
     await prisma.annotation.deleteMany()
     await prisma.videoSummary.deleteMany()
     await prisma.ontology.deleteMany()
@@ -603,12 +613,15 @@ describe('Personas API', () => {
         cookies: { session_token: testSessionToken }
       })
 
-      // Verify type assignment was cleaned up
-      const worldState = await prisma.worldState.findFirst({
-        where: { userId: testUserId, projectId: null }
+      // Verify type assignment was cleaned up (world lives in the layers store,
+      // read it back through the /api/world endpoint).
+      const worldResp = await app.inject({
+        method: 'GET',
+        url: '/api/world',
+        cookies: { session_token: testSessionToken }
       })
-      const entities = worldState?.entities as Array<{ typeAssignments?: Array<{ personaId: string }> }>
-      const entity = entities[0]
+      const world = worldResp.json() as { entities: Array<{ typeAssignments?: Array<{ personaId: string }> }> }
+      const entity = world.entities[0]
       expect(entity.typeAssignments).toHaveLength(1)
       expect(entity.typeAssignments![0].personaId).toBe('other-persona')
     })
@@ -654,12 +667,15 @@ describe('Personas API', () => {
         cookies: { session_token: testSessionToken }
       })
 
-      // Verify persona interpretation was cleaned up
-      const worldState = await prisma.worldState.findFirst({
-        where: { userId: testUserId, projectId: null }
+      // Verify persona interpretation was cleaned up (world lives in the layers
+      // store, read it back through the /api/world endpoint).
+      const worldResp = await app.inject({
+        method: 'GET',
+        url: '/api/world',
+        cookies: { session_token: testSessionToken }
       })
-      const events = worldState?.events as Array<{ personaInterpretations?: Array<{ personaId: string }> }>
-      const event = events[0]
+      const world = worldResp.json() as { events: Array<{ personaInterpretations?: Array<{ personaId: string }> }> }
+      const event = world.events[0]
       expect(event.personaInterpretations).toHaveLength(1)
       expect(event.personaInterpretations![0].personaId).toBe('other-persona')
     })
