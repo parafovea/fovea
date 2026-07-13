@@ -56,10 +56,18 @@ ENV VITE_DEMO_PUBLIC=$VITE_DEMO_PUBLIC
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY annotation-tool/package.json ./annotation-tool/
 COPY server/package.json ./server/
+COPY packages/layers-schema/package.json ./packages/layers-schema/
 
-# Install workspace dependencies with cache mount for pnpm
+# Install workspace dependencies with cache mount for pnpm. Include
+# @fovea/layers-schema so its own build toolchain (tsc) is installed: the
+# frontend type-checks against its generated types and builds it below.
 RUN --mount=type=cache,target=/root/.local/share/pnpm/store \
-    pnpm install --frozen-lockfile --filter @fovea/annotation-tool
+    pnpm install --frozen-lockfile --filter @fovea/annotation-tool --filter @fovea/layers-schema
+
+# Build the @fovea/layers-schema workspace package first: the frontend type-checks
+# (tsc) against its generated types, so its dist must exist before the build.
+COPY packages/layers-schema ./packages/layers-schema
+RUN pnpm --filter @fovea/layers-schema build
 
 # Copy annotation-tool source
 COPY annotation-tool/. ./annotation-tool/
