@@ -17,7 +17,7 @@ import { useCallback, useEffect, useRef } from 'react'
 
 import { selectionToSegments, tokenKey, type Rect, type TokenSelection } from '@/lib/spans'
 
-import { useSpanAnnotatorStoreApi } from '../SpanAnnotatorStoreProvider'
+import { useSpanAnnotatorStoreApi } from '../spanAnnotatorStoreContext'
 
 /** The container-level pointer handlers returned by {@link useTokenSelection}. */
 export interface TokenSelectionHandlers {

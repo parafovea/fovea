@@ -38,7 +38,7 @@ import { createAnonymousSession, seedFixture } from './api'
 import { isPresenterMode } from './mode-flags'
 import { loadTourContentBundle } from '@/tours/content/loader'
 import { saveWorldState, worldKeys } from '@store/queries/useWorld'
-import { queryClient } from '@/main'
+import { queryClient } from '@/queryClient'
 
 export function DemoShell() {
   const [error, setError] = useState<string | null>(null)

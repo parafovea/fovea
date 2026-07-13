@@ -29,7 +29,8 @@ import { Textarea } from '@/components/ui/textarea'
 import { useCreateDocument, useDocuments } from '@store/queries'
 import { useDialog } from '@store/zustand/dialogStore'
 
-import { DocumentCard, documentTitle } from './DocumentCard'
+import { DocumentCard } from './DocumentCard'
+import { documentTitle } from './documentTitle'
 
 /**
  * Renders the document browser: a search box, a create button, and a card grid.

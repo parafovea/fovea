@@ -32,7 +32,8 @@ import {
 import { cn } from '@/lib/utils'
 import { api } from '@services/api'
 import { ImportOptions, ImportPreview, ImportResult, Conflict } from '@models/types'
-import { ImportResultDialog, shouldShowOrphanSkippedBanner } from './ImportResultDialog'
+import { ImportResultDialog } from './ImportResultDialog'
+import { shouldShowOrphanSkippedBanner } from './importResultBanner'
 import { ExpandableJsonViewer } from '@components/shared/ExpandableJsonViewer'
 
 /**

@@ -439,7 +439,7 @@ export function TourProvider({
     clearPaused()
     setPaused(null)
     return true
-  }, [launch, paused])
+  }, [findTour, launch, paused])
 
   const discardPaused = useCallback(() => {
     clearPaused()
@@ -501,7 +501,7 @@ export function TourProvider({
     return () => {
       if (window.__foveaTour === handle) delete window.__foveaTour
     }
-  }, [active, discardPaused, launch, pause, paused, resume])
+  }, [active, discardPaused, findTour, launch, pause, paused, resume])
 
   return (
     <TourContext.Provider value={value}>

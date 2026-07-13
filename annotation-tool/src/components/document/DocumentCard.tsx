@@ -14,6 +14,8 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardFooter } from '@/components/ui/card'
 import type { LayersDocumentRow } from '@store/queries'
 
+import { documentTitle } from './documentTitle'
+
 /**
  * Props for {@link DocumentCard}.
  */
@@ -24,18 +26,6 @@ export interface DocumentCardProps {
   selected?: boolean
   /** Called when the card is clicked. */
   onOpen: (documentId: string) => void
-}
-
-/** Derives a display title from a document's metadata or its leading text. */
-export function documentTitle(document: LayersDocumentRow): string {
-  const metadata = document.metadata
-  if (metadata && typeof metadata === 'object') {
-    const title = (metadata as Record<string, unknown>).title
-    if (typeof title === 'string' && title.trim().length > 0) return title.trim()
-  }
-  const firstLine = (document.text ?? '').split('\n', 1)[0].trim()
-  if (firstLine.length > 0) return firstLine.slice(0, 80)
-  return 'Untitled document'
 }
 
 /**

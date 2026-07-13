@@ -30,11 +30,11 @@ export type { SpanSidePanelProps } from './SpanSidePanel'
 export { RelationSidePanel } from './RelationSidePanel'
 export type { RelationSidePanelProps } from './RelationSidePanel'
 
+export { SpanAnnotatorStoreProvider } from './SpanAnnotatorStoreProvider'
 export {
-  SpanAnnotatorStoreProvider,
   useSpanAnnotatorStore,
   useSpanAnnotatorStoreApi,
-} from './SpanAnnotatorStoreProvider'
+} from './spanAnnotatorStoreContext'
 
 export { useTokenSelection } from './hooks/useTokenSelection'
 export { useSpanRelationMachine } from './hooks/useSpanRelationMachine'
@@ -56,7 +56,8 @@ export { VideoTextPanel } from './VideoTextPanel'
 export type { VideoTextPanelProps } from './VideoTextPanel'
 export { DocumentWorkspace } from './DocumentWorkspace'
 export { DocumentBrowser } from './DocumentBrowser'
-export { DocumentCard, documentTitle } from './DocumentCard'
+export { DocumentCard } from './DocumentCard'
 export type { DocumentCardProps } from './DocumentCard'
+export { documentTitle } from './documentTitle'
 export { useLayersSpanAnnotator } from './hooks/useLayersSpanAnnotator'
 export type { LayersSpanAnnotatorController } from './hooks/useLayersSpanAnnotator'

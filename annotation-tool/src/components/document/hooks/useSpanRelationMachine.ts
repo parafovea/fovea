@@ -12,7 +12,7 @@
 
 import { useCallback } from 'react'
 
-import { useSpanAnnotatorStore, useSpanAnnotatorStoreApi } from '../SpanAnnotatorStoreProvider'
+import { useSpanAnnotatorStore, useSpanAnnotatorStoreApi } from '../spanAnnotatorStoreContext'
 import type { RelationPhase } from '@store/zustand/createSpanAnnotatorStore'
 
 /**

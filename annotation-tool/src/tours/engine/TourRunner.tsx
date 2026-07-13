@@ -142,8 +142,12 @@ export function TourRunner({
       startedFiredRef.current = true
       onTelemetry?.({ kind: 'started', tourId: tour.id })
     }
+    // Capture the ref's current value now so the cleanup restores focus to the
+    // element recorded when the effect ran, not whatever the ref happens to
+    // point at by teardown time (the ref is set once in its initializer, so
+    // these coincide, but the copy keeps the exhaustive-deps rule satisfied).
+    const prev = previouslyFocusedRef.current
     return () => {
-      const prev = previouslyFocusedRef.current
       if (prev && document.contains(prev)) {
         try {
           prev.focus({ preventScroll: true })

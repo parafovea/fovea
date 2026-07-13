@@ -1,14 +1,14 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { QueryClientProvider } from '@tanstack/react-query'
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
-import axios from 'axios'
 import { ThemeProvider } from 'next-themes'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { Toaster } from '@/components/ui/sonner'
 import App from './App'
 import { config } from '@/config'
+import { queryClient } from '@/queryClient'
 import { DemoShell } from './demo/DemoShell'
 import { isDemoModeEnabled } from './demo/config'
 import { TourProvider } from './tours'
@@ -193,39 +193,20 @@ async function maybeBootstrapDemoSession(): Promise<void> {
   }
 }
 
-/**
- * TanStack Query client configuration.
- * Manages caching, refetching, and background updates for API requests.
- */
-// Exported so DemoShell's onBeforeLaunch can invalidate cached queries
-// after seeding the demo user's WorldState — without this the
-// GlossEditor's useWorld() returns the stale empty cache for up to
-// staleTime=5 min and the @-popup keeps reading "No objects found"
-// even though the backend was just populated.
-export const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      // Do not retry client errors (4xx, including 429 rate limits); a retry
-      // cannot fix a bad request and only amplifies request fan-out. For other
-      // failures (network, 5xx) allow a single retry.
-      retry: (failureCount, error) => {
-        const status = axios.isAxiosError(error) ? error.response?.status : undefined
-        if (status && status >= 400 && status < 500) return false
-        return failureCount < 1
-      },
-      // Refetching on window focus multiplies request volume across the app
-      // and is not needed given staleTime + explicit invalidation on mutations.
-      refetchOnWindowFocus: false,
-      staleTime: 5 * 60 * 1000, // 5 minutes
-    },
-  },
-})
-
 // Boot-time fetch of the deployment's tour content bundle from
 // /tour-content.json (the admin's editable config). NO silent
 // fallback: if the file is missing or malformed, render a visible
 // banner and mount the app WITHOUT TourProvider so the admin can fix
 // the JSON without an opaque "tours just don't work" failure mode.
+//
+// Root lives in this entry module (not a sibling component file)
+// because it bridges the flag-gated demo layer and the product app:
+// this file is the only place permitted to import from src/demo/*
+// (see the no-restricted-imports demo boundary), and as the entry it
+// also runs boot side effects and calls ReactDOM.render. It therefore
+// can't be a component-only Fast Refresh boundary, so the react-refresh
+// rule is disabled for this single declaration.
+// eslint-disable-next-line react-refresh/only-export-components
 function Root() {
   type LoadState =
     | { kind: 'loading' }
@@ -323,7 +304,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
               shadow the outer state and the runner would never paint.
 
               The tour content bundle comes from /tour-content.json
-              (admin-editable JSON, loaded at boot via Root above).
+              (admin-editable JSON, loaded at boot inside Root).
               Edit that file to retheme the tour catalogue for your
               own domain. See docs/tour-customization.md.
             */}

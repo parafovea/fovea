@@ -32,11 +32,11 @@ import { RelationTypePicker } from './RelationTypePicker'
 import { SpanLabelPicker, type SpanLabelMode, type SpanLabelOption } from './SpanLabelPicker'
 import { SpanSidePanel } from './SpanSidePanel'
 import { TokenizedTextView } from './TokenizedTextView'
+import { SpanAnnotatorStoreProvider } from './SpanAnnotatorStoreProvider'
 import {
-  SpanAnnotatorStoreProvider,
   useSpanAnnotatorStore,
   useSpanAnnotatorStoreApi,
-} from './SpanAnnotatorStoreProvider'
+} from './spanAnnotatorStoreContext'
 import { useSpanAnnotatorHotkeys } from './hooks/useSpanAnnotatorHotkeys'
 import { useSpanPositions } from './hooks/useSpanPositions'
 import { useSpanRelationMachine } from './hooks/useSpanRelationMachine'
