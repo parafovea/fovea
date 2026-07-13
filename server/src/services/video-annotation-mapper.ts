@@ -90,6 +90,7 @@ export interface VideoAnnotationOutput {
   confidence: number | null
   source: string
   linkedObjectName: string | null
+  createdBy: string | null
   createdAt: string
   updatedAt: string
 }
@@ -156,6 +157,7 @@ export interface StoredLayersAnnotation {
   confidence: number | null
   ontologyTypeRefId: string | null
   denotesNodeId: string | null
+  createdByUserId: string | null
   createdAt: Date
   updatedAt: Date
 }
@@ -338,6 +340,7 @@ export function layersToAnnotation(
     confidence,
     source: meta.source ?? 'manual',
     linkedObjectName: layer.personaId ? null : (node?.label ?? null),
+    createdBy: row.createdByUserId,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   }

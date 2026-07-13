@@ -43,6 +43,7 @@ const VideoAnnotationResponseSchema = Type.Object({
   confidence: NullableNumber,
   source: Type.String(),
   linkedObjectName: Type.Optional(NullableString),
+  createdBy: NullableString,
   createdAt: Type.String(),
   updatedAt: Type.String(),
 })

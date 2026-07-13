@@ -20043,6 +20043,7 @@
                       "frames",
                       "confidence",
                       "source",
+                      "createdBy",
                       "createdAt",
                       "updatedAt"
                     ],
@@ -20082,6 +20083,12 @@
                         "type": "string"
                       },
                       "linkedObjectName": {
+                        "type": [
+                          "null",
+                          "string"
+                        ]
+                      },
+                      "createdBy": {
                         "type": [
                           "null",
                           "string"
@@ -20207,6 +20214,7 @@
                     "frames",
                     "confidence",
                     "source",
+                    "createdBy",
                     "createdAt",
                     "updatedAt"
                   ],
@@ -20246,6 +20254,12 @@
                       "type": "string"
                     },
                     "linkedObjectName": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "createdBy": {
                       "type": [
                         "null",
                         "string"
@@ -20278,6 +20292,7 @@
                     "frames",
                     "confidence",
                     "source",
+                    "createdBy",
                     "createdAt",
                     "updatedAt"
                   ],
@@ -20317,6 +20332,12 @@
                       "type": "string"
                     },
                     "linkedObjectName": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "createdBy": {
                       "type": [
                         "null",
                         "string"
@@ -20433,6 +20454,7 @@
                     "frames",
                     "confidence",
                     "source",
+                    "createdBy",
                     "createdAt",
                     "updatedAt"
                   ],
@@ -20472,6 +20494,12 @@
                       "type": "string"
                     },
                     "linkedObjectName": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "createdBy": {
                       "type": [
                         "null",
                         "string"

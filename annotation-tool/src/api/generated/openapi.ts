@@ -8433,6 +8433,7 @@ export interface paths {
                             confidence: null | number;
                             source: string;
                             linkedObjectName?: null | string;
+                            createdBy: null | string;
                             createdAt: string;
                             updatedAt: string;
                         }[];
@@ -8485,6 +8486,7 @@ export interface paths {
                             confidence: null | number;
                             source: string;
                             linkedObjectName?: null | string;
+                            createdBy: null | string;
                             createdAt: string;
                             updatedAt: string;
                         };
@@ -8507,6 +8509,7 @@ export interface paths {
                             confidence: null | number;
                             source: string;
                             linkedObjectName?: null | string;
+                            createdBy: null | string;
                             createdAt: string;
                             updatedAt: string;
                         };
@@ -8569,6 +8572,7 @@ export interface paths {
                             confidence: null | number;
                             source: string;
                             linkedObjectName?: null | string;
+                            createdBy: null | string;
                             createdAt: string;
                             updatedAt: string;
                         };
