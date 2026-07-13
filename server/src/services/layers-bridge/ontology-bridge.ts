@@ -3,9 +3,9 @@
  *
  * Reconstructs a persona's ontology (the four type buckets the `/api/ontology`
  * contract exchanges) from the layers store (LayersOntology + TypeDef), and
- * materializes an aggregate back into it. Reads are layers-first with a legacy
- * Ontology read-through; writes upsert the LayersOntology, prune its TypeDefs,
- * and recreate them from the aggregate. Mirrors the read-through structure of
+ * materializes an aggregate back into it. Reads read the layers store only;
+ * writes upsert the LayersOntology, prune its TypeDefs, and recreate them from
+ * the aggregate. Mirrors the structure of
  * `WorldStateService.readPersonaOntologyBundle` / `writePersonaOntology`.
  *
  * @module
@@ -22,7 +22,7 @@ import {
   type PersonaOntologyAggregate,
 } from '../ontology-layers-mapper.js'
 import { deriveId, layersOntologyForPersonaId } from '../layers-id-map.js'
-import { asRecords, toJson } from './util.js'
+import { toJson } from './util.js'
 
 /** A reconstructed persona ontology plus its id, timestamps, and existence. */
 export interface OntologyRead {
@@ -34,8 +34,7 @@ export interface OntologyRead {
 }
 
 /**
- * Reads a persona's ontology from the layers store, falling back to a
- * read-through of the legacy Ontology row when no LayersOntology exists yet.
+ * Reads a persona's ontology from the layers store.
  *
  * @param prisma - the Prisma client (or transaction client)
  * @param personaId - the persona whose ontology to read
@@ -55,22 +54,6 @@ export async function readOntologyAggregate(
       exists: true,
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
-    }
-  }
-
-  const legacy = await prisma.ontology.findUnique({ where: { personaId } })
-  if (legacy) {
-    return {
-      id: legacy.id,
-      aggregate: {
-        entityTypes: asRecords(legacy.entityTypes),
-        eventTypes: asRecords(legacy.eventTypes),
-        roleTypes: asRecords(legacy.roleTypes),
-        relationTypes: asRecords(legacy.relationTypes),
-      },
-      exists: true,
-      createdAt: legacy.createdAt.toISOString(),
-      updatedAt: legacy.updatedAt.toISOString(),
     }
   }
 
@@ -129,14 +112,17 @@ export async function writeOntologyAggregate(
 
   // TypeDef row ids are globally unique, but the same ontology type id may recur
   // across users (e.g. two users importing the same export, where nested type
-  // ids are not remapped). Derive a per-ontology row id so those rows do not
-  // collide; the original type id is preserved in the stashed object, so the
-  // reconstructed ontology (from the stash) still reports the original id.
-  const rowId = (originalId: string): string => deriveId('typedef', ontology.id, originalId)
+  // ids are not remapped) or across kinds within one ontology (an entity type
+  // and a role type both keyed '1'). Derive a per-(ontology, kind) row id so
+  // those rows do not collide; the original type id is preserved in the stashed
+  // object, so the reconstructed ontology (from the stash) still reports it. A
+  // type's parent is the same kind, so the parent row id derives from that kind.
+  const rowId = (typeKind: string, originalId: string): string =>
+    deriveId('typedef', ontology.id, typeKind, originalId)
 
   const createdIds = new Set<string>()
   for (const typeDef of typeDefs) {
-    const id = rowId(typeDef.id)
+    const id = rowId(typeDef.typeKind, typeDef.id)
     await prisma.typeDef.create({
       data: {
         id,
@@ -156,10 +142,10 @@ export async function writeOntologyAggregate(
   }
   for (const typeDef of typeDefs) {
     if (!typeDef.parentTypeId) continue
-    const parentRowId = rowId(typeDef.parentTypeId)
+    const parentRowId = rowId(typeDef.typeKind, typeDef.parentTypeId)
     if (createdIds.has(parentRowId)) {
       await prisma.typeDef.update({
-        where: { id: rowId(typeDef.id) },
+        where: { id: rowId(typeDef.typeKind, typeDef.id) },
         data: { parentTypeId: parentRowId },
       })
     }
@@ -167,7 +153,7 @@ export async function writeOntologyAggregate(
 }
 
 /**
- * Lists every persona id that has an ontology in either store, for import
+ * Lists every persona id that has an ontology in the layers store, for import
  * conflict detection.
  *
  * @param prisma - the Prisma client
@@ -182,7 +168,5 @@ export async function readAllOntologyPersonaIds(prisma: PrismaClient): Promise<S
   for (const row of layersOntologies) {
     if (row.personaId) ids.add(row.personaId)
   }
-  const legacyOntologies = await prisma.ontology.findMany({ select: { personaId: true } })
-  for (const row of legacyOntologies) ids.add(row.personaId)
   return ids
 }

@@ -279,6 +279,20 @@ export function personalWorldStateId(userId: string): string {
   return deriveId('worldstate:user', userId)
 }
 
+/**
+ * The synthetic WorldState id the project world-state contract reports for a
+ * (user, project) pair. As with {@link personalWorldStateId}, the layers store
+ * keys world objects by scope rather than by a single row, so a deterministic
+ * uuid keeps the response's `id` stable across reads.
+ *
+ * @param userId - the owning user's id
+ * @param projectId - the project the world is scoped to
+ * @returns a deterministic uuid for the project-scoped world state
+ */
+export function projectWorldStateId(userId: string, projectId: string): string {
+  return deriveId('worldstate:project', userId, projectId)
+}
+
 /** The node buckets exposed for callers that enumerate world node types. */
 export function worldNodeType(bucket: NodeBucket): string {
   const found = NODE_BUCKETS.find(([name]) => name === bucket)

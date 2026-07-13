@@ -11,15 +11,20 @@
  * @module
  */
 
-import { Prisma } from '@prisma/client'
 import { createPrismaAbility } from '@casl/prisma'
 import type { ForcedSubject, PureAbility, RawRuleFrom } from '@casl/ability'
 import type { PrismaQuery } from '@casl/prisma'
 
 /**
  * Narrow string-only form of subjects, used in rule definitions and
- * class-level authorize() checks. Must match Prisma.ModelName values
- * exactly so accessibleBy() can resolve them to Prisma WHERE clauses.
+ * class-level authorize() checks.
+ *
+ * The layers-store subjects (Media, Expression, ... TypeDef) name real Prisma
+ * models, so accessibleBy() resolves them to Prisma WHERE clauses. The remaining
+ * subjects (Annotation, Claim, WorldState) are authorization concepts: their
+ * rows live in the layers store and are reconstructed and authorized under these
+ * names, so they carry `create`/`read`/`update`/`delete` rules but are never
+ * passed to accessibleBy().
  */
 export type SubjectName =
   | 'Annotation' | 'Claim' | 'Persona' | 'WorldState' | 'Video'
@@ -51,13 +56,14 @@ export type Actions =
   | 'manage'
 
 /**
- * Subject type for CASL abilities. Includes both string model names (for
- * accessibleBy) and ForcedSubject-tagged objects (for subject() helper).
+ * Subject type for CASL abilities. Includes both string subject names (for
+ * accessibleBy on the layers models) and ForcedSubject-tagged objects (for the
+ * subject() helper).
  */
 type Subjects =
-  | Prisma.ModelName
+  | SubjectName
   | 'all'
-  | ForcedSubject<Prisma.ModelName>
+  | ForcedSubject<SubjectName>
 
 /**
  * CASL ability parameterized with Fovea actions and Prisma model names.
@@ -116,7 +122,7 @@ export function defineAbilitiesFor(
 
   // Ownership field varies per model. CASL's MongoQuery conditions match
   // against actual Prisma row fields, so we must use the correct column name.
-  const ownershipField = (modelName: Prisma.ModelName): string => {
+  const ownershipField = (modelName: SubjectName): string => {
     switch (modelName) {
       case 'Persona':
       case 'WorldState':
@@ -263,11 +269,11 @@ export function defineAbilitiesFor(
 }
 
 /**
- * Maps a RolePermission resourceType string to the corresponding Prisma
- * model name. Returns null for unmapped types.
+ * Maps a RolePermission resourceType string to the corresponding CASL subject
+ * name. Returns null for unmapped types.
  */
-function mapResourceTypeToModelName(resourceType: string): Prisma.ModelName | null {
-  const map: Record<string, Prisma.ModelName> = {
+function mapResourceTypeToModelName(resourceType: string): SubjectName | null {
+  const map: Record<string, SubjectName> = {
     annotation: 'Annotation',
     claim: 'Claim',
     persona: 'Persona',

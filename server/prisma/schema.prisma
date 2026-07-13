@@ -30,11 +30,9 @@ model User {
   systemRole   String  @default("user") // "system_admin" or "user"
 
   // Relationships
-  personas    Persona[]
-  apiKeys     ApiKey[]
-  sessions    Session[]
-  worldStates WorldState[]
-  annotations Annotation[]
+  personas Persona[]
+  apiKeys  ApiKey[]
+  sessions Session[]
 
   // RBAC relationships
   groupMemberships   GroupMembership[]
@@ -162,9 +160,7 @@ model Persona {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  ontology       Ontology?
   videoSummaries VideoSummary[]
-  annotations    Annotation[]
 
   // Layers annotation store back-relations
   annotationLayers AnnotationLayer[]
@@ -217,61 +213,6 @@ model SystemConfig {
   @@map("system_config")
 }
 
-/// Ontology defines the types (entities, events, roles, relations) for a specific persona
-model Ontology {
-  id        String  @id @default(uuid())
-  personaId String  @unique
-  persona   Persona @relation(fields: [personaId], references: [id], onDelete: Cascade)
-
-  /// JSON structure: EntityType[]
-  entityTypes   Json @default("[]")
-  /// JSON structure: EventType[]
-  eventTypes    Json @default("[]")
-  /// JSON structure: RoleType[]
-  roleTypes     Json @default("[]")
-  /// JSON structure: RelationType[]
-  relationTypes Json @default("[]")
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@map("ontologies")
-}
-
-/// WorldState stores the actual instances of entities, events, locations, times, and collections
-/// This is shared across all personas (personas assign types to these instances)
-/// Each user can have multiple world states (one per project + one personal)
-model WorldState {
-  id     String @id @default(uuid())
-  userId String
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  /// JSON structure: Entity[]
-  entities          Json @default("[]")
-  /// JSON structure: Event[]
-  events            Json @default("[]")
-  /// JSON structure: Time[]
-  times             Json @default("[]")
-  /// JSON structure: EntityCollection[]
-  entityCollections Json @default("[]")
-  /// JSON structure: EventCollection[]
-  eventCollections  Json @default("[]")
-  /// JSON structure: TimeCollection[]
-  timeCollections   Json @default("[]")
-  /// JSON structure: OntologyRelation[]
-  relations         Json @default("[]")
-
-  projectId String?
-  project   Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@unique([userId, projectId])
-  @@index([projectId])
-  @@map("world_state")
-}
-
 /// Video represents a video file with its metadata
 model Video {
   id         String   @id @default(uuid())
@@ -297,7 +238,6 @@ model Video {
   metadataSyncStatus String?
 
   summaries          VideoSummary[]
-  annotations        Annotation[]
   projectAssignments ProjectVideoAssignment[]
 
   // Layers annotation store back-relations
@@ -364,9 +304,6 @@ model VideoSummary {
   /// Comment/notes field for annotator notes at video level
   comment String? @db.Text
 
-  /// Relation to Claim model
-  claims Claim[]
-
   /// Layers expressions projected from this summary
   expressions Expression[]
 
@@ -388,51 +325,6 @@ model VideoSummary {
   @@map("video_summaries")
 }
 
-/// Annotation represents a temporal-spatial annotation on a video
-/// Type annotations (persona-scoped ontology assignments) require personaId
-/// Object annotations (world object links) have null personaId as they are persona-agnostic
-model Annotation {
-  id        String   @id @default(uuid())
-  videoId   String
-  video     Video    @relation(fields: [videoId], references: [id], onDelete: Cascade)
-  personaId String?
-  persona   Persona? @relation(fields: [personaId], references: [id], onDelete: Cascade)
-  userId    String?
-  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
-
-  type       String
-  label      String
-  /// For object annotations, the kind of world object the `label` references:
-  /// 'entity' | 'event' | 'time' | 'location'. NULL for type annotations and
-  /// for legacy object annotations created before this column was added (in
-  /// which case the frontend treats them as entity-linked, matching the
-  /// previous behavior). Required to round-trip event/time/location-linked
-  /// annotations through export+import — without it the backend cannot
-  /// distinguish which `linked*Id` field the export should emit.
-  linkType   String?
-  /// JSON structure for frame-level data (bounding boxes, timestamps, etc.)
-  frames     Json
-  confidence Float?
-  /// Source of annotation: manual, ai-assisted, automatic
-  source     String  @default("manual")
-
-  createdByUserId String?
-  projectId       String?
-  project         Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([videoId])
-  @@index([personaId])
-  @@index([videoId, personaId])
-  @@index([userId])
-  @@index([createdAt])
-  @@index([projectId])
-  @@index([createdByUserId])
-  @@map("annotations")
-}
-
 /// ImportHistory tracks data imports from JSON Lines files
 model ImportHistory {
   id            String   @id @default(uuid())
@@ -446,127 +338,6 @@ model ImportHistory {
   createdAt     DateTime @default(now())
 
   @@map("import_history")
-}
-
-/// Claim represents an atomic factual statement from a summary
-/// Supports hierarchical decomposition and claim sourcing
-model Claim {
-  id String @id @default(uuid())
-
-  // Association with summary
-  summaryId   String
-  summaryType String // "video" or "collection"
-
-  // Relation to VideoSummary (currently only video summaries supported)
-  videoSummary VideoSummary @relation(fields: [summaryId], references: [id], onDelete: Cascade)
-
-  // Claim content
-  text  String @db.Text
-  /// JSON structure: GlossItem[] with #/@/^/$ references (types/objects/annotations/claims)
-  gloss Json   @default("[]")
-
-  // Hierarchical structure (parent/child decomposition)
-  parentClaimId String?
-  parentClaim   Claim?  @relation("ClaimHierarchy", fields: [parentClaimId], references: [id], onDelete: Cascade)
-  subclaims     Claim[] @relation("ClaimHierarchy")
-
-  // Text span mapping - support discontiguous spans
-  /// JSON structure: Array of {sentenceIndex?: number, charStart: number, charEnd: number}
-  textSpans Json?
-
-  // Video time spans (seconds) the claim is grounded in - supports discontiguous spans
-  /// JSON structure: Array of {start: number, end: number, source: "scrub" | "annotation", annotationIds?: string[]}
-  timeSpans Json?
-
-  // Claim source/claimer (who makes this claim)
-  /// null = standalone claim for reference only (not asserted by anyone)
-  /// "author" = video creator explicitly asserts this claim
-  /// other = specified entity/type asserts this claim
-  claimerType  String? // null, "entity", "entity_type", "author", "mixed"
-  /// JSON structure: GlossItem[] - mixed text and #/@/^/$ references for claimer
-  claimerGloss Json?
-
-  // Relation between claimer and claim (how claimer relates to claim)
-  /// JSON structure: GlossItem[] - mixed text and references (e.g., "says", "#claims", "denied that")
-  claimRelation Json?
-
-  // Context of the claiming event itself (when/where claim was made)
-  /// Reference to world state event object
-  claimEventId    String?
-  /// Reference to world state time object
-  claimTimeId     String?
-  /// Reference to world state location object
-  claimLocationId String?
-
-  // Metadata
-  confidence         Float? // Model confidence in claim extraction (0.0-1.0)
-  modelUsed          String? // Model that generated this claim (e.g., "llama-4-scout")
-  extractionStrategy String? // "sentence-based", "semantic-units", "hierarchical", "manual"
-
-  // Modality metadata - indicates what sources support the claim
-  /// JSON structure: Array of "speech" and/or "non-speech" - claim is based at least in part on audio
-  audio    Json? // null or ["speech"], ["non-speech"], or ["speech", "non-speech"]
-  /// JSON structure: Array of "text" and/or "non-text" - claim is based at least in part on non-audio video information
-  video    Json? // null or ["text"], ["non-text"], or ["text", "non-text"]
-  /// JSON structure: Array of "text" and/or "non-text" - claim is based on metadata (text = caption metadata, non-text = other metadata like location from .info.json)
-  metadata Json? // null or ["text"], ["non-text"], or ["text", "non-text"]
-
-  // Comment/notes field for annotator notes
-  comment String? @db.Text
-
-  // Audit fields
-  createdBy String? // User ID who created/approved this claim
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  projectId String?
-  project   Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
-
-  // Relations to other claims (this claim as source or target)
-  sourceClaimRelations ClaimRelation[] @relation("SourceClaim")
-  targetClaimRelations ClaimRelation[] @relation("TargetClaim")
-
-  @@index([summaryId, summaryType])
-  @@index([parentClaimId])
-  @@index([projectId])
-  @@map("claims")
-}
-
-/// ClaimRelation represents a typed relation between claims or claim spans
-/// Supports any relation type from the ontology (conflicts, supports, elaborates, etc.)
-/// Can relate entire claims or specific (discontiguous) spans within claims
-model ClaimRelation {
-  id String @id @default(uuid())
-
-  sourceClaimId String
-  sourceClaim   Claim  @relation("SourceClaim", fields: [sourceClaimId], references: [id], onDelete: Cascade)
-
-  targetClaimId String
-  targetClaim   Claim  @relation("TargetClaim", fields: [targetClaimId], references: [id], onDelete: Cascade)
-
-  /// Reference to ontology relation type (e.g., "conflicts", "supports", "denies")
-  relationTypeId String
-
-  // Optional span specification (if null, relation applies to entire claim)
-  /// JSON structure: Array of {charStart: number, charEnd: number}
-  /// Specifies discontiguous spans within source claim
-  sourceSpans Json?
-  /// JSON structure: Array of {charStart: number, charEnd: number}
-  /// Specifies discontiguous spans within target claim
-  targetSpans Json?
-
-  // Optional metadata
-  confidence Float?
-  notes      String? @db.Text
-
-  createdBy String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([sourceClaimId])
-  @@index([targetClaimId])
-  @@index([relationTypeId])
-  @@map("claim_relations")
 }
 
 // =============================================================================
@@ -627,10 +398,7 @@ model Project {
   members          ProjectMembership[]
   videoAssignments ProjectVideoAssignment[]
   personas         Persona[]
-  worldStates      WorldState[]
-  annotations      Annotation[]
   videoSummaries   VideoSummary[]
-  claims           Claim[]
 
   // Layers annotation store back-relations
   media                   Media[]
@@ -1134,8 +902,7 @@ model GraphEdge {
   @@map("graph_edges")
 }
 
-/// LayersOntology mirrors ontology.ontology: a named type system. Distinct from
-/// the legacy Ontology model, which it does not replace in this additive phase.
+/// LayersOntology mirrors ontology.ontology: a named type system.
 model LayersOntology {
   id String @id @default(uuid())
 

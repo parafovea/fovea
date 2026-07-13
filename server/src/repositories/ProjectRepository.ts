@@ -1,4 +1,7 @@
-import { PrismaClient, Project, ProjectMembership, Persona, WorldState, Prisma } from '@prisma/client'
+import { PrismaClient, Project, ProjectMembership, Persona, Prisma } from '@prisma/client'
+
+import { readWorldAggregate, writeWorldAggregate } from '../services/layers-bridge/world-bridge.js'
+import { projectWorldStateId, type WorldStateAggregate } from '../services/world-layers-mapper.js'
 
 /**
  * Project row joined with its members (each carrying the public user
@@ -47,6 +50,38 @@ export type ProjectWithMyMembership = Prisma.ProjectGetPayload<{
 export type AssignableUser = Prisma.UserGetPayload<{
   select: { id: true; username: true; displayName: true; email: true }
 }>
+
+/**
+ * A project-scoped world state reconstructed from the layers store, in the
+ * response-ready view shape: a deterministic id, the seven JSON buckets, and
+ * timestamps. World objects are keyed by scope (createdByUserId = the caller,
+ * projectId = the project) rather than by a single row, so the id is synthetic.
+ */
+export interface ProjectWorldStateView {
+  id: string
+  userId: string
+  projectId: string
+  entities: unknown[]
+  events: unknown[]
+  times: unknown[]
+  entityCollections: unknown[]
+  eventCollections: unknown[]
+  timeCollections: unknown[]
+  relations: unknown[]
+  createdAt: Date
+  updatedAt: Date
+}
+
+/** The buckets of a project world state a partial update may set. */
+export interface ProjectWorldStatePartialUpdate {
+  entities?: unknown[]
+  events?: unknown[]
+  times?: unknown[]
+  entityCollections?: unknown[]
+  eventCollections?: unknown[]
+  timeCollections?: unknown[]
+  relations?: unknown[]
+}
 
 /**
  * Repository for all Project and ProjectMembership database access.
@@ -385,45 +420,72 @@ export class ProjectRepository {
     })
   }
 
-  /**
-   * Finds the caller's world state for a project.
-   *
-   * @param userId - the caller
-   * @param projectId - Project UUID
-   * @returns the world state, or null if none exists yet
-   */
-  async findWorldState(userId: string, projectId: string): Promise<WorldState | null> {
-    return this.prisma.worldState.findUnique({
-      where: { userId_projectId: { userId, projectId } },
-    })
-  }
-
-  /**
-   * Creates a world state for the caller in a project.
-   *
-   * @param data - Prisma world state create input
-   * @returns the created world state
-   */
-  async createWorldState(data: Prisma.WorldStateUncheckedCreateInput): Promise<WorldState> {
-    return this.prisma.worldState.create({ data })
-  }
-
-  /**
-   * Updates the caller's world state in a project.
-   *
-   * @param userId - the caller
-   * @param projectId - Project UUID
-   * @param data - Prisma world state update input
-   * @returns the updated world state
-   */
-  async updateWorldState(
+  /** Builds the response-ready view for a scope's reconstructed aggregate. */
+  private static worldStateView(
     userId: string,
     projectId: string,
-    data: Prisma.WorldStateUpdateInput
-  ): Promise<WorldState> {
-    return this.prisma.worldState.update({
-      where: { userId_projectId: { userId, projectId } },
-      data,
-    })
+    aggregate: WorldStateAggregate
+  ): ProjectWorldStateView {
+    const now = new Date()
+    return {
+      id: projectWorldStateId(userId, projectId),
+      userId,
+      projectId,
+      entities: aggregate.entities,
+      events: aggregate.events,
+      times: aggregate.times,
+      entityCollections: aggregate.entityCollections,
+      eventCollections: aggregate.eventCollections,
+      timeCollections: aggregate.timeCollections,
+      relations: aggregate.relations,
+      createdAt: now,
+      updatedAt: now,
+    }
+  }
+
+  /**
+   * Reads the caller's world state for a project from the layers store, keyed by
+   * the (user, project) scope. Returns an empty view when the caller has none.
+   *
+   * @param userId - the caller
+   * @param projectId - Project UUID
+   * @returns the world state view (empty buckets when none exists yet)
+   */
+  async readWorldState(userId: string, projectId: string): Promise<ProjectWorldStateView> {
+    const { aggregate } = await readWorldAggregate(this.prisma, { userId, projectId })
+    return ProjectRepository.worldStateView(userId, projectId, aggregate)
+  }
+
+  /**
+   * Writes a partial update over the caller's project world state in the layers
+   * store: the provided buckets replace the current ones; the rest are preserved.
+   *
+   * @param userId - the caller
+   * @param projectId - Project UUID
+   * @param data - the world buckets to replace (omitted buckets are preserved)
+   * @returns the resulting world state view
+   */
+  async writeWorldState(
+    userId: string,
+    projectId: string,
+    data: ProjectWorldStatePartialUpdate
+  ): Promise<ProjectWorldStateView> {
+    const { aggregate } = await readWorldAggregate(this.prisma, { userId, projectId })
+    const merged: WorldStateAggregate = { ...aggregate }
+    const buckets: (keyof ProjectWorldStatePartialUpdate & keyof WorldStateAggregate)[] = [
+      'entities',
+      'events',
+      'times',
+      'entityCollections',
+      'eventCollections',
+      'timeCollections',
+      'relations',
+    ]
+    for (const bucket of buckets) {
+      const value = data[bucket]
+      if (value !== undefined) merged[bucket] = Array.isArray(value) ? value : []
+    }
+    await writeWorldAggregate(this.prisma, { userId, projectId }, merged)
+    return ProjectRepository.worldStateView(userId, projectId, merged)
   }
 }

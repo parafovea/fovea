@@ -230,7 +230,7 @@ export class AnnotationWorkspacePage extends BasePage {
    */
   private async waitForSaveSuccess(): Promise<void> {
     await this.page.waitForResponse(
-      resp => resp.url().includes('/api/annotations') && resp.status() === 200,
+      resp => resp.url().includes('/annotations') && resp.status() === 200,
       { timeout: 5000 }
     ).catch(() => {
       // Ignore timeout - save might not trigger API call in test environment
@@ -341,7 +341,7 @@ export class AnnotationWorkspacePage extends BasePage {
       (response) => {
         const url = response.url()
         const method = response.request().method()
-        const isAnnotationEndpoint = url.includes('/api/annotations')
+        const isAnnotationEndpoint = url.includes('/annotations')
         const isSuccessStatus = response.status() === 200 || response.status() === 201
         const isSaveMethod = method === 'POST' || method === 'PUT'
         return isAnnotationEndpoint && isSuccessStatus && isSaveMethod

@@ -190,8 +190,7 @@ export class WorldStateService {
   }
 
   /**
-   * Reads a user's personal world from the layers store, falling back to a
-   * read-through of the legacy WorldState row when no layers rows exist yet.
+   * Reads a user's personal world from the layers store.
    *
    * @param userId - the owning user id
    * @returns the reconstructed aggregate and whether any backing rows existed
@@ -204,22 +203,6 @@ export class WorldStateService {
 
     if (nodes.length > 0 || edges.length > 0) {
       return { aggregate: layersToWorldState(nodes, edges), exists: true }
-    }
-
-    const legacy = await this.prisma.worldState.findFirst({ where: { userId, projectId: null } })
-    if (legacy) {
-      return {
-        aggregate: {
-          entities: asRecords(legacy.entities),
-          events: asRecords(legacy.events),
-          times: asRecords(legacy.times),
-          entityCollections: asRecords(legacy.entityCollections),
-          eventCollections: asRecords(legacy.eventCollections),
-          timeCollections: asRecords(legacy.timeCollections),
-          relations: asRecords(legacy.relations),
-        },
-        exists: true,
-      }
     }
 
     return { aggregate: emptyWorldState(), exists: false }
@@ -326,8 +309,7 @@ export class WorldStateService {
   // --- Persona ontology persistence (shared with the ontology route) -------
 
   /**
-   * Reads a persona's ontology from the layers store, falling back to a
-   * read-through of the legacy Ontology row when no LayersOntology exists.
+   * Reads a persona's ontology from the layers store.
    *
    * @param persona - the persona whose ontology to read
    * @returns the reconstructed ontology bundle, or null when the persona has none
@@ -343,22 +325,6 @@ export class WorldStateService {
         aggregate: layersToOntology(typeDefs),
         createdAt: ontologyRow.createdAt.toISOString(),
         updatedAt: ontologyRow.updatedAt.toISOString(),
-      }
-    }
-
-    const legacy = await this.prisma.ontology.findUnique({ where: { personaId: persona.id } })
-    if (legacy) {
-      return {
-        id: legacy.id,
-        personaId: persona.id,
-        aggregate: {
-          entityTypes: asRecords(legacy.entityTypes),
-          eventTypes: asRecords(legacy.eventTypes),
-          roleTypes: asRecords(legacy.roleTypes),
-          relationTypes: asRecords(legacy.relationTypes),
-        },
-        createdAt: legacy.createdAt.toISOString(),
-        updatedAt: legacy.updatedAt.toISOString(),
       }
     }
 

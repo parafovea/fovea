@@ -250,7 +250,7 @@ test.describe('Tour 4: Events, roles, claims — end to end', () => {
     // ---- end-state: at least one annotation row landed on the
     // pinned bundle video (from at least one of the two bbox draws). ----
     const annsResp = await fetch(
-      `http://localhost:3001/api/annotations/${targetVideoId}`,
+      `http://localhost:3001/api/layers/videos/${targetVideoId}/annotations`,
       { headers: { Cookie: `session_token=${workerSessionToken}` } },
     )
     const anns = (await annsResp.json()) as Array<{ id: string }>

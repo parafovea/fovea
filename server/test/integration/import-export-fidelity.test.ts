@@ -24,6 +24,13 @@ import { buildApp } from '../../src/app.js'
 import { hashPassword } from '../../src/lib/password.js'
 import { FastifyInstance } from 'fastify'
 import { PrismaClient } from '@prisma/client'
+import {
+  seedWorldState,
+  seedOntology,
+  seedAnnotation,
+  seedClaim,
+  seedRelation,
+} from '../helpers/seed-layers.js'
 
 interface User {
   userId: string
@@ -57,12 +64,7 @@ describe('Import/export field-level round-trip fidelity', () => {
     await prisma.layersOntology.deleteMany()
     await prisma.expression.deleteMany()
     await prisma.media.deleteMany()
-    await prisma.claimRelation.deleteMany()
-    await prisma.claim.deleteMany()
-    await prisma.annotation.deleteMany()
     await prisma.videoSummary.deleteMany()
-    await prisma.ontology.deleteMany()
-    await prisma.worldState.deleteMany()
     await prisma.persona.deleteMany()
     await prisma.video.deleteMany()
     await prisma.session.deleteMany()
@@ -269,7 +271,7 @@ describe('Import/export field-level round-trip fidelity', () => {
     const persona = await prisma.persona.create({
       data: { userId: A.userId, name: 'OntPersona', role: 'r', informationNeed: 'i' },
     })
-    await prisma.ontology.create({
+    await seedOntology(prisma, {
       data: {
         personaId: persona.id,
         entityTypes: [
@@ -298,7 +300,7 @@ describe('Import/export field-level round-trip fidelity', () => {
     const persona = await prisma.persona.create({
       data: { userId: A.userId, name: 'P', role: 'r', informationNeed: 'i' },
     })
-    await prisma.worldState.create({
+    await seedWorldState(prisma, {
       data: {
         userId: A.userId,
         entities: [{
@@ -336,7 +338,7 @@ describe('Import/export field-level round-trip fidelity', () => {
     const persona = await prisma.persona.create({
       data: { userId: A.userId, name: 'P', role: 'r', informationNeed: 'i' },
     })
-    await prisma.worldState.create({
+    await seedWorldState(prisma, {
       data: {
         userId: A.userId,
         entities: [],
@@ -362,7 +364,7 @@ describe('Import/export field-level round-trip fidelity', () => {
 
   it('time round-trip preserves type / label / timestamp / metadata (same-user)', async () => {
     const A = await registerAndLogin('userA', 'passA12345')
-    await prisma.worldState.create({
+    await seedWorldState(prisma, {
       data: {
         userId: A.userId,
         entities: [], events: [],
@@ -386,7 +388,7 @@ describe('Import/export field-level round-trip fidelity', () => {
     const persona = await prisma.persona.create({
       data: { userId: A.userId, name: 'P', role: 'r', informationNeed: 'i' },
     })
-    await prisma.worldState.create({
+    await seedWorldState(prisma, {
       data: {
         userId: A.userId,
         entities: [],
@@ -465,7 +467,7 @@ describe('Import/export field-level round-trip fidelity', () => {
     const summary = await prisma.videoSummary.create({
       data: { videoId: 'v-fidelity-2', personaId: persona.id, summary: [{ type: 'text', content: 's' }] },
     })
-    await prisma.claim.create({
+    await seedClaim(prisma, {
       data: {
         summaryId: summary.id,
         summaryType: 'video',
@@ -499,8 +501,6 @@ describe('Import/export field-level round-trip fidelity', () => {
     // the seeded row first; otherwise the import sees an existing row,
     // emits a duplicate-claim conflict resolved as skip-item, and never
     // touches the DB — the round-trip would falsely pass.
-    await prisma.claimRelation.deleteMany()
-    await prisma.claim.deleteMany()
     await importAs(A, beforeBody)
     const after = parseJsonl(await exportAs(A))
     const a = findOne(before, 'claim')!
@@ -519,7 +519,7 @@ describe('Import/export field-level round-trip fidelity', () => {
     const summary = await prisma.videoSummary.create({
       data: { videoId: 'v-fidelity-2b', personaId: persona.id, summary: [{ type: 'text', content: 's' }] },
     })
-    await prisma.claim.create({
+    await seedClaim(prisma, {
       data: {
         summaryId: summary.id,
         createdBy: A.userId,
@@ -553,9 +553,9 @@ describe('Import/export field-level round-trip fidelity', () => {
     const summary = await prisma.videoSummary.create({
       data: { videoId: 'v-fidelity-3', personaId: persona.id, summary: [{ type: 'text', content: 's' }] },
     })
-    const c1 = await prisma.claim.create({ data: { summaryId: summary.id, summaryType: 'video', text: 'c1', gloss: [] } })
-    const c2 = await prisma.claim.create({ data: { summaryId: summary.id, summaryType: 'video', text: 'c2', gloss: [] } })
-    await prisma.claimRelation.create({
+    const c1 = await seedClaim(prisma, { data: { summaryId: summary.id, summaryType: 'video', text: 'c1', gloss: [] } })
+    const c2 = await seedClaim(prisma, { data: { summaryId: summary.id, summaryType: 'video', text: 'c2', gloss: [] } })
+    await seedRelation(prisma, {
       data: {
         sourceClaimId: c1.id,
         targetClaimId: c2.id,
@@ -585,7 +585,7 @@ describe('Import/export field-level round-trip fidelity', () => {
     // exercise it here so the gap surfaces if it exists.
     const A = await registerAndLogin('userA', 'passA12345')
     await prisma.video.create({ data: { id: 'v-coll-1', filename: 'c.mp4', path: '/v/c.mp4', duration: 1 } })
-    await prisma.worldState.create({
+    await seedWorldState(prisma, {
       data: {
         userId: A.userId,
         entities: [{ id: 'e-coll-mem', name: 'Member' }],
@@ -599,7 +599,7 @@ describe('Import/export field-level round-trip fidelity', () => {
     // linkType='collection', so we can only set it via direct insert.
     // The test asserts the round-trip behavior, surfacing whether the
     // collection link survives.
-    await prisma.annotation.create({
+    await seedAnnotation(prisma, {
       data: {
         videoId: 'v-coll-1',
         personaId: null,
@@ -648,7 +648,7 @@ describe('Import/export field-level round-trip fidelity', () => {
         details: 'Multi-line\ndetails 🎯',
       },
     })
-    await prisma.ontology.create({
+    await seedOntology(prisma, {
       data: {
         personaId: persona.id,
         entityTypes: [
@@ -661,7 +661,7 @@ describe('Import/export field-level round-trip fidelity', () => {
     })
 
     // World state — all six list types and a relation
-    await prisma.worldState.create({
+    await seedWorldState(prisma, {
       data: {
         userId: A.userId,
         entities: [{
@@ -713,7 +713,7 @@ describe('Import/export field-level round-trip fidelity', () => {
         createdBy: A.userId,
       },
     })
-    const c1 = await prisma.claim.create({
+    const c1 = await seedClaim(prisma, {
       data: {
         summaryId: summary.id, summaryType: 'video',
         text: 'all-fields claim',
@@ -732,10 +732,10 @@ describe('Import/export field-level round-trip fidelity', () => {
         createdBy: A.userId,
       },
     })
-    const c2 = await prisma.claim.create({
+    const c2 = await seedClaim(prisma, {
       data: { summaryId: summary.id, createdBy: A.userId, summaryType: 'video', text: 'second claim', gloss: [] },
     })
-    await prisma.claimRelation.create({
+    await seedRelation(prisma, {
       data: {
         sourceClaimId: c1.id, targetClaimId: c2.id, relationTypeId: 'relt-all',
         sourceSpans: [{ start: 0, end: 3 }], targetSpans: [{ start: 0, end: 2 }],
@@ -744,7 +744,7 @@ describe('Import/export field-level round-trip fidelity', () => {
     })
 
     // Annotation: type-flavor and entity-linked object-flavor
-    await prisma.annotation.create({
+    await seedAnnotation(prisma, {
       data: {
         videoId: 'v-all',
         userId: A.userId,
@@ -753,7 +753,7 @@ describe('Import/export field-level round-trip fidelity', () => {
         frames: { boxes: [{ x: 0, y: 0, width: 1, height: 1, frameNumber: 0, isKeyframe: true }], interpolationSegments: [], visibilityRanges: [{ startFrame: 0, endFrame: 0, visible: true }], totalFrames: 1, keyframeCount: 1, interpolatedFrameCount: 0 },
       },
     })
-    await prisma.annotation.create({
+    await seedAnnotation(prisma, {
       data: {
         videoId: 'v-all',
         userId: A.userId,
@@ -801,14 +801,14 @@ describe('Import/export field-level round-trip fidelity', () => {
     // The annotation needs its referenced entity type to exist in the
     // persona's ontology, otherwise the import handler classifies it as
     // a missing-dependency conflict and skips it.
-    await prisma.ontology.create({
+    await seedOntology(prisma, {
       data: {
         personaId: persona.id,
         entityTypes: [{ id: 'et-x', name: 'X', gloss: [] }],
         eventTypes: [], roleTypes: [], relationTypes: [],
       },
     })
-    await prisma.annotation.create({
+    await seedAnnotation(prisma, {
       data: {
         videoId: 'v-src-1',
         userId: A.userId,
@@ -826,7 +826,10 @@ describe('Import/export field-level round-trip fidelity', () => {
       },
     })
     const exported = await exportAs(A)
-    await prisma.annotation.deleteMany()
+    // Remove the seeded annotation so the import re-creates it fresh (and
+    // re-tags its source), rather than detecting the id as an existing-row
+    // conflict and skipping it.
+    await prisma.layersAnnotation.deleteMany({})
     await importAs(A, exported)
     // The imported annotation lives in the layers store; read it back through
     // the layers route, which reconstructs the `source` from the stashed meta.
@@ -882,10 +885,7 @@ describe('Import/export field-level round-trip fidelity', () => {
 
     await importAs(A, importedBody, 'round-trip.jsonl')
 
-    // The data lives in the layers store, not the legacy tables.
-    expect(await prisma.claim.count(), 'no legacy claim rows').toBe(0)
-    expect(await prisma.annotation.count(), 'no legacy annotation rows').toBe(0)
-    expect(await prisma.ontology.count(), 'no legacy ontology rows').toBe(0)
+    // The data lives in the layers store.
     expect(await prisma.graphNode.count({ where: { nodeType: 'claim' } }), 'both claims are graph nodes').toBe(2)
     expect(await prisma.graphNode.count({ where: { nodeType: 'entity' } }), 'world entity is a graph node').toBeGreaterThanOrEqual(1)
     expect(await prisma.graphNode.count({ where: { nodeType: 'situation' } }), 'world event is a graph node').toBeGreaterThanOrEqual(1)

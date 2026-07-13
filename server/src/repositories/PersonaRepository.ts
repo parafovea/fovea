@@ -1,4 +1,4 @@
-import { PrismaClient, Persona, Ontology, WorldState, Prisma } from '@prisma/client'
+import { PrismaClient, Persona, Prisma } from '@prisma/client'
 
 import {
   countPersonaAnnotations,
@@ -10,14 +10,28 @@ import { personalWorldStateId, type WorldStateAggregate } from '../services/worl
 import type { PersonaOntologyAggregate } from '../services/ontology-layers-mapper.js'
 
 /**
+ * A persona's ontology reconstructed from the layers store, in the row shape the
+ * ontology read paths consume: the four type buckets plus an id and timestamps.
+ */
+export interface PersonaOntologyRow {
+  id: string
+  personaId: string
+  entityTypes: Prisma.JsonValue
+  eventTypes: Prisma.JsonValue
+  roleTypes: Prisma.JsonValue
+  relationTypes: Prisma.JsonValue
+  createdAt: Date
+  updatedAt: Date
+}
+
+/**
  * Persona row joined with its ontology.
  *
  * Used by read paths that need the ontology in the same round-trip
  * (deletion preview, ontology endpoints, and the type-deletion flows). The
- * ontology is reconstructed from the layers store, so it carries the same fields
- * as the legacy relation did.
+ * ontology is reconstructed from the layers store.
  */
-export type PersonaWithOntology = Persona & { ontology: Ontology | null }
+export type PersonaWithOntology = Persona & { ontology: PersonaOntologyRow | null }
 
 /** An annotation filter selecting a persona's annotations, optionally by type/label. */
 export interface PersonaAnnotationWhere {
@@ -49,24 +63,23 @@ export interface WorldStatePartialUpdate {
 }
 
 /**
- * A personal world state reconstructed from the layers store, in the legacy
- * WorldState row shape the persona-cleanup paths read.
+ * A personal world state reconstructed from the layers store, in the row shape
+ * the persona-cleanup paths read.
  */
-export type PersonalWorldStateView = Pick<
-  WorldState,
-  | 'id'
-  | 'userId'
-  | 'projectId'
-  | 'entities'
-  | 'events'
-  | 'times'
-  | 'entityCollections'
-  | 'eventCollections'
-  | 'timeCollections'
-  | 'relations'
-  | 'createdAt'
-  | 'updatedAt'
->
+export interface PersonalWorldStateView {
+  id: string
+  userId: string
+  projectId: string | null
+  entities: Prisma.JsonValue
+  events: Prisma.JsonValue
+  times: Prisma.JsonValue
+  entityCollections: Prisma.JsonValue
+  eventCollections: Prisma.JsonValue
+  timeCollections: Prisma.JsonValue
+  relations: Prisma.JsonValue
+  createdAt: Date
+  updatedAt: Date
+}
 
 /**
  * Repository for all Persona and Ontology database access.
@@ -93,14 +106,14 @@ export class PersonaRepository {
    */
   constructor(private readonly prisma: PrismaClient) {}
 
-  /** Builds a legacy-shaped Ontology row from a reconstructed aggregate. */
+  /** Builds an ontology row shape from a reconstructed aggregate. */
   private static synthOntology(
     id: string,
     personaId: string,
     aggregate: PersonaOntologyAggregate,
     createdAt: Date,
     updatedAt: Date,
-  ): Ontology {
+  ): PersonaOntologyRow {
     return {
       id,
       personaId,
@@ -114,7 +127,7 @@ export class PersonaRepository {
   }
 
   /** Reconstructs a persona's ontology from the layers store, or null. */
-  private async reconstructOntology(personaId: string): Promise<Ontology | null> {
+  private async reconstructOntology(personaId: string): Promise<PersonaOntologyRow | null> {
     const read = await readOntologyAggregate(this.prisma, personaId)
     if (!read.exists) return null
     return PersonaRepository.synthOntology(
@@ -183,13 +196,21 @@ export class PersonaRepository {
   }
 
   /**
-   * Creates a persona together with an empty ontology in a single call.
+   * Creates a persona together with an empty ontology in the layers store.
    *
-   * @param data - Prisma create input (must nest an ontology create)
+   * @param data - Prisma persona create input
    * @returns the created persona
    */
   async createWithOntology(data: Prisma.PersonaCreateInput): Promise<Persona> {
-    return this.prisma.persona.create({ data })
+    const persona = await this.prisma.persona.create({ data })
+    await writeOntologyAggregate(
+      this.prisma,
+      persona.id,
+      { entityTypes: [], eventTypes: [], roleTypes: [], relationTypes: [] },
+      { name: `${persona.name} ontology`, description: persona.informationNeed, domain: persona.domain },
+      { projectId: persona.projectId, createdByUserId: persona.userId },
+    )
+    return persona
   }
 
   /**
@@ -222,10 +243,10 @@ export class PersonaRepository {
    *
    * @param personaId - Persona UUID owning the ontology
    * @param data - the four type buckets to persist
-   * @returns the updated ontology in the legacy row shape
+   * @returns the updated ontology in the row shape
    * @throws {Error} when the persona does not exist
    */
-  async updateOntology(personaId: string, data: OntologyBucketUpdate): Promise<Ontology> {
+  async updateOntology(personaId: string, data: OntologyBucketUpdate): Promise<PersonaOntologyRow> {
     const persona = await this.prisma.persona.findUnique({ where: { id: personaId } })
     if (!persona) {
       throw new Prisma.PrismaClientKnownRequestError('Persona not found', {

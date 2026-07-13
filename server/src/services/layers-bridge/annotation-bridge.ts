@@ -1,12 +1,10 @@
 /**
  * Video-annotation bridge over the unified layers store.
  *
- * Reconstructs the legacy Annotation wire shape from the layers store (an
- * AnnotationLayer grouping plus a LayersAnnotation) and materializes a legacy
+ * Reconstructs the Annotation wire shape from the layers store (an
+ * AnnotationLayer grouping plus a LayersAnnotation) and materializes an
  * annotation into it, mirroring the `/api/layers/videos/:videoId/annotations`
- * route. A given annotation lives in exactly one store, so the export reader
- * unions the layers rows with the legacy rows; the writers used by import and
- * sharing always target the layers store.
+ * route. The writers used by import and sharing target the layers store.
  *
  * @module
  */
@@ -21,7 +19,6 @@ import {
 } from '../video-annotation-mapper.js'
 import { getOrCreateVideoExpression, parseResolution } from '../video-expression-service.js'
 import { layersOntologyForPersonaId } from '../layers-id-map.js'
-import type { BoundingBoxSequence } from '../layers-conversion-service.js'
 
 /** The forced scope columns a materialized annotation carries. */
 export interface AnnotationScope {
@@ -169,67 +166,11 @@ export async function readLayersAnnotations(
   })
 }
 
-/** A legacy Annotation row read for the export reader. */
-export interface LegacyAnnotationRow {
-  id: string
-  videoId: string
-  personaId: string | null
-  type: string
-  label: string
-  linkType: string | null
-  frames: Prisma.JsonValue
-  confidence: number | null
-  source: string
-  createdAt: Date
-  updatedAt: Date
-}
-
-/** Reconstructs the legacy annotation shape from a legacy Annotation row. */
-export function legacyAnnotationToOutput(row: LegacyAnnotationRow): VideoAnnotationOutput {
-  return {
-    id: row.id,
-    videoId: row.videoId,
-    personaId: row.personaId,
-    type: row.type,
-    label: row.label,
-    linkType: (row.linkType as VideoAnnotationOutput['linkType']) ?? null,
-    frames: (row.frames as unknown as BoundingBoxSequence) ?? {
-      boxes: [],
-      interpolationSegments: [],
-      visibilityRanges: [],
-      totalFrames: 0,
-      keyframeCount: 0,
-      interpolatedFrameCount: 0,
-    },
-    confidence: row.confidence,
-    source: row.source,
-    linkedObjectName: null,
-    createdAt: row.createdAt.toISOString(),
-    updatedAt: row.updatedAt.toISOString(),
-  }
-}
-
 /**
- * Reads the legacy annotations matching a WHERE clause, reconstructed into the
- * shared legacy annotation shape. Used by the export reader for annotations that
- * were never materialized into the layers store.
- *
- * @param prisma - the Prisma client
- * @param where - the composed Annotation WHERE clause
- * @returns the reconstructed annotations
- */
-export async function readLegacyAnnotations(
-  prisma: PrismaClient,
-  where: Prisma.AnnotationWhereInput,
-): Promise<VideoAnnotationOutput[]> {
-  const rows = await prisma.annotation.findMany({ where, orderBy: { createdAt: 'asc' } })
-  return rows.map(legacyAnnotationToOutput)
-}
-
-/**
- * Reads a persona's annotations across both stores as `{ type, label }` pairs,
- * for the detection-query builder's world-instance extraction. Layers rows carry
- * their semantic legacy `type` in the stashed annotation meta, so it round-trips.
+ * Reads a persona's annotations from the layers store as `{ type, label }`
+ * pairs, for the detection-query builder's world-instance extraction. Layers
+ * rows carry their semantic `type` in the stashed annotation meta, so it
+ * round-trips.
  *
  * @param prisma - the Prisma client
  * @param personaId - the persona whose annotations to read
@@ -240,18 +181,11 @@ export async function readPersonaAnnotationTypesAndLabels(
   personaId: string,
 ): Promise<Array<{ type: string; label: string }>> {
   const layersRows = await readLayersAnnotations(prisma, { layer: { personaId } })
-  if (layersRows.length > 0) {
-    return layersRows.map((row) => ({ type: row.type, label: row.label }))
-  }
-  const legacy = await prisma.annotation.findMany({
-    where: { personaId },
-    select: { type: true, label: true },
-  })
-  return legacy.map((row) => ({ type: row.type, label: row.label }))
+  return layersRows.map((row) => ({ type: row.type, label: row.label }))
 }
 
 /**
- * Reads a (video, persona) pair's annotations across both stores as
+ * Reads a (video, persona) pair's annotations from the layers store as
  * `{ type, label }` pairs, for the claim-extraction context builder.
  *
  * @param prisma - the Prisma client
@@ -269,15 +203,7 @@ export async function readVideoPersonaAnnotations(
   const layersRows = await readLayersAnnotations(prisma, {
     layer: { personaId, expression: { videoId } },
   })
-  if (layersRows.length > 0) {
-    return layersRows.slice(0, limit).map((row) => ({ type: row.type, label: row.label }))
-  }
-  const legacy = await prisma.annotation.findMany({
-    where: { videoId, personaId },
-    take: limit,
-    select: { type: true, label: true },
-  })
-  return legacy.map((row) => ({ type: row.type, label: row.label }))
+  return layersRows.slice(0, limit).map((row) => ({ type: row.type, label: row.label }))
 }
 
 /** An optional semantic-type / label filter for persona annotation queries. */
@@ -287,10 +213,9 @@ export interface PersonaAnnotationFilter {
 }
 
 /**
- * Counts a persona's annotations, optionally filtered by the semantic `type`
- * (stashed in the layers annotation meta) and `label`, for persona/type deletion
- * previews. Reads the layers store when the persona has any layers annotation,
- * else falls through to the legacy table.
+ * Counts a persona's annotations in the layers store, optionally filtered by the
+ * semantic `type` (stashed in the layers annotation meta) and `label`, for
+ * persona/type deletion previews.
  *
  * @param prisma - the Prisma client
  * @param personaId - the persona whose annotations to count
@@ -302,26 +227,18 @@ export async function countPersonaAnnotations(
   personaId: string,
   filter: PersonaAnnotationFilter = {},
 ): Promise<number> {
-  const hasLayers = (await prisma.layersAnnotation.count({ where: { layer: { personaId } } })) > 0
-  if (hasLayers) {
-    if (filter.type === undefined && filter.label === undefined) {
-      return prisma.layersAnnotation.count({ where: { layer: { personaId } } })
-    }
-    const where: Prisma.LayersAnnotationWhereInput = { layer: { personaId } }
-    if (filter.label !== undefined) where.label = filter.label
-    const rows = await readLayersAnnotations(prisma, where)
-    return filter.type !== undefined ? rows.filter((r) => r.type === filter.type).length : rows.length
+  if (filter.type === undefined && filter.label === undefined) {
+    return prisma.layersAnnotation.count({ where: { layer: { personaId } } })
   }
-  const where: Prisma.AnnotationWhereInput = { personaId }
-  if (filter.type !== undefined) where.type = filter.type
+  const where: Prisma.LayersAnnotationWhereInput = { layer: { personaId } }
   if (filter.label !== undefined) where.label = filter.label
-  return prisma.annotation.count({ where })
+  const rows = await readLayersAnnotations(prisma, where)
+  return filter.type !== undefined ? rows.filter((r) => r.type === filter.type).length : rows.length
 }
 
 /**
- * Deletes a persona's annotations, optionally filtered by the semantic `type`
- * and `label`, for persona/type deletion. Deletes from the layers store when the
- * persona has any layers annotation, else from the legacy table.
+ * Deletes a persona's annotations from the layers store, optionally filtered by
+ * the semantic `type` and `label`, for persona/type deletion.
  *
  * @param prisma - the Prisma client
  * @param personaId - the persona whose annotations to delete
@@ -333,32 +250,24 @@ export async function deletePersonaAnnotations(
   personaId: string,
   filter: PersonaAnnotationFilter = {},
 ): Promise<number> {
-  const hasLayers = (await prisma.layersAnnotation.count({ where: { layer: { personaId } } })) > 0
-  if (hasLayers) {
-    if (filter.type === undefined && filter.label === undefined) {
-      const result = await prisma.layersAnnotation.deleteMany({ where: { layer: { personaId } } })
-      return result.count
-    }
-    const where: Prisma.LayersAnnotationWhereInput = { layer: { personaId } }
-    if (filter.label !== undefined) where.label = filter.label
-    const rows = await readLayersAnnotations(prisma, where)
-    const ids = rows
-      .filter((r) => filter.type === undefined || r.type === filter.type)
-      .map((r) => r.id)
-    if (ids.length === 0) return 0
-    const result = await prisma.layersAnnotation.deleteMany({ where: { id: { in: ids } } })
+  if (filter.type === undefined && filter.label === undefined) {
+    const result = await prisma.layersAnnotation.deleteMany({ where: { layer: { personaId } } })
     return result.count
   }
-  const where: Prisma.AnnotationWhereInput = { personaId }
-  if (filter.type !== undefined) where.type = filter.type
+  const where: Prisma.LayersAnnotationWhereInput = { layer: { personaId } }
   if (filter.label !== undefined) where.label = filter.label
-  const result = await prisma.annotation.deleteMany({ where })
+  const rows = await readLayersAnnotations(prisma, where)
+  const ids = rows
+    .filter((r) => filter.type === undefined || r.type === filter.type)
+    .map((r) => r.id)
+  if (ids.length === 0) return 0
+  const result = await prisma.layersAnnotation.deleteMany({ where: { id: { in: ids } } })
   return result.count
 }
 
 /**
- * Reads a single annotation by id across both stores, reconstructed into the
- * legacy annotation shape, or null when no annotation with that id exists.
+ * Reads a single annotation by id from the layers store, reconstructed into the
+ * annotation shape, or null when no annotation with that id exists.
  *
  * @param prisma - the Prisma client
  * @param id - the annotation id
@@ -369,14 +278,12 @@ export async function readAnnotationById(
   id: string,
 ): Promise<VideoAnnotationOutput | null> {
   const layersRows = await readLayersAnnotations(prisma, { id })
-  if (layersRows.length > 0) return layersRows[0]
-  const legacy = await readLegacyAnnotations(prisma, { id })
-  return legacy.length > 0 ? legacy[0] : null
+  return layersRows.length > 0 ? layersRows[0] : null
 }
 
 /**
- * Returns the owner user id of an annotation across both stores, or null when no
- * annotation with that id exists.
+ * Returns the owner user id of an annotation in the layers store, or null when
+ * no annotation with that id exists.
  *
  * @param prisma - the Prisma client
  * @param id - the annotation id
@@ -387,28 +294,22 @@ export async function annotationOwner(prisma: PrismaClient, id: string): Promise
     where: { id },
     select: { createdByUserId: true },
   })
-  if (layers) return layers.createdByUserId
-  const legacy = await prisma.annotation.findUnique({
-    where: { id },
-    select: { createdByUserId: true },
-  })
-  return legacy ? legacy.createdByUserId : null
+  return layers ? layers.createdByUserId : null
 }
 
 /**
- * True when an annotation with the given id exists in either store.
+ * True when an annotation with the given id exists in the layers store.
  *
  * @param prisma - the Prisma client
  * @param id - the annotation id
  * @returns whether the annotation exists
  */
 export async function annotationExists(prisma: PrismaClient, id: string): Promise<boolean> {
-  if ((await prisma.layersAnnotation.count({ where: { id } })) > 0) return true
-  return (await prisma.annotation.count({ where: { id } })) > 0
+  return (await prisma.layersAnnotation.count({ where: { id } })) > 0
 }
 
 /**
- * Lists every annotation id paired with its persona id across both stores, for
+ * Lists every annotation id paired with its persona id in the layers store, for
  * import conflict detection.
  *
  * @param prisma - the Prisma client
@@ -427,13 +328,6 @@ export async function readAllAnnotationRefs(
     if (!seen.has(row.id)) {
       seen.add(row.id)
       refs.push({ id: row.id, personaId: row.layer.personaId })
-    }
-  }
-  const legacy = await prisma.annotation.findMany({ select: { id: true, personaId: true } })
-  for (const row of legacy) {
-    if (!seen.has(row.id)) {
-      seen.add(row.id)
-      refs.push({ id: row.id, personaId: row.personaId })
     }
   }
   return refs

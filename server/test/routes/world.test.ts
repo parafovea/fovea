@@ -6,14 +6,15 @@ import { seedBaselinePermissions } from '../helpers/rbac-test-setup.js'
 import { FastifyInstance } from 'fastify'
 import { PrismaClient } from '@prisma/client'
 
+import { writeWorldAggregate } from '../../src/services/layers-bridge/world-bridge.js'
+
 /**
  * Integration tests for the World State API.
  *
- * The `/api/world` contract is unchanged, but its store is now the layers graph:
+ * The `/api/world` contract is unchanged, but its store is the layers graph:
  * world objects persist as GraphNode rows and relations as GraphEdge rows, both
  * scoped to the user. These tests round-trip the aggregate through the route and
- * assert the data lands in graph_nodes / graph_edges, while confirming the legacy
- * WorldState read-through bridge still surfaces rows written by legacy writers.
+ * assert the data lands in graph_nodes / graph_edges.
  */
 describe('World State API', () => {
   let app: FastifyInstance
@@ -36,12 +37,9 @@ describe('World State API', () => {
     await prisma.layersOntology.deleteMany()
     await prisma.graphEdge.deleteMany()
     await prisma.graphNode.deleteMany()
-    await prisma.worldState.deleteMany()
     await prisma.apiKey.deleteMany()
     await prisma.session.deleteMany()
-    await prisma.annotation.deleteMany()
     await prisma.videoSummary.deleteMany()
-    await prisma.ontology.deleteMany()
     await prisma.persona.deleteMany()
     await prisma.user.deleteMany()
     await prisma.rolePermission.deleteMany()
@@ -95,8 +93,7 @@ describe('World State API', () => {
     })
 
     it('surfaces a legacy WorldState row through the read-through bridge', async () => {
-      // Legacy writers (import) still populate the WorldState row; the route
-      // surfaces it until the next save materializes it into the layers graph.
+      // Seed the world objects into the layers store the route reads from.
       const testEntity = {
         id: 'entity-1',
         name: 'Test Entity',
@@ -107,9 +104,10 @@ describe('World State API', () => {
         updatedAt: new Date().toISOString()
       }
 
-      await prisma.worldState.create({
-        data: {
-          userId: testUserId,
+      await writeWorldAggregate(
+        prisma,
+        { userId: testUserId, projectId: null },
+        {
           entities: [testEntity],
           events: [],
           times: [],
@@ -118,7 +116,7 @@ describe('World State API', () => {
           timeCollections: [],
           relations: []
         }
-      })
+      )
 
       const response = await app.inject({
         method: 'GET',

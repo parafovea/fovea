@@ -14,7 +14,7 @@
  * Two test users (A and B), neither of whom is the exporter, both import
  * the SAME fixture against a shared video. The test then walks the API
  * sequence the All Annotations panel and the Claims panel walk in the
- * browser (`GET /api/world`, `GET /api/annotations/:videoId`,
+ * browser (`GET /api/world`, `GET /api/layers/videos/:videoId/annotations`,
  * `GET /api/videos/:videoId/summaries`, `GET /api/summaries/:summaryId/claims`)
  * and asserts:
  *
@@ -37,6 +37,7 @@ import { buildApp } from '../../src/app.js'
 import { hashPassword } from '../../src/lib/password.js'
 import { FastifyInstance } from 'fastify'
 import { PrismaClient } from '@prisma/client'
+import { seedWorldState, seedAnnotations } from '../helpers/seed-layers.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const FIXTURE_PATH = resolve(__dirname, '../fixtures/cross-user-import-real-export.jsonl')
@@ -70,12 +71,25 @@ describe('cross-user import of a real Fovea export', () => {
     await reseedOwnershipBaseline(prisma)
     await prisma.loginAttempt.deleteMany()
     await prisma.importHistory.deleteMany()
-    await prisma.claimRelation.deleteMany()
-    await prisma.claim.deleteMany()
-    await prisma.annotation.deleteMany()
+    // Layers store (reverse-FK order): imports and seeds materialize into
+    // these tables, so clear them before the videos / personas / users they
+    // reference are deleted.
+    await prisma.textAnnotationRelation.deleteMany()
+    await prisma.layersAnnotation.deleteMany()
+    await prisma.annotationLayer.deleteMany()
+    await prisma.tokenization.deleteMany()
+    await prisma.segmentation.deleteMany()
+    await prisma.corpusMembership.deleteMany()
+    await prisma.corpus.deleteMany()
+    await prisma.clusterSet.deleteMany()
+    await prisma.alignment.deleteMany()
+    await prisma.graphEdge.deleteMany()
+    await prisma.graphNode.deleteMany()
+    await prisma.typeDef.deleteMany()
+    await prisma.layersOntology.deleteMany()
+    await prisma.expression.deleteMany()
+    await prisma.media.deleteMany()
     await prisma.videoSummary.deleteMany()
-    await prisma.ontology.deleteMany()
-    await prisma.worldState.deleteMany()
     await prisma.persona.deleteMany()
     await prisma.video.deleteMany()
     await prisma.session.deleteMany()
@@ -321,12 +335,12 @@ describe('cross-user import of a real Fovea export', () => {
     const B = await registerAndLogin('userB', 'passB12345')
 
     // Seed user A with an event, a time, a location, and three object
-    // annotations linking to each. Use raw prisma so the test can set
-    // linkType directly without going through the route.
+    // annotations linking to each. Seed through the layers store so each
+    // annotation carries its linkType without going through the route.
     const eventId = '11111111-1111-1111-1111-111111111111'
     const timeId = '22222222-2222-2222-2222-222222222222'
     const locationId = '33333333-3333-3333-3333-333333333333'
-    await prisma.worldState.create({
+    await seedWorldState(prisma, {
       data: {
         userId: A.userId,
         entities: [],
@@ -351,11 +365,11 @@ describe('cross-user import of a real Fovea export', () => {
       keyframeCount: 1,
       interpolatedFrameCount: 0,
     }
-    await prisma.annotation.createMany({
+    await seedAnnotations(prisma, {
       data: [
-        { videoId: ANNOTATION_VIDEO_ID, personaId: null, userId: A.userId, createdByUserId: A.userId, type: 'object', label: eventId, linkType: 'event', frames },
-        { videoId: ANNOTATION_VIDEO_ID, personaId: null, userId: A.userId, createdByUserId: A.userId, type: 'object', label: timeId, linkType: 'time', frames },
-        { videoId: ANNOTATION_VIDEO_ID, personaId: null, userId: A.userId, createdByUserId: A.userId, type: 'object', label: locationId, linkType: 'location', frames },
+        { videoId: ANNOTATION_VIDEO_ID, personaId: null, userId: A.userId, type: 'object', label: eventId, linkType: 'event', frames },
+        { videoId: ANNOTATION_VIDEO_ID, personaId: null, userId: A.userId, type: 'object', label: timeId, linkType: 'time', frames },
+        { videoId: ANNOTATION_VIDEO_ID, personaId: null, userId: A.userId, type: 'object', label: locationId, linkType: 'location', frames },
       ],
     })
 

@@ -1,5 +1,4 @@
 import {
-  Annotation as PrismaAnnotation,
   Persona as PrismaPersona,
   VideoSummary as PrismaVideoSummary,
   PrismaClient
@@ -9,10 +8,7 @@ import type { VideoAnnotationOutput } from './video-annotation-mapper.js'
 import { readOntologyAggregate } from './layers-bridge/ontology-bridge.js'
 import { readWorldAggregate } from './layers-bridge/world-bridge.js'
 import { readSummaryClaims } from './layers-bridge/claim-bridge.js'
-import {
-  readLayersAnnotations,
-  readLegacyAnnotations,
-} from './layers-bridge/annotation-bridge.js'
+import { readLayersAnnotations } from './layers-bridge/annotation-bridge.js'
 
 /** Coerces a Date or ISO string to an ISO string. */
 function toIso(value: Date | string): string {
@@ -627,108 +623,9 @@ export class AnnotationExporter {
   }
 
   /**
-   * Convert Prisma annotation to export format.
-   * This handles the conversion from database format to the typed Annotation interface.
-   *
-   * Database storage format:
-   * - `type` column: 'type' | 'object' (annotation type)
-   * - `label` column: typeId (for type annotations) or linkedEntityId (for object annotations)
-   * - `frames` column: BoundingBoxSequence directly (NOT nested as frames.boundingBoxSequence)
-   * - `personaId` column: persona ID for type annotations
-   * - `confidence` column: confidence score
-   *
-   * @param prismaAnnotation - Annotation from Prisma
-   * @returns Typed annotation, or null if annotation has invalid data
-   */
-  convertPrismaAnnotation(prismaAnnotation: PrismaAnnotation): Annotation | null {
-    // The frames field IS the BoundingBoxSequence directly (not nested)
-    const frames = prismaAnnotation.frames as BoundingBoxSequence | Record<string, unknown> | null
-
-    // Create a default empty sequence for annotations without bounding boxes
-    // This supports ontology-only annotations (summaries, claims without spatial data)
-    const emptySequence: BoundingBoxSequence = {
-      boxes: [],
-      interpolationSegments: [],
-      visibilityRanges: [],
-      totalFrames: 0,
-      keyframeCount: 0,
-      interpolatedFrameCount: 0
-    }
-
-    // Determine if frames contains a valid bounding box sequence
-    let boundingBoxSequence: BoundingBoxSequence
-    if (frames && typeof frames === 'object' && 'boxes' in frames && Array.isArray(frames.boxes)) {
-      // Valid sequence structure
-      boundingBoxSequence = {
-        boxes: frames.boxes || [],
-        interpolationSegments: (frames as BoundingBoxSequence).interpolationSegments || [],
-        visibilityRanges: (frames as BoundingBoxSequence).visibilityRanges || [],
-        trackId: (frames as BoundingBoxSequence).trackId,
-        trackingSource: (frames as BoundingBoxSequence).trackingSource,
-        trackingConfidence: (frames as BoundingBoxSequence).trackingConfidence,
-        totalFrames: (frames as BoundingBoxSequence).totalFrames || 0,
-        keyframeCount: (frames as BoundingBoxSequence).keyframeCount || 0,
-        interpolatedFrameCount: (frames as BoundingBoxSequence).interpolatedFrameCount || 0
-      }
-    } else {
-      // No bounding box data - use empty sequence (valid for ontology-only exports)
-      boundingBoxSequence = emptySequence
-    }
-
-    // Annotation type is stored in the 'type' column, NOT inside frames
-    const annotationType = (prismaAnnotation.type === 'type' || prismaAnnotation.type === 'object')
-      ? prismaAnnotation.type as 'type' | 'object'
-      : 'type'
-
-    // Build the annotation object
-    const annotation: Annotation = {
-      id: prismaAnnotation.id,
-      videoId: prismaAnnotation.videoId,
-      annotationType,
-      boundingBoxSequence,
-      createdAt: prismaAnnotation.createdAt.toISOString(),
-      updatedAt: prismaAnnotation.updatedAt.toISOString()
-    }
-
-    // Type-specific fields - read from database columns, not frames
-    if (annotationType === 'type') {
-      annotation.personaId = prismaAnnotation.personaId ?? undefined
-      // For type annotations, label contains the typeId
-      annotation.typeId = prismaAnnotation.label
-      // Default typeCategory since it's not stored separately
-      annotation.typeCategory = 'entity'
-    } else {
-      // For object annotations, `label` is the linked id and `linkType`
-      // tells us which kind of world object it points at. NULL linkType
-      // (legacy rows) is treated as entity-linked, matching the historical
-      // behavior of always populating linkedEntityId.
-      const linkType = (prismaAnnotation as PrismaAnnotation & { linkType?: string | null }).linkType ?? 'entity'
-      if (linkType === 'event') {
-        annotation.linkedEventId = prismaAnnotation.label
-      } else if (linkType === 'time') {
-        annotation.linkedTimeId = prismaAnnotation.label
-      } else if (linkType === 'location') {
-        annotation.linkedLocationId = prismaAnnotation.label
-      } else {
-        annotation.linkedEntityId = prismaAnnotation.label
-      }
-    }
-
-    // Add confidence from database column
-    if (prismaAnnotation.confidence !== null) {
-      annotation.confidence = prismaAnnotation.confidence
-    }
-
-    return annotation
-  }
-
-  /**
-   * Convert a reconstructed layers annotation (the legacy annotation wire shape)
-   * to the export format. The layers-store equivalent of
-   * {@link AnnotationExporter.convertPrismaAnnotation}: it maps the semantic
-   * `type`/`label`/`linkType` triple onto the export's `annotationType` plus the
-   * per-link `linked*Id` / `typeId` fields, so an annotation read from the layers
-   * store exports identically to the same annotation read from the legacy table.
+   * Convert a reconstructed layers annotation (the annotation wire shape) to the
+   * export format. It maps the semantic `type`/`label`/`linkType` triple onto the
+   * export's `annotationType` plus the per-link `linked*Id` / `typeId` fields.
    *
    * @param output - the reconstructed legacy annotation
    * @returns the typed export annotation
@@ -1144,19 +1041,12 @@ export class AnnotationExporter {
       lines.push(this.exportSummariesWithClaims(summaries, claims, claimRelations))
     }
 
-    // 4. Export annotations (reconstructed from the layers store, unioned with
-    // any legacy rows that were never materialized).
+    // 4. Export annotations (reconstructed from the layers store).
     const outputs = await this.readAnnotationOutputs(prisma, {
       layersWhere: {
         OR: [
           { layer: { personaId: { in: personaIds } } },
           { layer: { personaId: null }, createdByUserId: userId },
-        ],
-      },
-      legacyWhere: {
-        OR: [
-          { personaId: { in: personaIds } },
-          { personaId: null, userId },
         ],
       },
     })
@@ -1169,27 +1059,19 @@ export class AnnotationExporter {
   }
 
   /**
-   * Reads a scope's annotations from the layers store unioned with any legacy
-   * rows that were never materialized, reconstructed into the legacy annotation
-   * shape. A given annotation lives in exactly one store, so the union dedupes by
-   * id (layers wins on the rare double).
+   * Reads a scope's annotations from the layers store, reconstructed into the
+   * annotation wire shape.
    *
    * @param prisma - the Prisma client
-   * @param where - the layers and legacy WHERE clauses selecting the scope
+   * @param where - the layers WHERE clause selecting the scope
    * @returns the reconstructed annotations
    */
   async readAnnotationOutputs(
     prisma: PrismaClient,
     where: {
       layersWhere: Parameters<typeof readLayersAnnotations>[1]
-      legacyWhere: Parameters<typeof readLegacyAnnotations>[1]
     },
   ): Promise<VideoAnnotationOutput[]> {
-    const layersOutputs = await readLayersAnnotations(prisma, where.layersWhere)
-    const legacyOutputs = await readLegacyAnnotations(prisma, where.legacyWhere)
-    const byId = new Map<string, VideoAnnotationOutput>()
-    for (const output of legacyOutputs) byId.set(output.id, output)
-    for (const output of layersOutputs) byId.set(output.id, output)
-    return [...byId.values()]
+    return readLayersAnnotations(prisma, where.layersWhere)
   }
 }

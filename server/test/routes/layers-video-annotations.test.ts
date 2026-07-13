@@ -208,7 +208,6 @@ describe('Video annotations over the layers store', () => {
     await prisma.graphNode.deleteMany({ where: { createdByUserId: userId } })
     await prisma.typeDef.deleteMany({ where: { createdByUserId: userId } })
     await prisma.layersOntology.deleteMany({ where: { createdByUserId: userId } })
-    await prisma.annotation.deleteMany({ where: { videoId } })
     await prisma.persona.deleteMany({ where: { userId } })
     await prisma.video.deleteMany({ where: { id: videoId } })
     await prisma.session.deleteMany({ where: { userId } })

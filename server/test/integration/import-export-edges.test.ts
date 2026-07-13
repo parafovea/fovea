@@ -15,6 +15,7 @@ import { buildApp } from '../../src/app.js'
 import { hashPassword } from '../../src/lib/password.js'
 import { FastifyInstance } from 'fastify'
 import { PrismaClient } from '@prisma/client'
+import { seedOntology, seedWorldState, seedClaim } from '../helpers/seed-layers.js'
 
 interface User {
   userId: string
@@ -38,12 +39,25 @@ describe('Import/export edge cases', () => {
     await reseedOwnershipBaseline(prisma)
     await prisma.loginAttempt.deleteMany()
     await prisma.importHistory.deleteMany()
-    await prisma.claimRelation.deleteMany()
-    await prisma.claim.deleteMany()
-    await prisma.annotation.deleteMany()
+    // Layers store (reverse-FK order): seeds and imports materialize into
+    // these tables, so clear them before the videos / personas / users they
+    // reference are deleted.
+    await prisma.textAnnotationRelation.deleteMany()
+    await prisma.layersAnnotation.deleteMany()
+    await prisma.annotationLayer.deleteMany()
+    await prisma.tokenization.deleteMany()
+    await prisma.segmentation.deleteMany()
+    await prisma.corpusMembership.deleteMany()
+    await prisma.corpus.deleteMany()
+    await prisma.clusterSet.deleteMany()
+    await prisma.alignment.deleteMany()
+    await prisma.graphEdge.deleteMany()
+    await prisma.graphNode.deleteMany()
+    await prisma.typeDef.deleteMany()
+    await prisma.layersOntology.deleteMany()
+    await prisma.expression.deleteMany()
+    await prisma.media.deleteMany()
     await prisma.videoSummary.deleteMany()
-    await prisma.ontology.deleteMany()
-    await prisma.worldState.deleteMany()
     await prisma.persona.deleteMany()
     await prisma.video.deleteMany()
     await prisma.session.deleteMany()
@@ -196,7 +210,9 @@ describe('Import/export edge cases', () => {
       expect(orphanConflict!.details).toContain('99999999-9999-9999-9999-999999999999')
 
       // The DB must not contain the skipped annotation.
-      const annCount = await prisma.annotation.count({ where: { videoId: 'v-edge-1' } })
+      const annCount = await prisma.layersAnnotation.count({
+        where: { layer: { expression: { videoId: 'v-edge-1' } } },
+      })
       expect(annCount).toBe(0)
     })
   })
@@ -212,14 +228,14 @@ describe('Import/export edge cases', () => {
       const persona = await prisma.persona.create({
         data: { userId: A.userId, name: 'P', role: 'r', informationNeed: 'i' },
       })
-      await prisma.ontology.create({
+      await seedOntology(prisma, {
         data: {
           personaId: persona.id,
           entityTypes: [{ id: 'et-1', name: 'Type1', gloss: [] }],
           eventTypes: [], roleTypes: [], relationTypes: [],
         },
       })
-      await prisma.worldState.create({
+      await seedWorldState(prisma, {
         data: {
           userId: A.userId,
           entities: [{ id: 'e-1', name: 'E1' }],
@@ -230,7 +246,7 @@ describe('Import/export edge cases', () => {
       const summary = await prisma.videoSummary.create({
         data: { videoId: 'v-edge-2', personaId: persona.id, summary: [{ type: 'text', content: 's' }] },
       })
-      await prisma.claim.create({
+      await seedClaim(prisma, {
         data: { summaryId: summary.id, summaryType: 'video', text: 'c', gloss: [{ type: 'text', content: 'c' }] },
       })
 
@@ -268,14 +284,14 @@ describe('Import/export edge cases', () => {
       const persona = await prisma.persona.create({
         data: { userId: A.userId, name: 'AP', role: 'r', informationNeed: 'i' },
       })
-      await prisma.ontology.create({
+      await seedOntology(prisma, {
         data: {
           personaId: persona.id,
           entityTypes: [{ id: 'et-x', name: 'X', gloss: [] }],
           eventTypes: [], roleTypes: [], relationTypes: [],
         },
       })
-      await prisma.worldState.create({
+      await seedWorldState(prisma, {
         data: {
           userId: A.userId,
           entities: [{ id: 'a-e-1', name: 'AEntity' }],

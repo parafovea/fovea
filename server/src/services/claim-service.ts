@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { Prisma, PrismaClient, type VideoSummary, type Claim as PrismaClaim, type ClaimRelation as PrismaClaimRelation } from '@prisma/client'
+import { Prisma, PrismaClient, type VideoSummary } from '@prisma/client'
 import { Job } from 'bullmq'
 import { subject } from '@casl/ability'
 import type { AppAbility } from '../lib/abilities.js'
@@ -12,6 +12,7 @@ import {
 } from '../queues/setup.js'
 import { GraphRepository } from '../repositories/GraphRepository.js'
 import { AnnotationLayerRepository } from '../repositories/AnnotationLayerRepository.js'
+import { readOntologyAggregate } from './layers-bridge/ontology-bridge.js'
 import { getOrCreateVideoExpression } from './video-expression-service.js'
 import { claimSpanLayerId, expressionTranscriptId } from './layers-id-map.js'
 import {
@@ -222,13 +223,8 @@ export interface VideoPersonaClaimResponse {
  * `createdBy`/`projectId` the ability conditions read), and summaries as
  * `VideoSummary` subjects.
  *
- * A legacy read-through bridge keeps the not-yet-re-pointed writers (import,
- * extraction) working: when a summary has no layers claim rows yet, reads fall
- * through to the legacy Claim/ClaimRelation rows without writing. The first write
- * to a summary materializes its legacy claims into layers (adoption); subsequent
- * reads use layers only. A per-summary claim-span AnnotationLayer serves as the
- * materialization marker so deleting the last claim does not resurrect the legacy
- * rows through the bridge.
+ * A per-summary claim-span AnnotationLayer anchors each claim's text-span
+ * annotations; it is ensured before the first claim of a summary is written.
  *
  * @example
  * ```typescript
@@ -265,56 +261,6 @@ export class ClaimService {
     return this.ability
   }
 
-  // --- Legacy row conversion -------------------------------------------------
-
-  /** Converts a legacy Claim row to the storable claim shape. */
-  private static fromLegacyClaim(claim: PrismaClaim): StoredClaim {
-    return {
-      id: claim.id,
-      summaryId: claim.summaryId,
-      summaryType: claim.summaryType,
-      text: claim.text,
-      gloss: claim.gloss ?? [],
-      parentClaimId: claim.parentClaimId ?? null,
-      textSpans: claim.textSpans ?? null,
-      timeSpans: claim.timeSpans ?? null,
-      claimerType: claim.claimerType ?? null,
-      claimerGloss: claim.claimerGloss ?? null,
-      claimRelation: claim.claimRelation ?? null,
-      claimEventId: claim.claimEventId ?? null,
-      claimTimeId: claim.claimTimeId ?? null,
-      claimLocationId: claim.claimLocationId ?? null,
-      confidence: claim.confidence ?? null,
-      modelUsed: claim.modelUsed ?? null,
-      extractionStrategy: claim.extractionStrategy ?? null,
-      audio: claim.audio ?? null,
-      video: claim.video ?? null,
-      metadata: claim.metadata ?? null,
-      comment: claim.comment ?? null,
-      createdBy: claim.createdBy ?? null,
-      projectId: claim.projectId ?? null,
-      createdAt: claim.createdAt.toISOString(),
-      updatedAt: claim.updatedAt.toISOString(),
-    }
-  }
-
-  /** Converts a legacy ClaimRelation row to the storable relation shape. */
-  private static fromLegacyRelation(relation: PrismaClaimRelation): StoredRelation {
-    return {
-      id: relation.id,
-      sourceClaimId: relation.sourceClaimId,
-      targetClaimId: relation.targetClaimId,
-      relationTypeId: relation.relationTypeId,
-      sourceSpans: relation.sourceSpans ?? null,
-      targetSpans: relation.targetSpans ?? null,
-      confidence: relation.confidence ?? null,
-      notes: relation.notes ?? null,
-      createdBy: relation.createdBy ?? null,
-      createdAt: relation.createdAt.toISOString(),
-      updatedAt: relation.updatedAt.toISOString(),
-    }
-  }
-
   // --- Layers reads ----------------------------------------------------------
 
   /** Reads the layers claim nodes for a summary. */
@@ -335,88 +281,47 @@ export class ClaimService {
     return claims
   }
 
-  /** True when the per-summary claim-span marker layer exists. */
-  private async claimSpanLayerExists(summaryId: string): Promise<boolean> {
-    const layer = await this.annotationLayerRepo.findLayerById(claimSpanLayerId(summaryId))
-    return layer !== null
+  /** Reads a summary's flat claim list from the layers store. */
+  private async readClaims(summaryId: string): Promise<{ claims: StoredClaim[] }> {
+    return { claims: await this.findSummaryClaimNodes(summaryId) }
   }
 
-  /**
-   * True when a summary's claims live in the layers store: it has claim nodes,
-   * or its marker layer exists (the case when every claim was deleted).
-   */
-  private async isSummaryMaterialized(summaryId: string): Promise<boolean> {
-    const nodes = await this.findSummaryClaimNodes(summaryId)
-    if (nodes.length > 0) return true
-    return this.claimSpanLayerExists(summaryId)
-  }
-
-  /**
-   * Reads a summary's flat claim list, from the layers store when materialized
-   * and from the legacy Claim rows (read-through bridge) otherwise.
-   */
-  private async readClaims(summaryId: string): Promise<{ claims: StoredClaim[]; materialized: boolean }> {
-    if (await this.isSummaryMaterialized(summaryId)) {
-      return { claims: await this.findSummaryClaimNodes(summaryId), materialized: true }
-    }
-    const legacy = await this.prisma.claim.findMany({ where: { summaryId } })
-    return { claims: legacy.map((c) => ClaimService.fromLegacyClaim(c)), materialized: false }
-  }
-
-  /** Finds a claim by id across the layers store and the legacy bridge. */
+  /** Finds a claim by id in the layers store. */
   private async findClaimById(claimId: string): Promise<StoredClaim | null> {
     const node = await this.graphRepo.findNodeById(claimId)
     if (node && isClaimNode(node)) {
       const claim = nodeToClaim(node)
       if (claim) return claim
     }
-    const legacy = await this.prisma.claim.findUnique({ where: { id: claimId } })
-    return legacy ? ClaimService.fromLegacyClaim(legacy) : null
+    return null
   }
 
-  /** True when a claim exists as a layers node. */
-  private async isClaimMaterialized(claimId: string): Promise<boolean> {
-    const node = await this.graphRepo.findNodeById(claimId)
-    return node !== null && isClaimNode(node)
-  }
-
-  /** Finds a relation by id across the layers store and the legacy bridge. */
-  private async findRelationById(
-    relationId: string,
-  ): Promise<{ relation: StoredRelation; inLayers: boolean } | null> {
+  /** Finds a relation by id in the layers store. */
+  private async findRelationById(relationId: string): Promise<StoredRelation | null> {
     const edge = await this.graphRepo.findEdgeById(relationId)
     if (edge && isClaimRelationEdge(edge)) {
       const relation = edgeToRelation(edge)
-      if (relation) return { relation, inLayers: true }
+      if (relation) return relation
     }
-    const legacy = await this.prisma.claimRelation.findUnique({ where: { id: relationId } })
-    return legacy ? { relation: ClaimService.fromLegacyRelation(legacy), inLayers: false } : null
+    return null
   }
 
-  /** Lists a claim's relations from the layers store or the legacy bridge. */
+  /** Lists a claim's relations from the layers store. */
   private async readClaimRelations(
     claim: StoredClaim,
   ): Promise<{ asSource: StoredRelation[]; asTarget: StoredRelation[] }> {
-    if (await this.isClaimMaterialized(claim.id)) {
-      const asSourceEdges = await this.graphRepo.findAccessibleEdges({}, { sourceLocalId: claim.id })
-      const asTargetEdges = await this.graphRepo.findAccessibleEdges({}, { targetLocalId: claim.id })
-      const toRelations = (edges: typeof asSourceEdges): StoredRelation[] => {
-        const relations: StoredRelation[] = []
-        for (const edge of edges) {
-          if (!isClaimRelationEdge(edge)) continue
-          const relation = edgeToRelation(edge)
-          if (relation) relations.push(relation)
-        }
-        return relations
+    const asSourceEdges = await this.graphRepo.findAccessibleEdges({}, { sourceLocalId: claim.id })
+    const asTargetEdges = await this.graphRepo.findAccessibleEdges({}, { targetLocalId: claim.id })
+    const toRelations = (edges: typeof asSourceEdges): StoredRelation[] => {
+      const relations: StoredRelation[] = []
+      for (const edge of edges) {
+        if (!isClaimRelationEdge(edge)) continue
+        const relation = edgeToRelation(edge)
+        if (relation) relations.push(relation)
       }
-      return { asSource: toRelations(asSourceEdges), asTarget: toRelations(asTargetEdges) }
+      return relations
     }
-    const asSource = await this.prisma.claimRelation.findMany({ where: { sourceClaimId: claim.id } })
-    const asTarget = await this.prisma.claimRelation.findMany({ where: { targetClaimId: claim.id } })
-    return {
-      asSource: asSource.map((r) => ClaimService.fromLegacyRelation(r)),
-      asTarget: asTarget.map((r) => ClaimService.fromLegacyRelation(r)),
-    }
+    return { asSource: toRelations(asSourceEdges), asTarget: toRelations(asTargetEdges) }
   }
 
   // --- Layers writes ---------------------------------------------------------
@@ -514,35 +419,6 @@ export class ClaimService {
       projectId: edge.projectId,
       createdByUserId: edge.createdByUserId,
     })
-  }
-
-  /**
-   * Ensures a summary's claims live in the layers store. Always ensures the
-   * marker layer exists (so a later delete-to-empty stays materialized). When
-   * the summary has no layers rows yet, adopts its legacy claims and relations
-   * into layers, preserving each row's owner and project scope.
-   */
-  private async ensureMaterialized(summary: VideoSummary): Promise<void> {
-    const alreadyMaterialized = await this.isSummaryMaterialized(summary.id)
-    const layerId = await this.ensureClaimSpanLayer(summary)
-    if (alreadyMaterialized) return
-
-    const legacyClaims = await this.prisma.claim.findMany({ where: { summaryId: summary.id } })
-    for (const legacy of legacyClaims) {
-      await this.persistClaimNode(layerId, ClaimService.fromLegacyClaim(legacy))
-    }
-    if (legacyClaims.length > 0) {
-      const legacyRelations = await this.prisma.claimRelation.findMany({
-        where: { sourceClaimId: { in: legacyClaims.map((c) => c.id) } },
-      })
-      for (const legacy of legacyRelations) {
-        await this.persistRelationEdge(
-          ClaimService.fromLegacyRelation(legacy),
-          summary.id,
-          summary.projectId ?? null,
-        )
-      }
-    }
   }
 
   // --- Claim shaping ---------------------------------------------------------
@@ -728,7 +604,6 @@ export class ClaimService {
       this.authorizeClaim('update', parent)
     }
 
-    await this.ensureMaterialized(summary)
     const layerId = await this.ensureClaimSpanLayer(summary)
     const claim = this.buildClaim(summary, summaryType, input, summary.projectId ?? null)
     await this.persistClaimNode(layerId, claim)
@@ -758,7 +633,6 @@ export class ClaimService {
       throw new NotFoundError('Summary', summaryId)
     }
 
-    await this.ensureMaterialized(summary)
     const layerId = await this.ensureClaimSpanLayer(summary)
     const merged = ClaimService.applyUpdate(existing, input)
     await this.updateClaimNode(layerId, merged)
@@ -786,7 +660,6 @@ export class ClaimService {
       throw new NotFoundError('Summary', summaryId)
     }
 
-    await this.ensureMaterialized(summary)
     const { claims } = await this.readClaims(summaryId)
     const subtreeIds = [...collectSubtreeIds(claims, claimId)]
 
@@ -987,19 +860,18 @@ export class ClaimService {
     this.authorizeClaim('update', sourceClaim)
     this.authorizeClaim('update', targetClaim)
 
-    const summary = await this.prisma.videoSummary.findUnique({
-      where: { id: summaryId },
-      include: { persona: { include: { ontology: true } } },
-    })
+    const summary = await this.prisma.videoSummary.findUnique({ where: { id: summaryId } })
     if (!summary) {
       throw new NotFoundError('Summary', summaryId)
     }
 
-    // Validate relationTypeId against the persona's ontology.
-    if (summary.persona.ontology) {
-      const rawRelationTypes = Array.isArray(summary.persona.ontology.relationTypes)
-        ? summary.persona.ontology.relationTypes
-        : []
+    // Validate relationTypeId against the persona's ontology (layers store).
+    const { aggregate: ontology, exists: ontologyExists } = await readOntologyAggregate(
+      this.prisma,
+      summary.personaId,
+    )
+    if (ontologyExists) {
+      const rawRelationTypes = ontology.relationTypes
       const relationType = rawRelationTypes.find(
         (rt): rt is Prisma.JsonObject =>
           typeof rt === 'object' && rt !== null && !Array.isArray(rt) && 'id' in rt && rt.id === relationTypeId,
@@ -1022,15 +894,6 @@ export class ClaimService {
           `Relation type '${rtName}' does not support claim-to-claim relations. Source types: [${sourceTypes.join(', ')}], Target types: [${targetTypes.join(', ')}]`,
         )
       }
-    }
-
-    // Materialize both endpoints' summaries so the relation edge lives in layers.
-    await this.ensureMaterialized(summary)
-    if (targetClaim.summaryId !== summaryId) {
-      const targetSummary = await this.prisma.videoSummary.findUnique({
-        where: { id: targetClaim.summaryId },
-      })
-      if (targetSummary) await this.ensureMaterialized(targetSummary)
     }
 
     const now = new Date().toISOString()
@@ -1105,11 +968,10 @@ export class ClaimService {
    * @throws {NotFoundError} when the relation does not exist or its source claim belongs to another summary
    */
   async deleteRelation(summaryId: string, relationId: string): Promise<void> {
-    const found = await this.findRelationById(relationId)
-    if (!found) {
+    const relation = await this.findRelationById(relationId)
+    if (!relation) {
       throw new NotFoundError('Relation', relationId)
     }
-    const { relation } = found
 
     const sourceClaim = await this.findClaimById(relation.sourceClaimId)
     const targetClaim = await this.findClaimById(relation.targetClaimId)
@@ -1124,18 +986,7 @@ export class ClaimService {
     this.authorizeClaim('update', sourceClaim)
     this.authorizeClaim('update', targetClaim)
 
-    if (found.inLayers) {
-      await this.graphRepo.deleteEdge(relationId)
-      return
-    }
-
-    // Legacy relation: materialize the source summary (which adopts this relation
-    // as an edge), then delete the edge so the bridge no longer surfaces it.
-    const summary = await this.prisma.videoSummary.findUnique({ where: { id: summaryId } })
-    if (summary) {
-      await this.ensureMaterialized(summary)
-      await this.graphRepo.deleteEdge(relationId)
-    }
+    await this.graphRepo.deleteEdge(relationId)
   }
 
   /**
@@ -1201,7 +1052,6 @@ export class ClaimService {
       this.authorizeClaim('update', parent)
     }
 
-    await this.ensureMaterialized(summary)
     const layerId = await this.ensureClaimSpanLayer(summary)
     const claim = this.buildClaim(summary, 'video', input, persona.projectId ?? null)
     await this.persistClaimNode(layerId, claim)

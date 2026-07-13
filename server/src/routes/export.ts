@@ -90,11 +90,9 @@ async function collectAnnotationOutputs(
   },
 ): Promise<VideoAnnotationOutput[]> {
   let layersScope: Prisma.LayersAnnotationWhereInput
-  let legacyScope: Prisma.AnnotationWhereInput
   if (scope.personaIds.length > 0) {
     const scopedIds = scope.personaIds.filter(id => scope.userPersonaIds.includes(id))
     layersScope = { layer: { personaId: { in: scopedIds } } }
-    legacyScope = { personaId: { in: scopedIds } }
   } else {
     layersScope = {
       OR: [
@@ -102,27 +100,18 @@ async function collectAnnotationOutputs(
         { layer: { personaId: null }, createdByUserId: scope.userId },
       ],
     }
-    legacyScope = {
-      OR: [{ personaId: { in: scope.userPersonaIds } }, { personaId: null, userId: scope.userId }],
-    }
   }
 
   const layersAnd: Prisma.LayersAnnotationWhereInput[] = [
     layersScope,
     accessibleBy(ability, 'read').LayersAnnotation,
   ]
-  const legacyAnd: Prisma.AnnotationWhereInput[] = [
-    legacyScope,
-    accessibleBy(ability, 'read').Annotation,
-  ]
   if (scope.videoIds && scope.videoIds.length > 0) {
     layersAnd.push({ layer: { expression: { videoId: { in: scope.videoIds } } } })
-    legacyAnd.push({ videoId: { in: scope.videoIds } })
   }
 
   return exporter.readAnnotationOutputs(prisma, {
     layersWhere: { AND: layersAnd },
-    legacyWhere: { AND: legacyAnd },
   })
 }
 
@@ -130,10 +119,9 @@ async function collectAnnotationOutputs(
  * Fastify plugin for export-related routes.
  * Provides endpoints for exporting all user data.
  *
- * Every export reconstructs the legacy bundle shape from the unified layers
- * store: ontologies, world state, claims, and annotations are read back through
- * the layers bridge (which falls through to the legacy tables only when no
- * layers rows exist yet), so the export format is unchanged.
+ * Every export reconstructs the bundle shape from the unified layers store:
+ * ontologies, world state, claims, and annotations are read back through the
+ * layers bridge, so the export format is unchanged.
  *
  * Routes:
  * - GET /api/export - Export all user data in JSON Lines format

@@ -11,6 +11,7 @@ import { invalidateUserAbilities } from '../middleware/abilities.js'
 import {
   ProjectRepository,
   AssignableUser,
+  type ProjectWorldStateView,
 } from '../repositories/ProjectRepository.js'
 
 /** Convert a value to Prisma JSON without type assertions. */
@@ -613,22 +614,7 @@ export class ProjectService {
       throw new ForbiddenError('You must be a project member to access world state')
     }
 
-    let worldState = await this.repository.findWorldState(userId, projectId)
-    if (!worldState) {
-      worldState = await this.repository.createWorldState({
-        userId,
-        projectId,
-        entities: [],
-        events: [],
-        times: [],
-        entityCollections: [],
-        eventCollections: [],
-        timeCollections: [],
-        relations: [],
-      })
-    }
-
-    return this.mapWorldState(worldState)
+    return this.mapWorldState(await this.repository.readWorldState(userId, projectId))
   }
 
   /**
@@ -659,32 +645,15 @@ export class ProjectService {
       throw new ForbiddenError('You must be a project member to update world state')
     }
 
-    const existing = await this.repository.findWorldState(userId, projectId)
-
-    let worldState
-    if (existing) {
-      worldState = await this.repository.updateWorldState(userId, projectId, {
-        entities: input.entities !== undefined ? toJson(input.entities) : undefined,
-        events: input.events !== undefined ? toJson(input.events) : undefined,
-        times: input.times !== undefined ? toJson(input.times) : undefined,
-        entityCollections: input.entityCollections !== undefined ? toJson(input.entityCollections) : undefined,
-        eventCollections: input.eventCollections !== undefined ? toJson(input.eventCollections) : undefined,
-        timeCollections: input.timeCollections !== undefined ? toJson(input.timeCollections) : undefined,
-        relations: input.relations !== undefined ? toJson(input.relations) : undefined,
-      })
-    } else {
-      worldState = await this.repository.createWorldState({
-        userId,
-        projectId,
-        entities: toJson(input.entities || []),
-        events: toJson(input.events || []),
-        times: toJson(input.times || []),
-        entityCollections: toJson(input.entityCollections || []),
-        eventCollections: toJson(input.eventCollections || []),
-        timeCollections: toJson(input.timeCollections || []),
-        relations: toJson(input.relations || []),
-      })
-    }
+    const worldState = await this.repository.writeWorldState(userId, projectId, {
+      entities: input.entities,
+      events: input.events,
+      times: input.times,
+      entityCollections: input.entityCollections,
+      eventCollections: input.eventCollections,
+      timeCollections: input.timeCollections,
+      relations: input.relations,
+    })
 
     return this.mapWorldState(worldState)
   }
@@ -754,34 +723,21 @@ export class ProjectService {
   }
 
   /**
-   * Maps a Prisma world-state row to the response shape: ISO date strings,
-   * JSON arrays defaulted to [] when null.
+   * Maps a reconstructed project world-state view to the response shape: ISO
+   * date strings and the seven JSON buckets.
    */
-  private mapWorldState(worldState: {
-    id: string
-    userId: string
-    projectId: string | null
-    entities: Prisma.JsonValue
-    events: Prisma.JsonValue
-    times: Prisma.JsonValue
-    entityCollections: Prisma.JsonValue
-    eventCollections: Prisma.JsonValue
-    timeCollections: Prisma.JsonValue
-    relations: Prisma.JsonValue
-    createdAt: Date
-    updatedAt: Date
-  }): WorldStateResponse {
+  private mapWorldState(worldState: ProjectWorldStateView): WorldStateResponse {
     return {
       id: worldState.id,
       userId: worldState.userId,
       projectId: worldState.projectId,
-      entities: (worldState.entities as unknown[]) || [],
-      events: (worldState.events as unknown[]) || [],
-      times: (worldState.times as unknown[]) || [],
-      entityCollections: (worldState.entityCollections as unknown[]) || [],
-      eventCollections: (worldState.eventCollections as unknown[]) || [],
-      timeCollections: (worldState.timeCollections as unknown[]) || [],
-      relations: (worldState.relations as unknown[]) || [],
+      entities: worldState.entities,
+      events: worldState.events,
+      times: worldState.times,
+      entityCollections: worldState.entityCollections,
+      eventCollections: worldState.eventCollections,
+      timeCollections: worldState.timeCollections,
+      relations: worldState.relations,
       createdAt: worldState.createdAt.toISOString(),
       updatedAt: worldState.updatedAt.toISOString(),
     }

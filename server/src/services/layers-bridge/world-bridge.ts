@@ -3,11 +3,10 @@
  *
  * Reconstructs the WorldState aggregate the `/api/world` contract exchanges from
  * the layers graph (GraphNode + GraphEdge), and materializes an aggregate back
- * into it. Reads are layers-first with a legacy WorldState read-through so data
- * written before the cutover still surfaces; writes prune the scope's world rows
+ * into it. Reads read the layers store only; writes prune the scope's world rows
  * and recreate them from the aggregate. This is the persistence primitive the
- * re-pointed export, import, sharing, and persona-cleanup paths share, mirroring
- * the read-through structure of `world-state-service.ts`.
+ * export, import, sharing, and persona-cleanup paths share, mirroring the
+ * structure of `world-state-service.ts`.
  *
  * @module
  */
@@ -22,7 +21,7 @@ import {
   personalWorldStateId,
   type WorldStateAggregate,
 } from '../world-layers-mapper.js'
-import { asRecords, toJson } from './util.js'
+import { toJson } from './util.js'
 
 /** The scope a personal world's rows are keyed by. */
 export interface WorldScope {
@@ -37,8 +36,7 @@ export interface WorldRead {
 }
 
 /**
- * Reads a scope's world aggregate from the layers store, falling back to a
- * read-through of the legacy WorldState row when no layers rows exist yet.
+ * Reads a scope's world aggregate from the layers store.
  *
  * @param prisma - the Prisma client (or transaction client)
  * @param scope - the owning user id and project scope
@@ -54,24 +52,6 @@ export async function readWorldAggregate(
 
   if (nodes.length > 0 || edges.length > 0) {
     return { aggregate: layersToWorldState(nodes, edges), exists: true }
-  }
-
-  const legacy = await prisma.worldState.findFirst({
-    where: { userId: scope.userId, projectId: scope.projectId },
-  })
-  if (legacy) {
-    return {
-      aggregate: {
-        entities: asRecords(legacy.entities),
-        events: asRecords(legacy.events),
-        times: asRecords(legacy.times),
-        entityCollections: asRecords(legacy.entityCollections),
-        eventCollections: asRecords(legacy.eventCollections),
-        timeCollections: asRecords(legacy.timeCollections),
-        relations: asRecords(legacy.relations),
-      },
-      exists: true,
-    }
   }
 
   return { aggregate: emptyWorldState(), exists: false }
@@ -133,10 +113,9 @@ export async function writeWorldAggregate(
 }
 
 /**
- * Resolves the owner user id of a personal world from its (synthetic or legacy)
- * world-state id. The `/api/world` response reports a personal world under the
- * deterministic {@link personalWorldStateId}; a legacy WorldState row carries its
- * own id. Matches both so a share keyed by either id resolves.
+ * Resolves the owner user id of a personal world from its synthetic world-state
+ * id. The `/api/world` response reports a personal world under the deterministic
+ * {@link personalWorldStateId}, so a share keyed by that id resolves to its owner.
  *
  * @param prisma - the Prisma client
  * @param worldStateId - the world-state id to resolve
@@ -153,15 +132,13 @@ export async function resolvePersonalWorldOwner(
   for (const owner of owners) {
     if (personalWorldStateId(owner) === worldStateId) return owner
   }
-  const legacy = await prisma.worldState.findUnique({ where: { id: worldStateId } })
-  return legacy && legacy.projectId === null ? legacy.userId : null
+  return null
 }
 
 /**
  * Extracts world-object ids from every scope's world rows across the store, for
- * import conflict detection. Scans layers graph world nodes and every legacy
- * WorldState row, so an imported id colliding with any existing world object is
- * detected regardless of which store holds it.
+ * import conflict detection. Scans the layers graph world nodes so an imported id
+ * colliding with any existing world object is detected.
  *
  * @param prisma - the Prisma client
  * @returns the global id sets by bucket
@@ -211,19 +188,6 @@ export async function readAllWorldObjectIds(prisma: PrismaClient): Promise<{
   const scopes = new Set([...nodesByScope.keys(), ...edgesByScope.keys()])
   for (const key of scopes) {
     collect(layersToWorldState(nodesByScope.get(key) ?? [], edgesByScope.get(key) ?? []))
-  }
-
-  const legacyWorldStates = await prisma.worldState.findMany()
-  for (const legacy of legacyWorldStates) {
-    collect({
-      entities: asRecords(legacy.entities),
-      events: asRecords(legacy.events),
-      times: asRecords(legacy.times),
-      entityCollections: asRecords(legacy.entityCollections),
-      eventCollections: asRecords(legacy.eventCollections),
-      timeCollections: asRecords(legacy.timeCollections),
-      relations: asRecords(legacy.relations),
-    })
   }
 
   return { entityIds, eventIds, timeIds, collectionIds }

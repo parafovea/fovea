@@ -201,14 +201,6 @@ export class PersonaService {
       hidden: input.hidden,
       user: { connect: { id: userId } },
       ...(projectId ? { project: { connect: { id: projectId } } } : {}),
-      ontology: {
-        create: {
-          entityTypes: [],
-          eventTypes: [],
-          roleTypes: [],
-          relationTypes: []
-        }
-      }
     })
   }
 

@@ -271,7 +271,7 @@ export class DatabaseHelper {
     },
     sessionToken: string
   ): Promise<Annotation> {
-    const response = await fetch(`${this.apiURL}/api/annotations`, {
+    const response = await fetch(`${this.apiURL}/api/layers/videos/${data.videoId}/annotations`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -301,7 +301,7 @@ export class DatabaseHelper {
    * @param sessionToken - Session token for authentication
    */
   async deleteAnnotation(videoId: string, annotationId: string, sessionToken: string): Promise<void> {
-    await fetch(`${this.apiURL}/api/annotations/${videoId}/${annotationId}`, {
+    await fetch(`${this.apiURL}/api/layers/videos/${videoId}/annotations/${annotationId}`, {
       method: 'DELETE',
       headers: {
         'Cookie': `session_token=${sessionToken}`
@@ -316,7 +316,7 @@ export class DatabaseHelper {
    * @returns Array of annotations
    */
   async getAnnotations(videoId: string, sessionToken: string): Promise<Annotation[]> {
-    const response = await fetch(`${this.apiURL}/api/annotations/${videoId}`, {
+    const response = await fetch(`${this.apiURL}/api/layers/videos/${videoId}/annotations`, {
       headers: {
         'Cookie': `session_token=${sessionToken}`
       }

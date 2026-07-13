@@ -14,8 +14,7 @@ import { PrismaClient } from '@prisma/client'
  * graph: personas stay in the `persona` table, their ontologies persist as a
  * LayersOntology plus TypeDef rows, and the world persists as GraphNode /
  * GraphEdge rows. These tests round-trip the multi-persona payload through the
- * route and assert the data lands in layers_ontologies / type_defs, while
- * confirming the legacy read-through bridge still surfaces legacy rows.
+ * route and assert the data lands in layers_ontologies / type_defs.
  */
 describe('Ontology API', () => {
   let app: FastifyInstance
@@ -38,12 +37,9 @@ describe('Ontology API', () => {
     await prisma.layersOntology.deleteMany()
     await prisma.graphEdge.deleteMany()
     await prisma.graphNode.deleteMany()
-    await prisma.worldState.deleteMany()
     await prisma.apiKey.deleteMany()
     await prisma.session.deleteMany()
-    await prisma.annotation.deleteMany()
     await prisma.videoSummary.deleteMany()
-    await prisma.ontology.deleteMany()
     await prisma.persona.deleteMany()
     await prisma.user.deleteMany()
     await prisma.rolePermission.deleteMany()
@@ -96,34 +92,6 @@ describe('Ontology API', () => {
       expect(response.statusCode).toBe(401)
     })
 
-    it('surfaces a legacy Ontology row through the read-through bridge', async () => {
-      const persona = await prisma.persona.create({
-        data: { userId: testUserId, name: 'Legacy', role: 'analyst', informationNeed: 'legacy need' }
-      })
-      await prisma.ontology.create({
-        data: {
-          personaId: persona.id,
-          entityTypes: [{ id: 'legacy-et', name: 'Legacy Type', gloss: [{ type: 'text', content: 'legacy' }] }],
-          eventTypes: [],
-          roleTypes: [],
-          relationTypes: []
-        }
-      })
-
-      const response = await app.inject({
-        method: 'GET',
-        url: '/api/ontology',
-        cookies: { session_token: sessionToken }
-      })
-
-      expect(response.statusCode).toBe(200)
-      const bundle = response.json() as {
-        personaOntologies: Array<{ personaId: string; entities: Array<{ id: string }> }>
-      }
-      const ontology = bundle.personaOntologies.find(o => o.personaId === persona.id)!
-      expect(ontology.entities).toHaveLength(1)
-      expect(ontology.entities[0].id).toBe('legacy-et')
-    })
   })
 
   describe('PUT /api/ontology round-trip', () => {

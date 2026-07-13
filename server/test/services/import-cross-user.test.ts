@@ -40,14 +40,10 @@ function createMockPrisma() {
   return {
     persona: { findMany: vi.fn().mockResolvedValue([]) },
     video: { findMany: vi.fn().mockResolvedValue([]) },
-    worldState: { findFirst: vi.fn().mockResolvedValue(null), findMany: vi.fn().mockResolvedValue([]) },
-    annotation: { findMany: vi.fn().mockResolvedValue([]), create: vi.fn().mockResolvedValue({}), delete: vi.fn().mockResolvedValue({}) },
     videoSummary: { findMany: vi.fn().mockResolvedValue([]) },
-    claim: { findMany: vi.fn().mockResolvedValue([]) },
-    claimRelation: { findMany: vi.fn().mockResolvedValue([]) },
-    ontology: { findMany: vi.fn().mockResolvedValue([]) },
-    // Layers-store tables the import bridge reads for conflict detection. Empty
-    // here so the mocked legacy tables drive the ownership-chain assertions.
+    // Layers-store tables the import bridge reads for conflict detection.
+    // Annotations, claims, claim relations, ontologies, and world objects all
+    // live here now, so the ownership-chain tests seed these tables.
     graphNode: { findMany: vi.fn().mockResolvedValue([]) },
     graphEdge: { findMany: vi.fn().mockResolvedValue([]) },
     layersAnnotation: { findMany: vi.fn().mockResolvedValue([]) },
@@ -660,7 +656,7 @@ describe('Cross-user import ownership', () => {
     it('should build ownership sets from database queries', async () => {
       const mockPrisma = createMockPrisma()
 
-      // Mock User A's persona in database
+      // User A and B personas in the database.
       ;(mockPrisma.persona.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([
         { id: 'persona-a', userId: USER_A },
         { id: 'persona-b', userId: USER_B },
@@ -668,27 +664,31 @@ describe('Cross-user import ownership', () => {
       ;(mockPrisma.video.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([
         { id: 'vid-1' },
       ])
-      ;(mockPrisma.annotation.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([
-        { id: 'ann-a', personaId: 'persona-a' },
-        { id: 'ann-b', personaId: 'persona-b' },
-      ])
       ;(mockPrisma.videoSummary.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([
         { id: 'sum-a', personaId: 'persona-a' },
         { id: 'sum-b', personaId: 'persona-b' },
       ])
-      ;(mockPrisma.claim.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([
-        { id: 'claim-a', summaryId: 'sum-a' },
-        { id: 'claim-b', summaryId: 'sum-b' },
+      // Annotations live in the layers store: each LayersAnnotation joins its
+      // grouping layer, which carries the personaId the ownership chain follows.
+      ;(mockPrisma.layersAnnotation.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([
+        { id: 'ann-a', layer: { personaId: 'persona-a' } },
+        { id: 'ann-b', layer: { personaId: 'persona-b' } },
       ])
-      ;(mockPrisma.claimRelation.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([
-        { id: 'cr-a', sourceClaimId: 'claim-a' },
-        { id: 'cr-b', sourceClaimId: 'claim-b' },
+      // Claims are claim GraphNodes stashing the original claim under
+      // `properties.foveaClaim.object`.
+      ;(mockPrisma.graphNode.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([
+        { nodeType: 'claim', properties: { foveaClaim: { summaryId: 'sum-a', parentClaimId: null, object: { id: 'claim-a', summaryId: 'sum-a' } } } },
+        { nodeType: 'claim', properties: { foveaClaim: { summaryId: 'sum-b', parentClaimId: null, object: { id: 'claim-b', summaryId: 'sum-b' } } } },
       ])
-      ;(mockPrisma.ontology.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([
+      // Claim relations are GraphEdges stashing the relation under
+      // `properties.foveaClaimRelation.object`.
+      ;(mockPrisma.graphEdge.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([
+        { properties: { foveaClaimRelation: { summaryId: 'sum-a', object: { id: 'cr-a', sourceClaimId: 'claim-a' } } } },
+        { properties: { foveaClaimRelation: { summaryId: 'sum-b', object: { id: 'cr-b', sourceClaimId: 'claim-b' } } } },
+      ])
+      ;(mockPrisma.layersOntology.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([
         { personaId: 'persona-a' },
       ])
-      ;(mockPrisma.worldState.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([])
-      ;(mockPrisma.worldState.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(null)
 
       const handler = new ImportHandler(mockPrisma, USER_A)
       const data = await handler.loadExistingData()
@@ -719,33 +719,19 @@ describe('Cross-user import ownership', () => {
 
       ;(mockPrisma.persona.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([])
       ;(mockPrisma.video.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([])
-      ;(mockPrisma.annotation.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([])
       ;(mockPrisma.videoSummary.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([])
-      ;(mockPrisma.claim.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([])
-      ;(mockPrisma.claimRelation.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([])
-      ;(mockPrisma.ontology.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([])
-      ;(mockPrisma.worldState.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([
-        {
-          id: 'ws-a',
-          userId: USER_A,
-          entities: [{ id: 'ent-a1' }, { id: 'ent-a2' }],
-          events: [{ id: 'evt-a1' }],
-          times: [{ id: 'time-a1' }],
-          entityCollections: [{ id: 'ec-a1' }],
-          eventCollections: [],
-          timeCollections: [],
-        },
+      ;(mockPrisma.layersAnnotation.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([])
+      ;(mockPrisma.graphEdge.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([])
+      // World objects are GraphNodes stashing the original object under
+      // `properties.foveaWorld.object` with its bucket and array index, scoped by
+      // `createdByUserId`. The bridge reconstructs the aggregate from these.
+      ;(mockPrisma.graphNode.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([
+        { id: 'ent-a1', nodeType: 'entity', createdByUserId: USER_A, projectId: null, properties: { foveaWorld: { bucket: 'entities', index: 0, object: { id: 'ent-a1' } } } },
+        { id: 'ent-a2', nodeType: 'entity', createdByUserId: USER_A, projectId: null, properties: { foveaWorld: { bucket: 'entities', index: 1, object: { id: 'ent-a2' } } } },
+        { id: 'evt-a1', nodeType: 'situation', createdByUserId: USER_A, projectId: null, properties: { foveaWorld: { bucket: 'events', index: 0, object: { id: 'evt-a1' } } } },
+        { id: 'time-a1', nodeType: 'time', createdByUserId: USER_A, projectId: null, properties: { foveaWorld: { bucket: 'times', index: 0, object: { id: 'time-a1' } } } },
+        { id: 'ec-a1', nodeType: 'collection', createdByUserId: USER_A, projectId: null, properties: { foveaWorld: { bucket: 'entityCollections', index: 0, object: { id: 'ec-a1' } } } },
       ])
-      ;(mockPrisma.worldState.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue({
-        id: 'ws-a',
-        userId: USER_A,
-        entities: [{ id: 'ent-a1' }, { id: 'ent-a2' }],
-        events: [{ id: 'evt-a1' }],
-        times: [{ id: 'time-a1' }],
-        entityCollections: [{ id: 'ec-a1' }],
-        eventCollections: [],
-        timeCollections: [],
-      })
 
       const handler = new ImportHandler(mockPrisma, USER_A)
       const data = await handler.loadExistingData()

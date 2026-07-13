@@ -37,12 +37,24 @@ describe('Cross-user import/export round-trip', () => {
     await reseedOwnershipBaseline(prisma)
     // Clean database in dependency order
     await prisma.importHistory.deleteMany()
-    await prisma.claimRelation.deleteMany()
-    await prisma.claim.deleteMany()
-    await prisma.annotation.deleteMany()
+    // Layers store (reverse-FK order) — this test now seeds user A's data
+    // through the layers-backed APIs, so the layers rows must be cleared too.
+    await prisma.textAnnotationRelation.deleteMany()
+    await prisma.layersAnnotation.deleteMany()
+    await prisma.annotationLayer.deleteMany()
+    await prisma.tokenization.deleteMany()
+    await prisma.segmentation.deleteMany()
+    await prisma.corpusMembership.deleteMany()
+    await prisma.corpus.deleteMany()
+    await prisma.clusterSet.deleteMany()
+    await prisma.alignment.deleteMany()
+    await prisma.graphEdge.deleteMany()
+    await prisma.graphNode.deleteMany()
+    await prisma.typeDef.deleteMany()
+    await prisma.layersOntology.deleteMany()
+    await prisma.expression.deleteMany()
+    await prisma.media.deleteMany()
     await prisma.videoSummary.deleteMany()
-    await prisma.ontology.deleteMany()
-    await prisma.worldState.deleteMany()
     await prisma.persona.deleteMany()
     await prisma.video.deleteMany()
     await prisma.session.deleteMany()
@@ -97,34 +109,57 @@ describe('Cross-user import/export round-trip', () => {
       },
     })
 
-    // Create ontology for user A
-    await prisma.ontology.create({
-      data: {
-        personaId: personaA.id,
-        entityTypes: [{ id: 'et-person', name: 'Person', gloss: [] }],
-        eventTypes: [],
-        roleTypes: [],
-        relationTypes: [],
+    // Log both users in first — user A's data is seeded through the
+    // layers-backed APIs (the legacy Annotation/WorldState/Ontology/Claim
+    // models were removed in the clean break).
+    const loginA = await app.inject({
+      method: 'POST',
+      url: '/api/auth/login',
+      payload: { username: 'userA', password: 'passwordA' },
+    })
+    userASessionToken = loginA.cookies.find(c => c.name === 'session_token')!.value
+
+    const loginB = await app.inject({
+      method: 'POST',
+      url: '/api/auth/login',
+      payload: { username: 'userB', password: 'passwordB' },
+    })
+    userBSessionToken = loginB.cookies.find(c => c.name === 'session_token')!.value
+
+    // Ontology + world for user A via the combined layers-backed endpoint.
+    await app.inject({
+      method: 'PUT',
+      url: '/api/ontology',
+      cookies: { session_token: userASessionToken },
+      payload: {
+        personas: [
+          { id: personaA.id, name: 'Analyst A', role: 'Security Analyst', informationNeed: 'Threat detection', details: '' },
+        ],
+        personaOntologies: [
+          { personaId: personaA.id, entities: [{ id: 'et-person', name: 'Person', gloss: [] }], roles: [], events: [], relationTypes: [] },
+        ],
+        world: {
+          entities: [{ id: 'entity-a1', name: 'Alice', typeId: 'et-person' }],
+          events: [], times: [], entityCollections: [], eventCollections: [], timeCollections: [], relations: [],
+        },
       },
     })
-
-    // Create world state for user A
-    await prisma.worldState.create({
-      data: {
-        userId: userAId,
+    await app.inject({
+      method: 'PUT',
+      url: '/api/world',
+      cookies: { session_token: userASessionToken },
+      payload: {
         entities: [{ id: 'entity-a1', name: 'Alice', typeId: 'et-person' }],
-        events: [],
-        times: [],
-        entityCollections: [],
-        eventCollections: [],
-        timeCollections: [],
-        relations: [],
+        events: [], times: [], entityCollections: [], eventCollections: [], timeCollections: [], relations: [],
       },
     })
 
-    // Create annotation for user A
-    await prisma.annotation.create({
-      data: {
+    // A type annotation for user A on the shared video.
+    await app.inject({
+      method: 'POST',
+      url: `/api/layers/videos/${sharedVideoId}/annotations`,
+      cookies: { session_token: userASessionToken },
+      payload: {
         videoId: sharedVideoId,
         personaId: personaA.id,
         type: 'type',
@@ -140,7 +175,7 @@ describe('Cross-user import/export round-trip', () => {
       },
     })
 
-    // Create summary for user A
+    // Summary (VideoSummary is retained) + a claim for user A.
     const summary = await prisma.videoSummary.create({
       data: {
         videoId: sharedVideoId,
@@ -148,31 +183,16 @@ describe('Cross-user import/export round-trip', () => {
         summary: [{ type: 'text', content: 'User A summary of video' }],
       },
     })
-
-    // Create claim for user A
-    await prisma.claim.create({
-      data: {
-        summaryId: summary.id,
+    await app.inject({
+      method: 'POST',
+      url: `/api/summaries/${summary.id}/claims`,
+      cookies: { session_token: userASessionToken },
+      payload: {
         summaryType: 'video',
         text: 'A person is visible in the video',
         gloss: [{ type: 'text', content: 'person visible' }],
       },
     })
-
-    // Login both users
-    const loginA = await app.inject({
-      method: 'POST',
-      url: '/api/auth/login',
-      payload: { username: 'userA', password: 'passwordA' },
-    })
-    userASessionToken = loginA.cookies.find(c => c.name === 'session_token')!.value
-
-    const loginB = await app.inject({
-      method: 'POST',
-      url: '/api/auth/login',
-      payload: { username: 'userB', password: 'passwordB' },
-    })
-    userBSessionToken = loginB.cookies.find(c => c.name === 'session_token')!.value
   })
 
   /**
@@ -281,12 +301,7 @@ describe('Cross-user import/export round-trip', () => {
       .map((e: { data: { id: string } }) => e.data.id)
 
     // Step 2: Delete user A's data so IDs no longer exist in the DB
-    await prisma.claimRelation.deleteMany()
-    await prisma.claim.deleteMany()
-    await prisma.annotation.deleteMany({ where: { persona: { userId: userAId } } })
     await prisma.videoSummary.deleteMany({ where: { persona: { userId: userAId } } })
-    await prisma.ontology.deleteMany({ where: { persona: { userId: userAId } } })
-    await prisma.worldState.deleteMany({ where: { userId: userAId } })
     await prisma.persona.deleteMany({ where: { userId: userAId } })
 
     // Step 3: User B imports user A's export (IDs no longer in DB)
@@ -333,8 +348,8 @@ describe('Cross-user import/export round-trip', () => {
 
     // Count user A's data before re-import
     const personasBefore = await prisma.persona.findMany({ where: { userId: userAId } })
-    const annotationsBefore = await prisma.annotation.findMany({
-      where: { personaId: { in: personasBefore.map(p => p.id) } },
+    const annotationsBefore = await prisma.layersAnnotation.findMany({
+      where: { layer: { personaId: { in: personasBefore.map(p => p.id) } } },
     })
 
     // Step 2: User A re-imports (default strategy is skip)
@@ -355,8 +370,8 @@ describe('Cross-user import/export round-trip', () => {
     const personasAfter = await prisma.persona.findMany({ where: { userId: userAId } })
     expect(personasAfter).toHaveLength(personasBefore.length)
 
-    const annotationsAfter = await prisma.annotation.findMany({
-      where: { personaId: { in: personasAfter.map(p => p.id) } },
+    const annotationsAfter = await prisma.layersAnnotation.findMany({
+      where: { layer: { personaId: { in: personasAfter.map(p => p.id) } } },
     })
     expect(annotationsAfter).toHaveLength(annotationsBefore.length)
   })

@@ -12,12 +12,24 @@
  * issue #121 (and the recurring "scope X to authenticated user" entries in
  * 0.1.1 / 0.1.4 / 0.1.6 / 0.1.7 / 0.1.8) is what motivates this matrix.
  */
+import { randomUUID } from 'node:crypto'
+
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest'
 import { reseedOwnershipBaseline } from './_rbac-baseline.js'
 import { buildApp } from '../../src/app.js'
 import { hashPassword } from '../../src/lib/password.js'
 import { FastifyInstance } from 'fastify'
 import { PrismaClient } from '@prisma/client'
+import {
+  seedOntology,
+  seedWorldState,
+  seedAnnotation,
+  seedClaim,
+  seedRelation,
+  readClaimById,
+} from '../helpers/seed-layers.js'
+import { readSummaryClaims } from '../../src/services/layers-bridge/claim-bridge.js'
+import { readOntologyAggregate } from '../../src/services/layers-bridge/ontology-bridge.js'
 
 interface UserGraph {
   userId: string
@@ -75,7 +87,7 @@ describe('Multi-user listing isolation matrix', () => {
       },
     })
 
-    await prisma.ontology.create({
+    await seedOntology(prisma, {
       data: {
         personaId: persona.id,
         entityTypes: [{ id: `${username}-et`, name: 'Type', gloss: [] }],
@@ -88,7 +100,7 @@ describe('Multi-user listing isolation matrix', () => {
     const worldEntityId = `${username}-entity-1`
     const worldEventId = `${username}-event-1`
     const worldTimeId = `${username}-time-1`
-    await prisma.worldState.create({
+    await seedWorldState(prisma, {
       data: {
         userId: user.id,
         entities: [{ id: worldEntityId, name: `${username} Entity`, typeId: `${username}-et` }],
@@ -114,7 +126,7 @@ describe('Multi-user listing isolation matrix', () => {
       },
     })
 
-    const claim = await prisma.claim.create({
+    const claim = await seedClaim(prisma, {
       data: {
         summaryId: summary.id,
         summaryType: 'video',
@@ -124,12 +136,13 @@ describe('Multi-user listing isolation matrix', () => {
       },
     })
 
-    const typeAnn = await prisma.annotation.create({
+    const typeAnnotationId = randomUUID()
+    await seedAnnotation(prisma, {
       data: {
+        id: typeAnnotationId,
         videoId,
         personaId: persona.id,
         userId: user.id,
-        createdByUserId: user.id,
         type: 'type',
         label: `${username}-et`,
         frames: {
@@ -143,12 +156,13 @@ describe('Multi-user listing isolation matrix', () => {
       },
     })
 
-    const objectAnn = await prisma.annotation.create({
+    const objectAnnotationId = randomUUID()
+    await seedAnnotation(prisma, {
       data: {
+        id: objectAnnotationId,
         videoId,
         personaId: null,
         userId: user.id,
-        createdByUserId: user.id,
         type: 'object',
         label: worldEntityId,
         linkType: 'entity',
@@ -202,8 +216,8 @@ describe('Multi-user listing isolation matrix', () => {
       worldTimeId,
       summaryId: summary.id,
       claimId: claim.id,
-      typeAnnotationId: typeAnn.id,
-      objectAnnotationId: objectAnn.id,
+      typeAnnotationId,
+      objectAnnotationId,
       apiKeyId: apiKey.id,
     }
   }
@@ -212,12 +226,25 @@ describe('Multi-user listing isolation matrix', () => {
     await reseedOwnershipBaseline(prisma)
     await prisma.loginAttempt.deleteMany()
     await prisma.importHistory.deleteMany()
-    await prisma.claimRelation.deleteMany()
-    await prisma.claim.deleteMany()
-    await prisma.annotation.deleteMany()
+    // Layers store (reverse-FK order): the graph each user seeds now
+    // materializes into these tables, so they must be cleared before the
+    // videos / personas / users they reference are deleted.
+    await prisma.textAnnotationRelation.deleteMany()
+    await prisma.layersAnnotation.deleteMany()
+    await prisma.annotationLayer.deleteMany()
+    await prisma.tokenization.deleteMany()
+    await prisma.segmentation.deleteMany()
+    await prisma.corpusMembership.deleteMany()
+    await prisma.corpus.deleteMany()
+    await prisma.clusterSet.deleteMany()
+    await prisma.alignment.deleteMany()
+    await prisma.graphEdge.deleteMany()
+    await prisma.graphNode.deleteMany()
+    await prisma.typeDef.deleteMany()
+    await prisma.layersOntology.deleteMany()
+    await prisma.expression.deleteMany()
+    await prisma.media.deleteMany()
     await prisma.videoSummary.deleteMany()
-    await prisma.ontology.deleteMany()
-    await prisma.worldState.deleteMany()
     await prisma.persona.deleteMany()
     await prisma.video.deleteMany()
     await prisma.session.deleteMany()
@@ -265,17 +292,17 @@ describe('Multi-user listing isolation matrix', () => {
   }
 
   describe('Annotation listings', () => {
-    it('GET /api/annotations/:videoId is user-scoped', async () => {
+    it('GET /api/layers/videos/:videoId/annotations is user-scoped', async () => {
       await expectIsolated<Array<{ id: string }>>({
-        label: 'GET /api/annotations/:videoId as A',
-        url: `/api/annotations/${sharedVideoId}`,
+        label: 'GET /api/layers/videos/:videoId/annotations as A',
+        url: `/api/layers/videos/${sharedVideoId}/annotations`,
         requester: A,
         foreignIds: [B.typeAnnotationId, B.objectAnnotationId],
         extractIds: body => body.map(a => a.id),
       })
       await expectIsolated<Array<{ id: string }>>({
-        label: 'GET /api/annotations/:videoId as B',
-        url: `/api/annotations/${sharedVideoId}`,
+        label: 'GET /api/layers/videos/:videoId/annotations as B',
+        url: `/api/layers/videos/${sharedVideoId}/annotations`,
         requester: B,
         foreignIds: [A.typeAnnotationId, A.objectAnnotationId],
         extractIds: body => body.map(a => a.id),
@@ -478,11 +505,11 @@ describe('Multi-user listing isolation matrix', () => {
       expect([403, 404], `[${label}] expected 403/404 but got ${statusCode}`).toContain(statusCode)
     }
 
-    it('POST /api/annotations rejects creating an annotation on another user\'s persona', async () => {
-      const beforeCount = await prisma.annotation.count({ where: { personaId: B.personaId } })
+    it('POST /api/layers/videos/:videoId/annotations rejects creating an annotation on another user\'s persona', async () => {
+      const beforeCount = await prisma.layersAnnotation.count({ where: { layer: { personaId: B.personaId } } })
       const res = await app.inject({
         method: 'POST',
-        url: '/api/annotations',
+        url: `/api/layers/videos/${sharedVideoId}/annotations`,
         cookies: { session_token: A.sessionToken },
         payload: {
           videoId: sharedVideoId,
@@ -493,32 +520,32 @@ describe('Multi-user listing isolation matrix', () => {
         },
       })
       expectDeniedOrNotFound(res.statusCode, 'POST annotation on foreign persona')
-      const afterCount = await prisma.annotation.count({ where: { personaId: B.personaId } })
+      const afterCount = await prisma.layersAnnotation.count({ where: { layer: { personaId: B.personaId } } })
       expect(afterCount).toBe(beforeCount)
     })
 
-    it('PUT /api/annotations/:id rejects writes to another user\'s annotation', async () => {
+    it('PUT /api/layers/videos/:videoId/annotations/:id rejects writes to another user\'s annotation', async () => {
       const res = await app.inject({
         method: 'PUT',
-        url: `/api/annotations/${B.typeAnnotationId}`,
+        url: `/api/layers/videos/${sharedVideoId}/annotations/${B.typeAnnotationId}`,
         cookies: { session_token: A.sessionToken },
         payload: { label: 'hijacked' },
       })
       expectDeniedOrNotFound(res.statusCode, 'PUT another user\'s annotation')
       // The annotation must remain unchanged.
-      const stored = await prisma.annotation.findUnique({ where: { id: B.typeAnnotationId } })
+      const stored = await prisma.layersAnnotation.findUnique({ where: { id: B.typeAnnotationId } })
       expect(stored?.label).not.toBe('hijacked')
     })
 
-    it('DELETE /api/annotations/:videoId/:id rejects deletes of another user\'s annotation', async () => {
+    it('DELETE /api/layers/videos/:videoId/annotations/:id rejects deletes of another user\'s annotation', async () => {
       const res = await app.inject({
         method: 'DELETE',
-        url: `/api/annotations/${sharedVideoId}/${B.typeAnnotationId}`,
+        url: `/api/layers/videos/${sharedVideoId}/annotations/${B.typeAnnotationId}`,
         cookies: { session_token: A.sessionToken },
       })
       expectDeniedOrNotFound(res.statusCode, 'DELETE another user\'s annotation')
       // The annotation must still exist.
-      const stored = await prisma.annotation.findUnique({ where: { id: B.typeAnnotationId } })
+      const stored = await prisma.layersAnnotation.findUnique({ where: { id: B.typeAnnotationId } })
       expect(stored).not.toBeNull()
     })
 
@@ -576,8 +603,8 @@ describe('Multi-user listing isolation matrix', () => {
         payload: { entities: [{ id: 'hijack-et', name: 'Hijacked', gloss: [] }] },
       })
       expectDeniedOrNotFound(res.statusCode, 'PUT another user\'s ontology')
-      const ontology = await prisma.ontology.findUnique({ where: { personaId: B.personaId } })
-      const entityTypes = ontology?.entityTypes as Array<{ id: string }>
+      const ontology = await readOntologyAggregate(prisma, B.personaId)
+      const entityTypes = ontology.aggregate.entityTypes as Array<{ id: string }>
       expect(entityTypes.map(e => e.id)).not.toContain('hijack-et')
     })
 
@@ -593,7 +620,7 @@ describe('Multi-user listing isolation matrix', () => {
         },
       })
       expectDeniedOrNotFound(res.statusCode, 'POST claim under another user\'s summary')
-      const claims = await prisma.claim.findMany({ where: { summaryId: B.summaryId } })
+      const claims = (await readSummaryClaims(prisma, B.summaryId)).claims
       // B's seed has one claim; nothing was added.
       expect(claims.length).toBe(1)
       expect(claims[0].id).toBe(B.claimId)
@@ -607,7 +634,7 @@ describe('Multi-user listing isolation matrix', () => {
         payload: { text: 'hijacked text' },
       })
       expectDeniedOrNotFound(res.statusCode, 'PUT another user\'s claim')
-      const stored = await prisma.claim.findUnique({ where: { id: B.claimId } })
+      const stored = await readClaimById(prisma, B.claimId)
       expect(stored?.text).not.toBe('hijacked text')
     })
 
@@ -618,7 +645,7 @@ describe('Multi-user listing isolation matrix', () => {
         cookies: { session_token: A.sessionToken },
       })
       expectDeniedOrNotFound(res.statusCode, 'DELETE another user\'s claim')
-      const stored = await prisma.claim.findUnique({ where: { id: B.claimId } })
+      const stored = await readClaimById(prisma, B.claimId)
       expect(stored).not.toBeNull()
     })
 
@@ -633,7 +660,8 @@ describe('Multi-user listing isolation matrix', () => {
         },
       })
       expectDeniedOrNotFound(res.statusCode, 'POST claim relation under foreign summary')
-      const relations = await prisma.claimRelation.count({ where: { sourceClaimId: B.claimId } })
+      const relations = (await readSummaryClaims(prisma, B.summaryId)).relations
+        .filter(r => r.sourceClaimId === B.claimId).length
       expect(relations).toBe(0)
     })
 
@@ -651,15 +679,14 @@ describe('Multi-user listing isolation matrix', () => {
         },
       })
       expectDeniedOrNotFound(res.statusCode, 'POST claim relation with foreign targetClaim')
-      const relations = await prisma.claimRelation.count({
-        where: { sourceClaimId: A.claimId, targetClaimId: B.claimId },
-      })
+      const relations = (await readSummaryClaims(prisma, A.summaryId)).relations
+        .filter(r => r.sourceClaimId === A.claimId && r.targetClaimId === B.claimId).length
       expect(relations).toBe(0)
     })
 
     it('DELETE /api/summaries/:summaryId/claims/relations/:relationId rejects deletes of another user\'s claim relation', async () => {
       // Seed a real claim relation owned by user B.
-      const relation = await prisma.claimRelation.create({
+      const relation = await seedRelation(prisma, {
         data: {
           sourceClaimId: B.claimId,
           targetClaimId: B.claimId,
@@ -672,8 +699,8 @@ describe('Multi-user listing isolation matrix', () => {
         cookies: { session_token: A.sessionToken },
       })
       expectDeniedOrNotFound(res.statusCode, 'DELETE another user\'s claim relation')
-      const stored = await prisma.claimRelation.findUnique({ where: { id: relation.id } })
-      expect(stored).not.toBeNull()
+      const stored = (await readSummaryClaims(prisma, B.summaryId)).relations.find(r => r.id === relation.id)
+      expect(stored).toBeDefined()
     })
 
     it('POST /api/videos/summaries/generate rejects queuing summary generation on another user\'s persona', async () => {
@@ -742,7 +769,7 @@ describe('Multi-user listing isolation matrix', () => {
     })
 
     it('PUT /api/ontology rejects upserting an ontology under another user\'s persona', async () => {
-      const before = await prisma.ontology.findUnique({ where: { personaId: B.personaId } })
+      const before = await readOntologyAggregate(prisma, B.personaId)
       const res = await app.inject({
         method: 'PUT',
         url: '/api/ontology',
@@ -756,8 +783,8 @@ describe('Multi-user listing isolation matrix', () => {
         },
       })
       expectDeniedOrNotFound(res.statusCode, 'PUT ontology with foreign personaId')
-      const after = await prisma.ontology.findUnique({ where: { personaId: B.personaId } })
-      expect(JSON.stringify(after?.entityTypes)).toBe(JSON.stringify(before?.entityTypes))
+      const after = await readOntologyAggregate(prisma, B.personaId)
+      expect(JSON.stringify(after.aggregate.entityTypes)).toBe(JSON.stringify(before.aggregate.entityTypes))
     })
 
     it('POST /api/ontology/augment rejects requesting suggestions against another user\'s persona', async () => {
@@ -795,7 +822,7 @@ describe('Multi-user listing isolation matrix', () => {
       })
       expectDeniedOrNotFound(res.statusCode, 'POST video+persona claim on foreign persona')
       // No new claim should appear under B's existing summary.
-      const claims = await prisma.claim.count({ where: { summaryId: B.summaryId } })
+      const claims = (await readSummaryClaims(prisma, B.summaryId)).claims.length
       expect(claims).toBe(1)
     })
   })

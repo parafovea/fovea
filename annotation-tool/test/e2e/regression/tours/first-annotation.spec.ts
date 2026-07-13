@@ -335,7 +335,7 @@ test.describe('Tour 1: First annotation in 90 seconds — end to end', () => {
 
     // ---- end state: an Annotation row exists for the video ----
     const annsResponse = await fetch(
-      `http://localhost:3001/api/annotations/${targetVideoId}`,
+      `http://localhost:3001/api/layers/videos/${targetVideoId}/annotations`,
       { headers: { Cookie: `session_token=${workerSessionToken}` } },
     )
     expect(annsResponse.ok, 'annotations endpoint reachable').toBe(true)
