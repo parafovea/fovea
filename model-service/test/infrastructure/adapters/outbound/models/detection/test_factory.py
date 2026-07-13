@@ -202,8 +202,7 @@ class TestRegistryCoverage:
         the desired loud-fail behaviour for routing bugs. The
         exhaustiveness check filters it out by name.
         """
-        union_type = get_args(DetectionArchitecture)[0]
-        members = set(get_args(union_type))
+        members = set(get_args(DetectionArchitecture))
         framework_pre_dispatched = {cls for cls in members if cls.__name__.startswith("SAM3")}
         local_members = members - framework_pre_dispatched
         registered = set(detection_pytorch_registry.registered_architectures)
@@ -224,8 +223,7 @@ class TestRegistryCoverage:
 
     def test_no_registry_advertises_unknown_architectures(self) -> None:
         """Neither registry may expose loaders for architectures outside the union."""
-        union_type = get_args(DetectionArchitecture)[0]
-        members = set(get_args(union_type))
+        members = set(get_args(DetectionArchitecture))
 
         pytorch_unknown = set(detection_pytorch_registry.registered_architectures) - members
         assert not pytorch_unknown, (

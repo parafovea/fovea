@@ -45,9 +45,9 @@ from pathlib import Path
 from typing import Protocol
 from unittest.mock import MagicMock, patch
 
+import didactic.api as dx
 import pytest
 import yaml
-from pydantic import BaseModel
 
 from src.application.services.model_management import ModelConfig
 from src.domain.entities.architectures import (
@@ -58,12 +58,6 @@ from src.domain.entities.architectures import (
     TrackingArchitecture,
     VLMArchitecture,
 )
-
-# The same discriminated-union adapter ModelConfig uses to parse the
-# ``architecture`` block of every catalog option. Reusing it means this test
-# parses the catalog exactly as the application does instead of hand-rolling
-# kind extraction.
-from src.domain.entities.model_config import _ARCHITECTURE_ADAPTER
 
 # Importing the loader modules executes their ``@*_registry.register(...)``
 # decorators (including the side-effect imports each module performs at the
@@ -94,7 +88,7 @@ class _RegistryView(Protocol):
         ...
 
     @property
-    def registered_architectures(self) -> list[type[BaseModel]]:
+    def registered_architectures(self) -> list[type[dx.Model]]:
         """Architecture classes the registry currently holds."""
         ...
 
@@ -117,13 +111,12 @@ _CATALOG_PATHS = (
 )
 
 
-def _union_members(alias: object) -> set[type[BaseModel]]:
-    """Return the architecture classes inside an ``Annotated[Union[...], ...]`` alias.
+def _union_members(alias: object) -> set[type[dx.Model]]:
+    """Return the architecture classes inside a family union alias.
 
-    The family aliases in :mod:`src.domain.entities.architectures` wrap a
-    ``Union`` of architecture classes in ``Annotated[..., Field(discriminator)]``.
-    This unwraps the ``Annotated`` layer, then the ``Union`` layer, and returns
-    the member classes.
+    The family aliases in :mod:`src.domain.entities.architectures` are plain
+    ``A | B | C`` unions of :class:`didactic.api.Model` subclasses. This
+    returns the member classes.
 
     Args:
         alias: A family architecture alias (for example
@@ -132,16 +125,14 @@ def _union_members(alias: object) -> set[type[BaseModel]]:
     Returns:
         The set of architecture classes that compose the union.
     """
-    annotated_args = typing.get_args(alias)
-    union = annotated_args[0]
-    members: set[type[BaseModel]] = set()
-    for member in typing.get_args(union):
-        if isinstance(member, type) and issubclass(member, BaseModel):
+    members: set[type[dx.Model]] = set()
+    for member in typing.get_args(alias):
+        if isinstance(member, type) and issubclass(member, dx.Model):
             members.add(member)
     return members
 
 
-def _kind_to_class(alias: object) -> dict[str, type[BaseModel]]:
+def _kind_to_class(alias: object) -> dict[str, type[dx.Model]]:
     """Map each architecture's ``kind`` literal to its class for one family.
 
     Args:
@@ -151,10 +142,10 @@ def _kind_to_class(alias: object) -> dict[str, type[BaseModel]]:
         Mapping from the ``kind`` discriminator string to the architecture
         class that declares it.
     """
-    mapping: dict[str, type[BaseModel]] = {}
+    mapping: dict[str, type[dx.Model]] = {}
     for member in _union_members(alias):
-        kind_field = member.model_fields["kind"]
-        mapping[str(kind_field.default)] = member
+        kind_spec = member.__field_specs__["kind"]
+        mapping[str(kind_spec.default)] = member
     return mapping
 
 
@@ -171,7 +162,7 @@ _LLM_KIND_TO_CLASS = _kind_to_class(LLMArchitecture)
 # registries that may satisfy an architecture-keyed option in that section.
 # Detection lists both registries because the framework hint (pytorch vs onnx)
 # picks one at load time; an option is reachable if either registry has it.
-_TASK_DISPATCH: dict[str, tuple[dict[str, type[BaseModel]], tuple[_RegistryView, ...]]] = {
+_TASK_DISPATCH: dict[str, tuple[dict[str, type[dx.Model]], tuple[_RegistryView, ...]]] = {
     "object_detection": (
         _DETECTION_KIND_TO_CLASS,
         (detection_pytorch_registry, detection_onnx_registry),
@@ -195,7 +186,7 @@ _ALL_REGISTRIES: tuple[_RegistryView, ...] = (
 
 # Every family union, so the reverse direction can confirm a registered loader
 # binds to a class that some family actually exposes.
-_ALL_UNION_MEMBERS: set[type[BaseModel]] = (
+_ALL_UNION_MEMBERS: set[type[dx.Model]] = (
     _union_members(DetectionArchitecture)
     | _union_members(TrackingArchitecture)
     | _union_members(AudioArchitecture)
@@ -210,7 +201,7 @@ def _iter_catalog_options() -> list[tuple[str, str, str, str, str]]:
     Returns:
         A list of ``(catalog_name, task_name, option_name, kind, framework)``
         tuples covering every option in both catalog files. Parsing mirrors the
-        application: the same discriminated ``Architecture`` adapter that
+        application: the same discriminated ``Architecture`` union that
         :class:`ModelConfig` uses validates each ``architecture`` block, so an
         unknown ``kind`` or a malformed block fails here exactly as it would at
         config load.
@@ -220,9 +211,9 @@ def _iter_catalog_options() -> list[tuple[str, str, str, str, str]]:
         catalog = yaml.safe_load(catalog_path.read_text())
         for task_name, task in catalog["models"].items():
             for option_name, option in task.get("options", {}).items():
-                # Validate through the same adapter the app uses; this both
+                # Validate through the same union the app uses; this both
                 # parses the kind and rejects unknown or malformed blocks.
-                parsed: Architecture = _ARCHITECTURE_ADAPTER.validate_python(option["architecture"])
+                parsed: Architecture = Architecture.model_validate(option["architecture"])
                 kind = str(parsed.kind)  # type: ignore[attr-defined]
                 framework = str(option["framework"])
                 records.append((catalog_path.name, task_name, option_name, kind, framework))

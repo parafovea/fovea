@@ -229,17 +229,57 @@ class TestYOLOWorldLoader:
 
 
 class TestGroundingDINOLoader:
-    """Tests for Grounding DINO 1.5 detection loader."""
+    """Tests for Grounding DINO 1.5 detection loader.
 
-    @pytest.mark.skip(reason="groundingdino requires manual installation from source")
+    The ``groundingdino`` package installs from source rather than PyPI, so the
+    loader imports it lazily inside ``load``. These tests inject a fake
+    ``groundingdino.util.inference`` module into ``sys.modules`` so the load
+    path and its error handling run without the source install.
+    """
+
+    @staticmethod
+    def _fake_groundingdino(load_model: MagicMock) -> dict[str, MagicMock]:
+        """Build the sys.modules entries a lazy groundingdino import needs."""
+        inference = MagicMock()
+        inference.load_model = load_model
+        return {
+            "groundingdino": MagicMock(),
+            "groundingdino.util": MagicMock(),
+            "groundingdino.util.inference": inference,
+        }
+
     def test_load_grounding_dino_success(self) -> None:
-        """Test successful Grounding DINO model loading."""
-        pass
+        """Grounding DINO load stores the model returned by load_model."""
+        fake_model = MagicMock()
+        load_model = MagicMock(return_value=fake_model)
+        config = DetectionConfig(
+            model_id="groundingdino_swint_ogc.pth",
+            framework=DetectionFramework.PYTORCH,
+            confidence_threshold=0.25,
+            device="cpu",
+        )
 
-    @pytest.mark.skip(reason="groundingdino requires manual installation from source")
+        with patch.dict("sys.modules", self._fake_groundingdino(load_model)):
+            loader = GroundingDINOLoader(GroundingDINO(), config)
+            loader.load()
+
+        assert loader.model is fake_model
+        load_model.assert_called_once()
+
     def test_load_grounding_dino_failure(self) -> None:
-        """Test Grounding DINO model loading failure."""
-        pass
+        """A load_model failure surfaces as RuntimeError with an actionable message."""
+        load_model = MagicMock(side_effect=OSError("weights missing"))
+        config = DetectionConfig(
+            model_id="groundingdino_swint_ogc.pth",
+            framework=DetectionFramework.PYTORCH,
+            confidence_threshold=0.25,
+            device="cpu",
+        )
+
+        with patch.dict("sys.modules", self._fake_groundingdino(load_model)):
+            loader = GroundingDINOLoader(GroundingDINO(), config)
+            with pytest.raises(RuntimeError, match="Model loading failed"):
+                loader.load()
 
 
 class TestOWLv2Loader:

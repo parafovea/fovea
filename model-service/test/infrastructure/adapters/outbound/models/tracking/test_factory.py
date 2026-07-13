@@ -107,9 +107,7 @@ class TestRegistryBindings:
         registry, or a YAML config naming it would fail at runtime with
         :class:`UnknownArchitectureError`.
         """
-        # TrackingArchitecture is Annotated[Union[...], Field(...)]; unwrap.
-        union_type = get_args(TrackingArchitecture)[0]
-        members = set(get_args(union_type))
+        members = set(get_args(TrackingArchitecture))
         registered = set(tracking_registry.registered_architectures)
         missing_from_registry = (members - {SAM3Tracking}) - registered
         assert not missing_from_registry, (

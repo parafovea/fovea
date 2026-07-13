@@ -69,7 +69,7 @@ dependencies = [
 
 [project.optional-dependencies]
 quantization = [
-    "bitsandbytes>=0.42.0",
+    "bitsandbytes>=0.42.0 ; python_version < '3.14'",
 ]
 # CPU-only deployment extra. Engaged by the Dockerfile when DEVICE=cpu so
 # the GGUF and ONNX models the models-cpu.yaml config selects can actually
@@ -87,16 +87,16 @@ cpu = [
     "onnxruntime>=1.20.0",
 ]
 sglang = [
-    "sglang>=0.4.1",
+    "sglang>=0.4.1 ; python_version < '3.14'",
 ]
 vllm = [
-    "vllm>=0.6.3",
+    "vllm>=0.6.3 ; python_version < '3.14'",
 ]
 sam2 = [
-    "sam-2 @ git+https://github.com/facebookresearch/segment-anything-2.git",
+    "sam-2 @ git+https://github.com/facebookresearch/segment-anything-2.git ; python_version < '3.14'",
 ]
 audio = [
-    "openai-whisper>=20240930",
+    "openai-whisper>=20240930 ; python_version < '3.14'",
     "faster-whisper>=1.1.0",
     # pyannote.audio 3.x calls hf_hub_download with the removed
     # `use_auth_token` kwarg under huggingface_hub 1.x; pin >=4.0 so
@@ -111,22 +111,23 @@ audio = [
     "azure-cognitiveservices-speech>=1.42.0",
 ]
 recommended = [
-    "bitsandbytes>=0.42.0",
+    "bitsandbytes>=0.42.0 ; python_version < '3.14'",
 ]
 # gpu is the symmetric no-op marker (the populated cpu = [...] block above
 # is the real CPU extra; gpu = [] is the placeholder for a future GPU-only
 # extra so pip's resolver does not interpret it as "every extra").
 gpu = []
 inference-engines = [
-    "bitsandbytes>=0.42.0",
-    "sglang>=0.4.1",
-    "vllm>=0.6.3",
-    "sam-2 @ git+https://github.com/facebookresearch/segment-anything-2.git",
+    "bitsandbytes>=0.42.0 ; python_version < '3.14'",
+    "sglang>=0.4.1 ; python_version < '3.14'",
+    "vllm>=0.6.3 ; python_version < '3.14'",
+    "sam-2 @ git+https://github.com/facebookresearch/segment-anything-2.git ; python_version < '3.14'",
 ]
 dev = [
     "pytest==8.0.0",
     "pytest-asyncio==0.23.5",
     "pytest-cov==4.1.0",
+    "hypothesis>=6.0.0",
     "ruff>=0.14.0",
     "mypy>=1.11.0",
     "types-PyYAML>=6.0.0",
