@@ -412,4 +412,60 @@ describe('Video annotations over the layers store', () => {
     expect(body).toHaveLength(1)
     expect(body[0].id).toBe(typeAnnotationId)
   })
+
+  it('excludes claim spans that share the video Expression', async () => {
+    // A claim text span persists as a LayersAnnotation under a 'claim' layer on
+    // the same video Expression. It has no bounding-box anchor, so it must never
+    // surface through the video-annotation route: the sidebar would render it as
+    // an empty object track that swallows keyframe edits.
+    const claimLayer = await prisma.annotationLayer.create({
+      data: {
+        id: randomUUID(),
+        expressionId: expressionVideoId(videoId),
+        kind: 'span',
+        subkind: 'claim',
+        createdByUserId: userId,
+      },
+    })
+    const claimAnnotationId = randomUUID()
+    await prisma.layersAnnotation.create({
+      data: {
+        id: claimAnnotationId,
+        layerId: claimLayer.id,
+        anchor: { spatioTemporalAnchor: { keyframes: [], temporalSpan: { start: 0, ending: 0 }, interpolation: 'linear' } },
+        label: 'claim-span',
+        createdByUserId: userId,
+      },
+    })
+
+    // GET still returns only the video annotation; the claim span is filtered out.
+    const getResponse = await app.inject({
+      method: 'GET',
+      url: `/api/layers/videos/${videoId}/annotations`,
+      cookies: { session_token: sessionToken },
+    })
+    const body = getResponse.json() as Array<Record<string, unknown>>
+    expect(body).toHaveLength(1)
+    expect(body[0].id).toBe(typeAnnotationId)
+
+    // The single-row endpoints treat the claim span as absent so the route only
+    // ever mutates bounding-box annotations.
+    const putResponse = await app.inject({
+      method: 'PUT',
+      url: `/api/layers/videos/${videoId}/annotations/${claimAnnotationId}`,
+      cookies: { session_token: sessionToken },
+      payload: { frames: typeFrames },
+    })
+    expect(putResponse.statusCode).toBe(404)
+
+    const deleteResponse = await app.inject({
+      method: 'DELETE',
+      url: `/api/layers/videos/${videoId}/annotations/${claimAnnotationId}`,
+      cookies: { session_token: sessionToken },
+    })
+    expect(deleteResponse.statusCode).toBe(404)
+
+    // The claim span is untouched by the rejected mutations.
+    expect(await prisma.layersAnnotation.findUnique({ where: { id: claimAnnotationId } })).not.toBeNull()
+  })
 })

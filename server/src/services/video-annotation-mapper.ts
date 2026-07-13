@@ -35,6 +35,28 @@ import { annotationLayerId } from './layers-id-map.js'
 export type VideoAnnotationLinkType = 'entity' | 'event' | 'time' | 'location'
 
 /**
+ * The `AnnotationLayer.subkind` values a video annotation lives under (see
+ * {@link annotationToLayers}): `ontology-type` for persona-scoped type
+ * annotations and `world-object` for object-linked annotations. Reconstruction
+ * queries MUST constrain to these so span layers of other kinds (notably claim
+ * text spans, whose subkind is `claim`) never surface as video annotations even
+ * when they anchor over the same video Expression.
+ */
+export const VIDEO_ANNOTATION_SUBKINDS = ['ontology-type', 'world-object'] as const
+
+/**
+ * Whether an `AnnotationLayer.subkind` denotes a video annotation. Single-row
+ * endpoints use this to reject a request that targets a span layer of another
+ * kind (e.g. a claim span) sharing the same video Expression.
+ *
+ * @param subkind - the stored layer subkind
+ * @returns true when the subkind is one a video annotation lives under
+ */
+export function isVideoAnnotationSubkind(subkind: string | null | undefined): boolean {
+  return subkind != null && (VIDEO_ANNOTATION_SUBKINDS as readonly string[]).includes(subkind)
+}
+
+/**
  * The legacy `Annotation` shape at the persistence boundary (the wire shape the
  * frontend sends and receives). Type annotations carry a `personaId` and a
  * `type` of `'type'`; object annotations carry a null `personaId` and a

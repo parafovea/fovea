@@ -14,6 +14,7 @@ import { PrismaClient, Prisma } from '@prisma/client'
 import {
   annotationToLayers,
   layersToAnnotation,
+  VIDEO_ANNOTATION_SUBKINDS,
   type VideoAnnotationInput,
   type VideoAnnotationOutput,
 } from '../video-annotation-mapper.js'
@@ -31,14 +32,6 @@ export interface AnnotationScope {
 function toJsonInput(value: unknown): Prisma.InputJsonValue {
   return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue
 }
-
-/**
- * The layer subkinds a video annotation lives under (see
- * `annotationToLayers`). Constrains reconstruction queries so span layers of
- * other kinds (claim text spans, whose subkind is `claim`) never surface as
- * video annotations even when they anchor over the same video expression.
- */
-const VIDEO_ANNOTATION_SUBKINDS = ['ontology-type', 'world-object']
 
 /**
  * Materializes a legacy annotation into the layers store, get-or-creating the
@@ -152,7 +145,7 @@ export async function readLayersAnnotations(
   where: Prisma.LayersAnnotationWhereInput,
 ): Promise<VideoAnnotationOutput[]> {
   const rows = await prisma.layersAnnotation.findMany({
-    where: { AND: [where, { layer: { subkind: { in: VIDEO_ANNOTATION_SUBKINDS } } }] },
+    where: { AND: [where, { layer: { subkind: { in: [...VIDEO_ANNOTATION_SUBKINDS] } } }] },
     include: { layer: { include: { expression: { include: { video: true } } } }, denotesNode: true },
     orderBy: { createdAt: 'asc' },
   })
@@ -322,7 +315,7 @@ export async function readAllAnnotationRefs(
   const refs: Array<{ id: string; personaId: string | null }> = []
   const seen = new Set<string>()
   const layersRows = await prisma.layersAnnotation.findMany({
-    where: { layer: { subkind: { in: VIDEO_ANNOTATION_SUBKINDS } } },
+    where: { layer: { subkind: { in: [...VIDEO_ANNOTATION_SUBKINDS] } } },
     select: { id: true, layer: { select: { personaId: true } } },
   })
   for (const row of layersRows) {

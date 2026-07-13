@@ -10,6 +10,8 @@ import { NotFoundError, ForbiddenError } from '../../lib/errors.js'
 import {
   annotationToLayers,
   layersToAnnotation,
+  isVideoAnnotationSubkind,
+  VIDEO_ANNOTATION_SUBKINDS,
   type VideoAnnotationInput,
   type VideoAnnotationLinkType,
 } from '../../services/video-annotation-mapper.js'
@@ -115,8 +117,16 @@ const videoAnnotationsRoutes: FastifyPluginAsync = async (fastify: FastifyInstan
     const { expressionId, video } = await getOrCreateVideoExpression(prisma, videoId)
 
     const readScope = accessibleBy(request.ability, 'read').LayersAnnotation
+    // Scope to the video-annotation subkinds so span layers of other kinds
+    // (notably claim text spans, subkind 'claim') that anchor over the same
+    // video Expression never surface here as bounding-box annotations.
     const rows = await prisma.layersAnnotation.findMany({
-      where: { AND: [readScope, { layer: { expressionId } }] },
+      where: {
+        AND: [
+          readScope,
+          { layer: { expressionId, subkind: { in: [...VIDEO_ANNOTATION_SUBKINDS] } } },
+        ],
+      },
       include: { layer: true, denotesNode: true },
       orderBy: { createdAt: 'asc' },
     })
@@ -370,7 +380,12 @@ const videoAnnotationsRoutes: FastifyPluginAsync = async (fastify: FastifyInstan
       where: { id },
       include: { layer: true },
     })
-    if (!existing) throw new NotFoundError('Annotation', id)
+    // Treat a non-video-annotation row (e.g. a claim span sharing the
+    // Expression) as absent so this route only ever mutates bounding-box
+    // annotations.
+    if (!existing || !isVideoAnnotationSubkind(existing.layer.subkind)) {
+      throw new NotFoundError('Annotation', id)
+    }
     if (!ability.can('update', subject('LayersAnnotation', existing))) {
       throw new ForbiddenError('Cannot update this Annotation')
     }
@@ -451,8 +466,16 @@ const videoAnnotationsRoutes: FastifyPluginAsync = async (fastify: FastifyInstan
     const { id } = request.params as { videoId: string; id: string }
     if (!request.ability) throw new ForbiddenError('No abilities defined')
 
-    const existing = await prisma.layersAnnotation.findUnique({ where: { id } })
-    if (!existing) throw new NotFoundError('Annotation', id)
+    const existing = await prisma.layersAnnotation.findUnique({
+      where: { id },
+      include: { layer: true },
+    })
+    // Treat a non-video-annotation row (e.g. a claim span sharing the
+    // Expression) as absent so this route only ever deletes bounding-box
+    // annotations.
+    if (!existing || !isVideoAnnotationSubkind(existing.layer.subkind)) {
+      throw new NotFoundError('Annotation', id)
+    }
     if (!request.ability.can('delete', subject('LayersAnnotation', existing))) {
       throw new ForbiddenError('Cannot delete this Annotation')
     }
