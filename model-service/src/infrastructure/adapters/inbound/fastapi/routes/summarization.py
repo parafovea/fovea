@@ -16,43 +16,47 @@ if TYPE_CHECKING:
 from fastapi import APIRouter, HTTPException
 from opentelemetry import trace
 
+from src.infrastructure.adapters.inbound.fastapi import dto_bridge, models
 from src.infrastructure.adapters.inbound.fastapi.dependencies import ModelManagerDep  # noqa: TC001
-from src.infrastructure.adapters.inbound.fastapi.mappers import (
-    summarize_request_schema_to_dto,
-    summarize_response_dto_to_schema,
-)
-from src.infrastructure.adapters.inbound.fastapi.schemas import (
-    ErrorResponse,
-    SummarizeRequest,
-    SummarizeResponse,
+from src.infrastructure.adapters.inbound.fastapi.dx_bodies import (
+    as_request,
+    as_response,
+    dump,
 )
 
 router = APIRouter()
 tracer = trace.get_tracer(__name__)
 logger = logging.getLogger(__name__)
 
+_SummarizeRequestBody = as_request(models.SummarizeRequest)
+
 
 @router.post(
     "/summarize",
-    response_model=SummarizeResponse,
+    response_model=as_response(models.SummarizeResponse),
     responses={
-        400: {"model": ErrorResponse},
-        500: {"model": ErrorResponse},
+        400: {"model": as_response(models.ErrorResponse)},
+        500: {"model": as_response(models.ErrorResponse)},
     },
     summary="Summarize video content",
     description="Generates a text summary of video content using vision language models. "
     "Analyzes video frames and optionally audio to produce a description tailored to the persona's perspective.",
 )
 async def summarize_video(
-    request: SummarizeRequest,
+    request: _SummarizeRequestBody,
     manager: ModelManagerDep,
-) -> SummarizeResponse:
+) -> dict[str, object]:
     """Summarize video content using vision language models."""
     with tracer.start_as_current_span("summarize_video") as span:
         span.set_attribute("video_id", request.video_id)
         span.set_attribute("persona_id", request.persona_id)
         span.set_attribute("frame_sample_rate", request.frame_sample_rate)
 
+        from src.application.dto.summarization import (
+            AudioOverridesDTO,
+            GenerationOverridesDTO,
+            SummarizeRequestDTO,
+        )
         from src.application.use_cases import summarize_video as summarize_module
         from src.application.use_cases.summarize_video import (
             SummarizationError,
@@ -78,7 +82,42 @@ async def summarize_video(
         from src.infrastructure.adapters.outbound.vlm_adapter import VLMLoaderAdapter
 
         temp_video_path: str | None = None
-        dto_request = summarize_request_schema_to_dto(request)
+        gen = request.generation_overrides
+        aud = request.audio_overrides
+        dto_request = SummarizeRequestDTO(
+            video_id=request.video_id,
+            persona_id=request.persona_id,
+            video_path=request.video_path,
+            persona_role=request.persona_role,
+            information_need=request.information_need,
+            frame_sample_rate=request.frame_sample_rate,
+            max_frames=request.max_frames,
+            enable_audio=request.enable_audio,
+            audio_language=request.audio_language,
+            enable_speaker_diarization=request.enable_speaker_diarization,
+            fusion_strategy=request.fusion_strategy,
+            generation_overrides=(
+                None
+                if gen is None
+                else GenerationOverridesDTO(
+                    temperature=gen.temperature,
+                    top_p=gen.top_p,
+                    max_tokens=gen.max_tokens,
+                )
+            ),
+            audio_overrides=(
+                None
+                if aud is None
+                else AudioOverridesDTO(
+                    beam_size=aud.beam_size,
+                    compute_type=aud.compute_type,
+                    num_speakers=aud.num_speakers,
+                    min_speakers=aud.min_speakers,
+                    max_speakers=aud.max_speakers,
+                    vad_threshold=aud.vad_threshold,
+                )
+            ),
+        )
 
         # Enforce the deployment-wide frame cap from inference config.
         # CPU VLMs run ~10-30 s/frame; without this cap, a frontend that
@@ -201,7 +240,7 @@ async def summarize_video(
                 )
 
             span.set_attribute("summary_generated", True)
-            return summarize_response_dto_to_schema(response_dto)
+            return dump(dto_bridge.summarize_response(response_dto))
 
         except HTTPException:
             raise

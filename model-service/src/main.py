@@ -10,6 +10,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 
+from didactic.fastapi import register_validation_handler
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -67,6 +68,10 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+
+# Map didactic ValidationError raised inside a route to a 422 response shaped
+# like FastAPI's own validation-error body.
+register_validation_handler(app)
 
 # Configure OpenTelemetry instrumentation
 instrument_app(app)

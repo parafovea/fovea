@@ -101,6 +101,10 @@ def mock_model_manager() -> Generator[Mock, None, None]:
 @pytest.fixture
 def test_client_with_mocks(mock_model_manager: Mock) -> Generator[TestClient, None, None]:
     """Test client fixture for API requests with mocked model manager."""
+    # Patching the vlm/llm loader factories imports their modules, which pull
+    # in the ML backend; skip these cases in the torch-free environment.
+    pytest.importorskip("torch")
+
     from src.infrastructure.adapters.inbound.fastapi.dependencies import get_model_manager
 
     app.dependency_overrides[get_model_manager] = lambda: mock_model_manager

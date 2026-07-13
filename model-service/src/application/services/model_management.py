@@ -22,19 +22,9 @@ from typing import TYPE_CHECKING, Any
 import psutil
 import yaml
 from opentelemetry import trace
-from pydantic import TypeAdapter
 
 from src.application.dto.external_api import ExternalAPIConfigDTO
 from src.domain.entities.architectures import Architecture
-
-# Pydantic adapter for the cross-family discriminated Architecture
-# union. Cached at module scope because TypeAdapter compilation is
-# non-trivial and ``ModelConfig`` instances parse architecture blocks
-# on every YAML load. The annotation is the family-tagged
-# ``Annotated[Union[...], Field(discriminator)]`` alias from
-# ``src.domain.entities.architectures``; Pyright's variance check on
-# Annotated forces a ``type: ignore``.
-_ARCHITECTURE_ADAPTER = TypeAdapter[Architecture](Architecture)  # type: ignore[misc]
 
 if TYPE_CHECKING:
     from src.application.ports.outbound.model_capability import IModelCapabilityProbe
@@ -58,8 +48,8 @@ class ModelConfig:
         # block fails loudly here at config load rather than silently
         # selecting a default at dispatch time. The discriminated union
         # in src.domain.entities.architectures parses the dict into the
-        # right Pydantic subclass; malformed blocks (unknown `kind`,
-        # extra fields) raise loud thanks to ConfigDict(extra='forbid').
+        # right variant subclass; malformed blocks (unknown `kind`,
+        # extra fields) raise loud because the union forbids unknown fields.
         try:
             arch_payload = config_dict["architecture"]
         except KeyError as exc:
@@ -68,7 +58,7 @@ class ModelConfig:
                 "every model option in models.yaml / models-cpu.yaml must "
                 f"declare its architecture kind. Got keys: {sorted(config_dict.keys())!r}"
             ) from exc
-        self.architecture: Architecture = _ARCHITECTURE_ADAPTER.validate_python(arch_payload)
+        self.architecture: Architecture = Architecture.model_validate(arch_payload)
         self.vram_gb: float = config_dict.get("vram_gb", 0)
         self.cpu_memory_gb: float = config_dict.get("cpu_memory_gb", 0)
         self.cpu_compatible: bool = config_dict.get("cpu_compatible", False)

@@ -46,6 +46,10 @@ def client_with_full_manager() -> Generator[TestClient, None, None]:
     """TestClient for a manager configured with both claim tasks."""
     from src.infrastructure.adapters.inbound.fastapi.dependencies import get_model_manager
 
+    # Patching create_llm_loader imports the llm.loader module, which pulls in
+    # the ML backend; skip these cases in the torch-free environment.
+    pytest.importorskip("torch")
+
     manager = _model_manager_with(
         {
             "claim_extraction": "meta-llama/Llama-4-Scout",

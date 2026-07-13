@@ -25,6 +25,10 @@ from __future__ import annotations
 
 import pytest
 
+pytest.importorskip("torch")  # requires the ML backend; skipped in the torch-free venv
+
+import pytest
+
 from src.domain.entities.architectures import (
     GLM4,
     ClaudeAPI,

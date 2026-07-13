@@ -8,10 +8,11 @@ import logging
 from fastapi import APIRouter, HTTPException
 from opentelemetry import trace
 
-from src.infrastructure.adapters.inbound.fastapi.schemas import (
-    ErrorResponse,
-    ThumbnailGenerateRequest,
-    ThumbnailGenerateResponse,
+from src.infrastructure.adapters.inbound.fastapi import models
+from src.infrastructure.adapters.inbound.fastapi.dx_bodies import (
+    as_request,
+    as_response,
+    dump,
 )
 from src.infrastructure.adapters.outbound.video.downloader import (
     cleanup_temp_video,
@@ -27,21 +28,23 @@ router = APIRouter()
 tracer = trace.get_tracer(__name__)
 logger = logging.getLogger(__name__)
 
+_ThumbnailRequestBody = as_request(models.ThumbnailGenerateRequest)
+
 
 @router.post(
     "/thumbnails/generate",
-    response_model=ThumbnailGenerateResponse,
+    response_model=as_response(models.ThumbnailGenerateResponse),
     responses={
-        400: {"model": ErrorResponse},
-        404: {"model": ErrorResponse},
-        500: {"model": ErrorResponse},
+        400: {"model": as_response(models.ErrorResponse)},
+        404: {"model": as_response(models.ErrorResponse)},
+        500: {"model": as_response(models.ErrorResponse)},
     },
     summary="Generate video thumbnail",
     description="Extract a thumbnail from a video at a specified timestamp using FFmpeg.",
 )
 async def generate_thumbnail(
-    request: ThumbnailGenerateRequest,
-) -> ThumbnailGenerateResponse:
+    request: _ThumbnailRequestBody,
+) -> dict[str, object]:
     """Generate a thumbnail from a video file.
 
     Parameters
@@ -97,11 +100,13 @@ async def generate_thumbnail(
                 size=dimensions,
             )
 
-            return ThumbnailGenerateResponse(
-                video_id=request.video_id,
-                thumbnail_path=thumbnail_path,
-                timestamp=request.timestamp,
-                size=request.size,
+            return dump(
+                models.ThumbnailGenerateResponse(
+                    video_id=request.video_id,
+                    thumbnail_path=thumbnail_path,
+                    timestamp=request.timestamp,
+                    size=request.size,
+                )
             )
 
         except VideoProcessingError as e:

@@ -13,47 +13,47 @@ import numpy as np
 from fastapi import APIRouter, HTTPException
 from opentelemetry import trace
 
+from src.infrastructure.adapters.inbound.fastapi import dto_bridge, models
 from src.infrastructure.adapters.inbound.fastapi.dependencies import (  # noqa: TC001
     ContainerDep,
     ModelManagerDep,
 )
-from src.infrastructure.adapters.inbound.fastapi.mappers import (
-    tracking_request_schema_to_dto,
-    tracking_response_dto_to_schema,
-)
-from src.infrastructure.adapters.inbound.fastapi.schemas import (
-    ErrorResponse,
-    TrackingRequest,
-    TrackingResponse,
+from src.infrastructure.adapters.inbound.fastapi.dx_bodies import (
+    as_request,
+    as_response,
+    dump,
 )
 
 router = APIRouter()
 tracer = trace.get_tracer(__name__)
 logger = logging.getLogger(__name__)
 
+_TrackingRequestBody = as_request(models.TrackingRequest)
+
 
 @router.post(
     "/tracking/track",
-    response_model=TrackingResponse,
+    response_model=as_response(models.TrackingResponse),
     responses={
-        400: {"model": ErrorResponse},
-        404: {"model": ErrorResponse},
-        500: {"model": ErrorResponse},
+        400: {"model": as_response(models.ErrorResponse)},
+        404: {"model": as_response(models.ErrorResponse)},
+        500: {"model": as_response(models.ErrorResponse)},
     },
     summary="Track objects across video frames",
     description="Tracks objects across video frames using initial segmentation masks. "
     "Supports SAMURAI, SAM2Long, SAM2.1, and YOLO11n-seg models.",
 )
 async def track_objects(
-    request: TrackingRequest,
+    request: _TrackingRequestBody,
     manager: ModelManagerDep,
     container: ContainerDep,
-) -> TrackingResponse:
+) -> dict[str, object]:
     """Track objects across video frames with mask-based segmentation."""
     with tracer.start_as_current_span("track_objects") as span:
         span.set_attribute("video_id", request.video_id)
         span.set_attribute("num_objects", len(request.object_ids))
 
+        from src.application.dto.tracking import TrackObjectsRequestDTO
         from src.application.use_cases.summarize_video import get_video_path_for_id
         from src.application.use_cases.track_objects import (
             TrackingError,
@@ -168,7 +168,13 @@ async def track_objects(
             if not frames_rgb:
                 raise HTTPException(status_code=400, detail="No valid frames to process")
 
-            dto_request = tracking_request_schema_to_dto(request, video_path)
+            dto_request = TrackObjectsRequestDTO(
+                video_id=request.video_id,
+                video_path=video_path,
+                initial_masks_b64=list(request.initial_masks),
+                object_ids=list(request.object_ids),
+                frame_numbers=list(request.frame_numbers),
+            )
             execution_input = TrackObjectsExecutionInput(
                 request=dto_request,
                 frames=frames_rgb,
@@ -185,7 +191,7 @@ async def track_objects(
             span.set_attribute("processing_time", response_dto.processing_time)
             span.set_attribute("fps", response_dto.fps)
 
-            return tracking_response_dto_to_schema(response_dto)
+            return dump(dto_bridge.tracking_response(response_dto))
 
         except HTTPException:
             raise

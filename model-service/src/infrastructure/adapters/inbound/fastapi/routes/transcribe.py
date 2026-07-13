@@ -16,17 +16,24 @@ import logging
 import os
 import time
 from pathlib import Path
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
+import didactic.api as dx
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, Field
 
 from src.infrastructure.adapters.inbound.fastapi.dependencies import ModelManagerDep  # noqa: TC001
-from src.infrastructure.adapters.outbound.models.audio.base import (
-    AudioTranscriptionLoader,
-    TranscriptionResult,
+from src.infrastructure.adapters.inbound.fastapi.dx_bodies import (
+    as_request,
+    as_response,
+    dump,
 )
 from src.infrastructure.config.settings import get_settings
+
+if TYPE_CHECKING:
+    from src.infrastructure.adapters.outbound.models.audio.base import (
+        AudioTranscriptionLoader,
+        TranscriptionResult,
+    )
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -44,11 +51,11 @@ _AUDIO_OUTPUT_PREFIX: str = os.path.realpath(str(get_settings().audio_output_roo
 _AUDIO_PATH_ROOTS: tuple[str, str] = (_VIDEO_DATA_PREFIX, _AUDIO_OUTPUT_PREFIX)
 
 
-class TranscribeRequest(BaseModel):
+class TranscribeRequest(dx.Model):
     """Request schema for the transcription endpoint."""
 
-    audio_path: str = Field(..., description="Filesystem path to an audio or video file.")
-    language: str | None = Field(
+    audio_path: str = dx.field(description="Filesystem path to an audio or video file.")
+    language: str | None = dx.field(
         default=None,
         description=(
             "Optional ISO-639-1 language code (e.g. 'en', 'es'). When omitted the loader "
@@ -57,7 +64,7 @@ class TranscribeRequest(BaseModel):
     )
 
 
-class TranscriptionSegmentResponse(BaseModel):
+class TranscriptionSegmentResponse(dx.Model):
     """One timed segment from the transcript."""
 
     start: float
@@ -66,26 +73,29 @@ class TranscriptionSegmentResponse(BaseModel):
     confidence: float
 
 
-class TranscribeResponse(BaseModel):
+class TranscribeResponse(dx.Model):
     """Response schema for the transcription endpoint."""
 
     text: str
-    segments: list[TranscriptionSegmentResponse]
-    language: str
-    duration: float
-    processing_time: float
-    model_used: str
+    segments: tuple[TranscriptionSegmentResponse, ...] = dx.field(default_factory=tuple)
+    language: str = ""
+    duration: float = 0.0
+    processing_time: float = 0.0
+    model_used: str = ""
+
+
+_TranscribeRequestBody = as_request(TranscribeRequest)
 
 
 @router.post(
     "/transcribe",
-    response_model=TranscribeResponse,
+    response_model=as_response(TranscribeResponse),
     summary="Transcribe an audio (or audio track of a video) file.",
 )
 async def transcribe(
-    request: TranscribeRequest,
+    request: _TranscribeRequestBody,
     manager: ModelManagerDep,
-) -> TranscribeResponse:
+) -> dict[str, object]:
     """Transcribe an audio or video file using the configured ASR model."""
     # CodeQL sanitizer chain (inlined per StartswithCall recognition):
     #   1. os.path.realpath -> PathNormalization
@@ -117,7 +127,9 @@ async def transcribe(
     # the concrete loader abstract base so downstream `.transcribe(...)`
     # returns a typed TranscriptionResult instead of leaking Any.
     try:
-        model = cast(AudioTranscriptionLoader, await manager.load_model("audio_transcription"))
+        model = cast(
+            "AudioTranscriptionLoader", await manager.load_model("audio_transcription")
+        )
     except Exception as exc:
         logger.exception("Failed to load audio_transcription model")
         raise HTTPException(status_code=500, detail=f"Model load failed: {exc}") from exc
@@ -138,19 +150,21 @@ async def transcribe(
         raise HTTPException(status_code=500, detail=f"Transcription failed: {exc}") from exc
     processing_time = time.time() - start
 
-    return TranscribeResponse(
-        text=result.text,
-        segments=[
-            TranscriptionSegmentResponse(
-                start=seg.start,
-                end=seg.end,
-                text=seg.text,
-                confidence=seg.confidence,
-            )
-            for seg in result.segments
-        ],
-        language=result.language,
-        duration=result.duration,
-        processing_time=processing_time,
-        model_used=selected.model_id,
+    return dump(
+        TranscribeResponse(
+            text=result.text,
+            segments=tuple(
+                TranscriptionSegmentResponse(
+                    start=seg.start,
+                    end=seg.end,
+                    text=seg.text,
+                    confidence=seg.confidence,
+                )
+                for seg in result.segments
+            ),
+            language=result.language,
+            duration=result.duration,
+            processing_time=processing_time,
+            model_used=selected.model_id,
+        )
     )

@@ -16,32 +16,31 @@ import numpy as np
 from fastapi import APIRouter, HTTPException
 from opentelemetry import trace
 
+from src.infrastructure.adapters.inbound.fastapi import dto_bridge, models
 from src.infrastructure.adapters.inbound.fastapi.dependencies import (  # noqa: TC001
     ContainerDep,
     ModelManagerDep,
 )
-from src.infrastructure.adapters.inbound.fastapi.mappers import (
-    detection_request_schema_to_dto,
-    detection_response_dto_to_schema,
-)
-from src.infrastructure.adapters.inbound.fastapi.schemas import (
-    DetectionRequest,
-    DetectionResponse,
-    ErrorResponse,
+from src.infrastructure.adapters.inbound.fastapi.dx_bodies import (
+    as_request,
+    as_response,
+    dump,
 )
 
 router = APIRouter()
 tracer = trace.get_tracer(__name__)
 logger = logging.getLogger(__name__)
 
+_DetectionRequestBody = as_request(models.DetectionRequest)
+
 
 @router.post(
     "/detection/detect",
-    response_model=DetectionResponse,
+    response_model=as_response(models.DetectionResponse),
     responses={
-        400: {"model": ErrorResponse},
-        404: {"model": ErrorResponse},
-        500: {"model": ErrorResponse},
+        400: {"model": as_response(models.ErrorResponse)},
+        404: {"model": as_response(models.ErrorResponse)},
+        500: {"model": as_response(models.ErrorResponse)},
     },
     summary="Detect objects in video frames",
     description="Detects objects in video frames based on text prompts using "
@@ -49,16 +48,17 @@ logger = logging.getLogger(__name__)
     "Grounding DINO 1.5, OWLv2, and Florence-2.",
 )
 async def detect_objects(
-    request: DetectionRequest,
+    request: _DetectionRequestBody,
     manager: ModelManagerDep,
     container: ContainerDep,
-) -> DetectionResponse:
+) -> dict[str, object]:
     """Detect objects in video frames using open-vocabulary detection models."""
     with tracer.start_as_current_span("detect_objects") as span:
         span.set_attribute("video_id", request.video_id)
         span.set_attribute("query", request.query)
         span.set_attribute("confidence_threshold", request.confidence_threshold)
 
+        from src.application.dto.detection import DetectObjectsRequestDTO
         from src.application.use_cases.detect_objects import (
             DetectObjectsExecutionInput,
             DetectObjectsFrameInput,
@@ -145,7 +145,14 @@ async def detect_objects(
                 )
             cap.release()
 
-            dto_request = detection_request_schema_to_dto(request, video_path)
+            dto_request = DetectObjectsRequestDTO(
+                video_id=request.video_id,
+                query=request.query,
+                video_path=video_path,
+                frame_numbers=list(request.frame_numbers),
+                confidence_threshold=float(request.confidence_threshold),
+                enable_tracking=request.enable_tracking,
+            )
             execution_input = DetectObjectsExecutionInput(
                 request=dto_request,
                 video_width=video_width,
@@ -158,7 +165,7 @@ async def detect_objects(
             span.set_attribute("frames_processed", len(response_dto.frames))
             span.set_attribute("processing_time", response_dto.processing_time)
 
-            return detection_response_dto_to_schema(response_dto)
+            return dump(dto_bridge.detection_response(response_dto))
 
         except HTTPException:
             raise

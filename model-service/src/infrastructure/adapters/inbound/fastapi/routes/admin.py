@@ -20,13 +20,19 @@ session or cookie is involved — this is service-to-service only.
 from __future__ import annotations
 
 import logging
-from typing import Literal
+from typing import Annotated, Literal
 
+import didactic.api as dx
+from annotated_types import Ge, Le
 from fastapi import APIRouter, Header, HTTPException, status
-from pydantic import BaseModel, Field
 
 from src.infrastructure.adapters.inbound.fastapi.dependencies import (
     ModelManagerDep,  # noqa: TC001  # FastAPI resolves this annotation at runtime
+)
+from src.infrastructure.adapters.inbound.fastapi.dx_bodies import (
+    as_request,
+    as_response,
+    dump,
 )
 from src.infrastructure.adapters.outbound.video.processor import reconfigure_roots
 from src.infrastructure.config.settings import get_settings
@@ -35,73 +41,73 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-class StoragePathsValue(BaseModel):
+class StoragePathsValue(dx.Model):
     """Runtime-updatable storage roots matching the Node ``storagePaths`` key."""
 
-    video_data_root: str = Field(alias="videoDataRoot")
-    thumbnail_output_root: str = Field(alias="thumbnailOutputRoot")
-    audio_output_root: str = Field(alias="audioOutputRoot")
-
-    model_config = {"populate_by_name": True}
+    video_data_root: str = dx.field(alias="videoDataRoot")
+    thumbnail_output_root: str = dx.field(alias="thumbnailOutputRoot")
+    audio_output_root: str = dx.field(alias="audioOutputRoot")
 
 
-class RuntimeValue(BaseModel):
+class RuntimeValue(dx.Model):
     """Runtime inference-config knobs."""
 
-    cuda_device: str = Field(alias="cudaDevice")
-    warmup_on_startup: bool = Field(alias="warmupOnStartup")
-    default_batch_size: int = Field(alias="defaultBatchSize", ge=1, le=128)
-    max_batch_size: int = Field(alias="maxBatchSize", ge=1, le=128)
-    offload_threshold: float = Field(alias="offloadThreshold", ge=0.0, le=1.0)
-
-    model_config = {"populate_by_name": True}
+    cuda_device: str = dx.field(alias="cudaDevice")
+    warmup_on_startup: bool = dx.field(alias="warmupOnStartup")
+    default_batch_size: Annotated[int, Ge(1), Le(128)] = dx.field(alias="defaultBatchSize")
+    max_batch_size: Annotated[int, Ge(1), Le(128)] = dx.field(alias="maxBatchSize")
+    offload_threshold: Annotated[float, Ge(0.0), Le(1.0)] = dx.field(alias="offloadThreshold")
 
 
-class ExternalApiProvider(BaseModel):
+class ExternalApiProvider(dx.Model):
     """External API provider declaration."""
 
     provider: Literal["anthropic", "openai", "google"]
     endpoint: str
-    timeout_seconds: int = Field(alias="timeoutSeconds", ge=1, le=600)
-    max_retries: int = Field(alias="maxRetries", ge=0, le=10)
-
-    model_config = {"populate_by_name": True}
+    timeout_seconds: Annotated[int, Ge(1), Le(600)] = dx.field(alias="timeoutSeconds")
+    max_retries: Annotated[int, Ge(0), Le(10)] = dx.field(alias="maxRetries")
 
 
-class ExternalApisValue(BaseModel):
+class ExternalApisValue(dx.Model):
     """External API providers list."""
 
-    providers: list[ExternalApiProvider]
-
-    model_config = {"populate_by_name": True}
+    providers: tuple[ExternalApiProvider, ...] = dx.field(default_factory=tuple)
 
 
-class StoragePathsRow(BaseModel):
+class StoragePathsRow(dx.Model):
     """Discriminated row for the ``storagePaths`` key."""
 
     key: Literal["storagePaths"]
     value: StoragePathsValue
 
 
-class RuntimeRow(BaseModel):
+class RuntimeRow(dx.Model):
     """Discriminated row for the ``runtime`` key."""
 
     key: Literal["runtime"]
     value: RuntimeValue
 
 
-class ExternalApisRow(BaseModel):
+class ExternalApisRow(dx.Model):
     """Discriminated row for the ``externalApis`` key."""
 
     key: Literal["externalApis"]
     value: ExternalApisValue
 
 
-class ReconfigureAck(BaseModel):
+class ReconfigureAck(dx.Model):
     """Response confirming the applied key and a short human summary."""
 
     applied: str
     summary: str
+
+
+# The reconfigure body is one of three key-tagged rows. FastAPI validates
+# the posted object against this union of the Pydantic mirrors; the route
+# dispatches on the ``key`` discriminator.
+_ReconfigureBody = (
+    as_request(StoragePathsRow) | as_request(RuntimeRow) | as_request(ExternalApisRow)
+)
 
 
 def _require_admin_token(x_admin_token: str | None) -> None:
@@ -122,16 +128,16 @@ def _require_admin_token(x_admin_token: str | None) -> None:
 
 @router.post(
     "/admin/reconfigure",
-    response_model=ReconfigureAck,
+    response_model=as_response(ReconfigureAck),
     summary="Apply an admin-managed config row to the live model service",
     description="Service-to-service endpoint called by the Node layer after a "
     "SystemConfig row is written. Idempotent and safe to replay on startup.",
 )
 async def reconfigure(
-    body: StoragePathsRow | RuntimeRow | ExternalApisRow,
+    body: _ReconfigureBody,
     manager: ModelManagerDep,
     x_admin_token: str | None = Header(default=None, alias="X-Admin-Token"),
-) -> ReconfigureAck:
+) -> dict[str, object]:
     """Apply a config row by type.
 
     The union discriminator is ``key``; each branch maps to a concrete
@@ -140,43 +146,49 @@ async def reconfigure(
     """
     _require_admin_token(x_admin_token)
 
-    if isinstance(body, StoragePathsRow):
+    if body.key == "storagePaths":
         paths = body.value
         reconfigure_roots(
             video_root=paths.video_data_root,
             thumbnail_root=paths.thumbnail_output_root,
             audio_root=paths.audio_output_root,
         )
-        return ReconfigureAck(
-            applied="storagePaths",
-            summary=(
-                f"roots set to video={paths.video_data_root!r}, "
-                f"thumb={paths.thumbnail_output_root!r}, "
-                f"audio={paths.audio_output_root!r}"
-            ),
+        return dump(
+            ReconfigureAck(
+                applied="storagePaths",
+                summary=(
+                    f"roots set to video={paths.video_data_root!r}, "
+                    f"thumb={paths.thumbnail_output_root!r}, "
+                    f"audio={paths.audio_output_root!r}"
+                ),
+            )
         )
 
-    if isinstance(body, RuntimeRow):
+    if body.key == "runtime":
         runtime = body.value
         ic = manager.inference_config
         ic.warmup_on_startup = runtime.warmup_on_startup
         ic.default_batch_size = runtime.default_batch_size
         ic.max_batch_size = runtime.max_batch_size
         ic.offload_threshold = runtime.offload_threshold
-        return ReconfigureAck(
-            applied="runtime",
-            summary=(
-                f"warmup={runtime.warmup_on_startup} "
-                f"batch={runtime.default_batch_size}/{runtime.max_batch_size} "
-                f"offload={runtime.offload_threshold}"
-            ),
+        return dump(
+            ReconfigureAck(
+                applied="runtime",
+                summary=(
+                    f"warmup={runtime.warmup_on_startup} "
+                    f"batch={runtime.default_batch_size}/{runtime.max_batch_size} "
+                    f"offload={runtime.offload_threshold}"
+                ),
+            )
         )
 
     # ExternalApisRow: the external API router reads credentials lazily on
     # every call, so there is nothing to rebind here — we only log the
     # effective provider list for operator visibility.
     providers = ",".join(p.provider for p in body.value.providers) or "(none)"
-    return ReconfigureAck(
-        applied="externalApis",
-        summary=f"external providers on file: {providers}",
+    return dump(
+        ReconfigureAck(
+            applied="externalApis",
+            summary=f"external providers on file: {providers}",
+        )
     )

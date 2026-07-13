@@ -17,23 +17,20 @@ if TYPE_CHECKING:
 from fastapi import APIRouter, HTTPException
 from opentelemetry import trace
 
+from src.infrastructure.adapters.inbound.fastapi import dto_bridge, models
 from src.infrastructure.adapters.inbound.fastapi.dependencies import ModelManagerDep  # noqa: TC001
-from src.infrastructure.adapters.inbound.fastapi.mappers import (
-    claim_relationship_schema_to_dto,
-    claim_source_schema_to_dto,
-    extracted_claim_dto_to_schema,
-)
-from src.infrastructure.adapters.inbound.fastapi.schemas import (
-    ClaimExtractionRequest,
-    ClaimExtractionResponse,
-    ErrorResponse,
-    SummarySynthesisRequest,
-    SummarySynthesisResponse,
+from src.infrastructure.adapters.inbound.fastapi.dx_bodies import (
+    as_request,
+    as_response,
+    dump,
 )
 
 router = APIRouter()
 tracer = trace.get_tracer(__name__)
 logger = logging.getLogger(__name__)
+
+_ClaimExtractionRequestBody = as_request(models.ClaimExtractionRequest)
+_SummarySynthesisRequestBody = as_request(models.SummarySynthesisRequest)
 
 
 class ClaimDict(TypedDict):
@@ -54,19 +51,19 @@ def _count_claims_recursive(claims: list[ClaimDict]) -> int:
 
 @router.post(
     "/extract-claims",
-    response_model=ClaimExtractionResponse,
+    response_model=as_response(models.ClaimExtractionResponse),
     responses={
-        400: {"model": ErrorResponse},
-        500: {"model": ErrorResponse},
+        400: {"model": as_response(models.ErrorResponse)},
+        500: {"model": as_response(models.ErrorResponse)},
     },
     summary="Extract atomic claims from summary text",
     description="Decomposes summary text into atomic factual claims using LLM. "
     "Supports hierarchical subclaim extraction and configurable context sources.",
 )
 async def extract_claims(
-    request: ClaimExtractionRequest,
+    request: _ClaimExtractionRequestBody,
     manager: ModelManagerDep,
-) -> ClaimExtractionResponse:
+) -> dict[str, object]:
     """Extract atomic claims from video summary."""
     with tracer.start_as_current_span("extract_claims") as span:
         span.set_attribute("summary_id", request.summary_id)
@@ -75,12 +72,6 @@ async def extract_claims(
         from src.application.use_cases.extract_claims import (
             ExtractClaimsRequest,
             ExtractClaimsUseCase,
-        )
-        from src.infrastructure.adapters.outbound.llm_adapter import LLMLoaderAdapter
-        from src.infrastructure.adapters.outbound.models.llm.loader import (
-            LLMConfig,
-            LLMFramework,
-            create_llm_loader,
         )
 
         try:
@@ -100,6 +91,15 @@ async def extract_claims(
                     f"models.yaml/models-cpu.yaml"
                 )
 
+            # ML loader imports are deferred until a valid task is confirmed so a
+            # missing-task request fails fast without pulling in the ML stack.
+            from src.infrastructure.adapters.outbound.llm_adapter import LLMLoaderAdapter
+            from src.infrastructure.adapters.outbound.models.llm.loader import (
+                LLMConfig,
+                LLMFramework,
+                create_llm_loader,
+            )
+
             llm_config = LLMConfig(
                 model_id=selected_config.model_id,
                 quantization=selected_config.quantization or "none",
@@ -118,8 +118,8 @@ async def extract_claims(
                 ontology_context = None
                 if request.ontology_types:
                     ontology_context = {
-                        "types": request.ontology_types,
-                        "glosses": request.ontology_glosses or {},
+                        "types": [dict(t) for t in request.ontology_types],
+                        "glosses": dict(request.ontology_glosses or {}),
                     }
 
                 start_time = time.time()
@@ -127,27 +127,37 @@ async def extract_claims(
                 claim_dtos = await use_case.execute(
                     ExtractClaimsRequest(
                         summary_text=request.summary_text,
-                        sentences=request.sentences,
+                        sentences=(
+                            list(request.sentences)
+                            if request.sentences is not None
+                            else None
+                        ),
                         strategy=request.extraction_strategy,
                         max_claims=request.max_claims,
                         min_confidence=request.min_confidence,
                         ontology_context=ontology_context,
-                        annotation_context=request.annotations,
+                        annotation_context=(
+                            [dict(a) for a in request.annotations]
+                            if request.annotations is not None
+                            else None
+                        ),
                         max_output_tokens=manager.inference_config.llm_max_claims_tokens,
                     )
                 )
                 processing_time = time.time() - start_time
 
-                claims = [extracted_claim_dto_to_schema(c) for c in claim_dtos]
+                claims = tuple(dto_bridge.extracted_claim(c) for c in claim_dtos)
 
                 span.set_attribute("claims_extracted", len(claims))
                 span.set_attribute("processing_time", processing_time)
 
-                return ClaimExtractionResponse(
-                    summary_id=request.summary_id,
-                    claims=claims,
-                    model_used=llm_config.model_id,
-                    processing_time=processing_time,
+                return dump(
+                    models.ClaimExtractionResponse(
+                        summary_id=request.summary_id,
+                        claims=claims,
+                        model_used=llm_config.model_id,
+                        processing_time=processing_time,
+                    )
                 )
 
             finally:
@@ -161,19 +171,19 @@ async def extract_claims(
 
 @router.post(
     "/synthesize-summary",
-    response_model=SummarySynthesisResponse,
+    response_model=as_response(models.SummarySynthesisResponse),
     responses={
-        400: {"model": ErrorResponse},
-        500: {"model": ErrorResponse},
+        400: {"model": as_response(models.ErrorResponse)},
+        500: {"model": as_response(models.ErrorResponse)},
     },
     summary="Synthesize narrative summary from claim hierarchies",
     description="Generates coherent summary text from structured claims. "
     "Supports hierarchical claims, claim relations, and multi-source synthesis.",
 )
 async def synthesize_summary(
-    request: SummarySynthesisRequest,
+    request: _SummarySynthesisRequestBody,
     manager: ModelManagerDep,
-) -> SummarySynthesisResponse:
+) -> dict[str, object]:
     """Synthesize summary from claim hierarchies."""
     with tracer.start_as_current_span("synthesize_summary") as span:
         span.set_attribute("summary_id", request.summary_id)
@@ -181,12 +191,6 @@ async def synthesize_summary(
         span.set_attribute("synthesis_strategy", request.synthesis_strategy)
 
         from src.application.use_cases.synthesize_summary import SynthesizeSummaryUseCase
-        from src.infrastructure.adapters.outbound.llm_adapter import LLMLoaderAdapter
-        from src.infrastructure.adapters.outbound.models.llm.loader import (
-            LLMConfig,
-            LLMFramework,
-            create_llm_loader,
-        )
 
         try:
             task_config = manager.tasks.get("claim_synthesis")
@@ -205,6 +209,15 @@ async def synthesize_summary(
                     f"models.yaml/models-cpu.yaml"
                 )
 
+            # ML loader imports are deferred until a valid task is confirmed so a
+            # missing-task request fails fast without pulling in the ML stack.
+            from src.infrastructure.adapters.outbound.llm_adapter import LLMLoaderAdapter
+            from src.infrastructure.adapters.outbound.models.llm.loader import (
+                LLMConfig,
+                LLMFramework,
+                create_llm_loader,
+            )
+
             llm_config = LLMConfig(
                 model_id=selected_config.model_id,
                 quantization=selected_config.quantization or "none",
@@ -220,9 +233,33 @@ async def synthesize_summary(
             await language_model.aload()
 
             try:
-                claim_source_dtos = [claim_source_schema_to_dto(s) for s in request.claim_sources]
+                from src.application.dto.claims import (
+                    ClaimRelationshipDTO,
+                    ClaimSourceDTO,
+                )
+
+                claim_source_dtos = [
+                    ClaimSourceDTO(
+                        source_id=source.source_id,
+                        source_type=source.source_type,
+                        claims=[dict(claim) for claim in source.claims],
+                        metadata=(
+                            dict(source.metadata) if source.metadata is not None else None
+                        ),
+                    )
+                    for source in request.claim_sources
+                ]
                 claim_relation_dtos = (
-                    [claim_relationship_schema_to_dto(r) for r in request.claim_relations]
+                    [
+                        ClaimRelationshipDTO(
+                            source_claim_id=relation.source_claim_id,
+                            target_claim_id=relation.target_claim_id,
+                            relation_type=relation.relation_type,
+                            confidence=relation.confidence,
+                            notes=relation.notes,
+                        )
+                        for relation in request.claim_relations
+                    ]
                     if request.claim_relations is not None
                     else None
                 )
@@ -259,17 +296,19 @@ async def synthesize_summary(
                         ]
                     )
 
-                return SummarySynthesisResponse(
-                    summary_id=request.summary_id,
-                    summary_gloss=summary_gloss,
-                    model_used=llm_config.model_id,
-                    processing_time=processing_time,
-                    claims_used=claims_used,
-                    synthesis_metadata={
-                        "strategy": request.synthesis_strategy,
-                        "num_sources": len(request.claim_sources),
-                        "conflicts_detected": conflicts_detected,
-                    },
+                return dump(
+                    models.SummarySynthesisResponse(
+                        summary_id=request.summary_id,
+                        summary_gloss=tuple(summary_gloss),
+                        model_used=llm_config.model_id,
+                        processing_time=processing_time,
+                        claims_used=claims_used,
+                        synthesis_metadata={
+                            "strategy": request.synthesis_strategy,
+                            "num_sources": len(request.claim_sources),
+                            "conflicts_detected": conflicts_detected,
+                        },
+                    )
                 )
 
             finally:

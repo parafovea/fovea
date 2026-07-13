@@ -17,6 +17,10 @@ architecture Pydantic class is the only legitimate dispatch key.
 
 from __future__ import annotations
 
+import pytest
+
+pytest.importorskip("torch")  # requires the ML backend; skipped in the torch-free venv
+
 from typing import get_args
 
 import pytest

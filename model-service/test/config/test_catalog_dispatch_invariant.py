@@ -36,6 +36,10 @@ loader, and this test would fail.
 
 from __future__ import annotations
 
+import pytest
+
+pytest.importorskip("psutil")  # requires the ML backend; skipped in the torch-free venv
+
 import typing
 from pathlib import Path
 from typing import Protocol

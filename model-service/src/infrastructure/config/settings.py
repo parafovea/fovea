@@ -14,11 +14,19 @@ feeds that path to the container; it does not replace the catalog schema.
 from __future__ import annotations
 
 import os
+from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
+from typing import TYPE_CHECKING, ClassVar
 
-from pydantic import AliasChoices, Field
-from pydantic_settings import BaseSettings, SettingsConfigDict
+import didactic.api as dx
+from didactic.settings import EnvSource
+from didactic.settings import Settings as DxSettings
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping, Sequence
+
+    from didactic.types._typing import JsonObject
 
 
 def _default_model_config_path() -> Path:
@@ -38,12 +46,57 @@ def _default_model_config_path() -> Path:
     return Path(__file__).resolve().parents[3] / "config" / "models.yaml"
 
 
-class Settings(BaseSettings):
+def _default_transformers_cache() -> Path:
+    """Return the default HuggingFace hub cache directory."""
+    return Path.home() / ".cache" / "huggingface" / "hub"
+
+
+def _to_path(value: object) -> Path:
+    """Coerce an environment string (or an existing Path) into a Path."""
+    return value if isinstance(value, Path) else Path(str(value))
+
+
+@dataclass(frozen=True, slots=True)
+class _AliasEnvSource:
+    """Read fields from the first set variable among a list of aliases.
+
+    didactic's :class:`~didactic.settings.EnvSource` maps a field name to a
+    single upper-cased environment variable. Two settings need richer
+    resolution: ``hf_token`` reads ``HUGGING_FACE_HUB_TOKEN`` before
+    ``HF_TOKEN``, and ``audio_output_root_raw`` mirrors the raw
+    ``AUDIO_OUTPUT_ROOT`` value. This source supplies exactly those, and it
+    runs after ``EnvSource`` so its resolutions win.
+
+    Parameters
+    ----------
+    aliases
+        Map of field name to the ordered tuple of environment-variable
+        names to try; the first one present wins.
+    """
+
+    aliases: Mapping[str, tuple[str, ...]]
+    name: str = "env-alias"
+
+    def fetch(self, fields: Sequence[str]) -> JsonObject:
+        """Return ``{field: value}`` for each alias-backed field that is set."""
+        out: JsonObject = {}
+        for field_name, names in self.aliases.items():
+            if field_name not in fields:
+                continue
+            for env_name in names:
+                if env_name in os.environ:
+                    out[field_name] = os.environ[env_name]
+                    break
+        return out
+
+
+class Settings(DxSettings):
     """Environment-derived configuration for the model service.
 
-    All fields are populated from environment variables (or an optional
-    local ``.env`` file). Validation runs at construction time, so an
-    invalid environment fails fast when the application starts.
+    All fields are populated from environment variables. Validation runs at
+    construction time, so an invalid environment fails fast when the
+    application starts. Build an instance with :meth:`load`, which merges the
+    configured sources; :func:`get_settings` caches one process-wide instance.
 
     Attributes
     ----------
@@ -74,57 +127,38 @@ class Settings(BaseSettings):
         falling back to ``HF_TOKEN``.
     """
 
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
-
-    model_config_path: Path = Field(
+    model_config_path: Path = dx.field(
         default_factory=_default_model_config_path,
-        validation_alias="MODEL_CONFIG_PATH",
+        converter=_to_path,
     )
-
-    otel_exporter_otlp_endpoint: str | None = Field(
-        default=None,
-        validation_alias="OTEL_EXPORTER_OTLP_ENDPOINT",
-    )
-
-    video_data_root: Path = Field(
-        default=Path("/videos"),
-        validation_alias="VIDEO_DATA_ROOT",
-    )
-
-    audio_output_root: Path = Field(
-        default=Path("/audio"),
-        validation_alias="AUDIO_OUTPUT_ROOT",
-    )
-
+    otel_exporter_otlp_endpoint: str | None = None
+    video_data_root: Path = dx.field(default=Path("/videos"), converter=_to_path)
+    audio_output_root: Path = dx.field(default=Path("/audio"), converter=_to_path)
     # Raw, default-free view of AUDIO_OUTPUT_ROOT. The video processor and the
     # transcribe/diarize routes both read AUDIO_OUTPUT_ROOT but apply different
     # fallbacks when it is unset (the processor writes extracted audio under
     # /tmp/audio, the routes accept inputs under /audio). Keeping the raw value
-    # here lets each consumer supply its own default without a second os.environ
-    # read leaking outside this module.
-    audio_output_root_raw: str | None = Field(
-        default=None,
-        validation_alias="AUDIO_OUTPUT_ROOT",
-    )
-
-    thumbnail_output_root: Path = Field(
+    # here lets each consumer supply its own default.
+    audio_output_root_raw: str | None = None
+    thumbnail_output_root: Path = dx.field(
         default=Path("/tmp/thumbnails"),  # noqa: S108
-        validation_alias="THUMBNAIL_OUTPUT_ROOT",
+        converter=_to_path,
     )
-
-    transformers_cache: Path = Field(
-        default_factory=lambda: Path.home() / ".cache" / "huggingface" / "hub",
-        validation_alias="TRANSFORMERS_CACHE",
+    transformers_cache: Path = dx.field(
+        default_factory=_default_transformers_cache,
+        converter=_to_path,
     )
+    model_service_admin_token: str | None = None
+    hf_token: str | None = None
 
-    model_service_admin_token: str | None = Field(
-        default=None,
-        validation_alias="MODEL_SERVICE_ADMIN_TOKEN",
-    )
-
-    hf_token: str | None = Field(
-        default=None,
-        validation_alias=AliasChoices("HUGGING_FACE_HUB_TOKEN", "HF_TOKEN"),
+    __sources__: ClassVar[tuple[object, ...]] = (
+        EnvSource(),
+        _AliasEnvSource(
+            aliases={
+                "hf_token": ("HUGGING_FACE_HUB_TOKEN", "HF_TOKEN"),
+                "audio_output_root_raw": ("AUDIO_OUTPUT_ROOT",),
+            }
+        ),
     )
 
     @property
@@ -187,11 +221,11 @@ def get_settings() -> Settings:
     The instance is constructed (and therefore validated) on first call
     and cached for the life of the process so validation runs exactly
     once. Tests that need a fresh read of the environment can either call
-    :func:`get_settings.cache_clear` or construct ``Settings()`` directly.
+    :func:`get_settings.cache_clear` or call ``Settings.load()`` directly.
 
     Returns
     -------
     Settings
         The cached, validated settings instance.
     """
-    return Settings()
+    return Settings.load()

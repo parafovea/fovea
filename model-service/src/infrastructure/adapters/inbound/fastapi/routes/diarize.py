@@ -26,10 +26,15 @@ import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Protocol, cast
 
+import didactic.api as dx
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, Field
 
 from src.infrastructure.adapters.inbound.fastapi.dependencies import ModelManagerDep  # noqa: TC001
+from src.infrastructure.adapters.inbound.fastapi.dx_bodies import (
+    as_request,
+    as_response,
+    dump,
+)
 from src.infrastructure.config.settings import get_settings
 
 if TYPE_CHECKING:
@@ -54,16 +59,22 @@ class _DiarizationModel(Protocol):
     def diarize(self, audio_path: str) -> DiarizationResult: ...
 
 
-class DiarizeRequest(BaseModel):
+class DiarizeRequest(dx.Model):
     """Request schema for the diarization endpoint."""
 
-    audio_path: str = Field(..., description="Filesystem path to an audio or video file.")
-    num_speakers: int | None = Field(default=None, description="Exact number of speakers if known.")
-    min_speakers: int | None = Field(default=None, description="Lower bound on speaker count.")
-    max_speakers: int | None = Field(default=None, description="Upper bound on speaker count.")
+    audio_path: str = dx.field(description="Filesystem path to an audio or video file.")
+    num_speakers: int | None = dx.field(
+        default=None, description="Exact number of speakers if known."
+    )
+    min_speakers: int | None = dx.field(
+        default=None, description="Lower bound on speaker count."
+    )
+    max_speakers: int | None = dx.field(
+        default=None, description="Upper bound on speaker count."
+    )
 
 
-class SpeakerSegmentResponse(BaseModel):
+class SpeakerSegmentResponse(dx.Model):
     """One contiguous turn attributed to a single speaker."""
 
     speaker: str
@@ -71,24 +82,27 @@ class SpeakerSegmentResponse(BaseModel):
     end: float
 
 
-class DiarizeResponse(BaseModel):
+class DiarizeResponse(dx.Model):
     """Response schema for the diarization endpoint."""
 
-    segments: list[SpeakerSegmentResponse]
-    speakers: list[str]
-    processing_time: float
-    model_used: str
+    segments: tuple[SpeakerSegmentResponse, ...] = dx.field(default_factory=tuple)
+    speakers: tuple[str, ...] = dx.field(default_factory=tuple)
+    processing_time: float = 0.0
+    model_used: str = ""
+
+
+_DiarizeRequestBody = as_request(DiarizeRequest)
 
 
 @router.post(
     "/diarize",
-    response_model=DiarizeResponse,
+    response_model=as_response(DiarizeResponse),
     summary="Identify speaker turns in an audio (or audio track of a video) file.",
 )
 async def diarize(
-    request: DiarizeRequest,
+    request: _DiarizeRequestBody,
     manager: ModelManagerDep,
-) -> DiarizeResponse:
+) -> dict[str, object]:
     """Run speaker diarization against the configured pyannote model."""
     # CodeQL sanitizer chain (inlined per StartswithCall recognition):
     #   1. os.path.realpath -> PathNormalization
@@ -125,9 +139,9 @@ async def diarize(
         or request.min_speakers is not None
         or request.max_speakers is not None
     ):
-        # Pydantic guarantees these fields are ``int | None`` so they cannot
-        # carry control characters, but CodeQL's log-injection query does
-        # not follow Pydantic's type narrowing. The explicit ``int()`` /
+        # The request model guarantees these fields are ``int | None`` so they
+        # cannot carry control characters, but CodeQL's log-injection query does
+        # not follow that type narrowing. The explicit ``int()`` /
         # ``"None"`` conversion below produces values whose only legal
         # characters are digits and a leading ``-``, which CodeQL recognises
         # as the typed-conversion sanitizer pattern.
@@ -161,9 +175,11 @@ async def diarize(
         if seg.speaker not in speakers:
             speakers.append(seg.speaker)
 
-    return DiarizeResponse(
-        segments=segments,
-        speakers=speakers,
-        processing_time=processing_time,
-        model_used=selected.model_id,
+    return dump(
+        DiarizeResponse(
+            segments=tuple(segments),
+            speakers=tuple(speakers),
+            processing_time=processing_time,
+            model_used=selected.model_id,
+        )
     )

@@ -7,11 +7,13 @@ selection, loading, unloading, and memory validation.
 import logging
 from datetime import datetime, timezone
 
-import torch
+import didactic.api as dx
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, Field
 
-from src.infrastructure.adapters.inbound.fastapi.dependencies import ModelManagerDep
+from src.infrastructure.adapters.inbound.fastapi.dependencies import (
+    ModelManagerDep,  # noqa: TC001  # FastAPI resolves this annotation at runtime
+)
+from src.infrastructure.adapters.inbound.fastapi.dx_bodies import as_response, dump
 from src.infrastructure.config.settings import get_settings
 
 router = APIRouter()
@@ -58,6 +60,8 @@ async def get_model_config(manager: ModelManagerDep) -> dict[str, object]:
             ],
         }
 
+    import torch  # deferred so the route module imports without the ML stack
+
     has_any_model = any(task_config.options for task_config in manager.tasks.values())
     has_cpu_model = any(
         model.cpu_compatible
@@ -99,6 +103,8 @@ async def get_model_status(manager: ModelManagerDep) -> dict[str, object]:
     dict[str, object]
         Dictionary with loaded models, memory statistics, and system info.
     """
+    import torch  # deferred so the route module imports without the ML stack
+
     loaded_models_dict = manager.get_loaded_models()
     total_vram = manager.get_total_vram()
 
@@ -342,18 +348,18 @@ async def check_task_ready(
     }
 
 
-class GenerationDefaults(BaseModel):
+class GenerationDefaults(dx.Model):
     """Default sampling parameters for text generation."""
 
-    max_tokens: int = Field(description="Maximum tokens to generate.")
-    temperature: float = Field(description="Sampling temperature; 0.0 is greedy.")
-    top_p: float = Field(description="Nucleus sampling probability mass.")
-    stop_sequences: list[str] | None = Field(
+    max_tokens: int = dx.field(description="Maximum tokens to generate.")
+    temperature: float = dx.field(description="Sampling temperature; 0.0 is greedy.")
+    top_p: float = dx.field(description="Nucleus sampling probability mass.")
+    stop_sequences: tuple[str, ...] | None = dx.field(
         default=None, description="Optional stop strings terminating generation."
     )
 
 
-class LLMDefaults(BaseModel):
+class LLMDefaults(dx.Model):
     """Default loading parameters for a language model."""
 
     quantization: str
@@ -364,7 +370,7 @@ class LLMDefaults(BaseModel):
     context_length: int
 
 
-class TranscriptionDefaults(BaseModel):
+class TranscriptionDefaults(dx.Model):
     """Default loading parameters for audio transcription."""
 
     framework: str
@@ -375,7 +381,7 @@ class TranscriptionDefaults(BaseModel):
     beam_size: int
 
 
-class VADDefaults(BaseModel):
+class VADDefaults(dx.Model):
     """Default parameters for voice-activity detection."""
 
     threshold: float
@@ -384,7 +390,7 @@ class VADDefaults(BaseModel):
     device: str
 
 
-class DiarizationDefaults(BaseModel):
+class DiarizationDefaults(dx.Model):
     """Default parameters for speaker diarization."""
 
     num_speakers: int | None
@@ -393,7 +399,7 @@ class DiarizationDefaults(BaseModel):
     device: str
 
 
-class DetectionDefaults(BaseModel):
+class DetectionDefaults(dx.Model):
     """Default parameters for object detection."""
 
     framework: str
@@ -401,14 +407,14 @@ class DetectionDefaults(BaseModel):
     device: str
 
 
-class TrackingDefaults(BaseModel):
+class TrackingDefaults(dx.Model):
     """Default parameters for object tracking."""
 
     framework: str
     device: str
 
 
-class VLMDefaults(BaseModel):
+class VLMDefaults(dx.Model):
     """Default loading parameters for a vision-language model."""
 
     quantization: str
@@ -417,7 +423,7 @@ class VLMDefaults(BaseModel):
     trust_remote_code: bool
 
 
-class ModelDefaultsResponse(BaseModel):
+class ModelDefaultsResponse(dx.Model):
     """Response shape for ``GET /api/models/defaults``."""
 
     generation: GenerationDefaults
@@ -430,30 +436,30 @@ class ModelDefaultsResponse(BaseModel):
     vlm: VLMDefaults
 
 
-class ModelFrameworksResponse(BaseModel):
+class ModelFrameworksResponse(dx.Model):
     """Response shape for ``GET /api/models/frameworks``.
 
     Each field is the full list of string values from the corresponding
     StrEnum so the UI can render selectors without hardcoding choices.
     """
 
-    llm: list[str]
-    audio: list[str]
-    detection: list[str]
-    tracking: list[str]
-    vlm_inference: list[str]
-    quantization: list[str]
+    llm: tuple[str, ...]
+    audio: tuple[str, ...]
+    detection: tuple[str, ...]
+    tracking: tuple[str, ...]
+    vlm_inference: tuple[str, ...]
+    quantization: tuple[str, ...]
 
 
 @router.get(
     "/models/defaults",
-    response_model=ModelDefaultsResponse,
+    response_model=as_response(ModelDefaultsResponse),
     summary="Get default inference configs per task",
     description="Returns the dataclass defaults used to construct each inference "
     "config (generation, transcription, diarization, VAD, detection, tracking). "
     "Used by the settings UI to render controls pre-filled with backend defaults.",
 )
-async def get_model_defaults() -> ModelDefaultsResponse:
+async def get_model_defaults() -> dict[str, object]:
     """Return default values for every inference config dataclass.
 
     The frontend uses these to render settings forms and validate user-entered
@@ -498,12 +504,14 @@ async def get_model_defaults() -> ModelDefaultsResponse:
     tracking = TrackingConfig(model_id="__placeholder__")
     vlm = VLMConfig(model_id="__placeholder__")
 
-    return ModelDefaultsResponse(
+    return dump(ModelDefaultsResponse(
         generation=GenerationDefaults(
             max_tokens=gen.max_tokens,
             temperature=gen.temperature,
             top_p=gen.top_p,
-            stop_sequences=gen.stop_sequences,
+            stop_sequences=(
+                None if gen.stop_sequences is None else tuple(gen.stop_sequences)
+            ),
         ),
         llm=LLMDefaults(
             quantization=llm.quantization,
@@ -548,19 +556,19 @@ async def get_model_defaults() -> ModelDefaultsResponse:
             device=vlm.device,
             trust_remote_code=vlm.trust_remote_code,
         ),
-    )
+    ))
 
 
 @router.get(
     "/models/frameworks",
-    response_model=ModelFrameworksResponse,
+    response_model=as_response(ModelFrameworksResponse),
     summary="Get available framework values per task",
     description="Enumerates the StrEnum values for LLMFramework, AudioFramework, "
     "DetectionFramework, TrackingFramework, VLM InferenceFramework, and "
     "QuantizationType so the UI can render framework pickers without hardcoding "
     "the lists.",
 )
-async def get_model_frameworks() -> ModelFrameworksResponse:
+async def get_model_frameworks() -> dict[str, object]:
     """Return every framework/quantization enum value keyed by task group."""
     from src.infrastructure.adapters.outbound.models.audio.base import (
         AudioFramework,
@@ -579,11 +587,13 @@ async def get_model_frameworks() -> ModelFrameworksResponse:
         QuantizationType,
     )
 
-    return ModelFrameworksResponse(
-        llm=[f.value for f in LLMFramework],
-        audio=[f.value for f in AudioFramework],
-        detection=[f.value for f in DetectionFramework],
-        tracking=[f.value for f in TrackingFramework],
-        vlm_inference=[f.value for f in InferenceFramework],
-        quantization=[f.value for f in QuantizationType],
+    return dump(
+        ModelFrameworksResponse(
+            llm=tuple(f.value for f in LLMFramework),
+            audio=tuple(f.value for f in AudioFramework),
+            detection=tuple(f.value for f in DetectionFramework),
+            tracking=tuple(f.value for f in TrackingFramework),
+            vlm_inference=tuple(f.value for f in InferenceFramework),
+            quantization=tuple(f.value for f in QuantizationType),
+        )
     )
