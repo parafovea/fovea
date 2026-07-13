@@ -186,6 +186,24 @@ const videoAnnotationsRoutes: FastifyPluginAsync = async (fastify: FastifyInstan
       }
       projectId = persona.projectId
       ontologyId = await resolveOntologyId(persona.id)
+    } else {
+      // Personaless object annotation: with no persona to inherit project scope
+      // from, adopt the video's project only when exactly one of the caller's
+      // projects has this video assigned, so a project reviewer can see it. A
+      // zero or ambiguous (multiple) assignment stays personal (projectId = null).
+      const assignments = await prisma.projectVideoAssignment.findMany({
+        where: { videoId },
+        select: { projectId: true },
+      })
+      const assignedProjectIds = [...new Set(assignments.map((a) => a.projectId))]
+      if (assignedProjectIds.length > 0) {
+        const memberships = await prisma.projectMembership.findMany({
+          where: { userId, projectId: { in: assignedProjectIds } },
+          select: { projectId: true },
+        })
+        const memberProjectIds = [...new Set(memberships.map((m) => m.projectId))]
+        if (memberProjectIds.length === 1) projectId = memberProjectIds[0]
+      }
     }
 
     const { expressionId, video } = await getOrCreateVideoExpression(prisma, videoId)

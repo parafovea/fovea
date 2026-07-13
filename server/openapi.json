@@ -432,6 +432,12 @@
               "string"
             ]
           },
+          "projectId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
           "createdAt": {
             "format": "date-time",
             "type": "string"
@@ -851,6 +857,24 @@
                 }
               }
             }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       }
@@ -1200,6 +1224,33 @@
                   "properties": {
                     "error": {
                       "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error",
+                    "message"
+                  ],
+                  "properties": {
+                    "error": {
+                      "description": "Machine-readable error code",
+                      "type": "string"
+                    },
+                    "message": {
+                      "description": "Human-readable error message",
+                      "type": "string"
+                    },
+                    "details": {
+                      "description": "Additional error context"
                     }
                   }
                 }
@@ -1627,6 +1678,33 @@
                 }
               }
             }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error",
+                    "message"
+                  ],
+                  "properties": {
+                    "error": {
+                      "description": "Machine-readable error code",
+                      "type": "string"
+                    },
+                    "message": {
+                      "description": "Human-readable error message",
+                      "type": "string"
+                    },
+                    "details": {
+                      "description": "Additional error context"
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       },
@@ -1696,6 +1774,33 @@
                   "properties": {
                     "error": {
                       "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error",
+                    "message"
+                  ],
+                  "properties": {
+                    "error": {
+                      "description": "Machine-readable error code",
+                      "type": "string"
+                    },
+                    "message": {
+                      "description": "Human-readable error message",
+                      "type": "string"
+                    },
+                    "details": {
+                      "description": "Additional error context"
                     }
                   }
                 }
@@ -7576,6 +7681,302 @@
         }
       }
     },
+    "/api/world/entity-collections/{objectId}": {
+      "delete": {
+        "tags": [
+          "world"
+        ],
+        "description": "Delete a world entity collection from the caller's personal world",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "objectId",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/world/event-collections/{objectId}": {
+      "delete": {
+        "tags": [
+          "world"
+        ],
+        "description": "Delete a world event collection from the caller's personal world",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "objectId",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/world/time-collections/{objectId}": {
+      "delete": {
+        "tags": [
+          "world"
+        ],
+        "description": "Delete a world time collection from the caller's personal world",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "objectId",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/world/relations/{objectId}": {
+      "delete": {
+        "tags": [
+          "world"
+        ],
+        "description": "Delete a world relation from the caller's personal world",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "objectId",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/world/events/{eventId}/deletion-preview": {
       "get": {
         "tags": [
@@ -8149,6 +8550,16 @@
                       "createdBy": {
                         "type": "string"
                       },
+                      "projectId": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
                       "createdAt": {
                         "format": "date-time",
                         "type": "string"
@@ -8384,6 +8795,16 @@
                     },
                     "createdBy": {
                       "type": "string"
+                    },
+                    "projectId": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
                     },
                     "createdAt": {
                       "format": "date-time",
@@ -8705,6 +9126,16 @@
                       },
                       "createdBy": {
                         "type": "string"
+                      },
+                      "projectId": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
                       },
                       "createdAt": {
                         "format": "date-time",
@@ -9169,6 +9600,16 @@
                             },
                             "createdBy": {
                               "type": "string"
+                            },
+                            "projectId": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
                             },
                             "createdAt": {
                               "format": "date-time",
@@ -9636,6 +10077,16 @@
                     "createdBy": {
                       "type": "string"
                     },
+                    "projectId": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
                     "createdAt": {
                       "format": "date-time",
                       "type": "string"
@@ -9962,6 +10413,16 @@
                     },
                     "createdBy": {
                       "type": "string"
+                    },
+                    "projectId": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
                     },
                     "createdAt": {
                       "format": "date-time",
@@ -10485,6 +10946,12 @@
                           "string"
                         ]
                       },
+                      "projectId": {
+                        "type": [
+                          "null",
+                          "string"
+                        ]
+                      },
                       "createdAt": {
                         "format": "date-time",
                         "type": "string"
@@ -10551,6 +11018,10 @@
                   "text"
                 ],
                 "properties": {
+                  "id": {
+                    "format": "uuid",
+                    "type": "string"
+                  },
                   "summaryType": {
                     "anyOf": [
                       {
@@ -11398,6 +11869,12 @@
                               "string"
                             ]
                           },
+                          "projectId": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          },
                           "createdAt": {
                             "format": "date-time",
                             "type": "string"
@@ -11928,6 +12405,12 @@
                       ]
                     },
                     "createdBy": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "projectId": {
                       "type": [
                         "null",
                         "string"
@@ -12828,6 +13311,12 @@
                             ]
                           },
                           "createdBy": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          },
+                          "projectId": {
                             "type": [
                               "null",
                               "string"
@@ -14144,6 +14633,10 @@
                   "text"
                 ],
                 "properties": {
+                  "id": {
+                    "format": "uuid",
+                    "type": "string"
+                  },
                   "text": {
                     "minLength": 1,
                     "type": "string"
@@ -14854,6 +15347,12 @@
                           ]
                         },
                         "createdBy": {
+                          "type": [
+                            "null",
+                            "string"
+                          ]
+                        },
+                        "projectId": {
                           "type": [
                             "null",
                             "string"
@@ -32389,6 +32888,33 @@
                     "assignedAt": {
                       "format": "date-time",
                       "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error",
+                    "message"
+                  ],
+                  "properties": {
+                    "error": {
+                      "description": "Machine-readable error code",
+                      "type": "string"
+                    },
+                    "message": {
+                      "description": "Human-readable error message",
+                      "type": "string"
+                    },
+                    "details": {
+                      "description": "Additional error context"
                     }
                   }
                 }

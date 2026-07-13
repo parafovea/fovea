@@ -1,5 +1,6 @@
 import { PrismaClient, Project, ProjectMembership, Persona, Prisma } from '@prisma/client'
 
+import { mergeById } from '../services/world-state-service.js'
 import { readWorldAggregate, writeWorldAggregate } from '../services/layers-bridge/world-bridge.js'
 import { projectWorldStateId, type WorldStateAggregate } from '../services/world-layers-mapper.js'
 
@@ -458,11 +459,19 @@ export class ProjectRepository {
 
   /**
    * Writes a partial update over the caller's project world state in the layers
-   * store: the provided buckets replace the current ones; the rest are preserved.
+   * store. Each provided bucket is merged into the current one by id: an object
+   * with a new id is appended and one with a matching id is overwritten, while
+   * objects the caller did not send are preserved. Omitted buckets are left
+   * untouched.
+   *
+   * Merging by id (rather than replacing the whole bucket) keeps concurrent
+   * additions from clobbering each other; a plain whole-blob PUT would drop any
+   * object a concurrent writer added between this read and write. Removal of a
+   * world object goes through the dedicated delete path, not this merge.
    *
    * @param userId - the caller
    * @param projectId - Project UUID
-   * @param data - the world buckets to replace (omitted buckets are preserved)
+   * @param data - the world buckets to merge (omitted buckets are preserved)
    * @returns the resulting world state view
    */
   async writeWorldState(
@@ -483,7 +492,12 @@ export class ProjectRepository {
     ]
     for (const bucket of buckets) {
       const value = data[bucket]
-      if (value !== undefined) merged[bucket] = Array.isArray(value) ? value : []
+      if (value !== undefined) {
+        merged[bucket] = mergeById(
+          aggregate[bucket] as unknown as Prisma.JsonValue,
+          Array.isArray(value) ? value : [],
+        ) as unknown as unknown[]
+      }
     }
     await writeWorldAggregate(this.prisma, { userId, projectId }, merged)
     return ProjectRepository.worldStateView(userId, projectId, merged)

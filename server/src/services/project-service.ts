@@ -214,17 +214,27 @@ export class ProjectService {
       throw new ForbiddenError('You do not have permission to create this project')
     }
 
-    const created = await this.repository.createWithOwnerMembership(
-      {
-        name: input.name,
-        description: input.description ?? null,
-        slug: input.slug,
-        ownerUserId: ownerGroupId ? null : userId,
-        ownerGroupId,
-        createdBy: userId,
-      },
-      userId
-    )
+    let created
+    try {
+      created = await this.repository.createWithOwnerMembership(
+        {
+          name: input.name,
+          description: input.description ?? null,
+          slug: input.slug,
+          ownerUserId: ownerGroupId ? null : userId,
+          ownerGroupId,
+          createdBy: userId,
+        },
+        userId
+      )
+    } catch (error) {
+      // The slug pre-check narrows the common case, but a concurrent create with
+      // the same slug can still race past it — surface 409, not 500.
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        throw new ConflictError(`Project slug "${input.slug}" is already taken`)
+      }
+      throw error
+    }
 
     // Creator is now a project_owner; their abilities have changed.
     invalidateUserAbilities(userId)
@@ -413,7 +423,18 @@ export class ProjectService {
       throw new ConflictError('User is already a member of this project')
     }
 
-    const membership = await this.repository.createMembership(targetUserId, projectId, role)
+    let membership
+    try {
+      membership = await this.repository.createMembership(targetUserId, projectId, role)
+    } catch (error) {
+      // The pre-check narrows the common case, but a concurrent add of the same
+      // member can still race past it into the @@unique([userId, projectId])
+      // constraint — surface 409, not 500.
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        throw new ConflictError('User is already a member of this project')
+      }
+      throw error
+    }
 
     // Newly added member picks up project-scope role permissions.
     invalidateUserAbilities(targetUserId)
@@ -511,6 +532,17 @@ export class ProjectService {
     const targetMembership = await this.repository.findMembership(targetUserId, projectId)
     if (!targetMembership) {
       throw new NotFoundError('ProjectMembership', targetUserId)
+    }
+
+    // Cannot demote the last project_owner — `project_owner` is not an assignable
+    // role (it is set only at creation), so any role change applied to a current
+    // owner is necessarily a demotion that would leave a user-owned project with
+    // no owner. Mirror the last-owner rule enforced on removal.
+    if (targetMembership.role === 'project_owner') {
+      const ownerCount = await this.repository.countMembershipsWithRole(projectId, 'project_owner')
+      if (ownerCount <= 1) {
+        throw new ValidationError('Cannot demote the last project owner')
+      }
     }
 
     const updated = await this.repository.updateMembershipRole(targetUserId, projectId, role)
@@ -614,6 +646,9 @@ export class ProjectService {
       throw new ForbiddenError('You must be a project member to access world state')
     }
 
+    // First access reconstructs an empty aggregate from the layers store; the
+    // layers world keys objects by (userId, projectId) rather than a single
+    // compound-unique row, so there is no first-access create race to guard.
     return this.mapWorldState(await this.repository.readWorldState(userId, projectId))
   }
 
@@ -645,6 +680,9 @@ export class ProjectService {
       throw new ForbiddenError('You must be a project member to update world state')
     }
 
+    // The repository merges each provided bucket into the caller's project
+    // world by id (a whole-blob replace would drop a concurrent writer's
+    // additions), preserving buckets the caller omitted.
     const worldState = await this.repository.writeWorldState(userId, projectId, {
       entities: input.entities,
       events: input.events,

@@ -13,7 +13,9 @@ import { videoSummarizationQueue, claimExtractionQueue, closeQueues } from './qu
 import { apiRequestCounter, apiRequestDuration } from './metrics.js'
 import { config } from './config.js'
 import { prisma } from './lib/prisma.js'
+import { ZodError } from 'zod'
 import { AppError, TooManyRequestsError } from './lib/errors.js'
+import { requireAdmin, requireAuth } from './middleware/auth.js'
 import { recordApiError } from './lib/errorMetrics.js'
 
 /**
@@ -39,7 +41,7 @@ import { recordApiError } from './lib/errorMetrics.js'
  */
 export async function buildApp() {
   const app = Fastify({
-    trustProxy: true,
+    trustProxy: config.server.trustProxy,
     logger: {
       level: config.server.logLevel,
       transport: !config.server.isProduction ? {
@@ -116,7 +118,11 @@ export async function buildApp() {
     }
   })
 
-  // Bull Board queue monitoring
+  // Bull Board queue monitoring. The dashboard exposes job payloads (video and
+  // persona ids, model prompts, error stacks) and Bull Board's mutating actions
+  // (retry/promote/clean/remove), so it MUST NOT be world-readable. Register it
+  // inside an encapsulated child context whose onRequest hook requires admin —
+  // the only authorization that applies to the bull-board plugin's own routes.
   const serverAdapter = new FastifyAdapter()
   createBullBoard({
     queues: [
@@ -126,7 +132,10 @@ export async function buildApp() {
     serverAdapter,
   })
   serverAdapter.setBasePath('/admin/queues')
-  await app.register(serverAdapter.registerPlugin(), { prefix: '/admin/queues' })
+  await app.register(async (queueScope) => {
+    queueScope.addHook('onRequest', requireAdmin)
+    await queueScope.register(serverAdapter.registerPlugin(), { prefix: '/admin/queues' })
+  })
 
   // Decorate Fastify instance with Prisma client
   app.decorate('prisma', prisma)
@@ -203,6 +212,19 @@ export async function buildApp() {
         error: 'VALIDATION_ERROR',
         message: error.message,
         details: error.validation
+      })
+    }
+
+    // Handle Zod validation errors raised by service-layer `.parse()` calls
+    // that bypass Fastify's TypeBox schema validation (so they carry no
+    // `error.validation`). These are client input faults, not server failures —
+    // surface 400 with the field-level issues rather than a generic 500.
+    if (error instanceof ZodError) {
+      recordApiError(method, route, 400, 'VALIDATION_ERROR', 'warning')
+      return reply.code(400).send({
+        error: 'VALIDATION_ERROR',
+        message: 'Request validation failed',
+        details: error.issues
       })
     }
 
@@ -308,8 +330,16 @@ export async function buildApp() {
   const videosRoute = await import('./routes/videos/index.js')
   await app.register(videosRoute.default)
 
+  // The model routes proxy to the shared Python model-service and include
+  // state-changing operations (select/load/unload affect every user's
+  // inference). Register them in an encapsulated child context that requires
+  // authentication so they are never world-readable/-writable; the mutating
+  // routes additionally require admin (declared per-route in models.ts).
   const modelsRoute = await import('./routes/models.js')
-  await app.register(modelsRoute.default)
+  await app.register(async (modelsScope) => {
+    modelsScope.addHook('onRequest', requireAuth)
+    await modelsScope.register(modelsRoute.default)
+  })
 
   // Layers-shaped annotation store. The aggregator applies requireAuth +
   // buildAbilities once and mounts every resource sub-module under /api/layers.

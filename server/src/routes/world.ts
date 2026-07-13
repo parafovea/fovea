@@ -236,6 +236,41 @@ const worldRoute: FastifyPluginAsync = async (fastify) => {
     }
   )
 
+  // Explicit single-object removal for the collection and relation arrays.
+  // Unlike entities/events/times (above), these have no graceful-delete route
+  // and used to be removed by omission through the whole-blob PUT. Now that the
+  // PUT merges by id, removal must be explicit so the merge cannot resurrect a
+  // deleted object.
+  const objectDeleteRoutes = [
+    { path: '/api/world/entity-collections/:objectId', field: 'entityCollections' as const, desc: 'entity collection' },
+    { path: '/api/world/event-collections/:objectId', field: 'eventCollections' as const, desc: 'event collection' },
+    { path: '/api/world/time-collections/:objectId', field: 'timeCollections' as const, desc: 'time collection' },
+    { path: '/api/world/relations/:objectId', field: 'relations' as const, desc: 'relation' },
+  ]
+  for (const { path, field, desc } of objectDeleteRoutes) {
+    fastify.delete<{ Params: { objectId: string } }>(
+      path,
+      {
+        onRequest: [requireAuth, buildAbilities],
+        schema: {
+          description: `Delete a world ${desc} from the caller's personal world`,
+          tags: ['world'],
+          params: Type.Object({ objectId: Type.String() }),
+          response: {
+            200: Type.Object({ success: Type.Boolean() }),
+            403: Type.Object({ error: Type.String() }),
+            404: Type.Object({ error: Type.String() }),
+          },
+        },
+      },
+      async (request, reply) => {
+        const service = serviceFor(request)
+        await service.removeWorldObject(field, request.params.objectId)
+        return reply.send({ success: true })
+      },
+    )
+  }
+
   /**
    * Get deletion preview for a world event.
    *

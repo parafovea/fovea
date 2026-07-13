@@ -10,7 +10,7 @@
 
 import { Type, Static } from '@sinclair/typebox'
 import { FastifyPluginAsync } from 'fastify'
-import { PrismaClient } from '@prisma/client'
+import { Prisma, PrismaClient } from '@prisma/client'
 
 import { requireAuth, requireAdmin } from '../middleware/auth.js'
 import { groupOperationCounter } from '../metrics.js'
@@ -218,38 +218,48 @@ const groupsRoute: FastifyPluginAsync = async (fastify) => {
         )
       }
 
-      // Create group and owner membership in a transaction
-      const group = await fastify.prisma.$transaction(async (tx) => {
-        const created = await tx.userGroup.create({
-          data: {
-            name,
-            description: description ?? null,
-            slug,
-            createdBy: userId,
-          },
-        })
+      // Create group and owner membership in a transaction. The slug pre-check
+      // narrows the common case, but a concurrent create with the same slug can
+      // still race past it — translate the unique violation to 409 rather than 500.
+      let group
+      try {
+        group = await fastify.prisma.$transaction(async (tx) => {
+          const created = await tx.userGroup.create({
+            data: {
+              name,
+              description: description ?? null,
+              slug,
+              createdBy: userId,
+            },
+          })
 
-        await tx.groupMembership.create({
-          data: {
-            userId,
-            groupId: created.id,
-            role: 'group_owner',
-          },
-        })
+          await tx.groupMembership.create({
+            data: {
+              userId,
+              groupId: created.id,
+              role: 'group_owner',
+            },
+          })
 
-        return tx.userGroup.findUniqueOrThrow({
-          where: { id: created.id },
-          include: {
-            members: {
-              include: {
-                user: {
-                  select: { id: true, username: true, displayName: true, email: true },
+          return tx.userGroup.findUniqueOrThrow({
+            where: { id: created.id },
+            include: {
+              members: {
+                include: {
+                  user: {
+                    select: { id: true, username: true, displayName: true, email: true },
+                  },
                 },
               },
             },
-          },
+          })
         })
-      })
+      } catch (error) {
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+          throw new ConflictError(`A group with slug "${slug}" already exists. Choose a different slug.`)
+        }
+        throw error
+      }
 
       // Creator's abilities changed (they are now a group_owner)
       invalidateUserAbilities(userId)
@@ -463,8 +473,18 @@ const groupsRoute: FastifyPluginAsync = async (fastify) => {
         throw new NotFoundError('UserGroup', groupId)
       }
 
+      // Snapshot members before the cascade so their cached abilities can be
+      // cleared afterward. Group-scope non-ownOnly rules are emitted globally
+      // unconditioned (lib/abilities.ts), so without this a former member keeps
+      // the group's permissions until restart/re-login. Mirrors
+      // ProjectService.delete (snapshot ids -> delete -> invalidate each).
+      const memberRows = await fastify.prisma.groupMembership.findMany({
+        where: { groupId },
+        select: { userId: true },
+      })
       // Memberships cascade-delete via onDelete: Cascade in the schema
       await fastify.prisma.userGroup.delete({ where: { id: groupId } })
+      for (const { userId } of memberRows) invalidateUserAbilities(userId)
 
       groupOperationCounter.add(1, { operation: 'delete', status: 'success' })
       return reply.send({ success: true })
@@ -536,18 +556,28 @@ const groupsRoute: FastifyPluginAsync = async (fastify) => {
         throw new ConflictError('User is already a member of this group')
       }
 
-      const membership = await fastify.prisma.groupMembership.create({
-        data: {
-          userId: targetUserId,
-          groupId,
-          role: targetRole,
-        },
-        include: {
-          user: {
-            select: { id: true, username: true, displayName: true, email: true },
+      let membership
+      try {
+        membership = await fastify.prisma.groupMembership.create({
+          data: {
+            userId: targetUserId,
+            groupId,
+            role: targetRole,
           },
-        },
-      })
+          include: {
+            user: {
+              select: { id: true, username: true, displayName: true, email: true },
+            },
+          },
+        })
+      } catch (error: unknown) {
+        // The existence pre-check narrows the common case, but a concurrent add
+        // can race past it and hit the unique constraint — return 409, not 500.
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+          throw new ConflictError('User is already a member of this group')
+        }
+        throw error
+      }
 
       // Newly added member's abilities now include group-scope roles
       invalidateUserAbilities(targetUserId)
@@ -825,37 +855,45 @@ const groupsRoute: FastifyPluginAsync = async (fastify) => {
         throw new NotFoundError('User', createdBy)
       }
 
-      const group = await fastify.prisma.$transaction(async (tx) => {
-        const created = await tx.userGroup.create({
-          data: {
-            name,
-            description: description ?? null,
-            slug,
-            createdBy,
-          },
-        })
+      let group
+      try {
+        group = await fastify.prisma.$transaction(async (tx) => {
+          const created = await tx.userGroup.create({
+            data: {
+              name,
+              description: description ?? null,
+              slug,
+              createdBy,
+            },
+          })
 
-        await tx.groupMembership.create({
-          data: {
-            userId: createdBy,
-            groupId: created.id,
-            role: 'group_owner',
-          },
-        })
+          await tx.groupMembership.create({
+            data: {
+              userId: createdBy,
+              groupId: created.id,
+              role: 'group_owner',
+            },
+          })
 
-        return tx.userGroup.findUniqueOrThrow({
-          where: { id: created.id },
-          include: {
-            members: {
-              include: {
-                user: {
-                  select: { id: true, username: true, displayName: true, email: true },
+          return tx.userGroup.findUniqueOrThrow({
+            where: { id: created.id },
+            include: {
+              members: {
+                include: {
+                  user: {
+                    select: { id: true, username: true, displayName: true, email: true },
+                  },
                 },
               },
             },
-          },
+          })
         })
-      })
+      } catch (error) {
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+          throw new ConflictError(`A group with slug "${slug}" already exists. Choose a different slug.`)
+        }
+        throw error
+      }
 
       // Admin-created group: the designated owner's abilities changed
       invalidateUserAbilities(createdBy)
@@ -957,7 +995,14 @@ const groupsRoute: FastifyPluginAsync = async (fastify) => {
         throw new NotFoundError('UserGroup', groupId)
       }
 
+      // Snapshot members before the cascade so their cached abilities can be
+      // cleared afterward (see the non-admin delete handler above for why).
+      const memberRows = await fastify.prisma.groupMembership.findMany({
+        where: { groupId },
+        select: { userId: true },
+      })
       await fastify.prisma.userGroup.delete({ where: { id: groupId } })
+      for (const { userId } of memberRows) invalidateUserAbilities(userId)
 
       groupOperationCounter.add(1, { operation: 'delete', status: 'success' })
       return reply.send({ success: true })
@@ -1018,18 +1063,28 @@ const groupsRoute: FastifyPluginAsync = async (fastify) => {
         throw new ConflictError('User is already a member of this group')
       }
 
-      const membership = await fastify.prisma.groupMembership.create({
-        data: {
-          userId: targetUserId,
-          groupId,
-          role: targetRole,
-        },
-        include: {
-          user: {
-            select: { id: true, username: true, displayName: true, email: true },
+      let membership
+      try {
+        membership = await fastify.prisma.groupMembership.create({
+          data: {
+            userId: targetUserId,
+            groupId,
+            role: targetRole,
           },
-        },
-      })
+          include: {
+            user: {
+              select: { id: true, username: true, displayName: true, email: true },
+            },
+          },
+        })
+      } catch (error: unknown) {
+        // A concurrent add can race past the existence pre-check and hit the
+        // unique constraint — return 409, not 500.
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+          throw new ConflictError('User is already a member of this group')
+        }
+        throw error
+      }
 
       // Admin-added member's abilities must pick up group-scope roles
       invalidateUserAbilities(targetUserId)

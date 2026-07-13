@@ -148,11 +148,13 @@ export async function readAllWorldObjectIds(prisma: PrismaClient): Promise<{
   eventIds: Set<string>
   timeIds: Set<string>
   collectionIds: Set<string>
+  relationIds: Set<string>
 }> {
   const entityIds = new Set<string>()
   const eventIds = new Set<string>()
   const timeIds = new Set<string>()
   const collectionIds = new Set<string>()
+  const relationIds = new Set<string>()
 
   const addId = (bucket: Set<string>, object: unknown): void => {
     if (object && typeof object === 'object' && 'id' in object) {
@@ -167,6 +169,7 @@ export async function readAllWorldObjectIds(prisma: PrismaClient): Promise<{
     for (const object of aggregate.entityCollections) addId(collectionIds, object)
     for (const object of aggregate.eventCollections) addId(collectionIds, object)
     for (const object of aggregate.timeCollections) addId(collectionIds, object)
+    for (const object of aggregate.relations) addId(relationIds, object)
   }
 
   const worldNodes = (await prisma.graphNode.findMany({})).filter(isWorldRow)
@@ -190,5 +193,5 @@ export async function readAllWorldObjectIds(prisma: PrismaClient): Promise<{
     collect(layersToWorldState(nodesByScope.get(key) ?? [], edgesByScope.get(key) ?? []))
   }
 
-  return { entityIds, eventIds, timeIds, collectionIds }
+  return { entityIds, eventIds, timeIds, collectionIds, relationIds }
 }

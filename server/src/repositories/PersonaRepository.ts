@@ -1,11 +1,13 @@
 import { PrismaClient, Persona, Prisma } from '@prisma/client'
 
+import { ConflictError, NotFoundError } from '../lib/errors.js'
 import {
   countPersonaAnnotations,
   deletePersonaAnnotations,
 } from '../services/layers-bridge/annotation-bridge.js'
 import { readOntologyAggregate, writeOntologyAggregate } from '../services/layers-bridge/ontology-bridge.js'
 import { readWorldAggregate, writeWorldAggregate } from '../services/layers-bridge/world-bridge.js'
+import { layersOntologyForPersonaId } from '../services/layers-id-map.js'
 import { personalWorldStateId, type WorldStateAggregate } from '../services/world-layers-mapper.js'
 import type { PersonaOntologyAggregate } from '../services/ontology-layers-mapper.js'
 
@@ -275,6 +277,61 @@ export class PersonaRepository {
         new Date(),
         new Date(),
       )
+  }
+
+  /**
+   * Applies a version-guarded update to a persona's ontology in the layers store.
+   *
+   * Reads the current ontology aggregate from the layers store, lets `transform`
+   * compute the new type buckets from it, then compares-and-swaps on the backing
+   * `LayersOntology.lockVersion` before materializing the buckets. When a
+   * concurrent writer advanced the version first the guard misses (count 0) and
+   * the whole read-transform-write retries against the freshly read row, so both
+   * writes land instead of one silently clobbering the other. The guard keys on
+   * the monotonic `lockVersion` rather than `updatedAt` because two writes landing
+   * in the same millisecond can share an `updatedAt`. Buckets the transform leaves
+   * undefined keep their current value, so a partial cleanup never drops a sibling
+   * bucket.
+   *
+   * @param personaId - Persona UUID owning the ontology
+   * @param transform - computes the type buckets to write from the current row
+   * @returns the updated ontology in the row shape
+   * @throws {NotFoundError} when the persona has no ontology
+   * @throws {ConflictError} when the write keeps conflicting after retries
+   */
+  async updateOntologyOptimistic(
+    personaId: string,
+    transform: (current: PersonaOntologyRow) => OntologyBucketUpdate,
+  ): Promise<PersonaOntologyRow> {
+    const ontologyId = layersOntologyForPersonaId(personaId)
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const row = await this.prisma.layersOntology.findUnique({ where: { id: ontologyId } })
+      if (!row) {
+        throw new NotFoundError('Ontology', personaId)
+      }
+      const current = await this.reconstructOntology(personaId)
+      if (!current) {
+        throw new NotFoundError('Ontology', personaId)
+      }
+      const buckets = transform(current)
+      const merged: OntologyBucketUpdate = {
+        entityTypes: buckets.entityTypes !== undefined ? buckets.entityTypes : current.entityTypes,
+        eventTypes: buckets.eventTypes !== undefined ? buckets.eventTypes : current.eventTypes,
+        roleTypes: buckets.roleTypes !== undefined ? buckets.roleTypes : current.roleTypes,
+        relationTypes: buckets.relationTypes !== undefined ? buckets.relationTypes : current.relationTypes,
+      }
+      // Compare-and-swap the ontology version before writing its types; on a miss
+      // a concurrent writer advanced it, so retry against the freshly read row.
+      const guard = await this.prisma.layersOntology.updateMany({
+        where: { id: ontologyId, lockVersion: row.lockVersion },
+        data: { lockVersion: { increment: 1 } },
+      })
+      if (guard.count !== 1) {
+        continue
+      }
+      return this.updateOntology(personaId, merged)
+    }
+    throw new ConflictError('Ontology update conflicted after retries')
   }
 
   /**

@@ -19,6 +19,7 @@ session or cookie is involved — this is service-to-service only.
 
 from __future__ import annotations
 
+import hmac
 import logging
 from typing import Annotated, Literal
 
@@ -119,7 +120,7 @@ def _require_admin_token(x_admin_token: str | None) -> None:
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Admin reconfigure is not enabled on this service",
         )
-    if not x_admin_token or x_admin_token != expected:
+    if not x_admin_token or not hmac.compare_digest(x_admin_token or "", expected):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or missing admin token",

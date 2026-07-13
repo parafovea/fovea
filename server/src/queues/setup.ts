@@ -6,6 +6,7 @@ import snakecaseKeys from "snakecase-keys";
 import { readOntologyAggregate } from "../services/layers-bridge/ontology-bridge.js";
 import { readVideoPersonaAnnotations } from "../services/layers-bridge/annotation-bridge.js";
 import {
+  deleteExtractedSummaryClaims,
   readSummaryClaims,
   writeClaim,
   type ClaimSummaryContext,
@@ -181,6 +182,8 @@ export interface AudioOverridesJobData {
 export interface VideoSummarizationJobData {
   videoId: string;
   personaId: string;
+  /** Id of the user who requested the summary; stamped as the row's owner. */
+  createdBy?: string;
   frameSampleRate?: number;
   maxFrames?: number;
   enableAudio?: boolean;
@@ -222,6 +225,7 @@ export const videoWorker = new Worker<
     const {
       videoId,
       personaId,
+      createdBy,
       frameSampleRate = 1,
       maxFrames = 30,
       enableAudio,
@@ -350,11 +354,22 @@ export const videoWorker = new Worker<
         processingTimeAudio: modelResponse.processing_time_audio || undefined,
         processingTimeVisual: modelResponse.processing_time_visual || undefined,
         processingTimeFusion: modelResponse.processing_time_fusion || undefined,
+        // Re-stamp project scope so a row created before this fix is healed.
+        projectId: persona.projectId,
         updatedAt: new Date(),
       },
       create: {
         videoId,
         personaId,
+        // Stamp the requesting user as owner so the generated summary is
+        // readable by its creator (a personal persona has no project scope to
+        // fall back on). Only set on create; the update branch preserves the
+        // original owner.
+        createdBy: createdBy ?? undefined,
+        // Stamp the persona's project so a model-generated summary is born in
+        // the right project scope; without it the row is NULL-scoped and
+        // project members cannot read it.
+        projectId: persona.projectId,
         // Convert text summary to GlossItem[] format
         summary: [{ type: 'text', content: modelResponse.summary }],
         visualAnalysis: modelResponse.visual_analysis,
@@ -462,6 +477,8 @@ claimQueueEvents.on("failed", async ({ jobId, failedReason }) => {
 export interface ClaimExtractionJobData {
   summaryId: string;
   summaryType: "video" | "collection";
+  /** Id of the user who requested extraction; stamped as each claim's owner. */
+  createdBy?: string;
   config: {
     inputSources: {
       includeSummaryText: boolean;
@@ -524,7 +541,7 @@ export const claimWorker = new Worker<
 >(
   "claim-extraction",
   async (job): Promise<ClaimExtractionResult> => {
-    const { summaryId, summaryType, config } = job.data;
+    const { summaryId, summaryType, config, createdBy } = job.data;
 
     await job.updateProgress(10);
 
@@ -639,13 +656,23 @@ export const claimWorker = new Worker<
 
     await job.updateProgress(60);
 
-    // Persist claims into the layers store under the summary's claim-span layer.
+    // Persist the extracted claims into the layers store idempotently. A job
+    // retry or double-submit would otherwise duplicate every claim, since each
+    // create inserts a new claim node. Remove the summary's previously extracted
+    // claims (preserving any manually authored ones, which carry
+    // extractionStrategy "manual"), write the fresh set under the summary's
+    // claim-span layer, then rebuild the denormalized claimsJson from the
+    // reconstructed tree.
     const summaryCtx: ClaimSummaryContext = {
       id: summary.id,
       videoId: summary.videoId,
       projectId: summary.projectId,
-      createdBy: summary.createdBy,
+      // Owned by the user who requested extraction so the extracted claims are
+      // readable by their creator (mirrors the interactive claim-create paths).
+      createdBy: createdBy ?? summary.createdBy,
     };
+
+    await deleteExtractedSummaryClaims(prisma, summaryId);
 
     async function saveClaim(
       claimData: (typeof modelResponse.claims)[0],
@@ -695,8 +722,6 @@ export const claimWorker = new Worker<
       await saveClaim(claimData);
     }
 
-    await job.updateProgress(80);
-
     // Rebuild the denormalized claim tree from the layers store.
     const { claims: flatClaims } = await readSummaryClaims(prisma, summaryId);
     const allClaims = nestClaims(flatClaims);
@@ -710,31 +735,29 @@ export const claimWorker = new Worker<
       }
       return count;
     };
-
     const totalClaims = countClaims(allClaims);
 
-    const claimsJson = {
-      version: "1.0",
-      claims: allClaims,
-      metadata: {
-        extractedAt: new Date().toISOString(),
-        totalClaims,
-        totalSubclaims: totalClaims - allClaims.length,
-        maxDepth: config.maxSubclaimDepth || 3,
-      },
-    };
-
     if (summaryType === "video") {
+      const claimsJson = {
+        version: "1.0",
+        claims: allClaims,
+        metadata: {
+          extractedAt: new Date().toISOString(),
+          totalClaims,
+          totalSubclaims: totalClaims - allClaims.length,
+          maxDepth: config.maxSubclaimDepth || 3,
+        },
+      };
       await prisma.videoSummary.update({
         where: { id: summaryId },
         data: {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma JSON type requires any
-          claimsJson: claimsJson as any,
+          claimsJson: claimsJson as unknown as Prisma.InputJsonValue,
           claimsExtractedAt: new Date(),
         },
       });
     }
 
+    await job.updateProgress(80);
     await job.updateProgress(100);
 
     return {

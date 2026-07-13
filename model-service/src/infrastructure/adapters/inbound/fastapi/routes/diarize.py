@@ -20,6 +20,7 @@ and otherwise ignored.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import time
@@ -35,6 +36,7 @@ from src.infrastructure.adapters.inbound.fastapi.dx_bodies import (
     as_response,
     dump,
 )
+from src.infrastructure.adapters.inbound.fastapi.routes.inference_locks import inference_lock
 from src.infrastructure.config.settings import get_settings
 
 if TYPE_CHECKING:
@@ -158,7 +160,12 @@ async def diarize(
 
     start = time.time()
     try:
-        result: DiarizationResult = model.diarize(audio_path_real)
+        # Diarization is a blocking CPU/GPU call; offload to a worker
+        # thread so it does not stall the event loop. Serialize inference on
+        # the shared cached pyannote pipeline: two concurrent diarizations
+        # would otherwise call the same non-thread-safe object at once.
+        async with inference_lock("speaker_diarization"):
+            result: DiarizationResult = await asyncio.to_thread(model.diarize, audio_path_real)
     except Exception as exc:
         logger.exception("Diarization failed")
         raise HTTPException(status_code=500, detail=f"Diarization failed: {exc}") from exc

@@ -25,6 +25,51 @@ class AudioProcessingError(Exception):
     """Raised when audio processing operations fail."""
 
 
+#: Bounded wait for an ffprobe metadata probe. Probes read only a few
+#: stream headers and should return in well under a second; the ceiling
+#: keeps a wedged ffprobe from hanging a request forever.
+_FFPROBE_TIMEOUT_SECONDS = 30
+
+#: Bounded wait for an ffmpeg decode/transcode that streams full audio.
+#: Larger than the probe ceiling because decoding a long file legitimately
+#: takes longer.
+_FFMPEG_DECODE_TIMEOUT_SECONDS = 300
+
+
+async def _communicate_with_timeout(
+    process: asyncio.subprocess.Process, timeout: float
+) -> tuple[bytes, bytes]:
+    """Await ``process.communicate()`` with a bounded timeout.
+
+    On timeout the process is killed and reaped before the error
+    propagates, so a wedged ffprobe/ffmpeg cannot leak a child process or
+    hang the request indefinitely.
+
+    Parameters
+    ----------
+    process : asyncio.subprocess.Process
+        The running subprocess.
+    timeout : float
+        Maximum seconds to wait for completion.
+
+    Returns
+    -------
+    tuple[bytes, bytes]
+        The process stdout and stderr.
+
+    Raises
+    ------
+    AudioProcessingError
+        If the process does not finish within ``timeout``.
+    """
+    try:
+        return await asyncio.wait_for(process.communicate(), timeout=timeout)
+    except TimeoutError as exc:
+        process.kill()
+        await process.wait()
+        raise AudioProcessingError(f"Audio subprocess timed out after {timeout:g}s") from exc
+
+
 async def has_audio_stream(video_path: str) -> bool:
     """Check if video file contains audio streams.
 
@@ -56,7 +101,7 @@ async def has_audio_stream(video_path: str) -> bool:
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
-            stdout, _ = await process.communicate()
+            stdout, _ = await _communicate_with_timeout(process, _FFPROBE_TIMEOUT_SECONDS)
 
             has_audio = stdout.decode().strip() == "audio"
             span.set_attribute("audio.has_stream", has_audio)
@@ -109,7 +154,7 @@ async def get_audio_info(video_path: str) -> dict[str, str | int | float]:
                 stderr=asyncio.subprocess.PIPE,
             )
 
-            stdout, stderr = await process.communicate()
+            stdout, stderr = await _communicate_with_timeout(process, _FFPROBE_TIMEOUT_SECONDS)
 
             if process.returncode != 0:
                 error_msg = stderr.decode() if stderr else "Unknown error"
@@ -212,7 +257,7 @@ async def extract_audio_segment(
                 stderr=asyncio.subprocess.PIPE,
             )
 
-            _stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=60)
+            _stdout, stderr = await _communicate_with_timeout(process, 60)
 
             if process.returncode != 0:
                 error_msg = stderr.decode() if stderr else "Unknown error"
@@ -228,8 +273,8 @@ async def extract_audio_segment(
 
             return output_path
 
-        except TimeoutError as e:
-            raise AudioProcessingError("Segment extraction timed out after 60s") from e
+        except AudioProcessingError:
+            raise
         except Exception as e:
             raise AudioProcessingError(f"Segment extraction failed: {e}") from e
 
@@ -277,7 +322,7 @@ async def chunk_audio_file(
                 stderr=asyncio.subprocess.PIPE,
             )
 
-            stdout, stderr = await process.communicate()
+            stdout, stderr = await _communicate_with_timeout(process, _FFPROBE_TIMEOUT_SECONDS)
 
             if process.returncode != 0:
                 error_msg = stderr.decode() if stderr else "Unknown error"
@@ -351,7 +396,9 @@ async def load_audio_array(
                 stderr=asyncio.subprocess.PIPE,
             )
 
-            stdout, stderr = await process.communicate()
+            stdout, stderr = await _communicate_with_timeout(
+                process, _FFMPEG_DECODE_TIMEOUT_SECONDS
+            )
 
             if process.returncode != 0:
                 error_msg = stderr.decode() if stderr else "Unknown error"
@@ -403,7 +450,7 @@ async def get_audio_duration(audio_path: str) -> float:
                 stderr=asyncio.subprocess.PIPE,
             )
 
-            stdout, stderr = await process.communicate()
+            stdout, stderr = await _communicate_with_timeout(process, _FFPROBE_TIMEOUT_SECONDS)
 
             if process.returncode != 0:
                 error_msg = stderr.decode() if stderr else "Unknown error"
@@ -500,7 +547,7 @@ async def extract_audio_track(
                 stderr=asyncio.subprocess.PIPE,
             )
 
-            _stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=300)
+            _stdout, stderr = await _communicate_with_timeout(process, 300)
 
             if process.returncode != 0:
                 error_msg = stderr.decode() if stderr else "Unknown error"
@@ -515,8 +562,8 @@ async def extract_audio_track(
 
             return output_path
 
-        except TimeoutError as e:
-            raise AudioProcessingError("Audio extraction timed out after 300s") from e
+        except AudioProcessingError:
+            raise
         except Exception as e:
             raise AudioProcessingError(f"Audio extraction failed: {e}") from e
 

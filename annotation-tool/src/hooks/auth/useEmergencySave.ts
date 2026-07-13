@@ -12,6 +12,7 @@ import { useQueryClient } from '@tanstack/react-query'
 
 import { logWarning, logCritical } from '@services/errorLogging'
 import { withSpan } from '@telemetry/tracing'
+import { flushAllAutoSaves } from '../data/autoSaveRegistry'
 
 /**
  * Result of an emergency save operation.
@@ -60,13 +61,18 @@ export function useEmergencySave(): EmergencySaveState {
       const results: EmergencySaveResult = { saved: 0, errors: [] }
 
       try {
-        // Get all mutation cache entries that might have pending data
-        // For now, just log that we attempted emergency save
-        // In a full implementation, we'd iterate through pending mutations
         logWarning('Emergency save triggered', {
           component: 'useEmergencySave',
           mutationCacheSize: queryClient.getMutationCache().getAll().length,
         })
+
+        // Flush every mounted editor's pending edits by invoking the auto-save
+        // forceSave callbacks they registered. Best-effort: a save may still
+        // fail (e.g. the session is already gone on a hard 401), which is
+        // recorded in errors rather than swallowed.
+        const flushed = await flushAllAutoSaves()
+        results.saved = flushed.saved
+        results.errors.push(...flushed.errors.map((e) => e.message))
 
         span.setAttribute('save_attempted', true)
       } catch (error) {

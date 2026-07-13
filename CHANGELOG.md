@@ -5,6 +5,259 @@ All notable changes to the Fovea project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.11] - 2026-07-02
+
+The 0.5.11 patch is the third and final release remediating the second swarm audit — the model-service slice — fixing event-loop starvation, ffmpeg subprocess leaks, a shared-model inference race, and a DNS-rebinding SSRF gap in the Python inference service ([#198](https://github.com/parafovea/fovea/pull/198)). Nothing is breaking. This completes the second-audit three-patch series (0.5.9 backend, 0.5.10 frontend, 0.5.11 model-service).
+
+### Fixed
+
+- The summarize-with-audio pipeline ran Whisper transcription and pyannote diarization directly on the asyncio event loop — the 0.5.8 offload reached the standalone `/transcribe` and `/diarize` routes and the VLM path but missed the summarizer's own audio path — so a `POST /summarize` with audio froze the `/health` probe, metric export, and every concurrent request for the tens of seconds to minutes the inference took. The load/transcribe/diarize/unload sequence now runs on a worker thread via `asyncio.to_thread` (`model-service/src/infrastructure/adapters/outbound/transcriber_whisper.py`).
+- Two ffmpeg extraction helpers on the transcription hot path (`extract_audio_track`, `extract_audio_segment`) awaited a timeout that cancelled only the coroutine, leaving the ffmpeg child running as an orphan; they now go through the shared kill-and-reap helper so the timeout path terminates and reaps the subprocess (`model-service/src/application/services/audio_processing.py`).
+- The video processor's `extract_audio` and `extract_thumbnail` awaited ffmpeg with no timeout at all, so a malformed or truncated video could wedge the request forever and leak the child; both now use a bounded timeout that kills and reaps on expiry (`model-service/src/infrastructure/adapters/outbound/video/processor.py`).
+- The standalone transcribe and diarize routes fetched the single cached model instance and ran its native inference in a worker thread with no serialization, so two concurrent requests called the same non-thread-safe object (faster-whisper / pyannote) at once, risking garbled output or a crash inside the native code. Inference is now serialized per task type by an `asyncio.Lock`, while distinct tasks still run in parallel (`model-service/src/infrastructure/adapters/inbound/fastapi/routes/transcribe.py`, `diarize.py`, `inference_locks.py`).
+- The video downloader's SSRF allow-list resolved the host and required a public IP but then fetched by hostname, so DNS could be rebound between the check and the connect (a TOCTOU). The connection is now pinned to the address vetted during preflight while still presenting the hostname for TLS, so a rebind cannot redirect it to a private or internal host (`model-service/src/infrastructure/adapters/outbound/video/downloader.py`).
+
+## [0.5.10] - 2026-07-01
+
+The 0.5.10 patch is the second of three releases remediating the second swarm audit — the frontend slice — fixing auto-save data-loss and stale-cache defects in the annotation UI ([#196](https://github.com/parafovea/fovea/pull/196)). Several were gaps in the first audit's own frontend fixes, which closed one instance of a defect class without closing every instance. Nothing is breaking.
+
+### Fixed
+
+#### Auto-save no longer drops edits
+
+- A forced save issued while another save was already in flight was silently dropped: the dialog's Done/Escape/backdrop flush, a keyframe override, and the session-expiry emergency flush could each return as if the write succeeded while persisting nothing. A forced save is now parked and drained once the in-flight save settles, and it reports whether it actually wrote (`annotation-tool/src/hooks/data/useAutoSave.ts`).
+- Switching the persona in an open video-summary editor dropped the unsaved edits made under the previous persona — and, in the render window where the id had already changed but the loaded content had not, could persist one persona's text against another. The dialog now flushes the editor before switching and keys the editor by persona so it remounts cleanly for the new one (`annotation-tool/src/components/video/VideoSummaryDialog.tsx`, `VideoSummaryEditor.tsx`).
+- The session-expiry emergency flush counted a no-op forced save (blocked by an in-flight save, skipped by change detection, or superseded) as a successful save, over-reporting preservation at the moment it matters most. It now counts only editors that actually persisted (`annotation-tool/src/hooks/data/autoSaveRegistry.ts`, `useAutoSave.ts`).
+- Opening the editor fired a redundant auto-save of the just-loaded content, because the change baseline started empty and the initial sync looked like an edit. The editor now seeds the baseline to the adopted server content, so the first debounce tick sees no change (`annotation-tool/src/hooks/data/useAutoSave.ts`, `VideoSummaryEditor.tsx`).
+
+#### Stale caches refreshed after mutations
+
+- Deleting an ontology type from the persona editor left open annotation views and world panels showing annotations and per-persona type-assignments the server had already removed, because the delete hooks wired to the buttons never invalidated the annotation and world caches (only their unused twins did). Those four hooks now invalidate both (`annotation-tool/src/store/queries/usePersonas.ts`).
+- A world collection or relation the user had just deleted could reappear after a quick follow-up add or edit: the add path built its whole-array PUT from a cache that still held the deleted object, and the merge-by-id server re-created it. The delete hooks now strip the object from the cache before any following write (`annotation-tool/src/store/queries/useWorld.ts`).
+- Creating or deleting a project-scoped persona did not refresh the project's persona list, so the project detail page showed a stale roster within its two-minute cache window. Both mutations now invalidate the project-personas cache (`annotation-tool/src/store/queries/usePersonas.ts`).
+- Accepting several AI ontology suggestions at once, or importing several Wikidata items quickly, left the ontology editor showing only a subset of the persisted types: the concurrent optimistic writes read the same base snapshot and the last one won. The add/update hooks now invalidate the per-persona ontology so the authoritative server state (merged by id) is refetched once the concurrent writes settle (`annotation-tool/src/store/queries/usePersonas.ts`).
+
+## [0.5.9] - 2026-06-30
+
+The 0.5.9 patch is the first of three releases remediating a second swarm audit of the shipped 0.5.x line — the backend slice — fixing authorization, lost-update concurrency, idempotency, and data-fidelity defects in the Fastify server ([#194](https://github.com/parafovea/fovea/pull/194)). Roughly a third of the findings were gaps in the first audit's own fixes: a fix addressed specific instances of a defect class without closing every instance. Nothing is breaking.
+
+### Fixed
+
+#### Authorization
+
+- The `/api/models/*` proxy routes were unauthenticated: any caller could read the model configuration and, worse, drive the shared inference service — selecting, loading, or unloading a model affects every user — with no credentials. The routes now require authentication, and the state-changing select/load/unload operations additionally require admin (`server/src/app.ts`, `server/src/routes/models.ts`).
+- A persona could be attached to a project by a non-member, since the create ability passed for any self-owned persona regardless of the target project. Project-scoped persona creation now verifies project membership and returns 403 otherwise (`server/src/services/persona-service.ts`).
+- The import "replace" paths overwrote or deleted an existing annotation, persona, summary, claim, or claim-relation found by id with no instance-level check, so a crafted import could clobber another user's row. Each replace now requires update (or delete) on the existing row, mirroring the ontology-import guard (`server/src/services/import/entity-importers.ts`).
+
+#### Concurrency — lost-update hardening
+
+- The optimistic-concurrency guard on world state and ontologies compared on `updatedAt`, which two writes landing in the same millisecond may share — letting the second silently overwrite the first. Both tables now carry a monotonic `version` column, and every guarded write compares-and-swaps on it; guard exhaustion now returns 409 and a missing row 404 rather than a generic 500 (`server/prisma/migrations/20260630120000_add_optimistic_version_and_admin_apikey_uniqueness`, `server/src/repositories/{WorldStateRepository,ProjectRepository,PersonaRepository}.ts`, `server/src/services/world-state-service.ts`).
+- Persona type-deletion and persona deletion wrote the annotation delete, the ontology gloss cleanup, and the world-state cleanup as separate unguarded statements, so a partial failure left them disagreeing and a concurrent edit could be clobbered. Each now runs in a single transaction with the ontology and world-state writes routed through the version guard, recomputing from a fresh read (`server/src/services/persona-service.ts`).
+- The admin "clear world state" path wrote through a bare id update that could half-survive a concurrent write; it now clears through the version guard (`server/src/services/world-state-service.ts`).
+- First-access creation of a project world state raced into the compound unique constraint and surfaced a 500; it now upserts the empty row and merges through the guard (`server/src/services/project-service.ts`).
+- The claim-extraction worker re-saved claims on every run with no dedup, so a job retry or double-submit duplicated every claim for a summary. Re-extraction is now idempotent: the prior extracted claims are replaced inside one transaction, preserving manually authored claims (`server/src/queues/setup.ts`).
+
+#### Idempotency and conflict status
+
+- Several create and update paths surfaced a duplicate as a 500 rather than a 409: the self-service profile email/username update, project and group membership adds, and admin API keys. Each now maps the unique-constraint violation to a 409 (`server/src/routes/{users,groups}.ts`, `server/src/services/{project-service,api-key-service}.ts`).
+- Admin API keys were unconstrained, since the compound `@@unique([userId, provider])` does not bind rows with a null userId in Postgres, so the advertised 409 never fired. A partial unique index now enforces one admin key per provider, deduping any existing duplicates first (`server/prisma/migrations/20260630120000_add_optimistic_version_and_admin_apikey_uniqueness`).
+- A claim create that lost the same-id race re-threw the raw unique violation as a 500 when the existing row was not updatable; it now returns 403, mirroring the pre-create authorization check (`server/src/services/claim-service.ts`).
+- A service-layer Zod validation failure — one that bypasses Fastify's schema validation — fell through to a generic 500; it now returns 400 with the field-level issues (`server/src/app.ts`).
+- The ontology-save handler returned a bespoke 500 that leaked the raw error message to the client; it now re-throws to the global handler for a safe generic 500, keeping the detail in the logs (`server/src/routes/ontology.ts`).
+
+#### Data fidelity
+
+- Forking a shared video summary copied the summary body but dropped every extracted claim, leaving the fork's claim view empty. The fork now deep-copies the claim tree under fresh ids and carries the denormalized `claimsJson`, re-pointing every claim reference — row ids, parent links, and the references embedded in glosses — at the new ids (`server/src/routes/sharing.ts`).
+- Cross-summary import conflict detection compared relation ids against the collection id set and read the world-state row with a narrower filter than the writer used, so it could miss or misreport conflicts. Both now key on the correct row and the relation id set (`server/src/services/import/conflict-resolver.ts`, `server/src/services/import-handler.ts`).
+- A merge-keyframes import resolution on an existing annotation fell through to an unconditional create and collided on the primary key; the create is now guarded by an existence check (`server/src/services/import/entity-importers.ts`).
+
+#### Demo and cache hygiene
+
+- The idle-demo-user sweeper deleted users but never evicted their cached abilities, leaking memory as anonymous demo sessions churned; it now invalidates each swept user's ability cache (`server/src/demo/idle-reset.ts`).
+- The anonymous-session mint endpoint had neither a per-route rate limit nor a population ceiling, so it could be driven to create users faster than the sweeper reclaims them; it now rate-limits per IP and refuses once a live-anonymous-user ceiling is reached (`server/src/demo/anonymous-session.ts`).
+- Admin user creation accepted an independent `systemRole` that could diverge from `isAdmin` (CASL keys on the former, the admin middleware on the latter); the two are now coupled. Admin user deletion now invalidates the deleted user's cached abilities (`server/src/routes/users.ts`).
+
+## [0.5.8] - 2026-06-30
+
+The 0.5.8 patch is the third and final audit-driven hardening release — the model-service slice — fixing resource and concurrency defects in the Python inference service ([#192](https://github.com/parafovea/fovea/pull/192)). Nothing is breaking.
+
+### Fixed
+
+- The `/detection/detect` and `/tracking/track` routes leaked an OpenCV `VideoCapture` handle (and decoder memory) whenever a frame read or mask decode failed, since the capture was released only on the success path. The capture is now released in a `try/finally` on every exit path, and an open failure raises a clean error (`model-service/.../routes/detection.py`, `tracking.py`).
+- Synchronous VLM, transcription, and diarization inference ran on the asyncio event loop, so a single request froze all concurrent requests, the `/health` probe, and telemetry export until it finished. The blocking calls are now offloaded with `asyncio.to_thread` (`model-service/.../use_cases/summarize_video.py`, `routes/transcribe.py`, `routes/diarize.py`).
+- ffprobe/ffmpeg subprocesses were awaited with no timeout, so a malformed or slow media file could wedge a request indefinitely and leak the child process. These calls now go through a shared helper that bounds the wait and kills and reaps the process on timeout (`model-service/.../services/audio_processing.py`).
+- `ModelManager` had no concurrency guard, so two requests loading the same not-yet-loaded model could both pass the "already loaded?" check and double-load (risking OOM). Load, unload, and eviction are now serialized by a reentrant model lock with a post-acquire re-check (`model-service/.../services/model_management.py`).
+- Id-based video resolution hardcoded `/videos`, returning 404 on any deployment whose video volume is mounted elsewhere; it now reads the configured `video_data_root` (`model-service/.../use_cases/summarize_video.py`).
+- The admin reconfigure token is now compared with `hmac.compare_digest` (constant-time) instead of `!=` (`model-service/.../routes/admin.py`).
+
+## [0.5.7] - 2026-06-30
+
+The 0.5.7 patch is the second of three audit-driven hardening releases — the frontend slice — fixing data-loss and stale-cache defects in the annotation UI ([#190](https://github.com/parafovea/fovea/pull/190)). Nothing is breaking.
+
+### Fixed
+
+#### Auto-Save No Longer Drops Edits
+
+- A comment-only edit in the video summary editor was never auto-saved: the auto-save change-detection keyed on the summary body alone, so editing only the comment never armed the debounce and the edit was lost on dialog dismiss or navigation. (The 0.5.6 line's predecessor fix folded the comment into the comparison snapshot but did not make the debounce *fire* on it — a passing test masked the gap.) `useAutoSave` now keys change detection on the serialized comparison snapshot's VALUE, so an edit to any compared field — including a sibling field such as the comment — schedules a save (`annotation-tool/src/hooks/data/useAutoSave.ts`, `VideoSummaryEditor.tsx`).
+- Dismissing the summary dialog with Escape or a click outside bypassed the save-on-close flow, dropping edits made in the last second. The dialog now routes Escape/backdrop dismiss through the same `forceSave` flush as the Done button (`annotation-tool/src/components/video/VideoSummaryDialog.tsx`).
+- After a transient save failure, the in-progress guard was released immediately even though a retry was scheduled, allowing a second save to run concurrently with the retry (duplicate writes / last-writer-wins). The guard is now held through the backoff and released only on a terminal outcome (`annotation-tool/src/hooks/data/useAutoSave.ts`).
+- The session-expiry emergency save was a no-op stub that logged but saved nothing. It now flushes every mounted editor's pending edits through a registry of their `forceSave` callbacks (`annotation-tool/src/hooks/auth/useEmergencySave.ts`, `annotation-tool/src/hooks/data/autoSaveRegistry.ts`).
+
+#### Ontology Type Deletion Persists Again
+
+- Deleting an entity, role, event, or relation type from a persona stopped taking effect after 0.5.6: the client deleted by PUTting the ontology with the type omitted, but 0.5.6 changed the ontology write to merge by id, so the omitted type was kept and re-appeared on the next refetch. These deletions now call the dedicated DELETE endpoint (which also cleans up gloss references, world assignments, and annotations) (`annotation-tool/src/store/queries/usePersonas.ts`).
+
+#### Stale Caches Refreshed After Mutations
+
+- Creating and sharing a persona did not refresh the Sent Shares panel; a self-role change in a project or group left the list's own-role field stale; the summary save/generate/delete mutations skipped the batch summaries-lookup cache; and deleting an ontology type (or a persona) left annotation lists and world panels showing entries that no longer exist server-side. Each of these mutations now invalidates the additional query keys it affects (`annotation-tool/src/store/queries/{usePersonas,useProjects,useGroups,useSummaries}.ts`).
+
+## [0.5.6] - 2026-06-30
+
+The 0.5.6 patch is the first of three audit-driven hardening releases — the backend slice — fixing a batch of authorization, data-integrity, idempotency, and concurrency defects surfaced by a code audit ([#188](https://github.com/parafovea/fovea/pull/188)). Nothing is breaking; the API additively gains `409` conflict responses on duplicate creates and the resource-fork now produces correctly-scoped resources.
+
+### Fixed
+
+#### Authorization and Access Control
+
+- The Bull Board queue dashboard (`/admin/queues`) was mounted with no authentication, exposing queued job payloads and Bull Board's mutating actions to any client that could reach the server. It is now gated behind an admin `onRequest` hook (`server/src/app.ts`).
+- A password change did not revoke the user's existing sessions, so a stolen or shared token survived a reset. Both the self-service profile update and the admin user update now revoke all of the affected user's sessions (the self-update re-issues a fresh session so the acting client stays logged in) (`server/src/routes/users.ts`).
+- The ontology importer overwrote any persona's ontology with no ownership check, letting any authenticated user clobber another user's ontology by uploading a line targeting their persona. The importer now enforces the same instance-level CASL update check as the rest of the app (`server/src/services/import/entity-importers.ts`).
+- The claim-relation privacy filter on `getRelations` was a no-op (an `OR` over either endpoint, the known one of which is always readable), leaking the existence and metadata of relations to claims the caller cannot read. Each query now requires the opposite endpoint to be accessible (`server/src/services/claim-service.ts`).
+- The corpus-manifest sync changed group memberships/roles and project ownership without invalidating the in-memory CASL ability cache, so a downgrade lingered until restart. The sync now clears the ability cache when it reconciles memberships or ownership (`server/src/services/videoSync.ts`).
+- The last `project_owner` could be demoted (via change-role) or stranded (via admin user-deletion), leaving a project with no owner. Both paths now enforce the last-owner invariant (`server/src/services/project-service.ts`, `server/src/routes/users.ts`).
+- Per-IP rate limiting trusted a fully spoofable `X-Forwarded-For` because `trustProxy` was `true`; it is now configurable via `TRUST_PROXY` and defaults to trusting a single proxy hop (`server/src/app.ts`, `server/src/config.ts`).
+- The demo seed fixture loader interpolated an unconstrained `tourId` into a filename (path traversal); `tourId` is now constrained to a strict charset at the route boundary (`server/src/demo/seed.ts`).
+
+#### Idempotency and Conflict Handling
+
+- Creating a resource share, a claim relation, a user, or a group is now idempotent / conflict-safe: duplicate shares and claim relations no longer accumulate (a re-issue reuses the existing row), and a duplicate user email/username or group slug returns `409 Conflict` instead of a `500`. New uniqueness constraints back these (a `ClaimRelation` triple unique and partial unique indexes on `ResourceShare` and personal `WorldState`); a migration dedupes any pre-existing duplicates before adding them (`server/src/routes/{sharing,users,groups,auth}.ts`, `server/src/services/{claim-service,project-service}.ts`, `server/prisma/migrations`).
+- A user could end up with two personal world-state rows (the compound unique did not constrain a NULL `projectId`); the personal get-or-create/update paths are now race-safe and merge on conflict, backed by a partial unique index (`server/src/services/world-state-service.ts`).
+
+#### Concurrency — Lost Updates
+
+- Concurrent edits to a persona's ontology, a project's world state, or an import running alongside a UI edit silently overwrote each other (whole-blob replace, no guard). These writes now merge each array by id under optimistic concurrency, the same pattern that protects personal world-state writes (`server/src/services/{persona-service,project-service}.ts`, `server/src/repositories/{PersonaRepository,ProjectRepository}.ts`, `server/src/routes/ontology.ts`, `server/src/services/import/entity-importers.ts`).
+
+#### World-Object Deletion Integrity
+
+- Deleting a world entity/event/time wrote the world state and cleaned up dependent ontology gloss references in two un-transacted writes, orphaning glosses on a partial failure, and bypassed the optimistic-concurrency guard so a concurrent addition could be clobbered. Each deletion now runs the guarded world-state write and all gloss cleanups in a single transaction (`server/src/services/world-state-service.ts`).
+- The world-object deletion preview always reported `annotationCount: 0`; it now counts the object annotations that reference the object.
+
+### Added
+
+#### Deep-Fork of Shared Resources
+
+- Forking a shared summary always returned a `500` (it collided on the source's `(videoId, personaId)`), and forked claims/annotations were orphaned or lost their object link. Forking now deep-copies into the forker's own scope: the source persona is forked, the summary/claim is re-pointed at the forked persona/summary, `claimsJson` is rebuilt, and annotation `linkType` is preserved (`server/src/routes/sharing.ts`).
+
+#### Conflict Responses
+
+- The user, group, and project create/update endpoints document and return `409 Conflict` on a duplicate, reflected in the OpenAPI contract and generated client types.
+
+## [0.5.5] - 2026-06-29
+
+The 0.5.5 patch is an audit-driven hardening release ([#186](https://github.com/parafovea/fovea/pull/186)). It closes two higher-severity defects — a former group member kept the group's permissions until the server restarted, and concurrent edits to the world graph silently overwrote one another — together with a set of data-scope, idempotency, and cache-staleness gaps. Nothing is breaking; the API additively gains explicit DELETE endpoints for world collections and relations, an optional client-supplied `id` on claim creation, and a `409` on a duplicate video assignment.
+
+### Fixed
+
+#### Deleting a Group Clears Its Former Members' Cached Abilities
+
+- Both group-delete handlers (`server/src/routes/groups.ts`) removed the group without invalidating its former members' in-memory ability cache. A group-scope, non-own-only permission compiles into a globally unconditioned CASL rule, so a former member kept the group's system-wide access until the process restarted or they logged in again. Each handler now snapshots the membership before the cascade and calls `invalidateUserAbilities` for every former member, mirroring `ProjectService.delete`.
+
+#### Concurrent World-Graph Edits No Longer Overwrite One Another
+
+- Every world add and update went through a whole-blob read-modify-write `PUT /api/world` with no serialization, so two edits in quick succession — or a Wikidata import racing a manual edit — read the same stale base and the last writer silently dropped the other's entities, events, or relations. Writes are now safe on two fronts: the client (`annotation-tool/src/store/queries/useWorld.ts`) funnels mutations through a single-flight chain that threads the latest server state into the next write, and the server (`server/src/services/world-state-service.ts`, `server/src/repositories/WorldStateRepository.ts`) merges each of the seven object arrays by `id` under an optimistic-concurrency guard rather than replacing them wholesale. Because merge-by-id makes removal-by-omission a no-op, every object removal — entities, events, times, the three collection kinds, and relations — now goes through an explicit DELETE endpoint; the client delete hooks call the graceful `DELETE /api/world/...` routes, which also clean up dependent relations, collection memberships, and gloss references.
+
+#### Personaless Object Annotations Inherit the Video's Project Scope
+
+- Object annotations carry no persona, so the create path (`server/src/routes/annotations.ts`) had no project to stamp and persisted them with `projectId = NULL`, invisible to every project reviewer but the creator. When the caller is a member of exactly one project the video is assigned to, the annotation now inherits that project; an ambiguous (multiple) or absent assignment stays personal, and the existing CASL pre-authorization still validates the resolved scope.
+
+#### Claim Creation Is Idempotent on a Client-Supplied ID
+
+- Neither claim-create route accepted a client `id`, so a network retry or programmatic resend minted a duplicate claim. Both routes (`server/src/routes/claims.ts`, `server/src/services/claim-service.ts`) now accept an optional `id`; a resend carrying an existing id re-authorizes against the stored row and returns it instead of creating a duplicate, with a `P2002` race fallback. This mirrors the annotation idempotent-create hardening from 0.5.4.
+
+#### Duplicate Video Assignment Returns 409 Instead of 500
+
+- Re-assigning a video already assigned to a project violated the `@@unique([projectId, videoId])` constraint and surfaced as an unhandled `500`. The route (`server/src/routes/video-assignments.ts`) now catches the constraint violation and returns a `409 Conflict`.
+
+#### The Summary Editor Autosaves Comment-Only Edits
+
+- The video summary editor's autosave watched only the summary body, so editing the comment without touching the summary never triggered a save and the edit was lost on navigation. Autosave now compares a snapshot that includes the comment (`annotation-tool/src/components/video/VideoSummaryEditor.tsx`).
+
+#### Relating Claims Refreshes Both Endpoints' Relation Panels
+
+- Creating or deleting a claim relation invalidated only the source claim's relation query, leaving the target claim's relation panel stale until a manual refetch. Both mutations (`annotation-tool/src/store/queries/useClaims.ts`) now invalidate the target as well.
+
+#### Membership and Role Changes Refresh the Client Ability Mirror
+
+- The client ability cache carried a five-minute stale time and no mutation invalidated it, so a user's own role or membership change took up to five minutes to reflect in the UI even though the server always enforced it correctly. The six self-affecting project- and group-membership mutations (`annotation-tool/src/store/queries/useProjects.ts`, `useGroups.ts`) now invalidate the ability mirror on success.
+
+#### Admin isAdmin Changes Stay in Sync With systemRole
+
+- The admin user-update endpoint (`server/src/routes/users.ts`) wrote `isAdmin` but never `systemRole`, which is what CASL's `manage all` keys on, so a promotion or demotion left the two fields divergent and the cached abilities stale. The endpoint now sets `systemRole` to match and invalidates the affected user's abilities.
+
+#### Removed a Dead Auto-Save Hook
+
+- `useAutoSaveAnnotations` had no callers and re-armed the exact save-loop footgun the live autosave was hardened against; it has been deleted.
+
+### Added
+
+#### Explicit DELETE Endpoints for World Collections and Relations
+
+- `server/src/routes/world.ts` gains `DELETE` routes for entity collections, event collections, time collections, and relations, so these objects are removed explicitly rather than by omission from a whole-blob `PUT`. This is what lets the non-clobbering merge-by-id persistence be safe (see Fixed).
+
+#### Optional Client-Supplied ID on Claim Creation
+
+- Both claim-create endpoints accept an optional `id`, enabling idempotent retries; the `Claim` response already echoes it.
+
+## [0.5.4] - 2026-06-25
+
+The 0.5.4 patch fixes project-scope and ownership stamping on video summaries and claims ([#181](https://github.com/parafovea/fovea/pull/181)). Project collaborators could not see a teammate's summary or add claims under it because summaries were persisted without their persona's project, and model-generated summaries and extracted claims were left unowned. Nothing is breaking; the API additively gains a `projectId` field on summary and claim responses.
+
+### Fixed
+
+#### Summaries and Claims Are Stamped With Their Persona's Project
+
+- Every video-summary and claim write now stamps `projectId` from the persona (or the parent summary). Previously the interactive summary route (`server/src/routes/summaries.ts`), the summarization and claim-extraction workers (`server/src/queues/setup.ts`), and the auto-created empty summary (`server/src/repositories/ClaimRepository.ts`) all omitted it, so rows were born `projectId = NULL` and were invisible to every project collaborator except the creator — which `403`'d them at the parent-summary read gate when they tried to add claims, and hid the content from project-scoped queries. The summary update path also re-stamps the scope so a previously NULL-scoped row heals on its next save, and a migration backfills existing summaries and claims.
+
+#### Model-Generated Summaries and Extracted Claims Are Owned
+
+- The summarization and claim-extraction queue workers created rows without `createdBy`, leaving model-generated summaries and extracted claims owned by no one (readable only by an admin). The requesting user is now threaded through the queue payload and stamped as the owner on create.
+
+### Added
+
+#### projectId on Summary and Claim API Responses
+
+- The `VideoSummary` and `Claim` API responses now include `projectId`, so clients can reflect a resource's project scope; its prior absence had helped the stamping defect go unnoticed.
+
+## [0.5.3] - 2026-06-24
+
+The 0.5.3 patch fixes a claims-workspace interaction bug ([#177](https://github.com/parafovea/fovea/pull/177)). No API shapes change and nothing is breaking.
+
+### Fixed
+
+#### Clicking a Claim Card No Longer Switches to the Summary Tab
+
+- In the video summary editor's Claims tab, clicking a claim card switched the interface back to the Summary tab, which is not what clicking a card should do. A card now selects in place: it is marked selected on the Claims tab and records its source spans so the Summary tab highlights the claim's provenance only if the user chooses to switch there. The card's selected styling, previously bound to a state value that was never set, is now driven by the selected-claim state (`annotation-tool/src/components/video/VideoSummaryEditor.tsx`, `annotation-tool/src/components/claims/ClaimsViewer.tsx`).
+
+## [0.5.2] - 2026-06-22
+
+The 0.5.2 patch fixes a Safari-only failure ([#143](https://github.com/parafovea/fovea/issues/143)) where a video in the annotation workspace blacked out the moment it was paused and jumped position on resume, while Chrome and Firefox played it back correctly. The cause was twofold: the video stream endpoint mishandled the byte-range requests Safari issues but Chrome does not, and WebKit dropped the paused video frame from its compositor. No API shapes change and nothing is breaking.
+
+### Fixed
+
+#### Video Stream Range Requests Handle Safari's Suffix and Edge Ranges
+
+- The local video stream provider (`server/src/services/videoStorage.ts`) parsed the HTTP `Range` header with a naive `split('-')`. A suffix range (`bytes=-N`, which Safari uses to read a file's trailing `moov` atom and to re-buffer on pause and resume) produced a `NaN` start offset and threw, and a range whose end ran past the file declared a `Content-Length` larger than the bytes actually streamed. Chrome and Firefox issue plain bounded ranges and were unaffected, so the player worked there while Safari received a failed request mid-playback, blacked out, and re-seeked on resume. Range parsing now follows RFC 7233: suffix ranges resolve to the last N bytes, open-ended ranges run to the last byte, an end past the file clamps so `Content-Length` always matches the stream, and a start past the file returns `416 Range Not Satisfiable` with a `Content-Range` header rather than a 404 that strict clients treat as a fatal media error.
+
+#### Paused Video Keeps Its Frame in Safari
+
+- The annotation video element (`annotation-tool/src/components/annotation/AnnotationWorkspace.css`) is composited beneath the interactive annotation overlay, and WebKit stopped repainting the last decoded frame the instant playback paused, showing the container's black background instead. The element is now pinned to its own GPU compositing layer (`transform: translateZ(0)` with `backface-visibility: hidden`), which keeps the frame painted while paused.
+
+### Added
+
+#### Cross-Browser Video Playback E2E Coverage
+
+- The Playwright matrix gained `video-chromium`, `video-webkit`, and `video-firefox` projects (`annotation-tool/playwright.config.ts`) that run a new pause-and-resume spec under all three engines, since the regression above was WebKit-only and the prior E2E matrix ran only under Chrome. The spec asserts that the stream endpoint answers Safari's suffix and edge byte ranges, that the playhead stays steady across pause and resume, and that the paused frame stays decoded.
+
 ## [0.5.1] - 2026-06-22
 
 The 0.5.1 patch resolves a batch of field-reported bugs surfaced on a self-hosted production deployment, spanning backend request validation and rate limiting, frontend request fan-out and resilience, and a set of annotation-workspace and persona-builder display fixes. No API shapes change and nothing is breaking; the cross-service contracts are unchanged.

@@ -12,10 +12,12 @@ contains no ML framework imports.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 from collections import OrderedDict
-from collections.abc import Callable
+from collections.abc import AsyncIterator, Callable
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -156,6 +158,14 @@ class ModelManager:
         self.model_load_times: dict[str, float] = {}
         self.model_memory_usage: dict[str, int] = {}
 
+        # Serializes load/unload/evict so two concurrent loads of the same
+        # not-yet-loaded task cannot both pass the "already loaded?" check
+        # (the eviction await inside load_model is a yield point). The lock
+        # is reentrant within a single task via _mutate_models so that
+        # load_model can drive eviction/unload while holding it.
+        self._model_lock = asyncio.Lock()
+        self._lock_holder: asyncio.Task[Any] | None = None
+
         self.device = self._detect_device()
         self.cpu_only_mode = self.device == "cpu"
 
@@ -255,32 +265,56 @@ class ModelManager:
 
     # --- Loading / unloading ------------------------------------------------------
 
+    @asynccontextmanager
+    async def _mutate_models(self) -> AsyncIterator[None]:
+        """Hold the model lock for the duration of the block.
+
+        Reentrant within a single asyncio task: ``load_model`` acquires the
+        lock and then calls ``evict_lru_model``/``unload_model``, which use
+        this same guard. The nested calls run in the same task that already
+        holds the lock, so they pass through without re-acquiring (an
+        ``asyncio.Lock`` is not reentrant and would otherwise deadlock).
+        """
+        current = asyncio.current_task()
+        if self._lock_holder is current:
+            yield
+            return
+
+        async with self._model_lock:
+            self._lock_holder = current
+            try:
+                yield
+            finally:
+                self._lock_holder = None
+
     @tracer.start_as_current_span("evict_lru_model")
     async def evict_lru_model(self) -> str | None:
         """Evict the least recently used model from memory."""
-        lru_task = self.get_lru_model()
-        if lru_task is None:
-            logger.warning("No models to evict")
-            return None
+        async with self._mutate_models():
+            lru_task = self.get_lru_model()
+            if lru_task is None:
+                logger.warning("No models to evict")
+                return None
 
-        logger.info(f"Evicting LRU model: {lru_task}")
-        await self.unload_model(lru_task)
-        return lru_task
+            logger.info(f"Evicting LRU model: {lru_task}")
+            await self.unload_model(lru_task)
+            return lru_task
 
     @tracer.start_as_current_span("unload_model")
     async def unload_model(self, task_type: str) -> None:
         """Unload a model from memory."""
-        if task_type not in self.loaded_models:
-            logger.warning(f"Model {task_type} not loaded")
-            return
+        async with self._mutate_models():
+            if task_type not in self.loaded_models:
+                logger.warning(f"Model {task_type} not loaded")
+                return
 
-        logger.info(f"Unloading model: {task_type}")
-        del self.loaded_models[task_type]
-        del self.model_load_times[task_type]
-        del self.model_memory_usage[task_type]
+            logger.info(f"Unloading model: {task_type}")
+            del self.loaded_models[task_type]
+            del self.model_load_times[task_type]
+            del self.model_memory_usage[task_type]
 
-        self._probe().empty_cache()
-        logger.info(f"Model {task_type} unloaded successfully")
+            self._probe().empty_cache()
+            logger.info(f"Model {task_type} unloaded successfully")
 
     @tracer.start_as_current_span("load_model")
     async def load_model(self, task_type: str) -> Any:
@@ -288,6 +322,16 @@ class ModelManager:
         if task_type not in self.tasks:
             raise ValueError(f"Invalid task type: {task_type}")
 
+        async with self._mutate_models():
+            return await self._load_model_locked(task_type)
+
+    async def _load_model_locked(self, task_type: str) -> Any:
+        """Load a model with the model lock already held.
+
+        Re-checks ``loaded_models`` after the lock is acquired so a
+        coroutine that lost the race returns the instance loaded by the
+        winner instead of double-loading and risking OOM.
+        """
         if task_type in self.loaded_models:
             self.loaded_models.move_to_end(task_type)
             logger.info(f"Model {task_type} already loaded, moved to end")

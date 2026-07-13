@@ -12,6 +12,7 @@ The summarize use case already drives transcription internally via
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import time
@@ -27,6 +28,7 @@ from src.infrastructure.adapters.inbound.fastapi.dx_bodies import (
     as_response,
     dump,
 )
+from src.infrastructure.adapters.inbound.fastapi.routes.inference_locks import inference_lock
 from src.infrastructure.config.settings import get_settings
 
 if TYPE_CHECKING:
@@ -136,15 +138,18 @@ async def transcribe(
 
     start = time.time()
     try:
-        # Loaders are synchronous; running inside the FastAPI worker
-        # thread is fine for a 14 s demo clip but production CPU
-        # deployments will want to offload to a thread pool. Pass
-        # language=None when the caller did not specify one — some
-        # loaders (faster-whisper) treat an empty string as a hard
-        # lookup miss rather than "auto-detect".
-        result: TranscriptionResult = model.transcribe(
-            audio_path_real, language=request.language or None
-        )
+        # Loaders are synchronous and blocking; offload to a worker thread
+        # so the transcription does not stall the event loop (concurrent
+        # requests, /health, and OTLP export). Pass language=None when the
+        # caller did not specify one; some loaders (faster-whisper) treat
+        # an empty string as a hard lookup miss rather than "auto-detect".
+        # Serialize inference on the shared cached model: two concurrent
+        # transcriptions would otherwise call the same non-thread-safe object
+        # from two worker threads at once.
+        async with inference_lock("audio_transcription"):
+            result: TranscriptionResult = await asyncio.to_thread(
+                model.transcribe, audio_path_real, language=request.language or None
+            )
     except Exception as exc:
         logger.exception("Transcription failed")
         raise HTTPException(status_code=500, detail=f"Transcription failed: {exc}") from exc

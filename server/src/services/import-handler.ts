@@ -22,8 +22,7 @@ import {
   Resolution,
   ImportOptions,
   ImportResult,
-  DependencyGraph,
-  ExistingData
+  DependencyGraph
 } from './import-types.js'
 import { SequenceValidator } from './import-validator.js'
 import { parseLine, validateLine } from './import/line-parser.js'
@@ -33,14 +32,15 @@ import {
   generateCrossUserResolutions,
   isCrossUserImport,
   remapIds,
-  resolveConflicts
+  resolveConflicts,
+  ExistingDataWithRelations
 } from './import/conflict-resolver.js'
 import { EntityImporter, ImportedIds } from './import/entity-importers.js'
 import { readAllAnnotationRefs } from './layers-bridge/annotation-bridge.js'
 import { readAllClaimRefs, readAllClaimRelationRefs } from './layers-bridge/claim-bridge.js'
 import { readAllOntologyPersonaIds } from './layers-bridge/ontology-bridge.js'
 import { readAllWorldObjectIds, readWorldAggregate, writeWorldAggregate } from './layers-bridge/world-bridge.js'
-import { personalWorldStateId } from './world-layers-mapper.js'
+import { personalWorldStateId, projectWorldStateId } from './world-layers-mapper.js'
 
 /**
  * Handles parsing, validation, and execution of imports.
@@ -98,7 +98,7 @@ export class ImportHandler {
    * @param existingData - existing data in database
    * @returns array of conflicts
    */
-  async detectConflicts(lines: ImportLine[], existingData: ExistingData): Promise<Conflict[]> {
+  async detectConflicts(lines: ImportLine[], existingData: ExistingDataWithRelations): Promise<Conflict[]> {
     return detectConflicts(lines, existingData, this.userId)
   }
 
@@ -152,11 +152,13 @@ export class ImportHandler {
    *
    * @returns existing data
    */
-  async loadExistingData(): Promise<ExistingData> {
+  async loadExistingData(): Promise<ExistingDataWithRelations> {
     // Personas, videos, and summaries remain their own models; annotations,
-    // claims, claim relations, ontologies, and world objects are read across the
-    // layers store and any not-yet-materialized legacy rows via the bridge, so
-    // conflict detection sees an id regardless of which store holds it.
+    // claims, claim relations, ontologies, and world objects are read from the
+    // layers store via the bridge, so conflict detection sees an id regardless
+    // of which store holds it. The importer's own world is read with the same
+    // (userId, projectId) scope importLines writes to, so ownership-based
+    // conflict detection reads the row that will actually be mutated.
     const [
       personas,
       videos,
@@ -176,7 +178,7 @@ export class ImportHandler {
       readAllClaimRelationRefs(this.prisma),
       readAllOntologyPersonaIds(this.prisma),
       readAllWorldObjectIds(this.prisma),
-      readWorldAggregate(this.prisma, { userId: this.userId, projectId: null }),
+      readWorldAggregate(this.prisma, { userId: this.userId, projectId: this.projectId }),
     ])
 
     // Build ownership sets
@@ -216,12 +218,15 @@ export class ImportHandler {
     for (const object of ownWorld.aggregate.eventCollections) addOwnedId(ownedCollectionIds, object)
     for (const object of ownWorld.aggregate.timeCollections) addOwnedId(ownedCollectionIds, object)
 
-    const existingData: ExistingData = {
+    const existingData: ExistingDataWithRelations = {
       personaIds: new Set(personas.map(p => p.id)),
       entityIds: allWorldIds.entityIds,
       eventIds: allWorldIds.eventIds,
       timeIds: allWorldIds.timeIds,
       collectionIds: allWorldIds.collectionIds,
+      // World relations key their own id space; the conflict resolver tests an
+      // imported relation id against this set, not collectionIds.
+      relationIds: allWorldIds.relationIds,
       annotationIds: new Set(annotationRefs.map(a => a.id)),
       videoIds: new Set(videos.map(v => v.id)),
       summaryIds: new Set(summaries.map(s => s.id)),
@@ -237,7 +242,14 @@ export class ImportHandler {
       ownedEventIds,
       ownedTimeIds,
       ownedCollectionIds,
-      ownedWorldStateId: ownWorld.exists ? personalWorldStateId(this.userId) : null,
+      // The synthetic world-state id for the scope importLines writes to; the
+      // layers store keys world objects by (userId, projectId) rather than a
+      // single row, so the id derives from that scope.
+      ownedWorldStateId: ownWorld.exists
+        ? (this.projectId
+            ? projectWorldStateId(this.userId, this.projectId)
+            : personalWorldStateId(this.userId))
+        : null,
     }
 
     return existingData

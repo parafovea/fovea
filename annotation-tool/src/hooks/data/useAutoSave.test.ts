@@ -222,6 +222,54 @@ describe('useAutoSave', () => {
     })
   })
 
+  describe('change detection', () => {
+    // Regression guard for the comment-autosave bug: a field folded into
+    // getComparisonSnapshot but living OUTSIDE `data` (e.g. a sibling comment)
+    // must still schedule a save when it changes. The debounce effect keys on
+    // the serialized snapshot, not on `data`, so a snapshot-only change re-arms
+    // it. Fails on the prior code, which keyed the effect on `data` alone.
+    it('schedules a save when only a getComparisonSnapshot field changes (not `data`)', async () => {
+      vi.useFakeTimers()
+      try {
+        const onSave = vi.fn().mockResolvedValue(undefined)
+        // Stable `data` reference across renders, so only the comment changes.
+        const data = { summary: ['unchanged'] }
+
+        const { rerender } = renderHook(
+          ({ comment }: { comment: string }) =>
+            useAutoSave({
+              data,
+              isEnabled: true,
+              onSave,
+              debounceMs: 100,
+              periodicMs: 0,
+              entityType: 'summary',
+              getComparisonSnapshot: (d) => ({ d, comment }),
+            }),
+          { initialProps: { comment: 'first' } },
+        )
+
+        // Flush the initial mount save so it cannot mask the change below.
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(150)
+        })
+        onSave.mockClear()
+
+        // Change ONLY the comment; `data` is the same object reference.
+        rerender({ comment: 'edited' })
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(150)
+        })
+
+        expect(onSave).toHaveBeenCalledTimes(1)
+        // And it persists with the latest comment in the saved snapshot.
+        expect(onSave).toHaveBeenLastCalledWith(data)
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+  })
+
   describe('error handling', () => {
     it('sets error status when save fails after all retries', async () => {
       const error = new Error('Save failed')
@@ -670,6 +718,93 @@ describe('useAutoSave', () => {
         })
         expect(onSaveA).toHaveBeenCalledTimes(0)
         expect(onSaveB).toHaveBeenCalledTimes(0)
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+  })
+
+  describe('in-flight force queue, outcome, and baseline seeding', () => {
+    it('queues a forceSave issued while a save is in flight and drains it (never dropped)', async () => {
+      // Hold the first save open so a second forceSave lands while it runs.
+      let releaseFirst!: () => void
+      const first = new Promise<void>((resolve) => {
+        releaseFirst = resolve
+      })
+      const onSave = vi
+        .fn<(data: { v: string }) => Promise<void>>()
+        .mockImplementationOnce(() => first)
+        .mockResolvedValue(undefined)
+
+      const { result } = renderHook(() =>
+        useAutoSave({ data: { v: 'render' }, isEnabled: true, onSave, entityType: 'annotation' })
+      )
+
+      let firstOutcome!: Promise<unknown>
+      let secondOutcome!: Promise<unknown>
+      act(() => {
+        firstOutcome = result.current.forceSave({ v: 'first' })
+      })
+      // While the first is still in flight, force again with new data.
+      act(() => {
+        secondOutcome = result.current.forceSave({ v: 'second' })
+      })
+
+      await act(async () => {
+        releaseFirst()
+        await firstOutcome
+        await secondOutcome
+      })
+
+      // Both writes land — the second was queued, not silently dropped.
+      expect(onSave).toHaveBeenCalledTimes(2)
+      expect(onSave).toHaveBeenNthCalledWith(1, { v: 'first' })
+      expect(onSave).toHaveBeenNthCalledWith(2, { v: 'second' })
+    })
+
+    it('forceSave resolves to "saved" on a real write', async () => {
+      const onSave = vi.fn().mockResolvedValue(undefined)
+      const { result } = renderHook(() =>
+        useAutoSave({ data: { v: 'x' }, isEnabled: true, onSave, entityType: 'annotation' })
+      )
+      let outcome: unknown
+      await act(async () => {
+        outcome = await result.current.forceSave()
+      })
+      expect(outcome).toBe('saved')
+    })
+
+    it('markSaved seeds the baseline so a debounce tick with the same data does not save', async () => {
+      vi.useFakeTimers()
+      try {
+        const onSave = vi.fn().mockResolvedValue(undefined)
+        const { result } = renderHook(() =>
+          useAutoSave({ data: { v: 'loaded' }, isEnabled: true, onSave, debounceMs: 100, entityType: 'summary' })
+        )
+        // The editor adopts server content and seeds the baseline to it.
+        act(() => {
+          result.current.markSaved({ v: 'loaded' })
+        })
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(200)
+        })
+        expect(onSave).not.toHaveBeenCalled()
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('without markSaved, the initial debounce tick saves the just-loaded data (the spurious save markSaved fixes)', async () => {
+      vi.useFakeTimers()
+      try {
+        const onSave = vi.fn().mockResolvedValue(undefined)
+        renderHook(() =>
+          useAutoSave({ data: { v: 'loaded' }, isEnabled: true, onSave, debounceMs: 100, entityType: 'summary' })
+        )
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(200)
+        })
+        expect(onSave).toHaveBeenCalledTimes(1)
       } finally {
         vi.useRealTimers()
       }

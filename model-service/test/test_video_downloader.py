@@ -8,6 +8,8 @@ import aiohttp
 import pytest
 
 from src.infrastructure.adapters.outbound.video.downloader import (
+    _PinnedResolver,
+    _preflight_url,
     cleanup_temp_video,
     download_video_if_needed,
 )
@@ -353,3 +355,48 @@ class TestCleanupTempVideo:
         # Cleanup for real
         if os.path.exists(temp_path):
             os.unlink(temp_path)
+
+
+_RESOLVE = "src.infrastructure.adapters.outbound.video.downloader._resolve_host_addresses"
+
+
+class TestPreflightPinning:
+    """Preflight returns the vetted address the fetch pins to (DNS-rebind defense)."""
+
+    def test_preflight_returns_pinned_public_ip(self):
+        """A public host resolves to a vetted IP the fetch will pin to."""
+        with patch(_RESOLVE, return_value=["8.8.8.8"]):
+            url, pinned = _preflight_url(TEST_S3_URL_HTTPS)
+        assert pinned == "8.8.8.8"
+        assert url == TEST_S3_URL_HTTPS
+
+    def test_preflight_localhost_is_not_pinned(self):
+        """Localhost has no DNS to rebind, so no pin is returned."""
+        _url, pinned = _preflight_url(TEST_LOCALHOST_URL)
+        assert pinned is None
+
+    def test_preflight_rejects_private_resolution(self):
+        """A host that resolves to a private IP is refused."""
+        with patch(_RESOLVE, return_value=["10.0.0.5"]):
+            with pytest.raises(ValueError, match="private or reserved"):
+                _preflight_url(TEST_S3_URL_HTTPS)
+
+
+class TestPinnedResolver:
+    """The connection resolver pins to the vetted IP and refuses a rebound host."""
+
+    @pytest.mark.asyncio
+    async def test_resolves_pinned_host_to_vetted_ip(self):
+        resolver = _PinnedResolver("bucket.s3.us-east-1.amazonaws.com", "8.8.8.8")
+        results = await resolver.resolve("bucket.s3.us-east-1.amazonaws.com", 443)
+        assert results[0]["host"] == "8.8.8.8"
+        assert results[0]["port"] == 443
+        await resolver.close()
+
+    @pytest.mark.asyncio
+    async def test_refuses_a_rebound_host(self):
+        """A different host at connect time (a rebind) is refused."""
+        resolver = _PinnedResolver("bucket.s3.us-east-1.amazonaws.com", "8.8.8.8")
+        with pytest.raises(OSError, match="not the pinned host"):
+            await resolver.resolve("evil.internal.example", 443)
+        await resolver.close()

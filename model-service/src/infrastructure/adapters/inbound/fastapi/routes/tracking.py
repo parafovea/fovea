@@ -127,43 +127,53 @@ async def track_objects(
             )
 
             cap = cv2.VideoCapture(str(video_path))
-            fps = cap.get(cv2.CAP_PROP_FPS)
-            total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-            width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-            height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-
-            frame_numbers = list(request.frame_numbers)
-            if not frame_numbers:
-                frame_numbers = list(range(total_frames))
-
-            # Decode initial masks
-            decoded_masks: list[np.ndarray[tuple[int, ...], np.dtype[np.bool_]]] = []
-            for mask_b64 in request.initial_masks:
-                try:
-                    mask_bytes = base64.b64decode(mask_b64)
-                    mask_array = np.frombuffer(mask_bytes, dtype=np.uint8).reshape(height, width)
-                    decoded_masks.append(mask_array.astype(np.bool_))
-                except Exception as e:
+            try:
+                if not cap.isOpened():
                     raise HTTPException(
-                        status_code=400, detail=f"Invalid mask encoding: {e!s}"
-                    ) from e
+                        status_code=400,
+                        detail=f"Failed to open video for decoding: {request.video_id}",
+                    )
 
-            # Extract frames
-            frames_rgb: list[np.ndarray[tuple[int, ...], np.dtype[np.uint8]]] = []
-            processed_frame_numbers: list[int] = []
-            timestamps: list[float] = []
-            for frame_num in frame_numbers:
-                if frame_num >= total_frames:
-                    continue
-                cap.set(cv2.CAP_PROP_POS_FRAMES, frame_num)
-                ret, frame = cap.read()
-                if not ret:
-                    continue
-                frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB).astype(np.uint8)
-                frames_rgb.append(frame_rgb)
-                processed_frame_numbers.append(frame_num)
-                timestamps.append(frame_num / fps if fps > 0 else 0.0)
-            cap.release()
+                fps = cap.get(cv2.CAP_PROP_FPS)
+                total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+                width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+                height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
+                frame_numbers = list(request.frame_numbers)
+                if not frame_numbers:
+                    frame_numbers = list(range(total_frames))
+
+                # Decode initial masks
+                decoded_masks: list[np.ndarray[tuple[int, ...], np.dtype[np.bool_]]] = []
+                for mask_b64 in request.initial_masks:
+                    try:
+                        mask_bytes = base64.b64decode(mask_b64)
+                        mask_array = np.frombuffer(mask_bytes, dtype=np.uint8).reshape(
+                            height, width
+                        )
+                        decoded_masks.append(mask_array.astype(np.bool_))
+                    except Exception as e:
+                        raise HTTPException(
+                            status_code=400, detail=f"Invalid mask encoding: {e!s}"
+                        ) from e
+
+                # Extract frames
+                frames_rgb: list[np.ndarray[tuple[int, ...], np.dtype[np.uint8]]] = []
+                processed_frame_numbers: list[int] = []
+                timestamps: list[float] = []
+                for frame_num in frame_numbers:
+                    if frame_num >= total_frames:
+                        continue
+                    cap.set(cv2.CAP_PROP_POS_FRAMES, frame_num)
+                    ret, frame = cap.read()
+                    if not ret:
+                        continue
+                    frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB).astype(np.uint8)
+                    frames_rgb.append(frame_rgb)
+                    processed_frame_numbers.append(frame_num)
+                    timestamps.append(frame_num / fps if fps > 0 else 0.0)
+            finally:
+                cap.release()
 
             if not frames_rgb:
                 raise HTTPException(status_code=400, detail="No valid frames to process")

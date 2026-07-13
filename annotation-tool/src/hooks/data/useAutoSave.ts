@@ -10,11 +10,24 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { logWarning, logCritical } from '@services/errorLogging'
 import { withSpan } from '@telemetry/tracing'
+import { registerAutoSaveFlush } from './autoSaveRegistry'
 
 /**
  * Status of the auto-save operation.
  */
 export type SaveStatus = 'idle' | 'saving' | 'saved' | 'error' | 'retrying'
+
+/**
+ * Outcome of a single save attempt, returned by `forceSave` so callers (the
+ * emergency-flush registry, a dialog closing) can tell a real write from a
+ * no-op:
+ * - `saved`: the data was persisted.
+ * - `skipped`: change detection found nothing to write (non-forced only).
+ * - `blocked`: a non-forced save no-oped because one was already in flight.
+ * - `superseded`: a queued forced save was replaced by a newer forced save.
+ * - `error`: the save failed after exhausting retries.
+ */
+export type SaveOutcome = 'saved' | 'skipped' | 'blocked' | 'superseded' | 'error'
 
 /**
  * Entity types supported by auto-save for observability.
@@ -92,8 +105,20 @@ export interface UseAutoSaveReturn<T> {
    *
    * @param dataOverride - the exact data to persist, used in place of the
    *   render-time `data`
+   * @returns the outcome of the save (whether it actually persisted)
    */
-  forceSave: (dataOverride?: T) => Promise<void>
+  forceSave: (dataOverride?: T) => Promise<SaveOutcome>
+  /**
+   * Seed the change-detection baseline to `savedData` without writing.
+   *
+   * Call this the moment the editor adopts freshly loaded server content so the
+   * first debounce tick sees no change and does not fire a spurious save of the
+   * just-fetched data. Without it the baseline stays empty and the initial sync
+   * looks like a user edit.
+   *
+   * @param savedData - the data now considered already persisted
+   */
+  markSaved: (savedData: T) => void
 }
 
 /**
@@ -141,6 +166,11 @@ export function useAutoSave<T>({
   const [retryCount, setRetryCount] = useState(0)
 
   const saveInProgressRef = useRef(false)
+  // A forced save requested while another save is in flight is parked here and
+  // drained when the in-flight save settles, so a final edit (dialog close,
+  // keyframe override, emergency flush) is never silently dropped. Its resolver
+  // reports the eventual outcome to the original forceSave caller.
+  const pendingForceRef = useRef<{ dataOverride?: T; resolve: (outcome: SaveOutcome) => void } | null>(null)
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const periodicTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const dataRef = useRef(data)
@@ -148,20 +178,27 @@ export function useAutoSave<T>({
 
   // Serialize `data` to the string used for change detection. When a caller
   // supplies getComparisonSnapshot, serialize the snapshot it derives (which
-  // strips server-managed fields the editor never writes); otherwise fall
-  // back to serializing the whole `data`. Held in a ref for the same reason
-  // performSave is (see performSaveRef below): the caller's
-  // getComparisonSnapshot closure can change identity on every render, and we
-  // must not let that churn re-arm the debounce/periodic effects.
+  // strips server-managed fields the editor never writes, and can fold in a
+  // sibling field such as a comment); otherwise fall back to serializing the
+  // whole `data`. The closure is held in a ref and updated DURING render (not in
+  // an effect) so the change key computed below reflects the latest snapshot
+  // this same render — otherwise an edit to a getComparisonSnapshot-only field
+  // (e.g. a comment that lives outside `data`) would lag a render and the
+  // debounce effect, keyed on the change key's string VALUE, would never re-run.
   const getComparisonSnapshotRef = useRef(getComparisonSnapshot)
-  useEffect(() => {
-    getComparisonSnapshotRef.current = getComparisonSnapshot
-  }, [getComparisonSnapshot])
+  getComparisonSnapshotRef.current = getComparisonSnapshot
 
   const serialize = useCallback((value: T): string => {
     const snapshot = getComparisonSnapshotRef.current
     return JSON.stringify(snapshot ? snapshot(value) : value)
   }, [])
+
+  // Value-based change key: the serialized comparison snapshot of the current
+  // data. Because it is a string compared by VALUE, using it as the debounce
+  // effect's dependency re-arms a save on any change to a compared field
+  // (including getComparisonSnapshot-only fields) without churning every render
+  // when the snapshot closure's identity changes.
+  const changeKey = serialize(data)
 
   // Keep the data ref pointed at the latest `data` seen on render. Done during
   // render (not in an effect) so a forceSave fired from the same event handler
@@ -173,10 +210,24 @@ export function useAutoSave<T>({
 
   // Core save function with retry logic. `dataOverride`, when provided, is the
   // exact data to persist; it is used in place of dataRef so a forced save can
-  // carry an edit that has not yet propagated back into `data`.
+  // carry an edit that has not yet propagated back into `data`. Returns the
+  // outcome so a forced save's caller can tell a real write from a no-op.
   const performSave = useCallback(
-    async (attempt = 0, force = false, dataOverride?: T): Promise<void> => {
-      if (saveInProgressRef.current) return
+    async (force = false, dataOverride?: T): Promise<SaveOutcome> => {
+      // A save is already running. A non-forced tick simply skips (its data will
+      // be picked up by the debounce/periodic loop). A forced save must NOT be
+      // dropped: park it, and it is drained in the in-flight save's `finally`.
+      // The returned promise resolves with the eventual outcome of that drained
+      // write, so `forceSave` reports real persistence, not a no-op.
+      if (saveInProgressRef.current) {
+        if (!force) return 'blocked'
+        return new Promise<SaveOutcome>((resolve) => {
+          const previous = pendingForceRef.current
+          pendingForceRef.current = { dataOverride, resolve }
+          // Only the latest forced save is kept; supersede an older parked one.
+          if (previous) previous.resolve('superseded')
+        })
+      }
 
       const currentData = dataOverride !== undefined ? dataOverride : dataRef.current
       const serialized = serialize(currentData)
@@ -189,74 +240,91 @@ export function useAutoSave<T>({
       // bypassing the guard here cannot re-introduce the auto-save loop.
       if (!force && serialized === lastSavedDataRef.current) {
         setPendingChanges(false)
-        return
+        return 'skipped'
       }
 
       saveInProgressRef.current = true
-      setSaveStatus(attempt > 0 ? 'retrying' : 'saving')
-      setRetryCount(attempt)
+      let outcome: SaveOutcome = 'saved'
 
       try {
-        await withSpan(
-          `${entityType}-autosave`,
-          { entityId: entityId || 'unknown', entityType },
-          async (span) => {
-            await onSave(currentData)
-            span.setAttribute('save_success', true)
-            span.setAttribute('retry_count', attempt)
+        // Retry with exponential backoff (1s, 2s, 4s) INSIDE this invocation, so
+        // the in-progress guard stays held across the whole sequence — a
+        // debounce/periodic tick cannot start a second save concurrently with a
+        // pending retry (duplicate writes / last-writer-wins) — and the final
+        // outcome is known when this promise resolves.
+        for (let attempt = 0; attempt < maxRetries; attempt++) {
+          setSaveStatus(attempt > 0 ? 'retrying' : 'saving')
+          setRetryCount(attempt)
+          try {
+            await withSpan(
+              `${entityType}-autosave`,
+              { entityId: entityId || 'unknown', entityType },
+              async (span) => {
+                await onSave(currentData)
+                span.setAttribute('save_success', true)
+                span.setAttribute('retry_count', attempt)
+              }
+            )
+
+            lastSavedDataRef.current = serialized
+            setLastSavedAt(new Date())
+            setSaveStatus('saved')
+            setPendingChanges(false)
+            setErrorMessage(null)
+            setRetryCount(0)
+            outcome = 'saved'
+            break
+          } catch (error) {
+            const err = error as Error
+
+            // Auth errors (401) are not retried — the session is invalid.
+            const isAuthError =
+              err.message.includes('401') ||
+              err.message.includes('Unauthorized') ||
+              err.message.includes('Session expired')
+
+            if (isAuthError) {
+              setSaveStatus('error')
+              setErrorMessage('Session expired. Please log in again.')
+              logWarning(`${entityType} save failed due to auth error`, {
+                entityId,
+                error: err.message,
+              })
+              outcome = 'error'
+              break
+            }
+
+            if (attempt < maxRetries - 1) {
+              logWarning(`${entityType} save failed, retrying`, {
+                entityId,
+                retryCount: attempt + 1,
+                error: err.message,
+              })
+              await new Promise((r) => setTimeout(r, Math.pow(2, attempt) * 1000))
+              continue
+            }
+
+            setSaveStatus('error')
+            setErrorMessage(err.message)
+            logCritical(err, {
+              component: `useAutoSave:${entityType}`,
+              entityId,
+            })
+            outcome = 'error'
           }
-        )
-
-        lastSavedDataRef.current = serialized
-        setLastSavedAt(new Date())
-        setSaveStatus('saved')
-        setPendingChanges(false)
-        setErrorMessage(null)
-        setRetryCount(0)
-      } catch (error) {
-        const err = error as Error
-
-        // Check if this is an auth error (401) - don't retry auth errors
-        const isAuthError =
-          err.message.includes('401') ||
-          err.message.includes('Unauthorized') ||
-          err.message.includes('Session expired')
-
-        if (isAuthError) {
-          // Auth errors should not be retried - the session is invalid
-          setSaveStatus('error')
-          setErrorMessage('Session expired. Please log in again.')
-          logWarning(`${entityType} save failed due to auth error`, {
-            entityId,
-            error: err.message,
-          })
-          // Don't log as critical - this is an expected auth flow issue
-        } else if (attempt < maxRetries - 1) {
-          // Exponential backoff: 1s, 2s, 4s
-          const delay = Math.pow(2, attempt) * 1000
-          logWarning(`${entityType} save failed, retrying`, {
-            entityId,
-            retryCount: attempt + 1,
-            error: err.message,
-          })
-
-          setTimeout(() => {
-            saveInProgressRef.current = false
-            performSave(attempt + 1, force, dataOverride)
-          }, delay)
-        } else {
-          setSaveStatus('error')
-          setErrorMessage(err.message)
-          logCritical(err, {
-            component: `useAutoSave:${entityType}`,
-            entityId,
-          })
         }
       } finally {
-        if (attempt === 0 || attempt >= maxRetries - 1) {
-          saveInProgressRef.current = false
+        saveInProgressRef.current = false
+        // Drain a forced save parked while this one ran, carrying its override,
+        // and resolve its caller's promise with the real outcome.
+        const queued = pendingForceRef.current
+        if (queued) {
+          pendingForceRef.current = null
+          performSave(true, queued.dataOverride).then(queued.resolve, () => queued.resolve('error'))
         }
       }
+
+      return outcome
     },
     [onSave, entityType, entityId, maxRetries, serialize]
   )
@@ -278,22 +346,43 @@ export function useAutoSave<T>({
     performSaveRef.current = performSave
   }, [performSave])
 
-  // Force save function
-  const forceSave = useCallback(async (dataOverride?: T) => {
+  // Force save function. Returns the outcome so callers (dialog close, keyframe
+  // override, emergency flush) can tell a real write from a no-op — and, via the
+  // in-flight force queue in performSave, a forced save is never silently
+  // dropped when another save is already running.
+  const forceSave = useCallback(async (dataOverride?: T): Promise<SaveOutcome> => {
     if (debounceTimerRef.current) {
       clearTimeout(debounceTimerRef.current)
       debounceTimerRef.current = null
     }
-    await performSaveRef.current(0, true, dataOverride)
+    return performSaveRef.current(true, dataOverride)
   }, [])
 
-  // Debounced save on data change. Deps deliberately exclude
-  // performSave (held via ref above) — see the ref comment.
+  // Seed the change-detection baseline to already-saved data without writing, so
+  // the first debounce tick after the editor adopts server content sees no
+  // change and does not fire a spurious save.
+  const markSaved = useCallback((savedData: T) => {
+    lastSavedDataRef.current = serialize(savedData)
+    setPendingChanges(false)
+  }, [serialize])
+
+  // Register this editor's flush so a global handler (emergency save on session
+  // expiry) can persist its pending edits. forceSave is stable, so this runs
+  // once; the cleanup deregisters on unmount.
+  useEffect(() => {
+    if (!isEnabled) return
+    return registerAutoSaveFlush(() => forceSave())
+  }, [isEnabled, forceSave])
+
+  // Debounced save on change. Keyed on `changeKey` (the serialized comparison
+  // snapshot) rather than `data` so an edit to ANY compared field — including a
+  // getComparisonSnapshot-only field such as a comment that lives outside `data`
+  // — re-arms the save. Deps deliberately exclude performSave (held via ref) —
+  // see the ref comment.
   useEffect(() => {
     if (!isEnabled) return
 
-    const serialized = serialize(data)
-    if (serialized !== lastSavedDataRef.current) {
+    if (changeKey !== lastSavedDataRef.current) {
       setPendingChanges(true)
     }
 
@@ -310,7 +399,7 @@ export function useAutoSave<T>({
         clearTimeout(debounceTimerRef.current)
       }
     }
-  }, [data, isEnabled, debounceMs, serialize])
+  }, [changeKey, isEnabled, debounceMs])
 
   // Periodic backup save. performSave intentionally NOT in deps for
   // the same reason — periodicTimer should NOT re-arm every render.
@@ -370,5 +459,6 @@ export function useAutoSave<T>({
     errorMessage,
     retryCount,
     forceSave,
+    markSaved,
   }
 }

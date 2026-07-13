@@ -3,6 +3,7 @@ import axios, { AxiosError } from 'axios'
 import camelcaseKeys from 'camelcase-keys'
 import { config } from '../config.js'
 import { InternalError, ValidationError } from '../lib/errors.js'
+import { requireAdmin } from '../middleware/auth.js'
 
 /**
  * Map a user-supplied taskType to one of the nine canonical
@@ -224,6 +225,7 @@ const modelsRoute: FastifyPluginAsync = async (fastify) => {
       modelName: string
     }
   }>('/api/models/select', {
+    onRequest: [requireAdmin],
     schema: {
       description: 'Select model for task type',
       tags: ['models'],
@@ -384,6 +386,7 @@ const modelsRoute: FastifyPluginAsync = async (fastify) => {
   fastify.post<{
     Params: { taskType: string }
   }>('/api/models/load/:taskType', {
+    onRequest: [requireAdmin],
     schema: {
       description: 'Load model for task type',
       tags: ['models'],
@@ -430,6 +433,7 @@ const modelsRoute: FastifyPluginAsync = async (fastify) => {
   fastify.post<{
     Params: { taskType: string }
   }>('/api/models/unload/:taskType', {
+    onRequest: [requireAdmin],
     schema: {
       description: 'Unload model for task type',
       tags: ['models'],

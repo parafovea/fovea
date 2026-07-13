@@ -2,7 +2,7 @@ import { FastifyPluginAsync } from 'fastify'
 import { Type } from '@sinclair/typebox'
 import { VideoRepository } from '../../repositories/VideoRepository.js'
 import { VideoStorageProvider } from '../../services/videoStorage.js'
-import { NotFoundError, InternalError } from '../../lib/errors.js'
+import { NotFoundError, InternalError, RangeNotSatisfiableError } from '../../lib/errors.js'
 
 /**
  * Video streaming route with range request support.
@@ -74,6 +74,17 @@ export const streamRoutes: FastifyPluginAsync<{
           .header('Accept-Ranges', 'bytes')
           .send(result.stream)
       } catch (error) {
+        // A well-formed but unsatisfiable range (start past EOF) gets a 416
+        // with the resource size so the client can re-request, per RFC 7233.
+        // This must not be swallowed into the 404 below, or strict clients
+        // (Safari) abort playback on the unexpected status and black out.
+        if (error instanceof RangeNotSatisfiableError) {
+          return reply
+            .code(416)
+            .header('Content-Range', `bytes */${error.size}`)
+            .header('Accept-Ranges', 'bytes')
+            .send()
+        }
         fastify.log.error({ error, videoId }, 'Failed to stream video')
         throw new NotFoundError('Video', videoId)
       }

@@ -2,7 +2,7 @@
  * Tests for useProjects TanStack Query hooks.
  */
 
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { renderHook, waitFor, act } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import React from 'react'
@@ -11,8 +11,10 @@ import {
   useProject,
   useProjectMembers,
   useCreateProject,
+  useAddProjectMember,
   projectKeys,
 } from './useProjects'
+import { abilityKeys } from './useAbilities'
 import { server } from '@test/setup'
 import { http, HttpResponse } from 'msw'
 
@@ -266,6 +268,30 @@ describe('useProjects hooks', () => {
         name: 'New Project',
         slug: 'new-project',
       })
+    })
+  })
+
+  describe('useAddProjectMember', () => {
+    it('invalidates the client ability mirror so permission changes are not stale', async () => {
+      server.use(
+        http.post('*/api/projects/:projectId/members', () =>
+          HttpResponse.json({ id: 'pm-new', userId: 'user-3', role: 'annotator' }, { status: 201 })
+        )
+      )
+
+      const queryClient = new QueryClient({
+        defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+      })
+      const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
+      const wrapper = ({ children }: { children: React.ReactNode }) => (
+        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+      )
+      const { result } = renderHook(() => useAddProjectMember(), { wrapper })
+
+      result.current.mutate({ projectId: 'proj-1', userId: 'user-3', role: 'annotator' })
+      await waitFor(() => expect(result.current.isSuccess).toBe(true))
+
+      expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: abilityKeys.all })
     })
   })
 })

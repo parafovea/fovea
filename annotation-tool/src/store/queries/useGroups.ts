@@ -6,6 +6,7 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { abilityKeys } from './useAbilities'
 
 /** Summary of a group as returned by the list endpoint. */
 export interface GroupSummary {
@@ -234,6 +235,9 @@ export function useAddGroupMember() {
     onSuccess: (_, { groupId }) => {
       queryClient.invalidateQueries({ queryKey: groupKeys.detail(groupId) })
       queryClient.invalidateQueries({ queryKey: groupKeys.members(groupId) })
+      // Membership/role changes alter the caller's own permissions; refresh the
+      // client ability mirror so the UI reflects them without a staleTime lag.
+      queryClient.invalidateQueries({ queryKey: abilityKeys.all })
       queryClient.invalidateQueries({ queryKey: groupKeys.lists() })
     },
   })
@@ -263,6 +267,12 @@ export function useUpdateGroupMember() {
     onSuccess: (_, { groupId }) => {
       queryClient.invalidateQueries({ queryKey: groupKeys.detail(groupId) })
       queryClient.invalidateQueries({ queryKey: groupKeys.members(groupId) })
+      // The list carries each group's own-role field, which a self-role change
+      // makes stale; refresh it (the add/remove paths already do).
+      queryClient.invalidateQueries({ queryKey: groupKeys.lists() })
+      // Membership/role changes alter the caller's own permissions; refresh the
+      // client ability mirror so the UI reflects them without a staleTime lag.
+      queryClient.invalidateQueries({ queryKey: abilityKeys.all })
     },
   })
 }
@@ -288,6 +298,9 @@ export function useRemoveGroupMember() {
     onSuccess: (_, { groupId }) => {
       queryClient.invalidateQueries({ queryKey: groupKeys.detail(groupId) })
       queryClient.invalidateQueries({ queryKey: groupKeys.members(groupId) })
+      // Membership/role changes alter the caller's own permissions; refresh the
+      // client ability mirror so the UI reflects them without a staleTime lag.
+      queryClient.invalidateQueries({ queryKey: abilityKeys.all })
       queryClient.invalidateQueries({ queryKey: groupKeys.lists() })
     },
   })

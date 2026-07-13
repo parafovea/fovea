@@ -19,6 +19,7 @@
 
 import type { FastifyInstance } from 'fastify'
 import { prisma } from '../lib/prisma.js'
+import { invalidateUserAbilities } from '../middleware/abilities.js'
 
 const IDLE_WINDOW_MS = 10 * 60 * 1000 // 10 minutes (plan §5.3)
 const SWEEP_INTERVAL_MS = 60 * 1000 // 1 minute
@@ -63,5 +64,14 @@ async function sweepOnce(app: FastifyInstance): Promise<void> {
 
   const ids = stale.map((u: { id: string }) => u.id)
   const deleted = await prisma.user.deleteMany({ where: { id: { in: ids } } })
+
+  // Evict the deleted users from the per-user ability cache. buildAbilities
+  // populates this map on first request and never expires entries, so without
+  // explicit eviction the cache grows by one entry per anonymous visitor and
+  // never shrinks as demo sessions churn.
+  for (const id of ids) {
+    invalidateUserAbilities(id)
+  }
+
   app.log.info({ swept: deleted.count }, '[demo] idle-reset swept stale anonymous users')
 }

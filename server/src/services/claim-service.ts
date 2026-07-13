@@ -97,6 +97,8 @@ export type MetadataModality = ('text' | 'non-text')[]
 
 /** Validated fields for creating a claim under a summary. */
 export interface CreateClaimInput {
+  /** Optional client-supplied id; makes create idempotent on retry. */
+  id?: string
   summaryType: 'video' | 'collection'
   text: string
   gloss?: GlossItemInput[]
@@ -163,6 +165,8 @@ export interface ClaimSynthesisConfigInput {
 
 /** Validated fields for creating a claim from a video + persona pair. */
 export interface CreateVideoPersonaClaimInput {
+  /** Optional client-supplied id; makes create idempotent on retry. */
+  id?: string
   text: string
   gloss?: GlossItemInput[]
   parentClaimId?: string
@@ -432,7 +436,7 @@ export class ClaimService {
   ): StoredClaim {
     const now = new Date().toISOString()
     return {
-      id: randomUUID(),
+      id: input.id ?? randomUUID(),
       summaryId: summary.id,
       summaryType,
       text: input.text,
@@ -604,9 +608,39 @@ export class ClaimService {
       this.authorizeClaim('update', parent)
     }
 
+    // Idempotent create on a client-supplied id: a network retry / resend
+    // carrying the same id must not mint a duplicate. If the claim already
+    // exists, re-authorize against it (so a caller cannot hijack another user's
+    // claim by supplying its id) and return the current tree.
+    if (input.id) {
+      const existing = await this.findClaimById(input.id)
+      if (existing) {
+        if (!ability.can('update', subject('Claim', { ...existing }))) {
+          throw new ForbiddenError('Cannot create this Claim')
+        }
+        return nestClaims((await this.readClaims(summaryId)).claims)
+      }
+    }
+
     const layerId = await this.ensureClaimSpanLayer(summary)
     const claim = this.buildClaim(summary, summaryType, input, summary.projectId ?? null)
-    await this.persistClaimNode(layerId, claim)
+    try {
+      await this.persistClaimNode(layerId, claim)
+    } catch (err) {
+      // Lost the same-id race (the claim node's id is unique). Collapse to the
+      // idempotent path: re-authorize against the stored row and return the
+      // current tree; a denied update is a 403, never a raw P2002 as a 500.
+      if (input.id && err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        const existing = await this.findClaimById(input.id)
+        if (existing) {
+          if (!ability.can('update', subject('Claim', { ...existing }))) {
+            throw new ForbiddenError('Cannot create this Claim')
+          }
+          return nestClaims((await this.readClaims(summaryId)).claims)
+        }
+      }
+      throw err
+    }
 
     return nestClaims((await this.readClaims(summaryId)).claims)
   }
@@ -706,6 +740,7 @@ export class ClaimService {
     const jobData: ClaimExtractionJobData = {
       summaryId,
       summaryType,
+      createdBy: this.userId ?? undefined,
       config: {
         inputSources: config.inputSources,
         extractionStrategy: config.extractionStrategy,
@@ -896,6 +931,15 @@ export class ClaimService {
       }
     }
 
+    // A retry or double-submit of the same (source, target, relationType) triple
+    // must not mint a second identical edge. Reuse an existing matching relation
+    // if one is already stored.
+    const existingRelations = await this.readClaimRelations(sourceClaim)
+    const duplicate = existingRelations.asSource.find(
+      (r) => r.targetClaimId === targetClaimId && r.relationTypeId === relationTypeId,
+    )
+    if (duplicate) return duplicate
+
     const now = new Date().toISOString()
     const relation: StoredRelation = {
       id: randomUUID(),
@@ -939,10 +983,11 @@ export class ClaimService {
 
     const { asSource, asTarget } = await this.readClaimRelations(claim)
 
-    // Keep only relations whose OTHER endpoint claim is also readable; otherwise
-    // relation payloads would leak the existence of unreadable claims.
+    // Keep only relations whose OPPOSITE endpoint claim is also readable;
+    // otherwise relation payloads would leak the existence and metadata of claims
+    // the caller cannot read. The known endpoint (claimId) is already proven
+    // readable above, so the filter must check the OTHER endpoint, not this one.
     const otherReadable = async (otherId: string): Promise<boolean> => {
-      if (ability.can('read', subject('Claim', { ...claim }))) return true
       const other = await this.findClaimById(otherId)
       return other != null && ability.can('read', subject('Claim', { ...other }))
     }
@@ -1028,6 +1073,20 @@ export class ClaimService {
       throw new ForbiddenError('Cannot create this Claim')
     }
 
+    // Idempotent create on a client-supplied id: a retry carrying the same id
+    // must not mint a duplicate. Re-authorize against the existing row (so a
+    // caller can't hijack another user's claim by supplying its id) and return
+    // it, skipping the summary upsert.
+    if (input.id) {
+      const existing = await this.findClaimById(input.id)
+      if (existing) {
+        if (!ability.can('update', subject('Claim', { ...existing }))) {
+          throw new ForbiddenError('Cannot create this Claim')
+        }
+        return { claim: existing, summaryId: existing.summaryId }
+      }
+    }
+
     // If an existing summary is present, the caller must also be able to update
     // it (we attach claims to it and auto-create it if missing).
     const existingSummary = await this.prisma.videoSummary.findUnique({
@@ -1037,9 +1096,20 @@ export class ClaimService {
       throw new ForbiddenError('Cannot update this VideoSummary')
     }
 
+    // Find or create the VideoSummary, stamping the persona's project scope and
+    // the caller as owner so the auto-created parent is project-visible and owned
+    // from birth (mirrors the child claim's projectId/createdBy stamping below).
+    // Without the stamp the parent is born projectId = NULL and a project
+    // collaborator is 403'd at the parent-summary read gate.
     const summary = await this.prisma.videoSummary.upsert({
       where: { videoId_personaId: { videoId, personaId } },
-      create: { videoId, personaId, summary: [] },
+      create: {
+        videoId,
+        personaId,
+        summary: [],
+        projectId: persona.projectId ?? undefined,
+        createdBy: userId,
+      },
       update: {},
     })
 
@@ -1054,7 +1124,22 @@ export class ClaimService {
 
     const layerId = await this.ensureClaimSpanLayer(summary)
     const claim = this.buildClaim(summary, 'video', input, persona.projectId ?? null)
-    await this.persistClaimNode(layerId, claim)
+    try {
+      await this.persistClaimNode(layerId, claim)
+    } catch (err) {
+      // Lost the same-id race: re-authorize the stored row and return it
+      // idempotently rather than surfacing a raw P2002 as a 500.
+      if (input.id && err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        const existing = await this.findClaimById(input.id)
+        if (existing) {
+          if (!ability.can('update', subject('Claim', { ...existing }))) {
+            throw new ForbiddenError('Cannot create this Claim')
+          }
+          return { claim: existing, summaryId: existing.summaryId }
+        }
+      }
+      throw err
+    }
 
     return { claim, summaryId: summary.id }
   }

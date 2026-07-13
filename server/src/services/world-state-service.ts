@@ -2,7 +2,7 @@ import { Prisma, PrismaClient, type Persona } from '@prisma/client'
 import { subject } from '@casl/ability'
 
 import type { AppAbility } from '../lib/abilities.js'
-import { NotFoundError, UnauthorizedError, InternalError, ForbiddenError } from '../lib/errors.js'
+import { NotFoundError, UnauthorizedError, InternalError, ForbiddenError, ConflictError } from '../lib/errors.js'
 import { config } from '../config.js'
 import { convertObjectRefsToText, countObjectRefsInGlosses, type TypeWithGloss } from '../lib/reference-cleanup.js'
 import { GraphRepository } from '../repositories/GraphRepository.js'
@@ -37,6 +37,28 @@ function toJson(value: unknown): Prisma.InputJsonValue | undefined {
 /** Coerces a JSON column to an array of records, tolerating null/non-array. */
 function asRecords(value: unknown): Record<string, unknown>[] {
   return Array.isArray(value) ? (value as Record<string, unknown>[]) : []
+}
+
+/**
+ * Merge an incoming array of `{ id }` objects into an existing one by id:
+ * existing items keep their position, a matching id is overwritten, and new
+ * ids are appended. This turns the whole-blob PUT into an upsert so a writer
+ * carrying a stale view (it never saw a concurrently-added item) no longer
+ * drops it — the merge re-runs against the freshly-read row via optimistic
+ * concurrency. Removals go through the explicit DELETE routes, never omission.
+ */
+export function mergeById(existing: Prisma.JsonValue | null | undefined, incoming: unknown[]): Prisma.InputJsonValue {
+  const byId = new Map<string, unknown>()
+  const order: string[] = []
+  const add = (item: unknown) => {
+    const id = (item as { id?: string } | null)?.id
+    if (!id) return
+    if (!byId.has(id)) order.push(id)
+    byId.set(id, item)
+  }
+  if (Array.isArray(existing)) existing.forEach(add)
+  incoming.forEach(add)
+  return order.map((id) => byId.get(id)) as Prisma.InputJsonValue
 }
 
 /**
@@ -273,6 +295,138 @@ export class WorldStateService {
   }
 
   /**
+   * Merges an aggregate into the caller's scoped world rows: each object is
+   * upserted as its own GraphNode/GraphEdge row (created when new, updated under
+   * a lockVersion compare-and-swap when it already exists). Rows the aggregate
+   * does not mention are left in place, so a partial write never drops a
+   * concurrently-added object; removal is explicit (the DELETE routes). On a CAS
+   * miss the whole reconcile retries against a fresh read so a concurrent
+   * same-object edit is not silently clobbered.
+   *
+   * @param userId - the owning user id
+   * @param projectId - the project scope (null for personal state)
+   * @param aggregate - the world objects to upsert
+   * @throws {ForbiddenError} when create access to the scope is denied
+   * @throws {ConflictError} when the write keeps conflicting after retries
+   */
+  private async upsertWorldObjects(
+    userId: string,
+    projectId: string | null,
+    aggregate: WorldStateAggregate,
+  ): Promise<void> {
+    const { nodes, edges } = worldStateToLayers(aggregate, { projectId, createdByUserId: userId })
+    if (nodes.length === 0 && edges.length === 0) return
+
+    if (this.ability) {
+      const candidate = subject('GraphNode', { projectId, createdByUserId: userId })
+      if (!this.ability.can('create', candidate)) {
+        throw new ForbiddenError('Cannot create world objects in this scope')
+      }
+    }
+
+    const nodeScope: Prisma.GraphNodeWhereInput = { createdByUserId: userId, projectId }
+    const edgeScope: Prisma.GraphEdgeWhereInput = { createdByUserId: userId, projectId }
+
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const existingNodes = new Map(
+        (await this.graphRepo.findAccessibleNodes(nodeScope, {})).filter(isWorldRow).map((n) => [n.id, n]),
+      )
+      const existingEdges = new Map(
+        (await this.graphRepo.findAccessibleEdges(edgeScope, {})).filter(isWorldRow).map((e) => [e.id, e]),
+      )
+      let conflict = false
+
+      for (const node of nodes) {
+        const existing = existingNodes.get(node.id)
+        if (existing) {
+          const result = await this.prisma.graphNode.updateMany({
+            where: { id: node.id, lockVersion: existing.lockVersion },
+            data: {
+              nodeType: node.nodeType,
+              label: node.label,
+              properties: toJson(node.properties),
+              knowledgeRefs: toJson(node.knowledgeRefs),
+              lockVersion: { increment: 1 },
+            },
+          })
+          if (result.count !== 1) {
+            conflict = true
+            break
+          }
+        } else {
+          try {
+            await this.graphRepo.createNode({
+              id: node.id,
+              nodeType: node.nodeType,
+              label: node.label,
+              properties: toJson(node.properties),
+              knowledgeRefs: toJson(node.knowledgeRefs),
+              projectId: node.projectId,
+              createdByUserId: node.createdByUserId,
+            })
+          } catch (error) {
+            if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+              conflict = true
+              break
+            }
+            throw error
+          }
+        }
+      }
+
+      if (!conflict) {
+        for (const edge of edges) {
+          const existing = existingEdges.get(edge.id)
+          if (existing) {
+            const result = await this.prisma.graphEdge.updateMany({
+              where: { id: edge.id, lockVersion: existing.lockVersion },
+              data: {
+                source: toJson(edge.source) as Prisma.InputJsonValue,
+                target: toJson(edge.target) as Prisma.InputJsonValue,
+                sourceLocalId: edge.sourceLocalId,
+                targetLocalId: edge.targetLocalId,
+                edgeType: edge.edgeType,
+                label: edge.label,
+                properties: toJson(edge.properties),
+                lockVersion: { increment: 1 },
+              },
+            })
+            if (result.count !== 1) {
+              conflict = true
+              break
+            }
+          } else {
+            try {
+              await this.graphRepo.createEdge({
+                id: edge.id,
+                source: toJson(edge.source) as Prisma.InputJsonValue,
+                target: toJson(edge.target) as Prisma.InputJsonValue,
+                sourceLocalId: edge.sourceLocalId,
+                targetLocalId: edge.targetLocalId,
+                edgeType: edge.edgeType,
+                label: edge.label,
+                properties: toJson(edge.properties),
+                projectId: edge.projectId,
+                createdByUserId: edge.createdByUserId,
+              })
+            } catch (error) {
+              if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+                conflict = true
+                break
+              }
+              throw error
+            }
+          }
+        }
+      }
+
+      if (!conflict) return
+    }
+
+    throw new ConflictError('World state update conflicted after retries')
+  }
+
+  /**
    * Updates the caller's personal world; only provided buckets are written, the
    * rest are preserved from the current state.
    *
@@ -282,13 +436,59 @@ export class WorldStateService {
   async updatePersonal(input: WorldStateUpdateInput): Promise<WorldStateResponse> {
     const userId = await this.resolveUserId()
     const { aggregate } = await this.readPersonalWorld(userId)
+
+    // Merge each provided bucket into the current aggregate by id (upsert)
+    // instead of replacing it, so a partial PUT carrying a stale view never
+    // drops previously-added objects. Removal is explicit (the DELETE routes),
+    // never omission. The per-row upsert below carries the lockVersion guard.
     const merged: WorldStateAggregate = { ...aggregate }
     for (const key of WORLD_BUCKET_KEYS) {
       const value = input[key]
-      if (value !== undefined) merged[key] = value
+      if (value !== undefined) {
+        merged[key] = mergeById(aggregate[key] as unknown as Prisma.JsonValue, value) as unknown as unknown[]
+      }
     }
-    await this.writePersonalWorld(userId, merged)
-    return this.toResponse(userId, merged)
+
+    await this.upsertWorldObjects(userId, null, merged)
+    const { aggregate: after } = await this.readPersonalWorld(userId)
+    return this.toResponse(userId, after)
+  }
+
+  /**
+   * Removes a single object (by id) from one of the personal world's collection
+   * or relation buckets. Collections are GraphNode rows and relations are
+   * GraphEdge rows, so removal deletes the matching row directly (scoped to the
+   * caller so another user's row cannot be touched). Removal is explicit, never
+   * omission from a whole-blob PUT, so the merge-by-id update cannot resurrect a
+   * deleted object.
+   *
+   * @param field - the bucket to remove from
+   * @param objectId - the id of the object to remove
+   * @throws {NotFoundError} when the user has no personal world state
+   * @throws {ForbiddenError} when update access is denied
+   */
+  async removeWorldObject(
+    field: 'entityCollections' | 'eventCollections' | 'timeCollections' | 'relations',
+    objectId: string,
+  ): Promise<void> {
+    const userId = await this.resolveUserId()
+    const { exists } = await this.readPersonalWorld(userId)
+    if (!exists) {
+      throw new NotFoundError('WorldState', userId)
+    }
+    if (this.ability) {
+      const candidate = subject('GraphNode', { projectId: null, createdByUserId: userId })
+      if (!this.ability.can('update', candidate)) {
+        throw new ForbiddenError('Cannot update world objects in this scope')
+      }
+    }
+
+    const scope = { id: objectId, createdByUserId: userId, projectId: null }
+    if (field === 'relations') {
+      await this.prisma.graphEdge.deleteMany({ where: scope })
+    } else {
+      await this.prisma.graphNode.deleteMany({ where: scope })
+    }
   }
 
   /**
@@ -432,6 +632,12 @@ export class WorldStateService {
   /**
    * Converts every persona ontology's gloss references to a deleted world object
    * into plain text, returning the number of references found.
+   *
+   * @param userId - owning user id
+   * @param objectId - id of the deleted world object
+   * @param refType - the kind of object reference to rewrite
+   * @param objectName - display name to substitute for the reference
+   * @returns the total number of gloss references converted
    */
   private async cleanupGlossReferences(
     userId: string,
@@ -466,22 +672,25 @@ export class WorldStateService {
     return count
   }
 
-  /** Relations incident to a world object of a given kind. */
+  /** Relations incident to a world object of a given kind, split from the rest. */
   private static incidentRelations(
     relations: unknown[],
     kind: string,
     id: string,
-  ): { kept: unknown[]; removed: number } {
+  ): { kept: unknown[]; removedIds: string[]; removed: number } {
     const kept: unknown[] = []
-    let removed = 0
+    const removedIds: string[] = []
     for (const relation of relations as Array<Record<string, unknown>>) {
       const incident =
         (relation.sourceType === kind && relation.sourceId === id) ||
         (relation.targetType === kind && relation.targetId === id)
-      if (incident) removed += 1
-      else kept.push(relation)
+      if (incident) {
+        if (typeof relation.id === 'string') removedIds.push(relation.id)
+      } else {
+        kept.push(relation)
+      }
     }
-    return { kept, removed }
+    return { kept, removedIds, removed: removedIds.length }
   }
 
   /** Collections after removing a member id, with the membership count removed. */
@@ -530,18 +739,25 @@ export class WorldStateService {
     const target = objects.find((object) => object.id === objectId)
     if (!target) throw new NotFoundError(kind.charAt(0).toUpperCase() + kind.slice(1), objectId)
 
+    // Object annotations denote the world object's GraphNode (the node reuses the
+    // object's own id), so the object-annotation count is the number of layers
+    // annotations pointing at that node.
+    const annotationCount = await this.prisma.layersAnnotation.count({ where: { denotesNodeId: objectId } })
+
     return {
       glossReferences: await this.countGlossReferences(userId, objectId, refType),
-      annotationCount: 0,
+      annotationCount,
       relationCount: WorldStateService.incidentRelations(aggregate.relations, kind, objectId).removed,
       collectionMemberships: WorldStateService.countMemberships(aggregate[collectionBucket], objectId),
     }
   }
 
   /**
-   * Shared deletion for a world object of a given kind: removes it and its
-   * incident relations and collection memberships from the aggregate, writes the
-   * result, and converts gloss references to text.
+   * Shared deletion for a world object of a given kind: deletes its GraphNode and
+   * every incident relation edge, strips its collection memberships, and converts
+   * ontology gloss references to text. The node and edge deletes plus the
+   * collection-node rewrites run in one transaction so the world graph never lands
+   * half-updated; removal is explicit rather than omission from a whole-blob PUT.
    */
   private async deleteObject(
     kind: 'entity' | 'event' | 'time',
@@ -559,8 +775,15 @@ export class WorldStateService {
     const target = objects.find((object) => object.id === objectId)
     if (!target) throw new NotFoundError(kind.charAt(0).toUpperCase() + kind.slice(1), objectId)
 
+    if (this.ability) {
+      const candidate = subject('GraphNode', { projectId: null, createdByUserId: userId })
+      if (!this.ability.can('update', candidate)) {
+        throw new ForbiddenError('Cannot update world objects in this scope')
+      }
+    }
+
     const objectName = nameFor(target)
-    const { kept: relations, removed: relationsRemoved } = WorldStateService.incidentRelations(
+    const { removedIds, removed: relationsRemoved } = WorldStateService.incidentRelations(
       aggregate.relations,
       kind,
       objectId,
@@ -570,13 +793,29 @@ export class WorldStateService {
       objectId,
     )
 
-    const updated: WorldStateAggregate = {
-      ...aggregate,
-      [bucket]: objects.filter((object) => object.id !== objectId),
-      [collectionBucket]: collections,
-      relations,
-    }
-    await this.writePersonalWorld(userId, updated)
+    // Recompute the collection nodes from the full updated bucket so each keeps
+    // its stashed array index; only the objects that lost a member actually change.
+    const { nodes: collectionNodes } = worldStateToLayers(
+      { ...emptyWorldState(), [collectionBucket]: collections },
+      { projectId: null, createdByUserId: userId },
+    )
+    const scope = { createdByUserId: userId, projectId: null }
+    await this.prisma.$transaction(async (tx) => {
+      await tx.graphNode.deleteMany({ where: { id: objectId, ...scope } })
+      if (removedIds.length > 0) {
+        await tx.graphEdge.deleteMany({ where: { id: { in: removedIds }, ...scope } })
+      }
+      for (const node of collectionNodes) {
+        await tx.graphNode.updateMany({
+          where: { id: node.id, ...scope },
+          data: {
+            label: node.label,
+            properties: toJson(node.properties),
+            lockVersion: { increment: 1 },
+          },
+        })
+      }
+    })
 
     const glossReferences = await this.cleanupGlossReferences(userId, objectId, refType, objectName)
 

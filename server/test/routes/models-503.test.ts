@@ -18,6 +18,11 @@ describe('Model Routes - 503 Service Unavailable', () => {
   let app: FastifyInstance
 
   beforeEach(async () => {
+    // The state-changing select/load/unload routes require admin. This suite
+    // exercises the proxy's unavailable-service handling, not auth, so enable
+    // the isolated-test admin bypass to reach the handler under test.
+    vi.stubEnv('ALLOW_TEST_ADMIN_BYPASS', 'true')
+
     app = Fastify({ logger: false })
 
     app.setErrorHandler((error, request, reply) => {
@@ -42,6 +47,7 @@ describe('Model Routes - 503 Service Unavailable', () => {
 
   afterEach(async () => {
     await app.close()
+    vi.unstubAllEnvs()
   })
 
   describe('connection refused (no response)', () => {

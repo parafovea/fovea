@@ -16,6 +16,7 @@
  */
 
 import { Type, Static } from '@sinclair/typebox'
+import type { Prisma } from '@prisma/client'
 
 /**
  * Standard error response schema for OpenAPI documentation.
@@ -151,6 +152,60 @@ export class ForbiddenError extends AppError {
 export class ConflictError extends AppError {
   constructor(message: string, details?: unknown) {
     super(409, 'CONFLICT', message, details)
+  }
+}
+
+/**
+ * Build a human-readable 409 message from a Prisma `P2002` unique-constraint
+ * violation. `error.meta.target` names the conflicting column(s) (or, for a
+ * named index, the constraint name); pass `labels` to map a field substring to
+ * a friendly message (e.g. `{ email: 'A user with this email already exists' }`).
+ *
+ * @example
+ * ```typescript
+ * catch (e) {
+ *   if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
+ *     throw new ConflictError(conflictMessageFromP2002(e, { email: 'Email already in use' }))
+ *   }
+ * }
+ * ```
+ */
+export function conflictMessageFromP2002(
+  error: Prisma.PrismaClientKnownRequestError,
+  labels: Record<string, string> = {}
+): string {
+  const target = error.meta?.target
+  const fields = Array.isArray(target)
+    ? target.map(String)
+    : typeof target === 'string'
+      ? [target]
+      : []
+  for (const [key, message] of Object.entries(labels)) {
+    if (fields.some((f) => f.toLowerCase().includes(key.toLowerCase()))) {
+      return message
+    }
+  }
+  return fields.length
+    ? `A record with this ${fields.join(', ')} already exists`
+    : 'A record with these values already exists'
+}
+
+/**
+ * 416 Range Not Satisfiable error.
+ * Use when a syntactically valid byte-range request cannot be served against
+ * the resource (e.g. the requested start is past the end of the file). The
+ * caller is expected to respond with a `Content-Range` header reporting the
+ * total resource size so the client can re-request a satisfiable range.
+ *
+ * @example
+ * ```typescript
+ * throw new RangeNotSatisfiableError(fileSize)
+ * // Returns: 416 { error: 'RANGE_NOT_SATISFIABLE', message: 'Requested range not satisfiable' }
+ * ```
+ */
+export class RangeNotSatisfiableError extends AppError {
+  constructor(public readonly size: number) {
+    super(416, 'RANGE_NOT_SATISFIABLE', 'Requested range not satisfiable', { size })
   }
 }
 

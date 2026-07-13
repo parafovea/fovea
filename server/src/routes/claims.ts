@@ -109,6 +109,9 @@ const ClaimSchema: any = Type.Recursive(This => Type.Object({
   ])),
   comment: Type.Optional(NullableString),
   createdBy: Type.Optional(NullableString),
+  // The project the claim is scoped to (inherited from its summary; null for
+  // personal personas). Exposed so project scope is observable on the API.
+  projectId: Type.Optional(NullableString),
   createdAt: Type.String({ format: 'date-time' }),
   updatedAt: Type.String({ format: 'date-time' }),
   subclaims: Type.Optional(Type.Array(This))
@@ -118,6 +121,8 @@ const ClaimSchema: any = Type.Recursive(This => Type.Object({
  * Create claim request schema
  */
 const CreateClaimSchema = Type.Object({
+  // Optional client-supplied id so a retried create is idempotent (no duplicate).
+  id: Type.Optional(Type.String({ format: 'uuid' })),
   summaryType: Type.Union([Type.Literal('video'), Type.Literal('collection')]),
   text: Type.String({ minLength: 1 }),
   gloss: Type.Optional(Type.Array(GlossItemSchema)),
@@ -755,6 +760,8 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
           personaId: Type.String({ format: 'uuid' })
         }),
         body: Type.Object({
+          // Optional client-supplied id so a retried create is idempotent.
+          id: Type.Optional(Type.String({ format: 'uuid' })),
           text: Type.String({ minLength: 1 }),
           gloss: Type.Optional(Type.Array(GlossItemSchema)),
           parentClaimId: Type.Optional(Type.String({ format: 'uuid' })),

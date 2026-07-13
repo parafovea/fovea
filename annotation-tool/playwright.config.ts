@@ -74,12 +74,55 @@ export default defineConfig({
     {
       name: 'regression',
       testDir: './test/e2e/regression',
-      testIgnore: '**/visual/**',  // Visual tests run only in visual project
+      // Visual tests run only in the visual project; cross-browser specs run
+      // once per engine in the dedicated video-* projects, not here.
+      testIgnore: ['**/visual/**', '**/cross-browser/**'],
       timeout: 60000,
       retries: 1,
       workers: 2,  // matches the number of test webm fixtures so each worker isolates onto its own video row
       use: {
         ...devices['Desktop Chrome'],
+        viewport: { width: 1280, height: 720 }
+      }
+    },
+
+    // Cross-browser video playback coverage. The annotation video player has
+    // had WebKit-only regressions (paused frames blacking out, stream
+    // range-request crashes) that a Chrome-only matrix cannot catch, so these
+    // specs run under all three engines. They live in their own directory and
+    // are excluded from the regression project above so each runs once per
+    // engine rather than twice under Chrome. One worker per engine keeps the
+    // single shared video row free of cross-test contention.
+    {
+      name: 'video-chromium',
+      testDir: './test/e2e/regression/cross-browser',
+      timeout: 60000,
+      retries: 1,
+      workers: 1,
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 1280, height: 720 }
+      }
+    },
+    {
+      name: 'video-webkit',
+      testDir: './test/e2e/regression/cross-browser',
+      timeout: 60000,
+      retries: 1,
+      workers: 1,
+      use: {
+        ...devices['Desktop Safari'],
+        viewport: { width: 1280, height: 720 }
+      }
+    },
+    {
+      name: 'video-firefox',
+      testDir: './test/e2e/regression/cross-browser',
+      timeout: 60000,
+      retries: 1,
+      workers: 1,
+      use: {
+        ...devices['Desktop Firefox'],
         viewport: { width: 1280, height: 720 }
       }
     },

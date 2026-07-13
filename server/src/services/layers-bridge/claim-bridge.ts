@@ -210,6 +210,38 @@ export async function writeClaimRelation(
 }
 
 /**
+ * Deletes a summary's model-extracted claims from the layers store, preserving
+ * manually authored ones. Removes the extracted claim nodes (extractionStrategy
+ * other than "manual"), their span annotations, and any relation edges incident
+ * to them. Used by the claim-extraction worker to make re-extraction idempotent.
+ *
+ * @param prisma - the Prisma client (or transaction client)
+ * @param summaryId - the VideoSummary id
+ * @returns the number of extracted claim nodes removed
+ */
+export async function deleteExtractedSummaryClaims(
+  prisma: PrismaClient,
+  summaryId: string,
+): Promise<number> {
+  const claims = await findSummaryClaimNodes(prisma, summaryId)
+  const extractedIds = claims
+    .filter((claim) => (claim.extractionStrategy ?? 'manual') !== 'manual')
+    .map((claim) => claim.id)
+  if (extractedIds.length === 0) return 0
+
+  // Span annotations first (deleting the node would only null their FK), then
+  // the relation edges incident to any removed claim, then the nodes.
+  await prisma.layersAnnotation.deleteMany({ where: { denotesNodeId: { in: extractedIds } } })
+  await prisma.graphEdge.deleteMany({
+    where: {
+      OR: [{ sourceLocalId: { in: extractedIds } }, { targetLocalId: { in: extractedIds } }],
+    },
+  })
+  const result = await prisma.graphNode.deleteMany({ where: { id: { in: extractedIds } } })
+  return result.count
+}
+
+/**
  * Reads a single claim by id from the layers store, or null when no claim with
  * that id exists.
  *

@@ -4,7 +4,7 @@ import { subject } from '@casl/ability'
 import { requireAuth } from '../middleware/auth.js'
 import { config } from '../config.js'
 import { buildAbilities } from '../middleware/abilities.js'
-import { NotFoundError, ForbiddenError, AppError } from '../lib/errors.js'
+import { NotFoundError, ForbiddenError, AppError, InternalError } from '../lib/errors.js'
 import { GraphRepository } from '../repositories/GraphRepository.js'
 import { LayersOntologyRepository } from '../repositories/LayersOntologyRepository.js'
 import {
@@ -152,9 +152,9 @@ const ontologyRoute: FastifyPluginAsync = async (fastify) => {
       // catch collapsed every error including ForbiddenError into a 500.
       if (error instanceof AppError) throw error
       fastify.log.error({ error }, 'Error saving ontology data')
-      return reply.code(500).send({
-        error: 'Failed to save ontology data'
-      })
+      // Re-throw to the global handler, which returns a safe generic 500. The
+      // raw error is logged above but never sent to the client.
+      throw new InternalError('Failed to save ontology data')
     }
   })
 

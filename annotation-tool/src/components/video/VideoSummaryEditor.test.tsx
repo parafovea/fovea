@@ -378,6 +378,62 @@ describe('VideoSummaryEditor', () => {
         { timeout: 5000 }
       )
     })
+
+    it('autosaves a comment-only edit (no summary change)', async () => {
+      const user = userEvent.setup()
+      const { useVideoSummary, useSaveSummary } = await import('@store/queries')
+      const mockMutateAsync = vi.fn().mockResolvedValue({})
+      const existingSummary = {
+        id: 'summary-1',
+        videoId: 'test-video',
+        personaId: 'test-persona',
+        summary: [],
+        comment: null,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      }
+
+      vi.mocked(useVideoSummary).mockReturnValue({
+        data: existingSummary,
+        isLoading: false,
+        error: null,
+        isError: false,
+        refetch: vi.fn(),
+      } as any)
+
+      vi.mocked(useSaveSummary).mockReturnValue({
+        mutate: vi.fn(),
+        mutateAsync: mockMutateAsync,
+        isPending: false,
+        error: null,
+      } as any)
+
+      render(
+        <VideoSummaryEditor
+          videoId="test-video"
+          personaId="test-persona"
+        />,
+        { wrapper: createWrapper() }
+      )
+
+      await user.click(screen.getByRole('tab', { name: /Summary/i }))
+
+      const commentField = await screen.findByPlaceholderText(/Enter comment/i)
+      // Only the comment changes; the summary body is left untouched. The
+      // getComparisonSnapshot wiring makes autosave notice the comment delta.
+      await user.type(commentField, 'Comment only')
+
+      await waitFor(
+        () => {
+          expect(mockMutateAsync).toHaveBeenCalledWith(
+            expect.objectContaining({
+              comment: expect.stringContaining('Comment only'),
+            })
+          )
+        },
+        { timeout: 5000 }
+      )
+    })
   })
 
   describe('Default Tab', () => {

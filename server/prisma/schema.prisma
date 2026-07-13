@@ -843,6 +843,9 @@ model TextAnnotationRelation {
 /// etc.). `id` == the node Uuid.value (reuse the Fovea world-object id on backfill).
 model GraphNode {
   id String @id @default(uuid())
+  /// Optimistic-concurrency counter: every guarded update compares-and-swaps
+  /// on it, so a concurrent writer cannot silently clobber a same-object edit.
+  lockVersion Int @default(0)
 
   /// entity | situation | state | time | location | claim | concept | ...
   nodeType      String
@@ -872,6 +875,9 @@ model GraphNode {
 /// denormalize the referenced node ids for indexed lookup.
 model GraphEdge {
   id String @id @default(uuid())
+  /// Optimistic-concurrency counter: every guarded update compares-and-swaps
+  /// on it, so a concurrent writer cannot silently clobber a same-object edit.
+  lockVersion Int @default(0)
 
   /// objectRef value-objects.
   source        Json
@@ -905,6 +911,9 @@ model GraphEdge {
 /// LayersOntology mirrors ontology.ontology: a named type system.
 model LayersOntology {
   id String @id @default(uuid())
+  /// Optimistic-concurrency counter: every guarded update compares-and-swaps
+  /// on it, so a concurrent writer cannot silently clobber a same-object edit.
+  lockVersion Int @default(0)
 
   name        String
   description String?

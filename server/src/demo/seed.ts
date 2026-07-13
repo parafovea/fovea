@@ -132,7 +132,11 @@ const seedPlugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           type: 'object',
           required: ['tourId', 'sessionUserId'],
           properties: {
-            tourId: { type: 'string', minLength: 1, maxLength: 64 },
+            // Strict charset: tourId is interpolated into a fixture filename
+            // (`tour-${tourId}.json`), so it must not contain path separators or
+            // `.` — otherwise a crafted id could traverse outside the fixtures
+            // dir. A bare tour id is lowercase-alphanumeric with hyphens.
+            tourId: { type: 'string', pattern: '^[a-z0-9][a-z0-9-]{0,63}$' },
             sessionUserId: { type: 'string', minLength: 1, maxLength: 64 },
           },
         },

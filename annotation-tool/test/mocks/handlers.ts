@@ -2058,6 +2058,26 @@ export const handlers = [
     })
   }),
 
+  /**
+   * World collection / relation removals (explicit DELETE endpoints that drop
+   * the object from its array, replacing the old remove-by-blob-omission PUT).
+   */
+  http.delete('*/api/world/entity-collections/:collectionId', () => {
+    return HttpResponse.json({ success: true })
+  }),
+
+  http.delete('*/api/world/event-collections/:collectionId', () => {
+    return HttpResponse.json({ success: true })
+  }),
+
+  http.delete('*/api/world/time-collections/:collectionId', () => {
+    return HttpResponse.json({ success: true })
+  }),
+
+  http.delete('*/api/world/relations/:relationId', () => {
+    return HttpResponse.json({ success: true })
+  }),
+
   // =============================================================================
   // GROUPS ENDPOINTS
   // =============================================================================

@@ -17,6 +17,11 @@ describe('Model Routes', () => {
   let app: FastifyInstance
 
   beforeEach(async () => {
+    // The state-changing select/load/unload routes require admin. This suite
+    // exercises proxy behavior and validation, not auth, so enable the
+    // isolated-test admin bypass to reach the handlers under test.
+    vi.stubEnv('ALLOW_TEST_ADMIN_BYPASS', 'true')
+
     // Create fresh Fastify instance for each test
     app = Fastify({ logger: false })
 
@@ -65,6 +70,7 @@ describe('Model Routes', () => {
 
   afterEach(async () => {
     await app.close()
+    vi.unstubAllEnvs()
   })
 
   describe('GET /api/models/config', () => {

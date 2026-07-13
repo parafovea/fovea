@@ -15,7 +15,7 @@
 
 import { PrismaClient, Prisma } from '@prisma/client'
 import { subject } from '@casl/ability'
-import { NotFoundError, ValidationError } from '../../lib/errors.js'
+import { NotFoundError, ValidationError, ForbiddenError } from '../../lib/errors.js'
 import type { AppAbility } from '../../lib/abilities.js'
 import { ImportLine, ImportOptions, ImportResult, Resolution } from '../import-types.js'
 import { SequenceValidator } from '../import-validator.js'
@@ -23,7 +23,7 @@ import { validateLine } from './line-parser.js'
 import { AnnotationData } from './types.js'
 import type { WorldStateAggregate } from '../world-layers-mapper.js'
 import { writeOntologyAggregate } from '../layers-bridge/ontology-bridge.js'
-import { writeClaim, writeClaimRelation, type ClaimSummaryContext } from '../layers-bridge/claim-bridge.js'
+import { readClaimById, writeClaim, writeClaimRelation, type ClaimSummaryContext } from '../layers-bridge/claim-bridge.js'
 import { writeVideoAnnotation } from '../layers-bridge/annotation-bridge.js'
 import { nodeToClaim } from '../claim-layers-mapper.js'
 import type {
@@ -143,6 +143,22 @@ export class EntityImporter {
       const existingPersona = await tx.persona.findUnique({ where: { id: personaId } })
 
       if (existingPersona && resolution?.action === 'replace') {
+        // Authorize the replace against the EXISTING row, not the importer's
+        // scope: overwriting a persona found by id requires permission to
+        // update THAT persona. Without this an import line carrying another
+        // user's persona id would clobber their persona (IDOR).
+        if (this.ability && !this.ability.can('update', subject('Persona', existingPersona))) {
+          result.errors.push({
+            line: line.lineNumber,
+            type: 'authorization',
+            message: `Not authorized to replace persona ${personaId}`,
+            data: line.data
+          })
+          if (options.transaction.atomic) {
+            throw new ForbiddenError(`Not authorized to replace persona ${personaId}`)
+          }
+          return
+        }
         await tx.persona.update({
           where: { id: personaId },
           data: {
@@ -216,6 +232,32 @@ export class EntityImporter {
       return
     }
 
+    // Authorize against the OWNING persona: importing an ontology overwrites that
+    // persona's types, so the caller must be allowed to update it. Without this,
+    // an import line carrying another user's personaId would clobber their
+    // ontology (IDOR). Checked before the write so the denial propagates cleanly
+    // rather than being swallowed by the generic import-error catch below.
+    const owningPersona = await tx.persona.findUnique({ where: { id: personaId } })
+    if (!owningPersona) {
+      result.errors.push({
+        line: line.lineNumber,
+        type: 'validation',
+        message: `Persona ${personaId} not found for ontology import`
+      })
+      return
+    }
+    if (this.ability && !this.ability.can('update', subject('Persona', owningPersona))) {
+      result.errors.push({
+        line: line.lineNumber,
+        type: 'authorization',
+        message: `Not authorized to import an ontology for persona ${personaId}`
+      })
+      if (options.transaction.atomic) {
+        throw new ForbiddenError(`Not authorized to import an ontology for persona ${personaId}`)
+      }
+      return
+    }
+
     try {
       const persona = await tx.persona.findUnique({ where: { id: personaId } })
       if (!persona) {
@@ -283,6 +325,12 @@ export class EntityImporter {
       return
     }
 
+    // Merge the imported item into the in-memory world aggregate by id. The
+    // whole aggregate is materialized once, after every world line is merged,
+    // through the layers store's guarded write (see ImportHandler.importLines),
+    // so a concurrent UI or importer edit cannot be clobbered by a stale
+    // per-item snapshot. A replace overwrites the matching object; otherwise a
+    // new object is appended and an existing one is preserved (skip-if-exists).
     const bucketKey = WORLD_BUCKET[itemType]
     const items = aggregate[bucketKey] as Array<Record<string, unknown>>
     const existingIndex = items.findIndex(
@@ -387,6 +435,21 @@ export class EntityImporter {
       }
 
       if (existingSummary && resolution?.action === 'replace') {
+        // Authorize the replace against the EXISTING row: overwriting a
+        // summary found by id requires permission to update THAT summary,
+        // not merely to create one in the importer's scope (IDOR guard).
+        if (this.ability && !this.ability.can('update', subject('VideoSummary', existingSummary))) {
+          result.errors.push({
+            line: line.lineNumber,
+            type: 'authorization',
+            message: `Not authorized to replace summary ${summaryId}`,
+            data: line.data
+          })
+          if (options.transaction.atomic) {
+            throw new ForbiddenError(`Not authorized to replace summary ${summaryId}`)
+          }
+          return
+        }
         await tx.videoSummary.update({
           where: { id: summaryId },
           data: summaryData
@@ -490,15 +553,37 @@ export class EntityImporter {
         throw new NotFoundError('Summary', summaryId)
       }
 
-      if (!this.canCreate('Claim', { createdBy: this.userId, projectId: this.projectId })) {
-        result.errors.push({
-          line: line.lineNumber,
-          type: 'authorization',
-          message: 'Cannot create Claim in this scope',
-          data: line.data
-        })
-        if (options.transaction.atomic) throw new ValidationError('Cannot create Claim in this scope')
-        return
+      // Read the existing claim (if any) so a replace authorizes against it.
+      const existingClaim = await readClaimById(tx, claimId)
+
+      if (existingClaim && resolution?.action === 'replace') {
+        // Authorize the replace against the EXISTING claim, not the importer's
+        // scope: overwriting a claim found by id requires permission to update
+        // THAT claim. Without this an import line carrying another user's claim
+        // id would clobber their claim (IDOR).
+        if (this.ability && !this.ability.can('update', subject('Claim', existingClaim))) {
+          result.errors.push({
+            line: line.lineNumber,
+            type: 'authorization',
+            message: `Not authorized to replace claim ${claimId}`,
+            data: line.data
+          })
+          if (options.transaction.atomic) {
+            throw new ForbiddenError(`Not authorized to replace claim ${claimId}`)
+          }
+          return
+        }
+      } else if (!existingClaim) {
+        if (!this.canCreate('Claim', { createdBy: this.userId, projectId: this.projectId })) {
+          result.errors.push({
+            line: line.lineNumber,
+            type: 'authorization',
+            message: 'Cannot create Claim in this scope',
+            data: line.data
+          })
+          if (options.transaction.atomic) throw new ValidationError('Cannot create Claim in this scope')
+          return
+        }
       }
 
       const now = new Date().toISOString()
@@ -537,8 +622,10 @@ export class EntityImporter {
         createdBy: summary.createdBy,
       }
 
-      const existing = await tx.graphNode.count({ where: { id: claimId, nodeType: 'claim' } })
-      if (existing > 0) {
+      // Materialize into the layers store. A replace deletes the existing claim
+      // node and its span annotations first; a non-replace existing claim is
+      // left untouched (skip-if-exists).
+      if (existingClaim) {
         if (resolution?.action === 'replace') {
           await tx.layersAnnotation.deleteMany({ where: { denotesNodeId: claimId } })
           await tx.graphNode.delete({ where: { id: claimId } })
@@ -627,13 +714,37 @@ export class EntityImporter {
       const summaryId = sourceClaim?.summaryId ?? ''
       const projectId = sourceClaim?.projectId ?? this.projectId
 
-      const existing = await tx.graphEdge.count({ where: { id: relationId } })
-      if (existing > 0) {
-        if (resolution?.action === 'replace') {
-          await tx.graphEdge.delete({ where: { id: relationId } })
-          await writeClaimRelation(tx, relation, summaryId, projectId)
+      const existingEdge = await tx.graphEdge.findUnique({ where: { id: relationId } })
+      if (existingEdge && resolution?.action === 'replace') {
+        // Authorize the replace against the EXISTING relation, not the
+        // importer's scope: overwriting a relation found by id requires
+        // permission to modify THAT relation. Relations have no CASL subject of
+        // their own; their update is governed by their endpoint claims (see
+        // ClaimService.createRelation), so authorize update on the existing
+        // relation's source claim. Without this an import line carrying another
+        // user's relation id would clobber their relation (IDOR).
+        const existingSourceNode = existingEdge.sourceLocalId
+          ? await tx.graphNode.findUnique({ where: { id: existingEdge.sourceLocalId } })
+          : null
+        const existingSourceClaim = existingSourceNode ? nodeToClaim(existingSourceNode) : null
+        if (
+          this.ability &&
+          (!existingSourceClaim || !this.ability.can('update', subject('Claim', existingSourceClaim)))
+        ) {
+          result.errors.push({
+            line: line.lineNumber,
+            type: 'authorization',
+            message: `Not authorized to replace claim relation ${relationId}`,
+            data: line.data
+          })
+          if (options.transaction.atomic) {
+            throw new ForbiddenError(`Not authorized to replace claim relation ${relationId}`)
+          }
+          return
         }
-      } else {
+        await tx.graphEdge.delete({ where: { id: relationId } })
+        await writeClaimRelation(tx, relation, summaryId, projectId)
+      } else if (!existingEdge) {
         await writeClaimRelation(tx, relation, summaryId, projectId)
       }
 
@@ -710,6 +821,47 @@ export class EntityImporter {
 
       if (keyframes.length === 1) {
         result.summary.importedItems.singleKeyframeSequences++
+      }
+
+      // Determine whether a layers row with this id already exists so the write
+      // below stays guarded. The layers annotation write upserts by id, so an
+      // existing id must be authorized (replace) or skipped (any other
+      // resolution) rather than silently overwritten.
+      const existingAnnotation = await tx.layersAnnotation.findUnique({
+        where: { id: annotation.id }
+      })
+
+      if (existingAnnotation && resolution && resolution.action === 'replace') {
+        // Authorize the overwrite against the EXISTING row: replacing an
+        // annotation found by id requires permission to delete THAT row, not
+        // merely to create one in the importer's scope (IDOR guard).
+        if (this.ability && !this.ability.can('delete', subject('Annotation', existingAnnotation))) {
+          result.errors.push({
+            line: line.lineNumber,
+            type: 'authorization',
+            message: `Not authorized to replace annotation ${annotation.id}`,
+            data: line.data
+          })
+          if (options.transaction.atomic) {
+            throw new ForbiddenError(`Not authorized to replace annotation ${annotation.id}`)
+          }
+          return
+        }
+      } else if (existingAnnotation) {
+        // A row with this id exists but the resolution is not 'replace' (e.g.
+        // merge-keyframes resolves to 'merge'). The layers write upserts by id,
+        // so proceeding would silently overwrite the existing row; skip with a
+        // clear error instead.
+        result.errors.push({
+          line: line.lineNumber,
+          type: 'import',
+          message: `Annotation ${annotation.id} already exists; '${resolution?.action ?? 'none'}' resolution does not overwrite it`,
+          data: line.data
+        })
+        if (options.transaction.atomic) {
+          throw new ValidationError(`Annotation ${annotation.id} already exists and cannot be recreated`)
+        }
+        return
       }
 
       if (!this.canCreate('Annotation', { createdByUserId: this.userId, projectId: this.projectId })) {

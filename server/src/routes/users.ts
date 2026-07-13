@@ -3,7 +3,11 @@ import { FastifyPluginAsync } from 'fastify'
 import { z } from 'zod'
 import bcrypt from 'bcrypt'
 import { requireAuth, requireAdmin } from '../middleware/auth.js'
-import { NotFoundError, UnauthorizedError, ForbiddenError, ConflictError } from '../lib/errors.js'
+import { invalidateUserAbilities } from '../middleware/abilities.js'
+import { NotFoundError, UnauthorizedError, ForbiddenError, ConflictError, conflictMessageFromP2002, ErrorResponseSchema } from '../lib/errors.js'
+import { authService } from '../services/auth-service.js'
+import { config } from '../config.js'
+import { Prisma } from '@prisma/client'
 
 /**
  * TypeBox schema for User response.
@@ -47,8 +51,7 @@ const createUserSchema = z.object({
   email: z.string().email().optional().nullable(),
   password: z.string().min(6, 'Password must be at least 6 characters'),
   displayName: z.string().min(1, 'Display name is required'),
-  isAdmin: z.boolean().optional().default(false),
-  systemRole: z.enum(['user', 'system_admin']).optional()
+  isAdmin: z.boolean().optional().default(false)
 })
 
 /**
@@ -143,7 +146,8 @@ const usersRoute: FastifyPluginAsync = async (fastify) => {
         200: UserSchema,
         401: Type.Object({
           error: Type.String()
-        })
+        }),
+        409: ErrorResponseSchema
       }
     }
   }, async (request, reply) => {
@@ -170,19 +174,50 @@ const usersRoute: FastifyPluginAsync = async (fastify) => {
       updateData.passwordHash = await bcrypt.hash(validatedData.password, 12)
     }
 
-    const user = await fastify.prisma.user.update({
-      where: { id: request.user.id },
-      data: updateData,
-      select: {
-        id: true,
-        username: true,
-        email: true,
-        displayName: true,
-        isAdmin: true,
-        createdAt: true,
-        updatedAt: true
+    let user
+    try {
+      user = await fastify.prisma.user.update({
+        where: { id: request.user.id },
+        data: updateData,
+        select: {
+          id: true,
+          username: true,
+          email: true,
+          displayName: true,
+          isAdmin: true,
+          createdAt: true,
+          updatedAt: true
+        }
+      })
+    } catch (error: unknown) {
+      // A duplicate email/username is a client conflict, not a server fault —
+      // surface 409 with the offending field rather than letting it 500.
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        throw new ConflictError(conflictMessageFromP2002(error, {
+          email: 'A user with this email already exists',
+          username: 'A user with this username already exists',
+        }))
       }
-    })
+      throw error
+    }
+
+    // A password change must invalidate every existing session so a stolen or
+    // shared token cannot survive the reset. Revoke all of this user's sessions,
+    // then re-issue a fresh one for the acting client so they stay logged in.
+    if (validatedData.password) {
+      await authService.revokeAllUserSessions(request.user.id)
+      const { token, expiresAt } = await authService.createSession(request.user.id, {
+        ipAddress: request.ip,
+        userAgent: request.headers['user-agent'],
+      })
+      reply.setCookie('session_token', token, {
+        httpOnly: true,
+        secure: config.server.isProduction,
+        sameSite: 'lax',
+        expires: expiresAt,
+        path: '/',
+      })
+    }
 
     return reply.send(user)
   })
@@ -267,26 +302,42 @@ const usersRoute: FastifyPluginAsync = async (fastify) => {
     // Hash password
     const passwordHash = await bcrypt.hash(validatedData.password, 12)
 
-    // Create user
-    const user = await fastify.prisma.user.create({
-      data: {
-        username: validatedData.username,
-        email: validatedData.email || null,
-        passwordHash,
-        displayName: validatedData.displayName,
-        isAdmin: validatedData.isAdmin,
-        ...(validatedData.systemRole ? { systemRole: validatedData.systemRole } : {})
-      },
-      select: {
-        id: true,
-        username: true,
-        email: true,
-        displayName: true,
-        isAdmin: true,
-        createdAt: true,
-        updatedAt: true
+    // Create user. The pre-check above narrows the common case, but a duplicate
+    // username/email can still race past it (or collide on email, which is not
+    // pre-checked) — catch the unique violation and return 409 rather than 500.
+    let user
+    try {
+      user = await fastify.prisma.user.create({
+        data: {
+          username: validatedData.username,
+          email: validatedData.email || null,
+          passwordHash,
+          displayName: validatedData.displayName,
+          isAdmin: validatedData.isAdmin,
+          // Derive systemRole from isAdmin so the two admin signals cannot
+          // diverge: requireAdmin gates on isAdmin while CASL `manage all`
+          // gates on systemRole. Mirrors the coupling in the update handler.
+          systemRole: validatedData.isAdmin ? 'system_admin' : 'user'
+        },
+        select: {
+          id: true,
+          username: true,
+          email: true,
+          displayName: true,
+          isAdmin: true,
+          createdAt: true,
+          updatedAt: true
+        }
+      })
+    } catch (error: unknown) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        throw new ConflictError(conflictMessageFromP2002(error, {
+          email: 'A user with this email already exists',
+          username: 'Username already exists',
+        }))
       }
-    })
+      throw error
+    }
 
     return reply.code(201).send(user)
   })
@@ -363,7 +414,8 @@ const usersRoute: FastifyPluginAsync = async (fastify) => {
         200: UserSchema,
         404: Type.Object({
           error: Type.String()
-        })
+        }),
+        409: ErrorResponseSchema
       }
     }
   }, async (request, reply) => {
@@ -375,6 +427,7 @@ const usersRoute: FastifyPluginAsync = async (fastify) => {
       email?: string | null
       displayName?: string
       isAdmin?: boolean
+      systemRole?: string
       passwordHash?: string
     } = {}
 
@@ -386,6 +439,10 @@ const usersRoute: FastifyPluginAsync = async (fastify) => {
     }
     if (validatedData.isAdmin !== undefined) {
       updateData.isAdmin = validatedData.isAdmin
+      // Keep systemRole (which drives CASL `manage all`) in sync with isAdmin
+      // so the two admin signals cannot diverge: requireAdmin gates on isAdmin
+      // while CASL super-powers gate on systemRole.
+      updateData.systemRole = validatedData.isAdmin ? 'system_admin' : 'user'
     }
     if (validatedData.password) {
       updateData.passwordHash = await bcrypt.hash(validatedData.password, 12)
@@ -405,10 +462,29 @@ const usersRoute: FastifyPluginAsync = async (fastify) => {
           updatedAt: true
         }
       })
+      // The ability cache keys on systemRole; clear this user's cached
+      // abilities so an admin promotion/demotion takes effect immediately
+      // rather than lingering until restart/re-login.
+      if (validatedData.isAdmin !== undefined) {
+        invalidateUserAbilities(userId)
+      }
+      // An admin password reset must lock out the target's existing sessions
+      // (e.g. compromised account remediation), so revoke them all.
+      if (validatedData.password) {
+        await authService.revokeAllUserSessions(userId)
+      }
       return reply.send(user)
     } catch (error: unknown) {
       if (error && typeof error === 'object' && 'code' in error && error.code === 'P2025') {
         throw new NotFoundError('User', userId)
+      }
+      // A duplicate email/username (or a create/update race) is a client
+      // conflict, not a server fault — surface 409 with the offending field.
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        throw new ConflictError(conflictMessageFromP2002(error, {
+          email: 'A user with this email already exists',
+          username: 'A user with this username already exists',
+        }))
       }
       throw error
     }
@@ -441,7 +517,8 @@ const usersRoute: FastifyPluginAsync = async (fastify) => {
         }),
         404: Type.Object({
           error: Type.String()
-        })
+        }),
+        409: ErrorResponseSchema
       }
     }
   }, async (request, reply) => {
@@ -452,10 +529,27 @@ const usersRoute: FastifyPluginAsync = async (fastify) => {
       throw new ForbiddenError('Cannot delete yourself')
     }
 
+    // Project.ownerUserId is onDelete: SetNull, so deleting a user who solely
+    // owns a project (and whose membership cascade-deletes) would strand it with
+    // no owner and no one able to administer it. Refuse and require the admin to
+    // transfer ownership first, preserving the last-owner invariant.
+    const ownedProjects = await fastify.prisma.project.findMany({
+      where: { ownerUserId: userId },
+      select: { name: true },
+    })
+    if (ownedProjects.length > 0) {
+      throw new ConflictError(
+        `Cannot delete a user who solely owns ${ownedProjects.length} project(s). Transfer ownership first: ${ownedProjects.map((p) => p.name).join(', ')}`
+      )
+    }
+
     try {
       await fastify.prisma.user.delete({
         where: { id: userId }
       })
+      // Clear the deleted user's cached abilities so a lingering in-memory entry
+      // cannot outlive the account if its id is ever observed again.
+      invalidateUserAbilities(userId)
       return reply.send({ success: true })
     } catch (error: unknown) {
       if (error && typeof error === 'object' && 'code' in error && error.code === 'P2025') {
