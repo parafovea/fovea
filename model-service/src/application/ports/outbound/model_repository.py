@@ -4,8 +4,10 @@ This module defines the interface for model configuration persistence.
 """
 
 from abc import ABC, abstractmethod
+from typing import TYPE_CHECKING
 
-from src.domain.entities import InferenceConfig, ModelConfig, TaskConfig
+if TYPE_CHECKING:
+    from src.domain.entities import InferenceConfig, ModelConfig, TaskConfig
 
 
 class IModelRepository(ABC):

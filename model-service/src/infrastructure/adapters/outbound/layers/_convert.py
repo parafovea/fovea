@@ -17,13 +17,14 @@ imports it directly (it depends on the lairs-free port instead).
 from __future__ import annotations
 
 import json
-from collections.abc import Mapping
 from typing import TYPE_CHECKING
 
 from lairs.integrations.codecs import FragmentRecord
 from lairs.records import defs
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     import didactic.api as dx
 
 # A plain JSON value: what a lens complement and a serialized record are made of.

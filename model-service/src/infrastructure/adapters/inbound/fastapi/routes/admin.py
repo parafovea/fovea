@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import hmac
 import logging
-from typing import Annotated, Literal
+from typing import TYPE_CHECKING, Annotated, Literal
 
 import didactic.api as dx
 from annotated_types import Ge, Le
@@ -105,10 +105,14 @@ class ReconfigureAck(dx.Model):
 
 # The reconfigure body is one of three key-tagged rows. FastAPI validates
 # the posted object against this union of the Pydantic mirrors; the route
-# dispatches on the ``key`` discriminator.
-_ReconfigureBody = (
-    as_request(StoragePathsRow) | as_request(RuntimeRow) | as_request(ExternalApisRow)
-)
+# dispatches on the ``key`` discriminator. The handler type-checks against the
+# union of the source wire models (the ``if TYPE_CHECKING`` branch).
+if TYPE_CHECKING:
+    _ReconfigureBody = StoragePathsRow | RuntimeRow | ExternalApisRow
+else:
+    _ReconfigureBody = (
+        as_request(StoragePathsRow) | as_request(RuntimeRow) | as_request(ExternalApisRow)
+    )
 
 
 def _require_admin_token(x_admin_token: str | None) -> None:

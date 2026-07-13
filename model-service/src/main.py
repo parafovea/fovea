@@ -6,9 +6,9 @@ AI models. Serves as the composition root, wiring the dependency injection
 container to the FastAPI application.
 """
 
-from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
 from didactic.fastapi import register_validation_handler
 from fastapi import FastAPI
@@ -23,6 +23,9 @@ from .infrastructure.config.container import (
 )
 from .infrastructure.config.settings import get_settings
 from .infrastructure.observability import configure_observability, instrument_app
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
 
 
 @asynccontextmanager

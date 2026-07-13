@@ -16,11 +16,11 @@ pytest.importorskip("lairs")
 pytest.importorskip("panproto")
 pytest.importorskip("pycocotools")
 
+import didactic.api as dx
 from hypothesis import strategies as st
 from lairs.records import annotation, media
 from pycocotools import mask as coco_mask
 
-import didactic.api as dx
 from src.application.dto.tracking import (
     TrackingFrameDTO,
     TrackingMaskDTO,

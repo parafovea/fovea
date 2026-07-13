@@ -31,7 +31,12 @@ router = APIRouter()
 tracer = trace.get_tracer(__name__)
 logger = logging.getLogger(__name__)
 
-_DetectionRequestBody = as_request(models.DetectionRequest)
+if TYPE_CHECKING:
+    # Handlers type-check against the source wire model; at runtime the body is
+    # the Pydantic mirror FastAPI validates against (the ``else`` branch).
+    _DetectionRequestBody = models.DetectionRequest
+else:
+    _DetectionRequestBody = as_request(models.DetectionRequest)
 
 
 @router.post(

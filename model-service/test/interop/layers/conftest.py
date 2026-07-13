@@ -8,13 +8,13 @@ The :class:`EmitContext` used by :func:`make_ctx` is lairs-free, so this
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from src.application.ports.outbound.layers_codec import EmitContext
 
 # A fixed instant so emitted records (and their round-trips) are deterministic.
 # Never use ``datetime.now()`` in tests: it makes fragments non-reproducible.
-FIXED_CREATED_AT = datetime(2026, 1, 1, tzinfo=timezone.utc)
+FIXED_CREATED_AT = datetime(2026, 1, 1, tzinfo=UTC)
 
 
 def make_ctx(

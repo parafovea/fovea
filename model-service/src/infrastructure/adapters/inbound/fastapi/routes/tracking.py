@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import base64
 import logging
+from typing import TYPE_CHECKING
 
 import cv2
 import numpy as np
@@ -28,7 +29,12 @@ router = APIRouter()
 tracer = trace.get_tracer(__name__)
 logger = logging.getLogger(__name__)
 
-_TrackingRequestBody = as_request(models.TrackingRequest)
+if TYPE_CHECKING:
+    # Handlers type-check against the source wire model; at runtime the body is
+    # the Pydantic mirror FastAPI validates against (the ``else`` branch).
+    _TrackingRequestBody = models.TrackingRequest
+else:
+    _TrackingRequestBody = as_request(models.TrackingRequest)
 
 
 @router.post(

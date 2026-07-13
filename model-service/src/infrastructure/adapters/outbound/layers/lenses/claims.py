@@ -26,6 +26,7 @@ remainder verbatim, so the GetPut law holds for every result.
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import cast
 
 import didactic.api as dx
 from lairs.author import builders
@@ -209,9 +210,11 @@ class ClaimsLayersLens(dx.Lens[ClaimsResultDTO, CorpusFragment, JsonValue]):
             )
 
         view = CorpusFragment(records=tuple(records), source="fovea")
+        # Widen the minted uuid strings to JsonValue across list invariance.
+        uuid_values = cast("list[JsonValue]", claim_uuids)
         complement: JsonValue = {
             "claims": [_dump_claim(claim) for claim in dto.claims],
-            "claim_uuids": claim_uuids,
+            "claim_uuids": uuid_values,
             "relationships": [
                 {
                     "source_claim_id": rel.source_claim_id,

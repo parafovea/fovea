@@ -7,17 +7,17 @@ import pytest
 pytest.importorskip("lairs")
 pytest.importorskip("panproto")
 
-import didactic.api as dx  # noqa: E402
-from hypothesis import strategies as st  # noqa: E402
-from lairs.records import annotation, expression, graph  # noqa: E402
+import didactic.api as dx
+from hypothesis import strategies as st
+from lairs.records import annotation, expression, graph
 
-from src.application.dto.claims import (  # noqa: E402
+from src.application.dto.claims import (
     ClaimRelationshipDTO,
     ClaimsResultDTO,
     ExtractedClaimDTO,
 )
-from src.application.dto.reasoning import ThinkingStep, ThinkingTrace  # noqa: E402
-from src.infrastructure.adapters.outbound.layers.lenses.claims import (  # noqa: E402
+from src.application.dto.reasoning import ThinkingStep, ThinkingTrace
+from src.infrastructure.adapters.outbound.layers.lenses.claims import (
     CLAIMS_LAYERS,
     ClaimsLayersLens,
 )

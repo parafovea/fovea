@@ -17,16 +17,17 @@ import os
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
-from typing import TYPE_CHECKING, ClassVar
+from typing import TYPE_CHECKING, ClassVar, cast
 
 import didactic.api as dx
 from didactic.settings import EnvSource
 from didactic.settings import Settings as DxSettings
+from didactic.settings._settings import _Source
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
-    from didactic.types._typing import JsonObject
+    from didactic.types._typing import FieldValue, JsonObject
 
 
 def _default_model_config_path() -> Path:
@@ -51,13 +52,19 @@ def _default_transformers_cache() -> Path:
     return Path.home() / ".cache" / "huggingface" / "hub"
 
 
-def _to_path(value: object) -> Path:
-    """Coerce an environment string (or an existing Path) into a Path."""
-    return value if isinstance(value, Path) else Path(str(value))
+def _to_path(value: object) -> FieldValue:
+    """Coerce an environment string (or an existing Path) into a Path.
+
+    didactic accepts ``Path`` field values at runtime but omits ``Path`` from
+    its ``FieldValue`` converter-output union, so the coerced Path is returned
+    through ``FieldValue`` at this single converter seam.
+    """
+    path = value if isinstance(value, Path) else Path(str(value))
+    return cast("FieldValue", path)
 
 
-@dataclass(frozen=True, slots=True)
-class _AliasEnvSource:
+@dataclass(frozen=True, slots=True, kw_only=True)
+class _AliasEnvSource(_Source):
     """Read fields from the first set variable among a list of aliases.
 
     didactic's :class:`~didactic.settings.EnvSource` maps a field name to a
@@ -151,7 +158,7 @@ class Settings(DxSettings):
     model_service_admin_token: str | None = None
     hf_token: str | None = None
 
-    __sources__: ClassVar[tuple[object, ...]] = (
+    __sources__: ClassVar[tuple[_Source, ...]] = (
         EnvSource(),
         _AliasEnvSource(
             aliases={

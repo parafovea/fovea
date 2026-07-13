@@ -93,7 +93,12 @@ class DiarizeResponse(dx.Model):
     model_used: str = ""
 
 
-_DiarizeRequestBody = as_request(DiarizeRequest)
+if TYPE_CHECKING:
+    # Handlers type-check against the source wire model; at runtime the body is
+    # the Pydantic mirror FastAPI validates against (the ``else`` branch).
+    _DiarizeRequestBody = DiarizeRequest
+else:
+    _DiarizeRequestBody = as_request(DiarizeRequest)
 
 
 @router.post(

@@ -28,7 +28,12 @@ router = APIRouter()
 tracer = trace.get_tracer(__name__)
 logger = logging.getLogger(__name__)
 
-_SummarizeRequestBody = as_request(models.SummarizeRequest)
+if TYPE_CHECKING:
+    # Handlers type-check against the source wire model; at runtime the body is
+    # the Pydantic mirror FastAPI validates against (the ``else`` branch).
+    _SummarizeRequestBody = models.SummarizeRequest
+else:
+    _SummarizeRequestBody = as_request(models.SummarizeRequest)
 
 
 @router.post(

@@ -26,19 +26,29 @@ stable Pydantic class regardless of how many routes reference it.
 from __future__ import annotations
 
 import json
-from types import UnionType
-from typing import TYPE_CHECKING, Annotated, Union, cast, get_args, get_origin
+from types import GenericAlias, UnionType
+from typing import TYPE_CHECKING, Annotated, TypeGuard, Union, cast, get_args, get_origin
 
 import didactic.api as dx
 from didactic.fields._fields import MISSING
 from didactic.pydantic import _reverse as _dxp
 
 if TYPE_CHECKING:
-    from didactic.types._typing import JsonValue
+    # The pydantic model and field builders. At runtime these are the functions
+    # didactic's interop layer re-exports from pydantic (see the ``else``
+    # branch); ``_reverse`` does not list them in ``__all__``, and both are
+    # invoked with field maps assembled at runtime, a shape no static overload
+    # can describe. They are declared here with the permissive signatures the
+    # dynamic construction needs, which keeps this the module's single
+    # dynamic-construction seam: every route handler downstream type-checks
+    # against the concrete source models instead.
+    def _build_model(name: str, /, **fields: object) -> type: ...
 
-# Pydantic builders, reached through the didactic interop package.
-_build_model = _dxp.create_model
-_field_info = _dxp.Field
+    def _field_info(**kwargs: object) -> object: ...
+
+else:
+    _build_model = _dxp.create_model
+    _field_info = _dxp.Field
 
 _CACHE: dict[type, type] = {}
 # Models whose Pydantic mirror is mid-construction. A field that references
@@ -47,19 +57,21 @@ _CACHE: dict[type, type] = {}
 _BUILDING: set[type] = set()
 
 
-def dump(model: dx.Model) -> dict[str, JsonValue]:
+def dump(model: dx.Model) -> dict[str, object]:
     """Render a wire ``dx.Model`` as a JSON-shaped dict for a route return.
 
     Routes return this dict; FastAPI validates it against the route's
     ``response_model`` (the mirror from :func:`as_response`). Using
     ``model_dump_json`` (rather than ``model_dump``) recurses through nested
     ``tuple[Model, ...]`` fields, which ``model_dump`` alone leaves as raw
-    sub-model instances.
+    sub-model instances. The return type matches the handlers' ``dict[str,
+    object]`` contract: the parsed JSON values are heterogeneous, and FastAPI
+    revalidates them against the route ``response_model`` regardless.
     """
-    return cast("dict[str, JsonValue]", json.loads(model.model_dump_json()))
+    return cast("dict[str, object]", json.loads(model.model_dump_json()))
 
 
-def _is_dx_model(annotation: object) -> bool:
+def _is_dx_model(annotation: object) -> TypeGuard[type[dx.Model]]:
     """Return True when ``annotation`` is a ``dx.Model`` subclass."""
     return isinstance(annotation, type) and issubclass(annotation, dx.Model)
 
@@ -74,8 +86,8 @@ def _rewrite(annotation: object) -> object:
     if _is_dx_model(annotation):
         if annotation in _BUILDING:
             # self-reference; emit a forward ref Pydantic resolves in place
-            return cast("type", annotation).__name__
-        return as_request(cast("type[dx.Model]", annotation))
+            return annotation.__name__
+        return as_request(annotation)
     origin = get_origin(annotation)
     args = get_args(annotation)
     if origin is None or not args:
@@ -86,12 +98,15 @@ def _rewrite(annotation: object) -> object:
     if origin in (Union, UnionType):
         # dynamic union from a runtime tuple of arms; ``X | Y`` cannot express this
         return Union[tuple(_rewrite(arg) for arg in args)]  # noqa: UP007
+    # ``tuple[...]`` / ``dict[...]`` are rebuilt with ``GenericAlias`` rather than
+    # subscription so the rewritten (runtime-computed) leaf types are treated as
+    # values, not as static type forms.
     if origin is tuple:
         if len(args) == 2 and args[1] is Ellipsis:
-            return tuple[_rewrite(args[0]), ...]
-        return tuple[tuple(_rewrite(arg) for arg in args)]
+            return GenericAlias(tuple, (_rewrite(args[0]), ...))
+        return GenericAlias(tuple, tuple(_rewrite(arg) for arg in args))
     if origin is dict:
-        return dict[args[0], _rewrite(args[1])]
+        return GenericAlias(dict, (args[0], _rewrite(args[1])))
     return annotation
 
 
@@ -133,15 +148,11 @@ def as_request[M: dx.Model](model: type[M]) -> type:
                 kwargs["alias"] = spec.alias
             fields[fname] = (annotation, _field_info(**kwargs))
 
-        creator = cast("object", _build_model)
-        pyd = cast(
-            "type",
-            creator(  # type: ignore[operator]
-                model.__name__,
-                __module__=model.__module__,
-                __doc__=model.__doc__,
-                **fields,
-            ),
+        pyd = _build_model(
+            model.__name__,
+            __module__=model.__module__,
+            __doc__=model.__doc__,
+            **fields,
         )
     finally:
         _BUILDING.discard(model)

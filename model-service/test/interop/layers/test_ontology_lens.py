@@ -15,22 +15,21 @@ import pytest
 pytest.importorskip("lairs")
 pytest.importorskip("panproto")
 
-import didactic.api as dx  # noqa: E402
-from hypothesis import strategies as st  # noqa: E402
-from lairs.records import ontology  # noqa: E402
+import didactic.api as dx
+from hypothesis import strategies as st
+from lairs.records import ontology
 
-from src.application.dto.ontology import OntologyTypeDTO  # noqa: E402
-from src.application.dto.reasoning import ThinkingStep, ThinkingTrace  # noqa: E402
-from src.infrastructure.adapters.outbound.layers._convert import (  # noqa: E402
+from src.application.dto.ontology import OntologyTypeDTO
+from src.application.dto.reasoning import ThinkingStep, ThinkingTrace
+from src.infrastructure.adapters.outbound.layers._convert import (
     ONTOLOGY_NSID,
     TYPEDEF_NSID,
     read_feature_map,
 )
-from src.infrastructure.adapters.outbound.layers.lenses.ontology import (  # noqa: E402
+from src.infrastructure.adapters.outbound.layers.lenses.ontology import (
     ONTOLOGY_LAYERS,
 )
-
-from test.interop.layers.conftest import make_ctx  # noqa: E402
+from test.interop.layers.conftest import make_ctx
 
 
 def _fixture_types() -> tuple[OntologyTypeDTO, ...]:

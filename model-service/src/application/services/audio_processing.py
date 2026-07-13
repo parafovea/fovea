@@ -12,10 +12,13 @@ import os
 import subprocess
 import tempfile
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
-from numpy.typing import NDArray
 from opentelemetry import trace
+
+if TYPE_CHECKING:
+    from numpy.typing import NDArray
 
 tracer = trace.get_tracer(__name__)
 logger = logging.getLogger(__name__)

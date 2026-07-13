@@ -7,20 +7,20 @@ import pytest
 pytest.importorskip("lairs")
 pytest.importorskip("panproto")
 
-from lairs.records import annotation, expression, media  # noqa: E402
+from lairs.records import annotation, expression, media
 
-from src.application.dto.detection import (  # noqa: E402
+from src.application.dto.detection import (
     BoundingBoxDTO,
     DetectionDTO,
     DetectObjectsResponseDTO,
     FrameDetectionsDTO,
 )
-from src.infrastructure.adapters.outbound.layers._convert import (  # noqa: E402
+from src.infrastructure.adapters.outbound.layers._convert import (
     ANNOTATION_LAYER_NSID,
     EXPRESSION_NSID,
     MEDIA_NSID,
 )
-from src.infrastructure.adapters.outbound.layers.lenses.detection import (  # noqa: E402
+from src.infrastructure.adapters.outbound.layers.lenses.detection import (
     DETECTION_LAYERS,
 )
 

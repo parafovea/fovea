@@ -22,12 +22,10 @@ import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import StrEnum
-from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import torch
-from PIL import Image
 
 from src.domain.entities.architectures import (
     SAM2,
@@ -38,6 +36,11 @@ from src.domain.entities.architectures import (
 )
 from src.infrastructure.adapters.outbound.models.registry import LoaderRegistry
 from src.infrastructure.observability.telemetry import instrument_method
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from PIL import Image
 
 logger = logging.getLogger(__name__)
 

@@ -15,6 +15,7 @@ import handler maps that to ``501 Not Implemented`` rather than a 500.
 from __future__ import annotations
 
 import json
+from typing import TYPE_CHECKING
 
 import didactic.api as dx
 from fastapi import APIRouter, HTTPException
@@ -62,8 +63,14 @@ class ExportRequest(dx.Model):
     corpus_name: str = dx.field(default="fovea", description="Corpus label.")
 
 
-_ImportRequestBody = as_request(ImportRequest)
-_ExportRequestBody = as_request(ExportRequest)
+if TYPE_CHECKING:
+    # Handlers type-check against the source wire models; at runtime the body is
+    # the Pydantic mirror FastAPI validates against (the ``else`` branch).
+    _ImportRequestBody = ImportRequest
+    _ExportRequestBody = ExportRequest
+else:
+    _ImportRequestBody = as_request(ImportRequest)
+    _ExportRequestBody = as_request(ExportRequest)
 
 
 @router.post(

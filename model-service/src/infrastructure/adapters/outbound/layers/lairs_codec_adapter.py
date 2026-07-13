@@ -43,14 +43,12 @@ if TYPE_CHECKING:
 
     from lairs.integrations.codecs import CorpusFragment
 
+    from src.application.dto.claims import ExtractedClaimDTO
     from src.application.dto.detection import DetectObjectsResponseDTO
     from src.application.dto.ontology import OntologyTypeDTO
     from src.application.dto.summarization import SummarizeResponseDTO
     from src.application.dto.tracking import TrackObjectsResponseDTO
-    from src.application.ports.outbound.layers_codec import (
-        EmitContext,
-        ExtractedClaimDTO,
-    )
+    from src.application.ports.outbound.layers_codec import EmitContext
     from src.application.ports.outbound.transcriber import TranscriptionResultDTO
 
 

@@ -28,7 +28,12 @@ router = APIRouter()
 tracer = trace.get_tracer(__name__)
 logger = logging.getLogger(__name__)
 
-_AugmentRequestBody = as_request(models.AugmentRequest)
+if TYPE_CHECKING:
+    # Handlers type-check against the source wire model; at runtime the body is
+    # the Pydantic mirror FastAPI validates against (the ``else`` branch).
+    _AugmentRequestBody = models.AugmentRequest
+else:
+    _AugmentRequestBody = as_request(models.AugmentRequest)
 
 
 @router.post(
@@ -77,7 +82,7 @@ async def augment_ontology(
 
             context = AugmentationContext(
                 domain=request.domain,
-                existing_types=request.existing_types,
+                existing_types=list(request.existing_types),
                 target_category=request.target_category,
                 persona_role=None,
                 information_need=None,

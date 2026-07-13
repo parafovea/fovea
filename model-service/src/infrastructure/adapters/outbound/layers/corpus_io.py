@@ -16,7 +16,7 @@ This module MAY import ``lairs``; the application layer never imports it directl
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from lairs.data import Corpus, load_corpus
 from lairs.records import annotation, expression, graph, media, ontology, segmentation
@@ -50,7 +50,7 @@ if TYPE_CHECKING:
 # The record model each emitted collection NSID validates into. Expressions and
 # annotation layers take dedicated corpus entry points; the rest are added by
 # AT-URI so ``save_to_repo`` preserves them.
-_MODEL_BY_NSID: dict[str, type] = {
+_MODEL_BY_NSID: dict[str, type[dx.Model]] = {
     EXPRESSION_NSID: expression.Expression,
     SEGMENTATION_NSID: segmentation.Segmentation,
     ANNOTATION_LAYER_NSID: annotation.AnnotationLayer,
@@ -97,21 +97,24 @@ def records_to_corpus(
         uri = local_uri(authority, record.nsid, _key(record.local_id))
         model = _parse(record.nsid, record.value_json)
         if record.nsid == EXPRESSION_NSID:
-            corpus.add_expression(uri, model)
+            # The NSID discriminator fixes the concrete parsed model type, which
+            # the string-keyed dispatch hides from the checker.
+            expr = cast("expression.Expression", model)
+            corpus.add_expression(uri, expr)
             corpus.add_membership(
                 local_uri(authority, MEMBERSHIP_NSID, _key(record.local_id)),
                 corpus_records.Membership(
                     corpusRef=corpus_uri,
                     expressionRef=uri,
-                    createdAt=model.createdAt,
+                    createdAt=expr.createdAt,
                     ordinal=ordinal,
                 ),
             )
             if ordinal == 0:
-                corpus_created_at = model.createdAt
+                corpus_created_at = expr.createdAt
             ordinal += 1
         elif record.nsid == ANNOTATION_LAYER_NSID:
-            corpus.add_annotation_layer(uri, model)
+            corpus.add_annotation_layer(uri, cast("annotation.AnnotationLayer", model))
         else:
             corpus.add_record(uri, model)
 

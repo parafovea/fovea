@@ -4,6 +4,7 @@ Provides the endpoint for extracting thumbnails from video files.
 """
 
 import logging
+from typing import TYPE_CHECKING
 
 from fastapi import APIRouter, HTTPException
 from opentelemetry import trace
@@ -28,7 +29,12 @@ router = APIRouter()
 tracer = trace.get_tracer(__name__)
 logger = logging.getLogger(__name__)
 
-_ThumbnailRequestBody = as_request(models.ThumbnailGenerateRequest)
+if TYPE_CHECKING:
+    # Handlers type-check against the source wire model; at runtime the body is
+    # the Pydantic mirror FastAPI validates against (the ``else`` branch).
+    _ThumbnailRequestBody = models.ThumbnailGenerateRequest
+else:
+    _ThumbnailRequestBody = as_request(models.ThumbnailGenerateRequest)
 
 
 @router.post(

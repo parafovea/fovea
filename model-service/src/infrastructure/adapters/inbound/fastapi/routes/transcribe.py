@@ -86,7 +86,12 @@ class TranscribeResponse(dx.Model):
     model_used: str = ""
 
 
-_TranscribeRequestBody = as_request(TranscribeRequest)
+if TYPE_CHECKING:
+    # Handlers type-check against the source wire model; at runtime the body is
+    # the Pydantic mirror FastAPI validates against (the ``else`` branch).
+    _TranscribeRequestBody = TranscribeRequest
+else:
+    _TranscribeRequestBody = as_request(TranscribeRequest)
 
 
 @router.post(

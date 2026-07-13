@@ -7,25 +7,25 @@ import pytest
 pytest.importorskip("lairs")
 pytest.importorskip("panproto")
 
-import didactic.api as dx  # noqa: E402
-from hypothesis import strategies as st  # noqa: E402
-from lairs.records import (  # noqa: E402
+import didactic.api as dx
+from hypothesis import strategies as st
+from lairs.records import (
     annotation,
     expression,
     media,
     segmentation,
 )
 
-from src.application.ports.outbound.transcriber import (  # noqa: E402
+from src.application.ports.outbound.transcriber import (
     TranscriptionResultDTO,
     TranscriptSegmentDTO,
 )
-from src.infrastructure.adapters.outbound.layers.lenses.transcript import (  # noqa: E402
+from src.infrastructure.adapters.outbound.layers.lenses.transcript import (
     TRANSCRIPT_LAYERS,
     TranscriptLayersLens,
 )
 
-from .conftest import make_ctx  # noqa: E402
+from .conftest import make_ctx
 
 LENS = TRANSCRIPT_LAYERS
 

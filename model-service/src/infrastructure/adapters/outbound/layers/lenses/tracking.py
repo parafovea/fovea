@@ -52,7 +52,7 @@ from src.infrastructure.adapters.outbound.layers._convert import (
 )
 
 if TYPE_CHECKING:
-    from src.application.dto.tracking import TrackObjectsResponseDTO
+    from src.application.dto.tracking import TrackingMaskDTO, TrackObjectsResponseDTO
 
 
 def _j_int(value: JsonValue) -> int:
@@ -124,7 +124,7 @@ class TrackingLayersLens(
         # Group masks by object in first-appearance order, keeping each mask's
         # frame timestamp so keyframes and the temporal span can be built.
         order: list[int] = []
-        by_object: dict[int, list[tuple[float, object]]] = {}
+        by_object: dict[int, list[tuple[float, TrackingMaskDTO]]] = {}
         for frame in dto.frames:
             for mask in frame.masks:
                 if mask.object_id not in by_object:

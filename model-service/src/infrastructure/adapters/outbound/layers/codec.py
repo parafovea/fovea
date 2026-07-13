@@ -23,7 +23,7 @@ from __future__ import annotations
 import dataclasses
 import json
 from datetime import datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, cast
 
 from lairs.integrations.codecs import CorpusFragment, FragmentRecord
 
@@ -66,6 +66,14 @@ if TYPE_CHECKING:
 
     import didactic.api as dx
 
+    from src.infrastructure.adapters.outbound.layers._convert import JsonValue
+
+# Every lens shares the ``(CorpusFragment, JsonValue)`` view/complement pair and
+# differs only in its forward source DTO. That source slot is invariant and the
+# codec dispatches over it by string ``kind``, so it is erased to ``Any`` here;
+# the two concrete slots stay typed.
+type _KindLens = dx.Lens[Any, CorpusFragment, JsonValue]
+
 # The fragment-local id under which the codec stashes the lens complement.
 _COMPLEMENT_LOCAL_ID = "complement"
 
@@ -79,7 +87,7 @@ _KIND_ONTOLOGY = "ontology"
 
 # Each non-ontology kind maps to the lens whose source is the named DTO. Ontology
 # is handled apart because its lens source is a ``(types, ctx)`` pair, not a DTO.
-_LENS_BY_KIND = {
+_LENS_BY_KIND: dict[str, _KindLens] = {
     _KIND_TRANSCRIPTION: TRANSCRIPT_LAYERS,
     _KIND_DETECTION: DETECTION_LAYERS,
     _KIND_TRACKING: TRACKING_LAYERS,
@@ -197,7 +205,7 @@ class FoveaCodec:
         """Encode layers fragment records back into a fovea output envelope."""
         record_list = list(records)
         kind = ""
-        complement: object = None
+        complement: JsonValue = None
         view_records: list[FragmentRecord] = []
         for record in record_list:
             if record.nsid == COMPLEMENT_NSID:
@@ -212,7 +220,7 @@ class FoveaCodec:
         return json.dumps({"kind": kind, "source": _dump(_lens_source(kind, lens_output))})
 
 
-def _lens_for(kind: str) -> dx.Lens:
+def _lens_for(kind: str) -> _KindLens:
     """Return the lens bound to ``kind`` (ontology shares the ontology lens)."""
     if kind == _KIND_ONTOLOGY:
         return ONTOLOGY_LAYERS
@@ -234,6 +242,6 @@ def _lens_input(kind: str, source: object) -> object:
 def _lens_source(kind: str, lens_output: object) -> object:
     """Turn a lens's backward output into the dumpable envelope source."""
     if kind == _KIND_ONTOLOGY:
-        types, ctx = lens_output  # type: ignore[misc]
+        types, ctx = cast("tuple[Iterable[object], object]", lens_output)
         return {"types": list(types), "ctx": ctx}
     return lens_output

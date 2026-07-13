@@ -29,8 +29,14 @@ router = APIRouter()
 tracer = trace.get_tracer(__name__)
 logger = logging.getLogger(__name__)
 
-_ClaimExtractionRequestBody = as_request(models.ClaimExtractionRequest)
-_SummarySynthesisRequestBody = as_request(models.SummarySynthesisRequest)
+if TYPE_CHECKING:
+    # Handlers type-check against the source wire models; at runtime the body is
+    # the Pydantic mirror FastAPI validates against (the ``else`` branch).
+    _ClaimExtractionRequestBody = models.ClaimExtractionRequest
+    _SummarySynthesisRequestBody = models.SummarySynthesisRequest
+else:
+    _ClaimExtractionRequestBody = as_request(models.ClaimExtractionRequest)
+    _SummarySynthesisRequestBody = as_request(models.SummarySynthesisRequest)
 
 
 class ClaimDict(TypedDict):
@@ -296,10 +302,15 @@ async def synthesize_summary(
                         ]
                     )
 
+                # Gloss items carry string values, a subset of the wire field's
+                # JsonValue; the cast widens across dict invariance at the boundary.
+                gloss = cast(
+                    "tuple[dict[str, models.JsonValue], ...]", tuple(summary_gloss)
+                )
                 return dump(
                     models.SummarySynthesisResponse(
                         summary_id=request.summary_id,
-                        summary_gloss=tuple(summary_gloss),
+                        summary_gloss=gloss,
                         model_used=llm_config.model_id,
                         processing_time=processing_time,
                         claims_used=claims_used,

@@ -127,7 +127,7 @@ class FakeModelManager:
 
 
 @pytest.fixture
-def audio_file() -> Generator[str, None, None]:
+def audio_file() -> Generator[str]:
     """Yield a path to a temp audio file that actually exists on disk."""
     with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
         tmp.write(b"RIFF\x00\x00\x00\x00WAVEfmt ")
@@ -145,7 +145,7 @@ def _client_with(manager: FakeModelManager) -> TestClient:
 
 
 @pytest.fixture(autouse=True)
-def _clear_overrides() -> Generator[None, None, None]:
+def _clear_overrides() -> Generator[None]:
     """Ensure dependency overrides do not leak between tests."""
     yield
     app.dependency_overrides.clear()

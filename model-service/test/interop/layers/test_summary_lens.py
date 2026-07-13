@@ -15,23 +15,22 @@ import pytest
 pytest.importorskip("lairs")
 pytest.importorskip("panproto")
 
-from hypothesis import strategies as st  # noqa: E402
+import didactic.api as dx
+from hypothesis import strategies as st
+from lairs.records import annotation, expression
 
-import didactic.api as dx  # noqa: E402
-from lairs.records import annotation, expression  # noqa: E402
-
-from src.application.dto.reasoning import ThinkingStep, ThinkingTrace  # noqa: E402
-from src.application.dto.summarization import (  # noqa: E402
+from src.application.dto.reasoning import ThinkingStep, ThinkingTrace
+from src.application.dto.summarization import (
     KeyFrameDTO,
     SummarizeResponseDTO,
 )
-from src.infrastructure.adapters.outbound.layers._convert import (  # noqa: E402
+from src.infrastructure.adapters.outbound.layers._convert import (
     ANNOTATION_LAYER_NSID,
     EXPRESSION_NSID,
     conf_to_int,
     sec_to_ms,
 )
-from src.infrastructure.adapters.outbound.layers.lenses.summary import (  # noqa: E402
+from src.infrastructure.adapters.outbound.layers.lenses.summary import (
     SUMMARY_LAYERS,
     SummaryLayersLens,
 )
