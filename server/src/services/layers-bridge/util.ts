@@ -9,7 +9,15 @@
  * @module
  */
 
-import { Prisma } from '@prisma/client'
+import { Prisma, PrismaClient } from '@prisma/client'
+
+/**
+ * A Prisma client the bridge writers accept: either the base client or an
+ * interactive-transaction client. Threading a `Prisma.TransactionClient` lets a
+ * caller run a bridge read/write inside its own `prisma.$transaction`, so a
+ * compound operation (delete + write + reindex) commits or rolls back atomically.
+ */
+export type PrismaLike = PrismaClient | Prisma.TransactionClient
 
 /**
  * Coerces a value to a Prisma JSON input for an optional column, omitting the

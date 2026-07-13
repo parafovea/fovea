@@ -22,7 +22,7 @@ import {
   type PersonaOntologyAggregate,
 } from '../ontology-layers-mapper.js'
 import { deriveId, layersOntologyForPersonaId } from '../layers-id-map.js'
-import { toJson } from './util.js'
+import { toJson, type PrismaLike } from './util.js'
 
 /** A reconstructed persona ontology plus its id, timestamps, and existence. */
 export interface OntologyRead {
@@ -36,12 +36,12 @@ export interface OntologyRead {
 /**
  * Reads a persona's ontology from the layers store.
  *
- * @param prisma - the Prisma client (or transaction client)
+ * @param prisma - the Prisma client (or a transaction client)
  * @param personaId - the persona whose ontology to read
  * @returns the reconstructed ontology, its id/timestamps, and whether it existed
  */
 export async function readOntologyAggregate(
-  prisma: PrismaClient,
+  prisma: PrismaLike,
   personaId: string,
 ): Promise<OntologyRead> {
   const ontologyId = layersOntologyForPersonaId(personaId)
@@ -72,14 +72,14 @@ export async function readOntologyAggregate(
  * inserted parent-free first, then parent refs that resolve to a sibling are
  * set, so a self-relation FK never references a not-yet-inserted row.
  *
- * @param prisma - the Prisma client (or transaction client)
+ * @param prisma - the Prisma client (or a transaction client)
  * @param personaId - the owning persona id
  * @param aggregate - the four type buckets to persist
  * @param meta - the persona-derived ontology metadata
  * @param scope - the scope columns every produced row carries
  */
 export async function writeOntologyAggregate(
-  prisma: PrismaClient,
+  prisma: PrismaLike,
   personaId: string,
   aggregate: PersonaOntologyAggregate,
   meta: OntologyMeta,

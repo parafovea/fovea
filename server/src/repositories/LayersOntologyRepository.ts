@@ -1,4 +1,6 @@
-import { PrismaClient, LayersOntology, TypeDef, Persona, Prisma } from '@prisma/client'
+import { LayersOntology, TypeDef, Persona, Prisma } from '@prisma/client'
+
+import type { PrismaLike } from '../services/layers-bridge/util.js'
 
 /**
  * Repository for all LayersOntology and TypeDef database access in the layers
@@ -20,9 +22,9 @@ export class LayersOntologyRepository {
   /**
    * Creates a new LayersOntologyRepository instance.
    *
-   * @param prisma - Prisma client instance for database access
+   * @param prisma - Prisma client (or a transaction client) for database access
    */
-  constructor(private readonly prisma: PrismaClient) {}
+  constructor(private readonly prisma: PrismaLike) {}
 
   // --- LayersOntology ----------------------------------------------------
 

@@ -6,7 +6,7 @@ import {
   deletePersonaAnnotations,
 } from '../services/layers-bridge/annotation-bridge.js'
 import { readOntologyAggregate, writeOntologyAggregate } from '../services/layers-bridge/ontology-bridge.js'
-import { readWorldAggregate, writeWorldAggregate } from '../services/layers-bridge/world-bridge.js'
+import { mergeWorldObjects, readWorldAggregate } from '../services/layers-bridge/world-bridge.js'
 import { layersOntologyForPersonaId } from '../services/layers-id-map.js'
 import { personalWorldStateId, type WorldStateAggregate } from '../services/world-layers-mapper.js'
 import type { PersonaOntologyAggregate } from '../services/ontology-layers-mapper.js'
@@ -129,8 +129,11 @@ export class PersonaRepository {
   }
 
   /** Reconstructs a persona's ontology from the layers store, or null. */
-  private async reconstructOntology(personaId: string): Promise<PersonaOntologyRow | null> {
-    const read = await readOntologyAggregate(this.prisma, personaId)
+  private async reconstructOntology(
+    personaId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<PersonaOntologyRow | null> {
+    const read = await readOntologyAggregate(tx ?? this.prisma, personaId)
     if (!read.exists) return null
     return PersonaRepository.synthOntology(
       read.id,
@@ -231,11 +234,12 @@ export class PersonaRepository {
    * Deletes a persona (cascades to its ontology, summaries, and annotations).
    *
    * @param id - Persona UUID
+   * @param tx - optional transaction client to run the delete inside
    * @returns the deleted persona
    * @throws {Prisma.PrismaClientKnownRequestError} P2025 if the persona does not exist
    */
-  async delete(id: string): Promise<Persona> {
-    return this.prisma.persona.delete({ where: { id } })
+  async delete(id: string, tx?: Prisma.TransactionClient): Promise<Persona> {
+    return (tx ?? this.prisma).persona.delete({ where: { id } })
   }
 
   /**
@@ -248,8 +252,13 @@ export class PersonaRepository {
    * @returns the updated ontology in the row shape
    * @throws {Error} when the persona does not exist
    */
-  async updateOntology(personaId: string, data: OntologyBucketUpdate): Promise<PersonaOntologyRow> {
-    const persona = await this.prisma.persona.findUnique({ where: { id: personaId } })
+  async updateOntology(
+    personaId: string,
+    data: OntologyBucketUpdate,
+    tx?: Prisma.TransactionClient,
+  ): Promise<PersonaOntologyRow> {
+    const db = tx ?? this.prisma
+    const persona = await db.persona.findUnique({ where: { id: personaId } })
     if (!persona) {
       throw new Prisma.PrismaClientKnownRequestError('Persona not found', {
         code: 'P2025',
@@ -263,13 +272,13 @@ export class PersonaRepository {
       relationTypes: Array.isArray(data.relationTypes) ? data.relationTypes : [],
     }
     await writeOntologyAggregate(
-      this.prisma,
+      db,
       personaId,
       aggregate,
       { name: `${persona.name} ontology`, description: persona.informationNeed, domain: persona.domain },
       { projectId: persona.projectId, createdByUserId: persona.userId },
     )
-    return (await this.reconstructOntology(personaId)) ??
+    return (await this.reconstructOntology(personaId, tx)) ??
       PersonaRepository.synthOntology(
         `ontology-${personaId}`,
         personaId,
@@ -295,6 +304,7 @@ export class PersonaRepository {
    *
    * @param personaId - Persona UUID owning the ontology
    * @param transform - computes the type buckets to write from the current row
+   * @param tx - optional transaction client to run the guarded read/write inside
    * @returns the updated ontology in the row shape
    * @throws {NotFoundError} when the persona has no ontology
    * @throws {ConflictError} when the write keeps conflicting after retries
@@ -302,14 +312,16 @@ export class PersonaRepository {
   async updateOntologyOptimistic(
     personaId: string,
     transform: (current: PersonaOntologyRow) => OntologyBucketUpdate,
+    tx?: Prisma.TransactionClient,
   ): Promise<PersonaOntologyRow> {
+    const db = tx ?? this.prisma
     const ontologyId = layersOntologyForPersonaId(personaId)
     for (let attempt = 0; attempt < 5; attempt++) {
-      const row = await this.prisma.layersOntology.findUnique({ where: { id: ontologyId } })
+      const row = await db.layersOntology.findUnique({ where: { id: ontologyId } })
       if (!row) {
         throw new NotFoundError('Ontology', personaId)
       }
-      const current = await this.reconstructOntology(personaId)
+      const current = await this.reconstructOntology(personaId, tx)
       if (!current) {
         throw new NotFoundError('Ontology', personaId)
       }
@@ -322,14 +334,17 @@ export class PersonaRepository {
       }
       // Compare-and-swap the ontology version before writing its types; on a miss
       // a concurrent writer advanced it, so retry against the freshly read row.
-      const guard = await this.prisma.layersOntology.updateMany({
+      // Under Read Committed (Postgres default) a re-read inside the same
+      // interactive transaction sees a concurrently committed bump, so the guard
+      // stays effective when this runs within a caller's `tx`.
+      const guard = await db.layersOntology.updateMany({
         where: { id: ontologyId, lockVersion: row.lockVersion },
         data: { lockVersion: { increment: 1 } },
       })
       if (guard.count !== 1) {
         continue
       }
-      return this.updateOntology(personaId, merged)
+      return this.updateOntology(personaId, merged, tx)
     }
     throw new ConflictError('Ontology update conflicted after retries')
   }
@@ -365,10 +380,14 @@ export class PersonaRepository {
    * persona has no layers annotations).
    *
    * @param where - persona id, plus optional type and label
+   * @param tx - optional transaction client to run the delete inside
    * @returns a batch payload with the deleted count
    */
-  async deleteAnnotations(where: PersonaAnnotationWhere): Promise<Prisma.BatchPayload> {
-    const count = await deletePersonaAnnotations(this.prisma, where.personaId, {
+  async deleteAnnotations(
+    where: PersonaAnnotationWhere,
+    tx?: Prisma.TransactionClient,
+  ): Promise<Prisma.BatchPayload> {
+    const count = await deletePersonaAnnotations(tx ?? this.prisma, where.personaId, {
       type: where.type,
       label: where.label,
     })
@@ -381,10 +400,14 @@ export class PersonaRepository {
    * world state the persona-deletion and type-deletion cleanup paths mutate.
    *
    * @param userId - owning user ID
+   * @param tx - optional transaction client to read inside
    * @returns the personal world state view, or null if the user has none
    */
-  async findPersonalWorldState(userId: string): Promise<PersonalWorldStateView | null> {
-    const { aggregate, exists } = await readWorldAggregate(this.prisma, { userId, projectId: null })
+  async findPersonalWorldState(
+    userId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<PersonalWorldStateView | null> {
+    const { aggregate, exists } = await readWorldAggregate(tx ?? this.prisma, { userId, projectId: null })
     if (!exists) return null
     const now = new Date()
     return {
@@ -404,14 +427,26 @@ export class PersonaRepository {
   }
 
   /**
-   * Applies a partial update to a user's personal world state in the layers
-   * store: the provided buckets replace the current ones; the rest are preserved.
+   * Applies a partial in-place update to a user's personal world state in the
+   * layers store: the provided buckets replace the current ones; the rest are
+   * preserved. The write goes through the version-guarded per-row merge
+   * ({@link mergeWorldObjects}), so it upserts each world object under its
+   * `lockVersion` (never a whole-blob prune-and-recreate). A same-object edit
+   * that lost a concurrent race raises {@link ConflictError}, rolling back the
+   * enclosing persona/type-deletion transaction rather than clobbering it.
    *
    * @param userId - the owning user id (from `PersonalWorldStateView.userId`)
    * @param data - the world buckets to replace
+   * @param tx - optional transaction client to run the read/write inside
+   * @throws {ConflictError} when a same-object edit lost a concurrent race
    */
-  async updateWorldState(userId: string, data: WorldStatePartialUpdate): Promise<void> {
-    const { aggregate } = await readWorldAggregate(this.prisma, { userId, projectId: null })
+  async updateWorldState(
+    userId: string,
+    data: WorldStatePartialUpdate,
+    tx?: Prisma.TransactionClient,
+  ): Promise<void> {
+    const db = tx ?? this.prisma
+    const { aggregate } = await readWorldAggregate(db, { userId, projectId: null })
     const merged: WorldStateAggregate = { ...aggregate }
     const buckets: (keyof WorldStatePartialUpdate & keyof WorldStateAggregate)[] = [
       'entities',
@@ -426,6 +461,6 @@ export class PersonaRepository {
       const value = data[bucket]
       if (value !== undefined) merged[bucket] = Array.isArray(value) ? value : []
     }
-    await writeWorldAggregate(this.prisma, { userId, projectId: null }, merged)
+    await mergeWorldObjects(db, { userId, projectId: null }, merged)
   }
 }

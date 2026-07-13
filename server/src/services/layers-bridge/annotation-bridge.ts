@@ -19,6 +19,7 @@ import {
 } from '../video-annotation-mapper.js'
 import { getOrCreateVideoExpression, parseResolution } from '../video-expression-service.js'
 import { layersOntologyForPersonaId } from '../layers-id-map.js'
+import type { PrismaLike } from './util.js'
 
 /** The forced scope columns a materialized annotation carries. */
 export interface AnnotationScope {
@@ -142,12 +143,12 @@ export async function deleteVideoAnnotation(prisma: PrismaClient, id: string): P
  * legacy annotation shape. The caller composes the WHERE from its CASL read
  * filter and any persona/video scoping.
  *
- * @param prisma - the Prisma client
+ * @param prisma - the Prisma client (or a transaction client)
  * @param where - the composed LayersAnnotation WHERE clause
  * @returns the reconstructed annotations
  */
 export async function readLayersAnnotations(
-  prisma: PrismaClient,
+  prisma: PrismaLike,
   where: Prisma.LayersAnnotationWhereInput,
 ): Promise<VideoAnnotationOutput[]> {
   const rows = await prisma.layersAnnotation.findMany({
@@ -217,13 +218,13 @@ export interface PersonaAnnotationFilter {
  * semantic `type` (stashed in the layers annotation meta) and `label`, for
  * persona/type deletion previews.
  *
- * @param prisma - the Prisma client
+ * @param prisma - the Prisma client (or a transaction client)
  * @param personaId - the persona whose annotations to count
  * @param filter - optional `type` / `label` filter
  * @returns the number of matching annotations
  */
 export async function countPersonaAnnotations(
-  prisma: PrismaClient,
+  prisma: PrismaLike,
   personaId: string,
   filter: PersonaAnnotationFilter = {},
 ): Promise<number> {
@@ -240,13 +241,13 @@ export async function countPersonaAnnotations(
  * Deletes a persona's annotations from the layers store, optionally filtered by
  * the semantic `type` and `label`, for persona/type deletion.
  *
- * @param prisma - the Prisma client
+ * @param prisma - the Prisma client (or a transaction client)
  * @param personaId - the persona whose annotations to delete
  * @param filter - optional `type` / `label` filter
  * @returns the number of annotations removed
  */
 export async function deletePersonaAnnotations(
-  prisma: PrismaClient,
+  prisma: PrismaLike,
   personaId: string,
   filter: PersonaAnnotationFilter = {},
 ): Promise<number> {

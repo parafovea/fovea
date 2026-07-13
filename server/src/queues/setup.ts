@@ -656,13 +656,13 @@ export const claimWorker = new Worker<
 
     await job.updateProgress(60);
 
-    // Persist the extracted claims into the layers store idempotently. A job
-    // retry or double-submit would otherwise duplicate every claim, since each
-    // create inserts a new claim node. Remove the summary's previously extracted
-    // claims (preserving any manually authored ones, which carry
+    // Persist the extracted claims into the layers store idempotently, inside ONE
+    // transaction so a job retry, double-submit, or mid-write failure never
+    // leaves a mix of old and new claims. Remove the summary's previously
+    // extracted claims (preserving any manually authored ones, which carry
     // extractionStrategy "manual"), write the fresh set under the summary's
     // claim-span layer, then rebuild the denormalized claimsJson from the
-    // reconstructed tree.
+    // reconstructed tree, all committing or rolling back together.
     const summaryCtx: ClaimSummaryContext = {
       id: summary.id,
       videoId: summary.videoId,
@@ -671,60 +671,6 @@ export const claimWorker = new Worker<
       // readable by their creator (mirrors the interactive claim-create paths).
       createdBy: createdBy ?? summary.createdBy,
     };
-
-    await deleteExtractedSummaryClaims(prisma, summaryId);
-
-    async function saveClaim(
-      claimData: (typeof modelResponse.claims)[0],
-      parentClaimId?: string,
-    ): Promise<string> {
-      const claimId = randomUUID();
-      const now = new Date().toISOString();
-      const claim: StoredClaim = {
-        id: claimId,
-        summaryId,
-        summaryType,
-        text: claimData.text,
-        gloss: [],
-        parentClaimId: parentClaimId ?? null,
-        textSpans: claimData.char_start
-          ? [
-              {
-                sentenceIndex: claimData.sentence_index,
-                charStart: claimData.char_start,
-                charEnd: claimData.char_end,
-              },
-            ]
-          : null,
-        timeSpans: null,
-        confidence: claimData.confidence,
-        modelUsed: modelResponse.model_used,
-        extractionStrategy: config.extractionStrategy,
-        createdBy: summaryCtx.createdBy,
-        projectId: summaryCtx.projectId,
-        createdAt: now,
-        updatedAt: now,
-      };
-      await writeClaim(prisma, summaryCtx, claim);
-
-      // Recursively save subclaims
-      if (claimData.subclaims && claimData.subclaims.length > 0) {
-        for (const subclaimData of claimData.subclaims as (typeof modelResponse.claims)[0][]) {
-          await saveClaim(subclaimData, claimId);
-        }
-      }
-
-      return claimId;
-    }
-
-    // Save all root claims
-    for (const claimData of modelResponse.claims) {
-      await saveClaim(claimData);
-    }
-
-    // Rebuild the denormalized claim tree from the layers store.
-    const { claims: flatClaims } = await readSummaryClaims(prisma, summaryId);
-    const allClaims = nestClaims(flatClaims);
 
     const countClaims = (claims: StoredClaimNode[]): number => {
       let count = claims.length;
@@ -735,27 +681,88 @@ export const claimWorker = new Worker<
       }
       return count;
     };
-    const totalClaims = countClaims(allClaims);
 
-    if (summaryType === "video") {
-      const claimsJson = {
-        version: "1.0",
-        claims: allClaims,
-        metadata: {
-          extractedAt: new Date().toISOString(),
-          totalClaims,
-          totalSubclaims: totalClaims - allClaims.length,
-          maxDepth: config.maxSubclaimDepth || 3,
-        },
-      };
-      await prisma.videoSummary.update({
-        where: { id: summaryId },
-        data: {
-          claimsJson: claimsJson as unknown as Prisma.InputJsonValue,
-          claimsExtractedAt: new Date(),
-        },
-      });
-    }
+    const { allClaims, totalClaims } = await prisma.$transaction(
+      async (tx) => {
+        await deleteExtractedSummaryClaims(tx, summaryId);
+
+        const saveClaim = async (
+          claimData: (typeof modelResponse.claims)[0],
+          parentClaimId?: string,
+        ): Promise<string> => {
+          const claimId = randomUUID();
+          const now = new Date().toISOString();
+          const claim: StoredClaim = {
+            id: claimId,
+            summaryId,
+            summaryType,
+            text: claimData.text,
+            gloss: [],
+            parentClaimId: parentClaimId ?? null,
+            textSpans: claimData.char_start
+              ? [
+                  {
+                    sentenceIndex: claimData.sentence_index,
+                    charStart: claimData.char_start,
+                    charEnd: claimData.char_end,
+                  },
+                ]
+              : null,
+            timeSpans: null,
+            confidence: claimData.confidence,
+            modelUsed: modelResponse.model_used,
+            extractionStrategy: config.extractionStrategy,
+            createdBy: summaryCtx.createdBy,
+            projectId: summaryCtx.projectId,
+            createdAt: now,
+            updatedAt: now,
+          };
+          await writeClaim(tx, summaryCtx, claim);
+
+          // Recursively save subclaims
+          if (claimData.subclaims && claimData.subclaims.length > 0) {
+            for (const subclaimData of claimData.subclaims as (typeof modelResponse.claims)[0][]) {
+              await saveClaim(subclaimData, claimId);
+            }
+          }
+
+          return claimId;
+        };
+
+        // Save all root claims
+        for (const claimData of modelResponse.claims) {
+          await saveClaim(claimData);
+        }
+
+        // Rebuild the denormalized claim tree from the layers store.
+        const { claims: flatClaims } = await readSummaryClaims(tx, summaryId);
+        const rootClaims = nestClaims(flatClaims);
+        const treeTotalClaims = countClaims(rootClaims);
+
+        if (summaryType === "video") {
+          const claimsJson = {
+            version: "1.0",
+            claims: rootClaims,
+            metadata: {
+              extractedAt: new Date().toISOString(),
+              totalClaims: treeTotalClaims,
+              totalSubclaims: treeTotalClaims - rootClaims.length,
+              maxDepth: config.maxSubclaimDepth || 3,
+            },
+          };
+          await tx.videoSummary.update({
+            where: { id: summaryId },
+            data: {
+              claimsJson: claimsJson as unknown as Prisma.InputJsonValue,
+              claimsExtractedAt: new Date(),
+            },
+          });
+        }
+
+        return { allClaims: rootClaims, totalClaims: treeTotalClaims };
+      },
+      { timeout: 30000 },
+    );
 
     await job.updateProgress(80);
     await job.updateProgress(100);

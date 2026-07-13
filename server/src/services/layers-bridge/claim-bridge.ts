@@ -26,7 +26,7 @@ import {
 } from '../claim-layers-mapper.js'
 import { claimSpanLayerId, expressionTranscriptId } from '../layers-id-map.js'
 import { getOrCreateVideoExpression } from '../video-expression-service.js'
-import { requiredJson, toJson } from './util.js'
+import { requiredJson, toJson, type PrismaLike } from './util.js'
 
 /** The summary fields the claim writers need to resolve scope and anchoring. */
 export interface ClaimSummaryContext {
@@ -43,7 +43,7 @@ export interface SummaryClaimsRead {
 }
 
 /** Reads a summary's claim GraphNodes as stored claims. */
-async function findSummaryClaimNodes(prisma: PrismaClient, summaryId: string): Promise<StoredClaim[]> {
+async function findSummaryClaimNodes(prisma: PrismaLike, summaryId: string): Promise<StoredClaim[]> {
   const nodes = await prisma.graphNode.findMany({
     where: {
       nodeType: 'claim',
@@ -61,7 +61,7 @@ async function findSummaryClaimNodes(prisma: PrismaClient, summaryId: string): P
 
 /** Reads a summary's claim-relation GraphEdges as stored relations. */
 async function findSummaryRelationEdges(
-  prisma: PrismaClient,
+  prisma: PrismaLike,
   summaryId: string,
 ): Promise<StoredRelation[]> {
   const edges = await prisma.graphEdge.findMany({
@@ -84,7 +84,7 @@ async function findSummaryRelationEdges(
  * @returns the flat claims and relations
  */
 export async function readSummaryClaims(
-  prisma: PrismaClient,
+  prisma: PrismaLike,
   summaryId: string,
 ): Promise<SummaryClaimsRead> {
   return {
@@ -95,7 +95,7 @@ export async function readSummaryClaims(
 
 /** Resolves the expression a summary's claim-span layer anchors over. */
 async function resolveClaimSpanExpressionId(
-  prisma: PrismaClient,
+  prisma: PrismaLike,
   summary: ClaimSummaryContext,
 ): Promise<string> {
   const transcriptId = expressionTranscriptId(summary.id)
@@ -107,7 +107,7 @@ async function resolveClaimSpanExpressionId(
 
 /** Finds or creates the per-summary claim-span marker layer, returning its id. */
 async function ensureClaimSpanLayer(
-  prisma: PrismaClient,
+  prisma: PrismaLike,
   summary: ClaimSummaryContext,
 ): Promise<string> {
   const layerId = claimSpanLayerId(summary.id)
@@ -129,7 +129,7 @@ async function ensureClaimSpanLayer(
 
 /** Creates a claim node and its span annotations under the given layer. */
 async function persistClaimNode(
-  prisma: PrismaClient,
+  prisma: PrismaLike,
   layerId: string,
   claim: StoredClaim,
 ): Promise<void> {
@@ -169,7 +169,7 @@ async function persistClaimNode(
  * @param claim - the claim to persist
  */
 export async function writeClaim(
-  prisma: PrismaClient,
+  prisma: PrismaLike,
   summary: ClaimSummaryContext,
   claim: StoredClaim,
 ): Promise<void> {
@@ -220,7 +220,7 @@ export async function writeClaimRelation(
  * @returns the number of extracted claim nodes removed
  */
 export async function deleteExtractedSummaryClaims(
-  prisma: PrismaClient,
+  prisma: PrismaLike,
   summaryId: string,
 ): Promise<number> {
   const claims = await findSummaryClaimNodes(prisma, summaryId)

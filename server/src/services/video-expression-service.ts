@@ -13,9 +13,10 @@
  * @module
  */
 
-import { PrismaClient, Prisma, type Video } from '@prisma/client'
+import { Prisma, type Video } from '@prisma/client'
 
 import { NotFoundError } from '../lib/errors.js'
+import type { PrismaLike } from './layers-bridge/util.js'
 import { mediaVideoId, expressionVideoId } from './layers-id-map.js'
 
 /** The resolved video expression plus the video row it was derived from. */
@@ -54,13 +55,13 @@ function jsonOrNull(value: Prisma.JsonValue | null | undefined): Prisma.InputJso
  * `Expression(video)` pair on first call. Idempotent: both rows key on the
  * video id, so repeated calls upsert the same rows.
  *
- * @param prisma - the Prisma client
+ * @param prisma - the Prisma client (or a transaction client)
  * @param videoId - the Fovea video id
  * @returns the expression id and the video row
  * @throws {NotFoundError} when the video does not exist
  */
 export async function getOrCreateVideoExpression(
-  prisma: PrismaClient,
+  prisma: PrismaLike,
   videoId: string,
 ): Promise<VideoExpressionResult> {
   const video = await prisma.video.findUnique({ where: { id: videoId } })

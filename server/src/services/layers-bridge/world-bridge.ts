@@ -13,6 +13,7 @@
 
 import { PrismaClient, Prisma } from '@prisma/client'
 
+import { ConflictError } from '../../lib/errors.js'
 import {
   worldStateToLayers,
   layersToWorldState,
@@ -21,7 +22,7 @@ import {
   personalWorldStateId,
   type WorldStateAggregate,
 } from '../world-layers-mapper.js'
-import { toJson } from './util.js'
+import { toJson, type PrismaLike } from './util.js'
 
 /** The scope a personal world's rows are keyed by. */
 export interface WorldScope {
@@ -38,12 +39,12 @@ export interface WorldRead {
 /**
  * Reads a scope's world aggregate from the layers store.
  *
- * @param prisma - the Prisma client (or transaction client)
+ * @param prisma - the Prisma client (or a transaction client)
  * @param scope - the owning user id and project scope
  * @returns the reconstructed aggregate and whether any backing rows existed
  */
 export async function readWorldAggregate(
-  prisma: PrismaClient,
+  prisma: PrismaLike,
   scope: WorldScope,
 ): Promise<WorldRead> {
   const where = { createdByUserId: scope.userId, projectId: scope.projectId }
@@ -61,12 +62,12 @@ export async function readWorldAggregate(
  * Writes a scope's world aggregate to the layers store: prunes the scope's
  * existing world rows, then recreates nodes and edges from the aggregate.
  *
- * @param prisma - the Prisma client (or transaction client)
+ * @param prisma - the Prisma client (or a transaction client)
  * @param scope - the owning user id and project scope
  * @param aggregate - the world state to persist
  */
 export async function writeWorldAggregate(
-  prisma: PrismaClient,
+  prisma: PrismaLike,
   scope: WorldScope,
   aggregate: WorldStateAggregate,
 ): Promise<void> {
@@ -109,6 +110,105 @@ export async function writeWorldAggregate(
         createdByUserId: edge.createdByUserId,
       },
     })
+  }
+}
+
+/**
+ * Merges a world aggregate into a scope's rows in place, guarded by each row's
+ * `lockVersion`: every object is upserted as its own GraphNode/GraphEdge row
+ * (created when new, updated under a compare-and-swap when it already exists).
+ * Rows the aggregate does not mention are left untouched, so a concurrently-added
+ * object is never dropped. A same-object CAS miss (a concurrent writer advanced
+ * the row's `lockVersion`) throws {@link ConflictError} rather than retrying, so
+ * an enclosing `prisma.$transaction` rolls the whole compound write back rather
+ * than partially reapplying a stale value. This is the version-guarded world
+ * write the persona/type-deletion cleanup routes through, keeping the world write
+ * atomic with its ontology and annotation cleanup.
+ *
+ * @param prisma - the Prisma client (or a transaction client)
+ * @param scope - the owning user id and project scope
+ * @param aggregate - the world objects to upsert in place
+ * @throws {ConflictError} when a same-object edit lost a concurrent race
+ */
+export async function mergeWorldObjects(
+  prisma: PrismaLike,
+  scope: WorldScope,
+  aggregate: WorldStateAggregate,
+): Promise<void> {
+  const where = { createdByUserId: scope.userId, projectId: scope.projectId }
+  const existingNodes = new Map(
+    (await prisma.graphNode.findMany({ where })).filter(isWorldRow).map((n) => [n.id, n]),
+  )
+  const existingEdges = new Map(
+    (await prisma.graphEdge.findMany({ where })).filter(isWorldRow).map((e) => [e.id, e]),
+  )
+  const { nodes, edges } = worldStateToLayers(aggregate, {
+    projectId: scope.projectId,
+    createdByUserId: scope.userId,
+  })
+
+  for (const node of nodes) {
+    const existing = existingNodes.get(node.id)
+    if (existing) {
+      const result = await prisma.graphNode.updateMany({
+        where: { id: node.id, lockVersion: existing.lockVersion },
+        data: {
+          nodeType: node.nodeType,
+          label: node.label,
+          properties: toJson(node.properties),
+          knowledgeRefs: toJson(node.knowledgeRefs),
+          lockVersion: { increment: 1 },
+        },
+      })
+      if (result.count !== 1) throw new ConflictError('World state update conflicted')
+    } else {
+      await prisma.graphNode.create({
+        data: {
+          id: node.id,
+          nodeType: node.nodeType,
+          label: node.label,
+          properties: toJson(node.properties),
+          knowledgeRefs: toJson(node.knowledgeRefs),
+          projectId: node.projectId,
+          createdByUserId: node.createdByUserId,
+        },
+      })
+    }
+  }
+
+  for (const edge of edges) {
+    const existing = existingEdges.get(edge.id)
+    if (existing) {
+      const result = await prisma.graphEdge.updateMany({
+        where: { id: edge.id, lockVersion: existing.lockVersion },
+        data: {
+          source: toJson(edge.source) as Prisma.InputJsonValue,
+          target: toJson(edge.target) as Prisma.InputJsonValue,
+          sourceLocalId: edge.sourceLocalId,
+          targetLocalId: edge.targetLocalId,
+          edgeType: edge.edgeType,
+          label: edge.label,
+          properties: toJson(edge.properties),
+          lockVersion: { increment: 1 },
+        },
+      })
+      if (result.count !== 1) throw new ConflictError('World state update conflicted')
+    } else {
+      await prisma.graphEdge.create({
+        data: {
+          id: edge.id,
+          source: toJson(edge.source) as Prisma.InputJsonValue,
+          target: toJson(edge.target) as Prisma.InputJsonValue,
+          sourceLocalId: edge.sourceLocalId,
+          targetLocalId: edge.targetLocalId,
+          edgeType: edge.edgeType,
+          label: edge.label,
+          properties: toJson(edge.properties),
+          projectId: edge.projectId,
+          createdByUserId: edge.createdByUserId,
+        },
+      })
+    }
   }
 }
 

@@ -509,16 +509,30 @@ export class WorldStateService {
   // --- Persona ontology persistence (shared with the ontology route) -------
 
   /**
+   * Returns the ontology repository bound to the given transaction client, or the
+   * per-request repository when no transaction is supplied. Lets the gloss
+   * cleanup commit atomically with the world-object delete that drives it.
+   */
+  private ontologyRepoFor(tx?: Prisma.TransactionClient): LayersOntologyRepository {
+    return tx ? new LayersOntologyRepository(tx) : this.ontologyRepo
+  }
+
+  /**
    * Reads a persona's ontology from the layers store.
    *
    * @param persona - the persona whose ontology to read
+   * @param tx - optional transaction client to read inside
    * @returns the reconstructed ontology bundle, or null when the persona has none
    */
-  async readPersonaOntologyBundle(persona: Persona): Promise<PersonaOntologyBundle | null> {
+  async readPersonaOntologyBundle(
+    persona: Persona,
+    tx?: Prisma.TransactionClient,
+  ): Promise<PersonaOntologyBundle | null> {
+    const repo = this.ontologyRepoFor(tx)
     const ontologyId = layersOntologyForPersonaId(persona.id)
-    const ontologyRow = await this.ontologyRepo.findOntologyById(ontologyId)
+    const ontologyRow = await repo.findOntologyById(ontologyId)
     if (ontologyRow) {
-      const typeDefs = await this.ontologyRepo.findAccessibleTypeDefs({}, { ontologyId })
+      const typeDefs = await repo.findAccessibleTypeDefs({}, { ontologyId })
       return {
         id: ontologyRow.id,
         personaId: persona.id,
@@ -537,8 +551,14 @@ export class WorldStateService {
    *
    * @param persona - the owning persona
    * @param aggregate - the four type buckets to persist
+   * @param tx - optional transaction client to run the writes inside
    */
-  async writePersonaOntology(persona: Persona, aggregate: PersonaOntologyAggregate): Promise<void> {
+  async writePersonaOntology(
+    persona: Persona,
+    aggregate: PersonaOntologyAggregate,
+    tx?: Prisma.TransactionClient,
+  ): Promise<void> {
+    const repo = this.ontologyRepoFor(tx)
     const scope = { projectId: persona.projectId, createdByUserId: persona.userId }
     const meta = {
       name: `${persona.name} ontology`,
@@ -547,15 +567,15 @@ export class WorldStateService {
     }
     const { ontology, typeDefs } = ontologyToLayers(aggregate, persona.id, meta, scope)
 
-    const existing = await this.ontologyRepo.findOntologyById(ontology.id)
+    const existing = await repo.findOntologyById(ontology.id)
     if (existing) {
-      await this.ontologyRepo.updateOntology(ontology.id, {
+      await repo.updateOntology(ontology.id, {
         name: ontology.name,
         description: ontology.description,
         domain: ontology.domain,
       })
     } else {
-      await this.ontologyRepo.createOntology({
+      await repo.createOntology({
         id: ontology.id,
         name: ontology.name,
         description: ontology.description,
@@ -566,14 +586,14 @@ export class WorldStateService {
       })
     }
 
-    const oldTypeDefs = await this.ontologyRepo.findAccessibleTypeDefs({}, { ontologyId: ontology.id })
-    for (const typeDef of oldTypeDefs) await this.ontologyRepo.deleteTypeDef(typeDef.id)
+    const oldTypeDefs = await repo.findAccessibleTypeDefs({}, { ontologyId: ontology.id })
+    for (const typeDef of oldTypeDefs) await repo.deleteTypeDef(typeDef.id)
 
     // Insert types parent-free first, then set parent refs that resolve to a
     // sibling type, so a self-relation FK never references a not-yet-inserted row.
     const createdIds = new Set<string>()
     for (const typeDef of typeDefs) {
-      await this.ontologyRepo.createTypeDef({
+      await repo.createTypeDef({
         id: typeDef.id,
         ontologyId: typeDef.ontologyId,
         name: typeDef.name,
@@ -590,7 +610,7 @@ export class WorldStateService {
     }
     for (const typeDef of typeDefs) {
       if (typeDef.parentTypeId && createdIds.has(typeDef.parentTypeId)) {
-        await this.ontologyRepo.updateTypeDef(typeDef.id, { parentTypeId: typeDef.parentTypeId })
+        await repo.updateTypeDef(typeDef.id, { parentTypeId: typeDef.parentTypeId })
       }
     }
   }
@@ -603,11 +623,12 @@ export class WorldStateService {
    */
   private async personasWithOntology(
     userId: string,
+    tx?: Prisma.TransactionClient,
   ): Promise<Array<{ persona: Persona; aggregate: PersonaOntologyAggregate }>> {
-    const personas = await this.prisma.persona.findMany({ where: { userId } })
+    const personas = await (tx ?? this.prisma).persona.findMany({ where: { userId } })
     const result: Array<{ persona: Persona; aggregate: PersonaOntologyAggregate }> = []
     for (const persona of personas) {
-      const bundle = await this.readPersonaOntologyBundle(persona)
+      const bundle = await this.readPersonaOntologyBundle(persona, tx)
       result.push({ persona, aggregate: bundle ? bundle.aggregate : emptyOntology() })
     }
     return result
@@ -637,6 +658,8 @@ export class WorldStateService {
    * @param objectId - id of the deleted world object
    * @param refType - the kind of object reference to rewrite
    * @param objectName - display name to substitute for the reference
+   * @param tx - optional transaction client so the rewrite commits atomically
+   *   with the world-object delete that drives it
    * @returns the total number of gloss references converted
    */
   private async cleanupGlossReferences(
@@ -644,9 +667,10 @@ export class WorldStateService {
     objectId: string,
     refType: 'entity-object' | 'event-object' | 'time-object',
     objectName: string,
+    tx?: Prisma.TransactionClient,
   ): Promise<number> {
     let count = 0
-    for (const { persona, aggregate } of await this.personasWithOntology(userId)) {
+    for (const { persona, aggregate } of await this.personasWithOntology(userId, tx)) {
       const before =
         countObjectRefsInGlosses(aggregate.entityTypes as TypeWithGloss[], objectId, refType) +
         countObjectRefsInGlosses(aggregate.roleTypes as TypeWithGloss[], objectId, refType) +
@@ -667,7 +691,7 @@ export class WorldStateService {
         eventTypes: convert(aggregate.eventTypes),
         roleTypes: convert(aggregate.roleTypes),
         relationTypes: convert(aggregate.relationTypes),
-      })
+      }, tx)
     }
     return count
   }
@@ -800,7 +824,11 @@ export class WorldStateService {
       { projectId: null, createdByUserId: userId },
     )
     const scope = { createdByUserId: userId, projectId: null }
-    await this.prisma.$transaction(async (tx) => {
+    // Delete the object node, its incident relation edges, rewrite the collection
+    // nodes that lost a member, and convert the ontology gloss references, all in
+    // ONE transaction so a partial failure rolls back rather than orphaning
+    // glosses on a half-deleted world object.
+    const glossReferences = await this.prisma.$transaction(async (tx) => {
       await tx.graphNode.deleteMany({ where: { id: objectId, ...scope } })
       if (removedIds.length > 0) {
         await tx.graphEdge.deleteMany({ where: { id: { in: removedIds }, ...scope } })
@@ -815,9 +843,8 @@ export class WorldStateService {
           },
         })
       }
+      return this.cleanupGlossReferences(userId, objectId, refType, objectName, tx)
     })
-
-    const glossReferences = await this.cleanupGlossReferences(userId, objectId, refType, objectName)
 
     const label = kind.charAt(0).toUpperCase() + kind.slice(1)
     return {
