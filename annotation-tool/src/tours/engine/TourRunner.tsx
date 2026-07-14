@@ -437,11 +437,7 @@ export function TourRunner({
 
   return (
     <>
-      <SpotlightOverlay
-        target={anchor}
-        modal={modal}
-        interactive={step.expectAction != null && step.expectAction !== 'none'}
-      />
+      <SpotlightOverlay target={anchor} modal={modal} />
       <StepCard
         tour={tour}
         stepIndex={stepIndex}
