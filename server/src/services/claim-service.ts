@@ -14,7 +14,7 @@ import { GraphRepository } from '../repositories/GraphRepository.js'
 import { AnnotationLayerRepository } from '../repositories/AnnotationLayerRepository.js'
 import { readOntologyAggregate } from './layers-bridge/ontology-bridge.js'
 import { getOrCreateVideoExpression } from './video-expression-service.js'
-import { claimSpanLayerId, expressionTranscriptId } from './layers-id-map.js'
+import { claimSpanLayerId, deriveId, expressionTranscriptId } from './layers-id-map.js'
 import {
   claimSpanAnnotations,
   claimToNode,
@@ -345,14 +345,25 @@ export class ClaimService {
     const existing = await this.annotationLayerRepo.findLayerById(layerId)
     if (existing) return layerId
     const expressionId = await this.resolveClaimSpanExpressionId(summary)
-    await this.annotationLayerRepo.createLayer({
-      id: layerId,
-      expressionId,
-      kind: 'span',
-      subkind: 'claim',
-      projectId: summary.projectId ?? null,
-      createdByUserId: summary.createdBy ?? null,
-    })
+    try {
+      await this.annotationLayerRepo.createLayer({
+        id: layerId,
+        expressionId,
+        kind: 'span',
+        subkind: 'claim',
+        projectId: summary.projectId ?? null,
+        createdByUserId: summary.createdBy ?? null,
+      })
+    } catch (err) {
+      // The layer id is a pure function of the summary id, so two concurrent
+      // first-claim creates both find no layer and both attempt this create. The
+      // loser hits the id's unique violation; the layer now exists, so treat the
+      // collision as success and return the shared id.
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        return layerId
+      }
+      throw err
+    }
     return layerId
   }
 
@@ -940,9 +951,15 @@ export class ClaimService {
     )
     if (duplicate) return duplicate
 
+    // Derive the edge id from the (source, target, relationType) triple so two
+    // concurrent identical requests resolve to the same primary-key row: the read
+    // above cannot see an insert that has not committed, but both writes then
+    // target the same id and the loser hits a unique violation, which collapses
+    // to the stored edge rather than a second identical relation.
+    const relationId = deriveId('edge:claim-relation', claimId, targetClaimId, relationTypeId)
     const now = new Date().toISOString()
     const relation: StoredRelation = {
-      id: randomUUID(),
+      id: relationId,
       sourceClaimId: claimId,
       targetClaimId,
       relationTypeId,
@@ -954,7 +971,15 @@ export class ClaimService {
       createdAt: now,
       updatedAt: now,
     }
-    await this.persistRelationEdge(relation, summaryId, sourceClaim.projectId ?? null)
+    try {
+      await this.persistRelationEdge(relation, summaryId, sourceClaim.projectId ?? null)
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        const raced = await this.findRelationById(relationId)
+        if (raced) return raced
+      }
+      throw err
+    }
 
     return relation
   }

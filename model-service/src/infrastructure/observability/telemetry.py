@@ -4,6 +4,8 @@ Configures OTLP exporters for traces and metrics, with automatic instrumentation
 for FastAPI and Redis clients.
 """
 
+from __future__ import annotations
+
 import asyncio
 import functools
 import time

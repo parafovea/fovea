@@ -1,7 +1,7 @@
 import { PrismaClient, Project, ProjectMembership, Persona, Prisma } from '@prisma/client'
 
 import { mergeById } from '../services/world-state-service.js'
-import { readWorldAggregate, writeWorldAggregate } from '../services/layers-bridge/world-bridge.js'
+import { readWorldAggregate, mergeWorldObjects } from '../services/layers-bridge/world-bridge.js'
 import { projectWorldStateId, type WorldStateAggregate } from '../services/world-layers-mapper.js'
 
 /**
@@ -469,10 +469,18 @@ export class ProjectRepository {
    * object a concurrent writer added between this read and write. Removal of a
    * world object goes through the dedicated delete path, not this merge.
    *
+   * The merge is written through the version-guarded per-row upsert
+   * ({@link mergeWorldObjects}) inside a transaction: each object is created or
+   * updated under its `lockVersion` and objects the caller did not send are left in
+   * place, so the write neither prunes-and-recreates the scope's world (no total
+   * loss on a mid-write failure) nor drops a concurrent writer's additions. A
+   * same-object compare-and-swap miss rolls the transaction back as a conflict.
+   *
    * @param userId - the caller
    * @param projectId - Project UUID
    * @param data - the world buckets to merge (omitted buckets are preserved)
    * @returns the resulting world state view
+   * @throws {ConflictError} when a same-object edit lost a concurrent race
    */
   async writeWorldState(
     userId: string,
@@ -499,7 +507,7 @@ export class ProjectRepository {
         ) as unknown as unknown[]
       }
     }
-    await writeWorldAggregate(this.prisma, { userId, projectId }, merged)
+    await this.prisma.$transaction((tx) => mergeWorldObjects(tx, { userId, projectId }, merged))
     return ProjectRepository.worldStateView(userId, projectId, merged)
   }
 }

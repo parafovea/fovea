@@ -18,6 +18,8 @@ Loaders support temporal consistency across frames, occlusion handling, and
 mask-based segmentation output.
 """
 
+from __future__ import annotations
+
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass

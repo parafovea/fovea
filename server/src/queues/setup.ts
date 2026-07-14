@@ -699,15 +699,16 @@ export const claimWorker = new Worker<
             text: claimData.text,
             gloss: [],
             parentClaimId: parentClaimId ?? null,
-            textSpans: claimData.char_start
-              ? [
-                  {
-                    sentenceIndex: claimData.sentence_index,
-                    charStart: claimData.char_start,
-                    charEnd: claimData.char_end,
-                  },
-                ]
-              : null,
+            textSpans:
+              typeof claimData.char_start === "number"
+                ? [
+                    {
+                      sentenceIndex: claimData.sentence_index,
+                      charStart: claimData.char_start,
+                      charEnd: claimData.char_end,
+                    },
+                  ]
+                : null,
             timeSpans: null,
             confidence: claimData.confidence,
             modelUsed: modelResponse.model_used,

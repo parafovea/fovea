@@ -18,7 +18,7 @@ pytest.importorskip("pycocotools")
 
 import didactic.api as dx
 from hypothesis import strategies as st
-from lairs.records import annotation, media
+from lairs.records import annotation, expression, media
 from pycocotools import mask as coco_mask
 
 from src.application.dto.tracking import (
@@ -110,11 +110,16 @@ def test_view_records_validate_as_lairs_models() -> None:
     view, _complement = TRACKING_LAYERS.forward(dto)
     nsids = {record.nsid for record in view.records}
     assert nsids == {
+        "pub.layers.expression.expression",
         "pub.layers.media.media",
         "pub.layers.annotation.annotationLayer",
     }
     for record in view.records:
-        if record.nsid == "pub.layers.media.media":
+        if record.nsid == "pub.layers.expression.expression":
+            expr = expression.Expression.model_validate_json(record.value_json)
+            assert expr.kind == "video"
+            assert expr.id == dto.video_id
+        elif record.nsid == "pub.layers.media.media":
             m = media.Media.model_validate_json(record.value_json)
             assert m.kind == "video"
             assert m.video is not None
@@ -126,6 +131,39 @@ def test_view_records_validate_as_lairs_models() -> None:
             assert layer.subkind == "custom"
             # One annotation per tracked object, in first-appearance order.
             assert [a.label for a in layer.annotations] == ["1", "2"]
+
+
+def test_fragment_emits_expression_record_the_layer_points_at() -> None:
+    """The annotation layer's ``expression`` resolves to an emitted Expression.
+
+    The fragment carries three records in a fixed order — an Expression, a
+    Media, and the AnnotationLayer — and the layer's ``expression`` AT-URI names
+    the Expression record's collection (``pub.layers.expression.expression``)
+    keyed by the tracked video id, so the layer never dangles at a record type
+    the fragment does not contain.
+    """
+    dto = _dto()
+    view, _complement = TRACKING_LAYERS.forward(dto)
+
+    assert [record.nsid for record in view.records] == [
+        "pub.layers.expression.expression",
+        "pub.layers.media.media",
+        "pub.layers.annotation.annotationLayer",
+    ]
+
+    expression_record = next(
+        record for record in view.records if record.nsid == "pub.layers.expression.expression"
+    )
+    assert expression_record.local_id == "expression"
+    expr = expression.Expression.model_validate_json(expression_record.value_json)
+    assert expr.kind == "video"
+    assert expr.id == dto.video_id
+
+    layer_record = next(
+        record for record in view.records if record.nsid == "pub.layers.annotation.annotationLayer"
+    )
+    layer = annotation.AnnotationLayer.model_validate_json(layer_record.value_json)
+    assert layer.expression == f"at://local/pub.layers.expression.expression/{dto.video_id}"
 
 
 def test_scale_rules_hold() -> None:

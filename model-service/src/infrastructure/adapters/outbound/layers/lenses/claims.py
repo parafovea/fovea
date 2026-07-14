@@ -76,6 +76,23 @@ def _edge_type(relation_type: str) -> str:
     return _EDGE_TYPE_BY_RELATION.get(relation_type, "custom")
 
 
+def _resolve_endpoint(raw_id: str, claim_uuids: list[str]) -> str:
+    """Resolve a relationship endpoint to the minted claim uuid it references.
+
+    A relationship names a claim by its position in the preorder claim list;
+    ``claim_uuids[index]`` is that claim's minted ``claim-{index}`` uuid, so a
+    resolved edge points at a real claim annotation. An endpoint that is not a
+    valid positional index passes through unchanged.
+    """
+    try:
+        index = int(raw_id)
+    except ValueError:
+        return raw_id
+    if 0 <= index < len(claim_uuids):
+        return claim_uuids[index]
+    return raw_id
+
+
 def _byte_offset(text: str, char_index: int) -> int:
     """Return the UTF-8 byte offset of ``char_index`` into ``text``."""
     return len(text[:char_index].encode("utf-8"))
@@ -197,8 +214,12 @@ class ClaimsLayersLens(dx.Lens[ClaimsResultDTO, CorpusFragment, JsonValue]):
                         edges=tuple(
                             graph.GraphEdgeEntry(
                                 uuid=defs.Uuid(value=f"edge-{index}"),
-                                source=object_ref(rel.source_claim_id),
-                                target=object_ref(rel.target_claim_id),
+                                source=object_ref(
+                                    _resolve_endpoint(rel.source_claim_id, claim_uuids)
+                                ),
+                                target=object_ref(
+                                    _resolve_endpoint(rel.target_claim_id, claim_uuids)
+                                ),
                                 edgeType=_edge_type(rel.relation_type),
                                 confidence=conf_to_int(rel.confidence),
                             )
@@ -212,6 +233,7 @@ class ClaimsLayersLens(dx.Lens[ClaimsResultDTO, CorpusFragment, JsonValue]):
         # Widen the minted uuid strings to JsonValue across list invariance.
         uuid_values = cast("list[JsonValue]", claim_uuids)
         complement: JsonValue = {
+            "text": dto.text,
             "claims": [_dump_claim(claim) for claim in dto.claims],
             "claim_uuids": uuid_values,
             "relationships": [
@@ -230,16 +252,13 @@ class ClaimsLayersLens(dx.Lens[ClaimsResultDTO, CorpusFragment, JsonValue]):
     def backward(self, view: CorpusFragment, complement: JsonValue) -> ClaimsResultDTO:
         """Reconstruct a claim result from its layers fragment and complement."""
         comp = j_obj(complement)
-        text = ""
-        for record in view.records:
-            if record.nsid == EXPRESSION_NSID:
-                expr = expression.Expression.model_validate_json(record.value_json)
-                text = expr.text if expr.text is not None else ""
-                break
-
         claims = [_load_claim(claim) for claim in j_list(comp["claims"])]
         relationships = [_load_relationship(rel) for rel in j_list(comp["relationships"])]
-        return ClaimsResultDTO(text=text, claims=claims, relationships=relationships)
+        return ClaimsResultDTO(
+            text=j_str(comp["text"]),
+            claims=claims,
+            relationships=relationships,
+        )
 
 
 def _build_annotations(

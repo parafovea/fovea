@@ -290,6 +290,19 @@ export function TourProvider({
         // returns focus to wherever the visitor started.
         clearCursor()
         restoreFocus()
+        // Drop a pause snapshot for this same tour. Relaunching a paused tour
+        // from the menu (same tourId) leaves the snapshot in place, so without
+        // this the Resume pill reappears on completion offering to replay the
+        // just-finished tour. Read the latest snapshot through the setter so the
+        // event handler need not depend on `paused`.
+        const finishedTourId = currentTourIdRef.current
+        setPaused((prev) => {
+          if (prev && prev.tourId === finishedTourId) {
+            clearPaused()
+            return null
+          }
+          return prev
+        })
       }
       onEvent?.(event)
     },

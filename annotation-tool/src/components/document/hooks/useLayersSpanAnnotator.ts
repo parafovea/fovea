@@ -82,6 +82,34 @@ function findSpanLayer(
   return spanLayers[0]
 }
 
+/**
+ * Returns every span layer whose annotations belong to a persona, so spans are
+ * read from all of them rather than only the first. This tolerates the rare case
+ * of more than one matching span layer for a scope, keeping every span visible
+ * and deletable.
+ */
+function matchingSpanLayers(
+  layers: LayersAnnotationLayerRow[],
+  personaId?: string | null,
+): LayersAnnotationLayerRow[] {
+  const spanLayers = layers.filter((layer) => layer.kind === 'span')
+  if (personaId) {
+    const forPersona = spanLayers.filter((layer) => layer.personaId === personaId)
+    return forPersona.length > 0 ? forPersona : spanLayers
+  }
+  return spanLayers
+}
+
+/** Returns a stable client-minted layer id for a scope key, creating one once. */
+function stableLayerId(cache: Map<string, string>, key: string): string {
+  let id = cache.get(key)
+  if (!id) {
+    id = crypto.randomUUID()
+    cache.set(key, id)
+  }
+  return id
+}
+
 /** Finds the relation layer for a persona, or the first relation layer, in a detail graph. */
 function findRelationLayer(
   layers: LayersAnnotationLayerRow[],
@@ -117,6 +145,8 @@ export function useLayersSpanAnnotator(
 
   const spanLayerPromiseRef = useRef<Promise<string> | null>(null)
   const relationLayerPromiseRef = useRef<Promise<string> | null>(null)
+  const spanLayerIdRef = useRef<Map<string, string>>(new Map())
+  const relationLayerIdRef = useRef<Map<string, string>>(new Map())
 
   const tokenization = useMemo(
     () => (detail ? pickPrimaryTokenization(detail.tokenizations) : null),
@@ -140,11 +170,12 @@ export function useLayersSpanAnnotator(
   const layers = useMemo(() => detail?.annotationLayers ?? [], [detail])
   const spanLayer = findSpanLayer(layers, personaId)
   const relationLayer = findRelationLayer(layers, personaId)
+  const spanLayers = useMemo(() => matchingSpanLayers(layers, personaId), [layers, personaId])
 
   const spans = useMemo<TextSpan[]>(() => {
-    if (!spanLayer || !tokenizationId) return []
-    return rowsToSpans(spanLayer.annotations, tokenizationId, resolvers)
-  }, [spanLayer, tokenizationId, resolvers])
+    if (!tokenizationId) return []
+    return spanLayers.flatMap((layer) => rowsToSpans(layer.annotations, tokenizationId, resolvers))
+  }, [spanLayers, tokenizationId, resolvers])
 
   const symmetricByTypeId = useMemo(() => {
     const map = new Map<string, boolean>()
@@ -190,10 +221,12 @@ export function useLayersSpanAnnotator(
     if (spanLayer) return spanLayer.id
     if (!expressionUri || !detail) throw new Error('Expression not loaded')
     if (!spanLayerPromiseRef.current) {
+      const clientId = stableLayerId(spanLayerIdRef.current, `${expressionUri}::${personaId ?? ''}`)
       spanLayerPromiseRef.current = upsertLayer
         .mutateAsync({
           expressionUri,
           input: {
+            id: clientId,
             expressionId: detail.id,
             kind: 'span',
             sourceMethod: 'manual',
@@ -213,10 +246,15 @@ export function useLayersSpanAnnotator(
     if (relationLayer) return relationLayer.id
     if (!expressionUri || !detail) throw new Error('Expression not loaded')
     if (!relationLayerPromiseRef.current) {
+      const clientId = stableLayerId(
+        relationLayerIdRef.current,
+        `${expressionUri}::${personaId ?? ''}`,
+      )
       relationLayerPromiseRef.current = upsertLayer
         .mutateAsync({
           expressionUri,
           input: {
+            id: clientId,
             expressionId: detail.id,
             kind: 'relation',
             sourceMethod: 'manual',

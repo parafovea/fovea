@@ -143,7 +143,7 @@ export const anchorCatalog = {
   'annotation-world-reference': { description: 'The world-object reference badge on an annotation.', surface: '/app/annotate/:videoId', conditional: true },
 
   // ---- Detection / tracking ----
-  'detect-dialog': { description: 'The object-detection dialog.', surface: 'dialog:detect', conditional: true },
+  'detect-dialog': { description: 'The object-detection dialog.', surface: 'dialog:detect', conditional: true, reachedBy: ['detect-objects-button'] },
   'detect-dialog-run-button': { description: 'The "Run detection" button in the detect dialog.', surface: 'dialog:detect', conditional: true },
   'object-picker-popover': { description: 'The world-object picker popover.', surface: 'dialog:annotate', conditional: true },
   'tracking-results-panel': { description: 'The tracking-results panel.', surface: '/app/annotate/:videoId', conditional: true },

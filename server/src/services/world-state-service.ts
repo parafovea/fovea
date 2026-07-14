@@ -13,8 +13,10 @@ import {
   worldStateToLayers,
   layersToWorldState,
   isWorldRow,
+  readWorldStash,
   emptyWorldState,
   personalWorldStateId,
+  WORLD_MARKER,
   type WorldStateAggregate,
 } from './world-layers-mapper.js'
 import {
@@ -136,6 +138,18 @@ const WORLD_BUCKET_KEYS: (keyof WorldStateAggregate)[] = [
   'timeCollections',
   'relations',
 ]
+
+/**
+ * How a collection bucket stores its members. Entity and event collections carry
+ * a string-id array (`entityIds` / `eventIds`); a time collection carries `times`,
+ * an array of Time objects matched by their `id`. World collections never carry a
+ * `members` field.
+ */
+interface CollectionMemberField {
+  field: 'entityIds' | 'eventIds' | 'times'
+  /** True when the field holds member objects keyed by `id`, false for a raw id array. */
+  objectMembers: boolean
+}
 
 /**
  * Resolves the personal user id to operate on: the authenticated user, or the
@@ -427,6 +441,30 @@ export class WorldStateService {
   }
 
   /**
+   * Merges world buckets into a user's personal world by id under the per-row
+   * `lockVersion` guard: each provided bucket is upserted into the current state,
+   * objects the caller did not send are preserved, and omitted buckets are left
+   * untouched. Removal is explicit (the DELETE routes), never omission, so a
+   * partial write carrying a stale view never drops a concurrently-added object.
+   *
+   * @param userId - the owning user id
+   * @param world - the world buckets to merge (omitted buckets are untouched)
+   * @throws {ForbiddenError} when create access to the scope is denied
+   * @throws {ConflictError} when the write keeps conflicting after retries
+   */
+  async mergePersonalWorld(userId: string, world: Partial<WorldStateAggregate>): Promise<void> {
+    const { aggregate } = await this.readPersonalWorld(userId)
+    const merged: WorldStateAggregate = { ...aggregate }
+    for (const key of WORLD_BUCKET_KEYS) {
+      const value = world[key]
+      if (value !== undefined) {
+        merged[key] = mergeById(aggregate[key] as unknown as Prisma.JsonValue, value) as unknown as unknown[]
+      }
+    }
+    await this.upsertWorldObjects(userId, null, merged)
+  }
+
+  /**
    * Updates the caller's personal world; only provided buckets are written, the
    * rest are preserved from the current state.
    *
@@ -435,21 +473,7 @@ export class WorldStateService {
    */
   async updatePersonal(input: WorldStateUpdateInput): Promise<WorldStateResponse> {
     const userId = await this.resolveUserId()
-    const { aggregate } = await this.readPersonalWorld(userId)
-
-    // Merge each provided bucket into the current aggregate by id (upsert)
-    // instead of replacing it, so a partial PUT carrying a stale view never
-    // drops previously-added objects. Removal is explicit (the DELETE routes),
-    // never omission. The per-row upsert below carries the lockVersion guard.
-    const merged: WorldStateAggregate = { ...aggregate }
-    for (const key of WORLD_BUCKET_KEYS) {
-      const value = input[key]
-      if (value !== undefined) {
-        merged[key] = mergeById(aggregate[key] as unknown as Prisma.JsonValue, value) as unknown as unknown[]
-      }
-    }
-
-    await this.upsertWorldObjects(userId, null, merged)
+    await this.mergePersonalWorld(userId, input)
     const { aggregate: after } = await this.readPersonalWorld(userId)
     return this.toResponse(userId, after)
   }
@@ -472,9 +496,17 @@ export class WorldStateService {
     objectId: string,
   ): Promise<void> {
     const userId = await this.resolveUserId()
-    const { exists } = await this.readPersonalWorld(userId)
+    const { aggregate, exists } = await this.readPersonalWorld(userId)
     if (!exists) {
       throw new NotFoundError('WorldState', userId)
+    }
+    // Confirm the id names a world row in exactly this bucket before deleting, so a
+    // collection or relation id from another bucket — or a non-world row the caller
+    // happens to own — cannot be destroyed through the wrong endpoint, bypassing the
+    // graceful-delete cleanup path.
+    const present = asRecords(aggregate[field]).some((object) => object.id === objectId)
+    if (!present) {
+      throw new NotFoundError('World object', objectId)
     }
     if (this.ability) {
       const candidate = subject('GraphNode', { projectId: null, createdByUserId: userId })
@@ -546,72 +578,123 @@ export class WorldStateService {
   }
 
   /**
-   * Writes a persona's ontology to the layers store: upserts the LayersOntology,
-   * prunes its existing TypeDefs, and recreates them from the aggregate.
+   * Merges buckets of a persona's ontology into the layers store by type id,
+   * guarded by the backing `LayersOntology.lockVersion`. Only the buckets the
+   * caller provides are merged (an omitted bucket is left untouched); within a
+   * provided bucket each type is upserted by id and types the caller did not send
+   * are preserved, so removals go through the explicit type-deletion routes rather
+   * than omission. The read, compare-and-swap, and materialization run in one
+   * transaction and retry against a fresh read when a concurrent writer advanced
+   * the version, so a stale save neither drops a concurrently-added type nor wipes
+   * the ontology on a mid-write failure.
    *
    * @param persona - the owning persona
-   * @param aggregate - the four type buckets to persist
-   * @param tx - optional transaction client to run the writes inside
+   * @param buckets - the type buckets to merge (omitted buckets are untouched)
+   * @param tx - optional transaction client to run the guarded write inside
+   * @throws {ConflictError} when the write keeps conflicting after retries
    */
   async writePersonaOntology(
     persona: Persona,
-    aggregate: PersonaOntologyAggregate,
+    buckets: Partial<PersonaOntologyAggregate>,
     tx?: Prisma.TransactionClient,
   ): Promise<void> {
-    const repo = this.ontologyRepoFor(tx)
     const scope = { projectId: persona.projectId, createdByUserId: persona.userId }
     const meta = {
       name: `${persona.name} ontology`,
       description: persona.informationNeed,
       domain: persona.domain,
     }
-    const { ontology, typeDefs } = ontologyToLayers(aggregate, persona.id, meta, scope)
+    const ontologyId = layersOntologyForPersonaId(persona.id)
 
-    const existing = await repo.findOntologyById(ontology.id)
-    if (existing) {
-      await repo.updateOntology(ontology.id, {
-        name: ontology.name,
-        description: ontology.description,
-        domain: ontology.domain,
-      })
-    } else {
-      await repo.createOntology({
-        id: ontology.id,
-        name: ontology.name,
-        description: ontology.description,
-        domain: ontology.domain,
-        personaId: ontology.personaId,
-        projectId: ontology.projectId,
-        createdByUserId: ontology.createdByUserId,
-      })
-    }
+    const write = async (client: Prisma.TransactionClient): Promise<void> => {
+      const repo = this.ontologyRepoFor(client)
+      const mergeBucket = (base: unknown[], incoming: unknown[] | undefined): unknown[] =>
+        incoming === undefined
+          ? base
+          : (mergeById(base as unknown as Prisma.JsonValue, incoming) as unknown as unknown[])
 
-    const oldTypeDefs = await repo.findAccessibleTypeDefs({}, { ontologyId: ontology.id })
-    for (const typeDef of oldTypeDefs) await repo.deleteTypeDef(typeDef.id)
+      for (let attempt = 0; attempt < 5; attempt++) {
+        const existing = await repo.findOntologyById(ontologyId)
+        const current = existing
+          ? layersToOntology(await repo.findAccessibleTypeDefs({}, { ontologyId }))
+          : emptyOntology()
+        const merged: PersonaOntologyAggregate = {
+          entityTypes: mergeBucket(current.entityTypes, buckets.entityTypes),
+          eventTypes: mergeBucket(current.eventTypes, buckets.eventTypes),
+          roleTypes: mergeBucket(current.roleTypes, buckets.roleTypes),
+          relationTypes: mergeBucket(current.relationTypes, buckets.relationTypes),
+        }
+        const { ontology, typeDefs } = ontologyToLayers(merged, persona.id, meta, scope)
 
-    // Insert types parent-free first, then set parent refs that resolve to a
-    // sibling type, so a self-relation FK never references a not-yet-inserted row.
-    const createdIds = new Set<string>()
-    for (const typeDef of typeDefs) {
-      await repo.createTypeDef({
-        id: typeDef.id,
-        ontologyId: typeDef.ontologyId,
-        name: typeDef.name,
-        typeKind: typeDef.typeKind,
-        gloss: typeDef.gloss,
-        parentTypeId: null,
-        allowedRoles: toJson(typeDef.allowedRoles),
-        knowledgeRefs: toJson(typeDef.knowledgeRefs),
-        features: toJson(typeDef.features),
-        projectId: typeDef.projectId,
-        createdByUserId: typeDef.createdByUserId,
-      })
-      createdIds.add(typeDef.id)
-    }
-    for (const typeDef of typeDefs) {
-      if (typeDef.parentTypeId && createdIds.has(typeDef.parentTypeId)) {
-        await repo.updateTypeDef(typeDef.id, { parentTypeId: typeDef.parentTypeId })
+        if (existing) {
+          // Compare-and-swap the ontology version before rewriting its types; on a
+          // miss a concurrent writer advanced it, so retry against a fresh read.
+          const guard = await client.layersOntology.updateMany({
+            where: { id: ontologyId, lockVersion: existing.lockVersion },
+            data: {
+              name: ontology.name,
+              description: ontology.description,
+              domain: ontology.domain,
+              lockVersion: { increment: 1 },
+            },
+          })
+          if (guard.count !== 1) continue
+        } else {
+          try {
+            await repo.createOntology({
+              id: ontology.id,
+              name: ontology.name,
+              description: ontology.description,
+              domain: ontology.domain,
+              personaId: ontology.personaId,
+              projectId: ontology.projectId,
+              createdByUserId: ontology.createdByUserId,
+            })
+          } catch (error) {
+            // A concurrent first save created the row; retry onto the guarded path.
+            if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') continue
+            throw error
+          }
+        }
+
+        // The merged aggregate carries every surviving type, so recreate the full
+        // set: prune the current rows and re-insert. Insert types parent-free first,
+        // then set parent refs that resolve to a sibling type, so a self-relation FK
+        // never references a not-yet-inserted row.
+        const oldTypeDefs = await repo.findAccessibleTypeDefs({}, { ontologyId })
+        for (const typeDef of oldTypeDefs) await repo.deleteTypeDef(typeDef.id)
+
+        const createdIds = new Set<string>()
+        for (const typeDef of typeDefs) {
+          await repo.createTypeDef({
+            id: typeDef.id,
+            ontologyId: typeDef.ontologyId,
+            name: typeDef.name,
+            typeKind: typeDef.typeKind,
+            gloss: typeDef.gloss,
+            parentTypeId: null,
+            allowedRoles: toJson(typeDef.allowedRoles),
+            knowledgeRefs: toJson(typeDef.knowledgeRefs),
+            features: toJson(typeDef.features),
+            projectId: typeDef.projectId,
+            createdByUserId: typeDef.createdByUserId,
+          })
+          createdIds.add(typeDef.id)
+        }
+        for (const typeDef of typeDefs) {
+          if (typeDef.parentTypeId && createdIds.has(typeDef.parentTypeId)) {
+            await repo.updateTypeDef(typeDef.id, { parentTypeId: typeDef.parentTypeId })
+          }
+        }
+        return
       }
+      throw new ConflictError('Ontology update conflicted after retries')
+    }
+
+    if (tx) {
+      await write(tx)
+    } else {
+      await this.prisma.$transaction(write)
     }
   }
 
@@ -717,31 +800,100 @@ export class WorldStateService {
     return { kept, removedIds, removed: removedIds.length }
   }
 
-  /** Collections after removing a member id, with the membership count removed. */
-  private static removeFromCollections(
-    collections: unknown[],
-    id: string,
-  ): { collections: unknown[]; memberships: number } {
-    let memberships = 0
-    const updated = (collections as Array<Record<string, unknown>>).map((collection) => {
-      const members = collection.members
-      if (Array.isArray(members) && members.includes(id)) {
-        memberships += 1
-        return { ...collection, members: members.filter((member) => member !== id) }
-      }
-      return collection
-    })
-    return { collections: updated, memberships }
+  /** The member field a collection bucket keeps its members under, by object kind. */
+  private static memberFieldFor(kind: 'entity' | 'event' | 'time'): CollectionMemberField {
+    switch (kind) {
+      case 'entity':
+        return { field: 'entityIds', objectMembers: false }
+      case 'event':
+        return { field: 'eventIds', objectMembers: false }
+      case 'time':
+        return { field: 'times', objectMembers: true }
+    }
   }
 
-  /** Counts collection memberships of an id. */
-  private static countMemberships(collections: unknown[], id: string): number {
+  /** True when a collection's member field contains the given id. */
+  private static collectionHasMember(
+    collection: Record<string, unknown>,
+    id: string,
+    member: CollectionMemberField,
+  ): boolean {
+    const members = collection[member.field]
+    if (!Array.isArray(members)) return false
+    return member.objectMembers
+      ? members.some((entry) => (entry as { id?: unknown } | null)?.id === id)
+      : members.includes(id)
+  }
+
+  /** A collection with the given member id removed from its member field. */
+  private static stripCollectionMember(
+    collection: Record<string, unknown>,
+    id: string,
+    member: CollectionMemberField,
+  ): Record<string, unknown> {
+    const members = collection[member.field]
+    if (!Array.isArray(members)) return collection
+    const filtered = member.objectMembers
+      ? members.filter((entry) => (entry as { id?: unknown } | null)?.id !== id)
+      : members.filter((entry) => entry !== id)
+    return { ...collection, [member.field]: filtered }
+  }
+
+  /** Counts collections whose member field contains the id. */
+  private static countMemberships(
+    collections: unknown[],
+    id: string,
+    member: CollectionMemberField,
+  ): number {
     let count = 0
     for (const collection of collections as Array<Record<string, unknown>>) {
-      const members = collection.members
-      if (Array.isArray(members) && members.includes(id)) count += 1
+      if (WorldStateService.collectionHasMember(collection, id, member)) count += 1
     }
     return count
+  }
+
+  /**
+   * Strips a deleted object's id from every collection node in a bucket that still
+   * lists it, each rewrite guarded by the node's `lockVersion`. Reads the scope's
+   * world nodes fresh (inside the caller's transaction) so a membership edit
+   * committed concurrently is stripped from the current member list rather than
+   * reverted, and only the collections that actually lose the member are rewritten.
+   * A compare-and-swap miss throws {@link ConflictError} so the enclosing delete
+   * transaction rolls back for the client to retry against a fresh read.
+   *
+   * @returns the number of collections the id was removed from
+   */
+  private async stripCollectionMemberships(
+    tx: Prisma.TransactionClient,
+    collectionBucket: keyof WorldStateAggregate,
+    member: CollectionMemberField,
+    memberId: string,
+    userId: string,
+  ): Promise<number> {
+    const scope = { createdByUserId: userId, projectId: null }
+    const worldNodes = (await tx.graphNode.findMany({ where: scope })).filter(isWorldRow)
+    let memberships = 0
+    for (const node of worldNodes) {
+      const stash = readWorldStash(node.properties)
+      if (!stash || stash.bucket !== collectionBucket) continue
+      const object = stash.object
+      if (object === null || typeof object !== 'object') continue
+      if (!WorldStateService.collectionHasMember(object as Record<string, unknown>, memberId, member)) continue
+
+      // Rewrite the collection node's stash in place — same bucket and array index,
+      // member stripped from the object — so the strip preserves array order.
+      const stripped = WorldStateService.stripCollectionMember(object as Record<string, unknown>, memberId, member)
+      const properties = { [WORLD_MARKER]: { bucket: stash.bucket, index: stash.index, object: stripped } }
+      const result = await tx.graphNode.updateMany({
+        where: { id: node.id, lockVersion: node.lockVersion, ...scope },
+        data: { properties: toJson(properties), lockVersion: { increment: 1 } },
+      })
+      if (result.count !== 1) {
+        throw new ConflictError('World state update conflicted')
+      }
+      memberships += 1
+    }
+    return memberships
   }
 
   /**
@@ -772,7 +924,11 @@ export class WorldStateService {
       glossReferences: await this.countGlossReferences(userId, objectId, refType),
       annotationCount,
       relationCount: WorldStateService.incidentRelations(aggregate.relations, kind, objectId).removed,
-      collectionMemberships: WorldStateService.countMemberships(aggregate[collectionBucket], objectId),
+      collectionMemberships: WorldStateService.countMemberships(
+        aggregate[collectionBucket],
+        objectId,
+        WorldStateService.memberFieldFor(kind),
+      ),
     }
   }
 
@@ -812,38 +968,21 @@ export class WorldStateService {
       kind,
       objectId,
     )
-    const { collections, memberships } = WorldStateService.removeFromCollections(
-      aggregate[collectionBucket],
-      objectId,
-    )
-
-    // Recompute the collection nodes from the full updated bucket so each keeps
-    // its stashed array index; only the objects that lost a member actually change.
-    const { nodes: collectionNodes } = worldStateToLayers(
-      { ...emptyWorldState(), [collectionBucket]: collections },
-      { projectId: null, createdByUserId: userId },
-    )
+    const member = WorldStateService.memberFieldFor(kind)
     const scope = { createdByUserId: userId, projectId: null }
-    // Delete the object node, its incident relation edges, rewrite the collection
-    // nodes that lost a member, and convert the ontology gloss references, all in
-    // ONE transaction so a partial failure rolls back rather than orphaning
-    // glosses on a half-deleted world object.
-    const glossReferences = await this.prisma.$transaction(async (tx) => {
+    // Delete the object node, its incident relation edges, strip its collection
+    // memberships (each rewrite recomputed from a fresh read and version-guarded so
+    // a concurrent membership edit survives), and convert the ontology gloss
+    // references, all in ONE transaction so a partial failure rolls back rather than
+    // orphaning glosses on a half-deleted world object.
+    const { glossReferences, memberships } = await this.prisma.$transaction(async (tx) => {
       await tx.graphNode.deleteMany({ where: { id: objectId, ...scope } })
       if (removedIds.length > 0) {
         await tx.graphEdge.deleteMany({ where: { id: { in: removedIds }, ...scope } })
       }
-      for (const node of collectionNodes) {
-        await tx.graphNode.updateMany({
-          where: { id: node.id, ...scope },
-          data: {
-            label: node.label,
-            properties: toJson(node.properties),
-            lockVersion: { increment: 1 },
-          },
-        })
-      }
-      return this.cleanupGlossReferences(userId, objectId, refType, objectName, tx)
+      const memberships = await this.stripCollectionMemberships(tx, collectionBucket, member, objectId, userId)
+      const glossReferences = await this.cleanupGlossReferences(userId, objectId, refType, objectName, tx)
+      return { glossReferences, memberships }
     })
 
     const label = kind.charAt(0).toUpperCase() + kind.slice(1)

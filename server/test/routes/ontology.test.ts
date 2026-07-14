@@ -227,7 +227,7 @@ describe('Ontology API', () => {
       expect(byName.get('Meeting')!.parentTypeId).toBe('evt-action')
     })
 
-    it('updates an existing ontology in place, pruning removed types', async () => {
+    it('updates an existing ontology in place, merging by id without pruning omitted types', async () => {
       const personaId = randomUUID()
       await app.inject({
         method: 'PUT',
@@ -244,6 +244,8 @@ describe('Ontology API', () => {
       })
       expect(await prisma.typeDef.count({ where: { createdByUserId: testUserId } })).toBe(2)
 
+      // A save that provides only 'a' updates it and leaves the omitted 'b' intact:
+      // removals go through the explicit type-deletion route, never omission.
       await app.inject({
         method: 'PUT',
         url: '/api/ontology',
@@ -258,16 +260,16 @@ describe('Ontology API', () => {
         }
       })
 
-      // The removed type is pruned; the survivor reflects the update.
-      expect(await prisma.typeDef.count({ where: { createdByUserId: testUserId } })).toBe(1)
+      expect(await prisma.typeDef.count({ where: { createdByUserId: testUserId } })).toBe(2)
       const bundle = (await app.inject({
         method: 'GET',
         url: '/api/ontology',
         cookies: { session_token: sessionToken }
       })).json() as { personaOntologies: Array<{ personaId: string; entities: Array<{ id: string; name: string }> }> }
       const ontology = bundle.personaOntologies.find(o => o.personaId === personaId)!
-      expect(ontology.entities).toHaveLength(1)
-      expect(ontology.entities[0].name).toBe('A renamed')
+      const byId = new Map(ontology.entities.map(e => [e.id, e.name]))
+      expect(byId.get('a')).toBe('A renamed')
+      expect(byId.get('b')).toBe('B')
     })
 
     it('saves world state through the ontology route and lands it in graph_nodes', async () => {

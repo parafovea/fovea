@@ -20,6 +20,7 @@ import {
   parseResolution,
 } from '../../services/video-expression-service.js'
 import { layersOntologyForPersonaId } from '../../services/layers-id-map.js'
+import { demoLayersAnnotationReadWhere } from '../../lib/demo-rbac.js'
 import type { BoundingBoxSequence } from '../../services/layers-conversion-service.js'
 
 /** Nullable string response field (serializes null correctly; see fastify-typebox skill). */
@@ -118,13 +119,18 @@ const videoAnnotationsRoutes: FastifyPluginAsync = async (fastify: FastifyInstan
     const { expressionId, video } = await getOrCreateVideoExpression(prisma, videoId)
 
     const readScope = accessibleBy(request.ability, 'read').LayersAnnotation
+    // In demo mode also match annotations grouped under a system persona, so an
+    // anonymous visitor whose CASL ability is scoped to their own data still
+    // sees the seed user's curated tour annotations (see lib/demo-rbac.ts).
+    const demoScope = demoLayersAnnotationReadWhere()
+    const accessScope = demoScope ? { OR: [readScope, demoScope] } : readScope
     // Scope to the video-annotation subkinds so span layers of other kinds
     // (notably claim text spans, subkind 'claim') that anchor over the same
     // video Expression never surface here as bounding-box annotations.
     const rows = await prisma.layersAnnotation.findMany({
       where: {
         AND: [
-          readScope,
+          accessScope,
           { layer: { expressionId, subkind: { in: [...VIDEO_ANNOTATION_SUBKINDS] } } },
         ],
       },
@@ -304,8 +310,28 @@ const videoAnnotationsRoutes: FastifyPluginAsync = async (fastify: FastifyInstan
       return respond(updated, 200)
     }
 
+    // Load a client-supplied id as an idempotent-update target only when it is a
+    // bounding-box annotation under this (video, persona) grouping layer. A row
+    // of another subkind (notably a claim text span sharing the id space) or one
+    // grouped under a different layer is treated as absent so the create path
+    // never overwrites it, mirroring the PUT/DELETE subkind guard.
+    const findUpdateTarget = async (candidateId: string): Promise<LayersAnnotation | null> => {
+      const existing = await prisma.layersAnnotation.findUnique({
+        where: { id: candidateId },
+        include: { layer: true },
+      })
+      if (
+        !existing ||
+        !isVideoAnnotationSubkind(existing.layer.subkind) ||
+        existing.layerId !== mapping.layer.id
+      ) {
+        return null
+      }
+      return existing
+    }
+
     if (body.id) {
-      const existing = await prisma.layersAnnotation.findUnique({ where: { id: body.id } })
+      const existing = await findUpdateTarget(body.id)
       if (existing) return updateExisting(existing)
     }
 
@@ -334,7 +360,7 @@ const videoAnnotationsRoutes: FastifyPluginAsync = async (fastify: FastifyInstan
         error instanceof Prisma.PrismaClientKnownRequestError &&
         error.code === 'P2002'
       ) {
-        const existing = await prisma.layersAnnotation.findUnique({ where: { id: annotationId } })
+        const existing = await findUpdateTarget(annotationId)
         if (existing) return updateExisting(existing)
       }
       throw error

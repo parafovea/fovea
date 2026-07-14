@@ -51,12 +51,17 @@ ENV VITE_INFERENCE_TIMEOUT_MS=$VITE_INFERENCE_TIMEOUT_MS
 ENV VITE_TOUR_DEMO=$VITE_TOUR_DEMO
 ENV VITE_DEMO_PUBLIC=$VITE_DEMO_PUBLIC
 
-# Copy workspace metadata + every package.json so pnpm can install from
-# the single root lockfile.
+# Copy workspace metadata + the annotation-tool/server manifests so pnpm can
+# install from the single root lockfile.
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY annotation-tool/package.json ./annotation-tool/
 COPY server/package.json ./server/
-COPY packages/layers-schema/package.json ./packages/layers-schema/
+
+# Copy the full @fovea/layers-schema package (src + tsconfig) before install:
+# its `prepare` script runs `tsc` during `pnpm install`, so the tsconfig and
+# source must already be present or the install aborts with TS5058 before any
+# explicit build step is reached.
+COPY packages/layers-schema ./packages/layers-schema
 
 # Install workspace dependencies with cache mount for pnpm. Include
 # @fovea/layers-schema so its own build toolchain (tsc) is installed: the
@@ -64,9 +69,8 @@ COPY packages/layers-schema/package.json ./packages/layers-schema/
 RUN --mount=type=cache,target=/root/.local/share/pnpm/store \
     pnpm install --frozen-lockfile --filter @fovea/annotation-tool --filter @fovea/layers-schema
 
-# Build the @fovea/layers-schema workspace package first: the frontend type-checks
-# (tsc) against its generated types, so its dist must exist before the build.
-COPY packages/layers-schema ./packages/layers-schema
+# Build the @fovea/layers-schema workspace package so its dist exists before the
+# frontend type-checks (tsc) against its generated types.
 RUN pnpm --filter @fovea/layers-schema build
 
 # Copy annotation-tool source

@@ -245,15 +245,33 @@ const TYPE_EDITOR_BY_CATEGORY: Record<string, { tabIndex: number; editor: Anchor
 }
 
 /**
+ * The authoring-mode toggle to click and the surface it reveals, per non-default
+ * mode. The editor opens in manual mode, so only modes that reveal an additional
+ * surface (Wikidata's live search + results) need an entry.
+ */
+const TYPE_EDITOR_BY_MODE: Record<string, { toggle: AnchorId; surface: AnchorId }> = {
+  wikidata: { toggle: 'type-editor-mode-wikidata', surface: 'augmenter-search' },
+}
+
+/**
  * Open an ontology type editor for the `category` param (entity, role, event, or
- * relation, defaulting to entity). Navigates to the ontology workspace, selects
- * a persona and the category's tab through the workspace's own state so the type
- * list mounts, clicks Add type, and resolves once that category's editor dialog
- * appears.
+ * relation, defaulting to entity; `kind` is accepted as an alias). Navigates to
+ * the ontology workspace, selects a persona and the category's tab through the
+ * workspace's own state so the type list mounts, clicks Add type, and waits for
+ * that category's editor dialog. When a `mode` param names a non-default
+ * authoring mode (e.g. `wikidata`), it then clicks that mode's toggle and waits
+ * for the surface the mode reveals, so a step anchored to a mode-specific surface
+ * is reachable on direct entry rather than only by advancing from the prior step.
  */
 registerCapability('open-type-editor', async (ctx, params) => {
-  const category = typeof params?.category === 'string' ? params.category : 'entity'
+  const category =
+    typeof params?.category === 'string'
+      ? params.category
+      : typeof params?.kind === 'string'
+        ? params.kind
+        : 'entity'
   const target = TYPE_EDITOR_BY_CATEGORY[category] ?? TYPE_EDITOR_BY_CATEGORY.entity
+  const mode = typeof params?.mode === 'string' ? params.mode : null
 
   ctx.navigate('/app/ontology')
 
@@ -267,7 +285,14 @@ registerCapability('open-type-editor', async (ctx, params) => {
 
   await waitForSurface(ctx.registry, 'ontology-workspace-tabs')
   await clickControl(ctx, 'ontology-add-type-button')
-  await waitForSurface(ctx.registry, target.editor)
+  const editor = await waitForSurface(ctx.registry, target.editor)
+  if (!editor) return
+
+  const modeTarget = mode ? TYPE_EDITOR_BY_MODE[mode] : undefined
+  if (modeTarget) {
+    await clickControl(ctx, modeTarget.toggle)
+    await waitForSurface(ctx.registry, modeTarget.surface)
+  }
 })
 
 /** The first persona id the deployment exposes, for picking a default. */

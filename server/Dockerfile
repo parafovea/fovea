@@ -17,20 +17,24 @@ RUN corepack enable && corepack prepare pnpm@10.15.0 --activate
 
 WORKDIR /repo
 
-# Copy workspace metadata + every package's package.json so pnpm can resolve
-# the workspace graph from a single frozen lockfile install.
+# Copy workspace metadata + the server/annotation-tool manifests so pnpm can
+# resolve the workspace graph from a single frozen lockfile install.
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY server/package.json ./server/
 COPY annotation-tool/package.json ./annotation-tool/
-COPY packages/layers-schema/package.json ./packages/layers-schema/
+
+# Copy the full @fovea/layers-schema package (src + tsconfig) before install:
+# its `prepare` script runs `tsc` during `pnpm install`, so the tsconfig and
+# source must already be present or the install aborts with TS5058 before any
+# explicit build step is reached.
+COPY packages/layers-schema ./packages/layers-schema
 
 # Install dependencies with cache mount for pnpm
 RUN --mount=type=cache,target=/root/.local/share/pnpm/store \
     pnpm install --frozen-lockfile
 
-# Build the @fovea/layers-schema workspace package first: the server compiles
-# against its generated types, so its dist must exist before the server build.
-COPY packages/layers-schema ./packages/layers-schema
+# Build @fovea/layers-schema so its compiled dist is present for the server
+# compile, which depends on its generated types.
 RUN pnpm --filter @fovea/layers-schema build
 
 # Copy server source (Prisma first for layer caching)

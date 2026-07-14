@@ -44,6 +44,14 @@ interface UserGraph {
   typeAnnotationId: string
   objectAnnotationId: string
   apiKeyId: string
+  // Layers store resources — one owned row per user so a dropped or inverted
+  // accessibleBy read filter on any of these list/detail routes leaks the
+  // other user's id and fails the matrix.
+  mediaId: string
+  corpusId: string
+  graphNodeId: string
+  graphEdgeId: string
+  documentId: string
 }
 
 describe('Multi-user listing isolation matrix', () => {
@@ -187,6 +195,37 @@ describe('Multi-user listing isolation matrix', () => {
       },
     })
 
+    // Layers store rows, each stamped with the user's ownership so the CASL
+    // read baseline (createdByUserId === userId) governs every layers list and
+    // detail route. Personal scope (projectId null) is deliberate: it forces
+    // the routes to isolate on ownership alone, not on a project boundary.
+    const media = await prisma.media.create({
+      data: { kind: 'document', title: `${username} media`, createdByUserId: user.id },
+    })
+    const corpus = await prisma.corpus.create({
+      data: { name: `${username} corpus`, createdByUserId: user.id },
+    })
+    const graphNode = await prisma.graphNode.create({
+      data: { nodeType: 'entity', label: `${username} node`, createdByUserId: user.id },
+    })
+    const graphEdge = await prisma.graphEdge.create({
+      data: {
+        source: { localId: `${username}-src` },
+        target: { localId: `${username}-tgt` },
+        edgeType: 'related-to',
+        createdByUserId: user.id,
+      },
+    })
+    const document = await prisma.expression.create({
+      data: {
+        layersId: randomUUID(),
+        kind: 'document',
+        sourceKind: 'document',
+        text: `${username} document text`,
+        createdByUserId: user.id,
+      },
+    })
+
     await prisma.importHistory.create({
       data: {
         importedBy: user.id,
@@ -219,6 +258,11 @@ describe('Multi-user listing isolation matrix', () => {
       typeAnnotationId,
       objectAnnotationId,
       apiKeyId: apiKey.id,
+      mediaId: media.id,
+      corpusId: corpus.id,
+      graphNodeId: graphNode.id,
+      graphEdgeId: graphEdge.id,
+      documentId: document.id,
     }
   }
 
@@ -307,6 +351,127 @@ describe('Multi-user listing isolation matrix', () => {
         foreignIds: [A.typeAnnotationId, A.objectAnnotationId],
         extractIds: body => body.map(a => a.id),
       })
+    })
+  })
+
+  /**
+   * Layers-store list and detail routes. Each user owns exactly one Media,
+   * Corpus, GraphNode, GraphEdge, and document Expression (all personal scope),
+   * so the only thing keeping user B's rows out of user A's response is the
+   * per-route `accessibleBy(ability, 'read')` filter. Dropping or inverting
+   * that filter surfaces the foreign id and fails the matching row below.
+   */
+  describe('Layers resource listings', () => {
+    it('GET /api/layers/media only returns the requesting user\'s media', async () => {
+      await expectIsolated<{ items: Array<{ id: string }> }>({
+        label: 'GET /api/layers/media as A',
+        url: '/api/layers/media',
+        requester: A,
+        foreignIds: [B.mediaId],
+        extractIds: body => body.items.map(m => m.id),
+      })
+      await expectIsolated<{ items: Array<{ id: string }> }>({
+        label: 'GET /api/layers/media as B',
+        url: '/api/layers/media',
+        requester: B,
+        foreignIds: [A.mediaId],
+        extractIds: body => body.items.map(m => m.id),
+      })
+    })
+
+    it('GET /api/layers/corpora only returns the requesting user\'s corpora', async () => {
+      await expectIsolated<Array<{ id: string }>>({
+        label: 'GET /api/layers/corpora as A',
+        url: '/api/layers/corpora',
+        requester: A,
+        foreignIds: [B.corpusId],
+        extractIds: body => body.map(c => c.id),
+      })
+      await expectIsolated<Array<{ id: string }>>({
+        label: 'GET /api/layers/corpora as B',
+        url: '/api/layers/corpora',
+        requester: B,
+        foreignIds: [A.corpusId],
+        extractIds: body => body.map(c => c.id),
+      })
+    })
+
+    it('GET /api/layers/graph/nodes only returns the requesting user\'s nodes', async () => {
+      await expectIsolated<Array<{ id: string }>>({
+        label: 'GET /api/layers/graph/nodes as A',
+        url: '/api/layers/graph/nodes',
+        requester: A,
+        foreignIds: [B.graphNodeId],
+        extractIds: body => body.map(n => n.id),
+      })
+      await expectIsolated<Array<{ id: string }>>({
+        label: 'GET /api/layers/graph/nodes as B',
+        url: '/api/layers/graph/nodes',
+        requester: B,
+        foreignIds: [A.graphNodeId],
+        extractIds: body => body.map(n => n.id),
+      })
+    })
+
+    it('GET /api/layers/graph/edges only returns the requesting user\'s edges', async () => {
+      await expectIsolated<Array<{ id: string }>>({
+        label: 'GET /api/layers/graph/edges as A',
+        url: '/api/layers/graph/edges',
+        requester: A,
+        foreignIds: [B.graphEdgeId],
+        extractIds: body => body.map(e => e.id),
+      })
+      await expectIsolated<Array<{ id: string }>>({
+        label: 'GET /api/layers/graph/edges as B',
+        url: '/api/layers/graph/edges',
+        requester: B,
+        foreignIds: [A.graphEdgeId],
+        extractIds: body => body.map(e => e.id),
+      })
+    })
+
+    it('GET /api/layers/documents only returns the requesting user\'s documents', async () => {
+      await expectIsolated<{ items: Array<{ id: string }> }>({
+        label: 'GET /api/layers/documents as A',
+        url: '/api/layers/documents',
+        requester: A,
+        foreignIds: [B.documentId],
+        extractIds: body => body.items.map(d => d.id),
+      })
+      await expectIsolated<{ items: Array<{ id: string }> }>({
+        label: 'GET /api/layers/documents as B',
+        url: '/api/layers/documents',
+        requester: B,
+        foreignIds: [A.documentId],
+        extractIds: body => body.items.map(d => d.id),
+      })
+    })
+
+    it('GET /api/layers/expressions/:id returns 403/404 for another user\'s expression', async () => {
+      const res = await app.inject({
+        method: 'GET',
+        url: `/api/layers/expressions/${B.documentId}`,
+        cookies: { session_token: A.sessionToken },
+      })
+      expect([403, 404]).toContain(res.statusCode)
+    })
+
+    it('GET /api/layers/media/:id returns 403/404 for another user\'s media', async () => {
+      const res = await app.inject({
+        method: 'GET',
+        url: `/api/layers/media/${B.mediaId}`,
+        cookies: { session_token: A.sessionToken },
+      })
+      expect([403, 404]).toContain(res.statusCode)
+    })
+
+    it('GET /api/layers/graph/nodes/:id returns 403/404 for another user\'s node', async () => {
+      const res = await app.inject({
+        method: 'GET',
+        url: `/api/layers/graph/nodes/${B.graphNodeId}`,
+        cookies: { session_token: A.sessionToken },
+      })
+      expect([403, 404]).toContain(res.statusCode)
     })
   })
 

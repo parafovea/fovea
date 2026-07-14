@@ -5,7 +5,9 @@ import { accessibleBy } from '@casl/prisma'
 import type { Token } from '@fovea/layers-schema'
 import type { AppAbility } from '../lib/abilities.js'
 import { ForbiddenError, NotFoundError, UnauthorizedError } from '../lib/errors.js'
+import { prisma } from '../lib/prisma.js'
 import { secToMs } from './layers-conversion-service.js'
+import { VideoAccessService } from './video-access-service.js'
 import {
   ExpressionRepository,
   type ExpressionDetail,
@@ -227,13 +229,14 @@ export class TextExpressionService {
    *
    * @param videoId - source Video UUID
    * @returns the materialized text expressions with their token decomposition
-   * @throws {NotFoundError} when the video does not exist
+   * @throws {NotFoundError} when the video does not exist or the caller cannot access it
    * @throws {ForbiddenError} when create access is denied
    */
   async materializeVideoTextExpressions(videoId: string): Promise<Array<Record<string, Json>>> {
     const userId = this.requireUserId()
     const video = await this.repository.findVideoById(videoId)
     if (!video) throw new NotFoundError('Video', videoId)
+    await this.assertVideoAccessible(videoId, userId)
 
     const results: ExpressionWithTokens[] = []
 
@@ -256,10 +259,18 @@ export class TextExpressionService {
     }
 
     // 2. ASR-transcript expression + segmentation, built from the first summary
-    //    that carries a structured transcript.
+    //    that carries a structured transcript. Gate on the source summary's
+    //    CASL read, mirroring the /summaries routes: a summary the caller
+    //    cannot read is skipped rather than having its transcript materialized
+    //    into a caller-owned expression, so another user's private transcript
+    //    is never exposed.
     const summary = await this.repository.findSummaryWithTranscript(videoId)
-    const transcript = summary ? asTranscriptJson(summary.transcriptJson) : null
-    if (summary && transcript && transcript.segments.length > 0) {
+    const readableSummary =
+      summary && (!this.ability || this.ability.can('read', subject('VideoSummary', summary)))
+        ? summary
+        : null
+    const transcript = readableSummary ? asTranscriptJson(readableSummary.transcriptJson) : null
+    if (readableSummary && transcript && transcript.segments.length > 0) {
       const { text, tokens } = transcriptToTokens(transcript.segments)
       const languages = transcript.language ? [transcript.language] : []
       const asrExpr = await this.upsertMaterialized({
@@ -271,12 +282,31 @@ export class TextExpressionService {
         languages,
         buildTokens: true,
         tokens,
-        videoSummaryId: summary.id,
+        videoSummaryId: readableSummary.id,
       })
       results.push(asrExpr)
     }
 
     return results.map((row) => this.mapWithTokens(row))
+  }
+
+  /**
+   * Gates access to a source video, mirroring the /videos routes: the caller
+   * may materialize only videos assigned to their projects (or assigned to them
+   * directly), plus globally-unassigned videos; system admins may materialize
+   * any. Throws {@link NotFoundError} (never a distinct 403) when the video is
+   * inaccessible so its existence is not leaked, matching GET
+   * /api/videos/:videoId.
+   */
+  private async assertVideoAccessible(videoId: string, userId: string): Promise<void> {
+    const systemRole = this.ability?.can('manage', 'all') ? 'system_admin' : 'user'
+    const accessible = await new VideoAccessService(prisma).getAccessibleVideoIds(
+      userId,
+      systemRole
+    )
+    if (accessible !== 'all' && !accessible.includes(videoId)) {
+      throw new NotFoundError('Video', videoId)
+    }
   }
 
   /**
@@ -374,6 +404,21 @@ export class TextExpressionService {
     }
 
     this.authorizeCreate(projectId, userId)
+
+    // A project-scoped document may only be created by a member of that
+    // project. The baseline own-content create rule passes for any self-owned
+    // Expression regardless of projectId, so a non-member could otherwise
+    // inject a row into a project's read scope they cannot access; verify
+    // direct membership explicitly. System admins authorize via manage-all
+    // rather than the baseline rule, so they are exempt.
+    if (projectId && !this.ability?.can('manage', 'all')) {
+      const membership = await prisma.projectMembership.findUnique({
+        where: { userId_projectId: { userId, projectId } },
+      })
+      if (!membership) {
+        throw new ForbiddenError('Cannot create Expression in this project')
+      }
+    }
 
     const id = input.id ?? randomUUID()
     const text = input.text

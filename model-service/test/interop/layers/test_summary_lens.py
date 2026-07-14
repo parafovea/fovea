@@ -143,6 +143,27 @@ def test_scale_rules_hold() -> None:
         assert isinstance(span.start, int)
 
 
+def test_literal_null_free_text_survives_the_round_trip() -> None:
+    """A summary/visual-analysis of the literal string ``"null"`` round-trips.
+
+    Both free-text fields flow through the fovea complement, not the
+    ``Expression.text`` / ``Annotation.value`` view fields that would coerce the
+    literal ``"null"`` to ``None``, so GetPut preserves them exactly.
+    """
+    dto = SummarizeResponseDTO(
+        id="s-null",
+        video_id="v-null",
+        persona_id="p-null",
+        summary="null",
+        visual_analysis="null",
+    )
+    view, comp = SUMMARY_LAYERS.forward(dto)
+    restored = SUMMARY_LAYERS.backward(view, comp)
+    assert restored == dto
+    assert restored.summary == "null"
+    assert restored.visual_analysis == "null"
+
+
 _SMALL_TEXT = st.text(max_size=40)
 _SMALL_ID = st.text(min_size=1, max_size=20)
 

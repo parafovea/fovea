@@ -7,7 +7,7 @@ import type {
   ObjectRef
 } from '@fovea/layers-schema'
 import type { AppAbility } from '../lib/abilities.js'
-import { NotFoundError, UnauthorizedError, ForbiddenError } from '../lib/errors.js'
+import { NotFoundError, UnauthorizedError, ForbiddenError, ValidationError } from '../lib/errors.js'
 import { GraphRepository } from '../repositories/GraphRepository.js'
 
 /**
@@ -19,6 +19,20 @@ import { GraphRepository } from '../repositories/GraphRepository.js'
  */
 function toJson(value: unknown): Prisma.InputJsonValue | undefined {
   return value === undefined ? undefined : JSON.parse(JSON.stringify(value))
+}
+
+/**
+ * Narrows an edge endpoint to a non-null {@link ObjectRef}. The edge route
+ * schema types source/target as an unconstrained value, so a schema-valid
+ * `null` (or any non-object) reaches the service; without this guard the
+ * subsequent `localId` access would throw a TypeError and surface as a 500.
+ * Rejecting it here yields a 400 instead.
+ */
+function assertObjectRef(value: unknown, field: 'source' | 'target'): ObjectRef {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    throw new ValidationError(`Graph edge ${field} must be an object reference`)
+  }
+  return value as ObjectRef
 }
 
 /**
@@ -356,16 +370,18 @@ export class GraphService {
     const ability = this.requireAbility()
     const userId = this.requireUserId()
     const projectId = input.projectId ?? null
+    const source = assertObjectRef(input.source, 'source')
+    const target = assertObjectRef(input.target, 'target')
 
     const updateExisting = async (existing: PrismaGraphEdge) => {
       if (!ability.can('update', subject('GraphEdge', existing))) {
         throw new ForbiddenError('Cannot update this GraphEdge')
       }
       const updated = await this.repository.updateEdge(existing.id, {
-        source: toJson(input.source),
-        target: toJson(input.target),
-        sourceLocalId: input.source.localId?.value ?? null,
-        targetLocalId: input.target.localId?.value ?? null,
+        source: toJson(source),
+        target: toJson(target),
+        sourceLocalId: source.localId?.value ?? null,
+        targetLocalId: target.localId?.value ?? null,
         edgeType: input.edgeType,
         label: input.label ?? null,
         ordinal: input.ordinal ?? null,
@@ -389,10 +405,10 @@ export class GraphService {
     try {
       const edge = await this.repository.createEdge({
         id: input.id,
-        source: toJson(input.source) as Prisma.InputJsonValue,
-        target: toJson(input.target) as Prisma.InputJsonValue,
-        sourceLocalId: input.source.localId?.value ?? null,
-        targetLocalId: input.target.localId?.value ?? null,
+        source: toJson(source) as Prisma.InputJsonValue,
+        target: toJson(target) as Prisma.InputJsonValue,
+        sourceLocalId: source.localId?.value ?? null,
+        targetLocalId: target.localId?.value ?? null,
         edgeType: input.edgeType,
         label: input.label ?? null,
         ordinal: input.ordinal ?? null,
@@ -424,13 +440,17 @@ export class GraphService {
     if (!ability.can('update', subject('GraphEdge', existing))) {
       throw new ForbiddenError('Cannot update this GraphEdge')
     }
+    // Reject a schema-valid null endpoint before dereferencing it (a 400, not a
+    // 500); leave an omitted endpoint untouched.
+    const source = input.source !== undefined ? assertObjectRef(input.source, 'source') : undefined
+    const target = input.target !== undefined ? assertObjectRef(input.target, 'target') : undefined
     // Keep the denormalized incident-node ids in step with any source/target
     // rewrite; leave them untouched when the endpoint is not being changed.
     const updated = await this.repository.updateEdge(id, {
-      source: toJson(input.source),
-      target: toJson(input.target),
-      sourceLocalId: input.source !== undefined ? (input.source.localId?.value ?? null) : undefined,
-      targetLocalId: input.target !== undefined ? (input.target.localId?.value ?? null) : undefined,
+      source: toJson(source),
+      target: toJson(target),
+      sourceLocalId: source !== undefined ? (source.localId?.value ?? null) : undefined,
+      targetLocalId: target !== undefined ? (target.localId?.value ?? null) : undefined,
       edgeType: input.edgeType,
       label: input.label,
       ordinal: input.ordinal,

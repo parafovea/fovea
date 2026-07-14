@@ -3,7 +3,7 @@ import { subject } from '@casl/ability'
 import { accessibleBy } from '@casl/prisma'
 import type { Anchor } from '@fovea/layers-schema'
 import type { AppAbility } from '../lib/abilities.js'
-import { NotFoundError, ForbiddenError } from '../lib/errors.js'
+import { NotFoundError, ForbiddenError, ValidationError } from '../lib/errors.js'
 import { AnnotationLayerRepository } from '../repositories/AnnotationLayerRepository.js'
 
 /**
@@ -496,6 +496,10 @@ export class AnnotationLayerService {
       if (!this.ability.can('update', subject('LayersAnnotation', existing))) {
         throw new ForbiddenError('Cannot update this LayersAnnotation')
       }
+      // Rewrite the denormalized extent only when the anchor is supplied, so a
+      // re-POST that omits the anchor preserves both the stored anchor and its
+      // derived startMs/endMs rather than clobbering the extent to null.
+      const extent = input.anchor !== undefined ? { startMs, endMs } : undefined
       const updated = await this.repository.updateAnnotation(existing.id, {
         tokenizationId: input.tokenizationId ?? null,
         anchor: input.anchor === undefined ? undefined : toJson(input.anchor),
@@ -515,8 +519,8 @@ export class AnnotationLayerService {
         temporal: toJson(input.temporal),
         spatial: toJson(input.spatial),
         features: toJson(input.features),
-        startMs,
-        endMs,
+        startMs: extent?.startMs,
+        endMs: extent?.endMs,
         layersUri: input.layersUri ?? null,
       })
       return { row: this.mapAnnotation(updated), created: false }
@@ -607,19 +611,22 @@ export class AnnotationLayerService {
       ? this.denotationForLayer(layer.personaId, input.ontologyTypeRefId, input.denotesNodeId)
       : undefined
 
+    // Scalar fields pass through as given: an explicit null clears the column,
+    // an omitted (undefined) field leaves it untouched. Collapsing null to
+    // undefined would make these fields impossible to clear.
     const updated = await this.repository.updateAnnotation(id, {
-      tokenizationId: input.tokenizationId ?? undefined,
+      tokenizationId: input.tokenizationId,
       anchor: input.anchor === undefined ? undefined : toJson(input.anchor),
-      tokenIndex: input.tokenIndex ?? undefined,
-      label: input.label ?? undefined,
-      value: input.value ?? undefined,
-      text: input.text ?? undefined,
-      parentAnnotationId: input.parentAnnotationId ?? undefined,
+      tokenIndex: input.tokenIndex,
+      label: input.label,
+      value: input.value,
+      text: input.text,
+      parentAnnotationId: input.parentAnnotationId,
       childIds: toJson(input.childIds),
-      headIndex: input.headIndex ?? undefined,
-      targetIndex: input.targetIndex ?? undefined,
+      headIndex: input.headIndex,
+      targetIndex: input.targetIndex,
       arguments: toJson(input.arguments),
-      confidence: input.confidence ?? undefined,
+      confidence: input.confidence,
       ontologyTypeRefId: denotation?.ontologyTypeRefId,
       denotesNodeId: denotation?.denotesNodeId,
       knowledgeRefs: toJson(input.knowledgeRefs),
@@ -628,7 +635,7 @@ export class AnnotationLayerService {
       features: toJson(input.features),
       startMs: extent?.startMs,
       endMs: extent?.endMs,
-      layersUri: input.layersUri ?? undefined,
+      layersUri: input.layersUri,
     })
     return this.mapAnnotation(updated)
   }
@@ -687,6 +694,24 @@ export class AnnotationLayerService {
       if (existing) return updateExisting(existing)
     }
 
+    // Both endpoints must exist and be readable by the caller so a relation
+    // cannot dangle off a nonexistent annotation (which would otherwise raise
+    // an uncaught P2003) or bridge into a layer the caller cannot read. The
+    // endpoints commonly live in a sibling span layer distinct from the
+    // relation's own layer, so membership is not constrained to input.layerId.
+    const [source, target] = await Promise.all([
+      this.repository.findAnnotationById(input.sourceAnnotationId),
+      this.repository.findAnnotationById(input.targetAnnotationId),
+    ])
+    if (!source) throw new NotFoundError('LayersAnnotation', input.sourceAnnotationId)
+    if (!target) throw new NotFoundError('LayersAnnotation', input.targetAnnotationId)
+    if (!this.ability.can('read', subject('LayersAnnotation', source))) {
+      throw new ForbiddenError('Cannot link this source LayersAnnotation')
+    }
+    if (!this.ability.can('read', subject('LayersAnnotation', target))) {
+      throw new ForbiddenError('Cannot link this target LayersAnnotation')
+    }
+
     const candidate = subject('TextAnnotationRelation', { projectId, createdByUserId: this.userId })
     if (!this.ability.can('create', candidate)) {
       throw new ForbiddenError('Cannot create TextAnnotationRelation in this scope')
@@ -707,9 +732,17 @@ export class AnnotationLayerService {
       })
       return { row: this.mapRelation(created), created: true }
     } catch (error) {
-      if (input.id && error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
-        const existing = await this.repository.findRelationById(input.id)
-        if (existing) return updateExisting(existing)
+      if (error instanceof Prisma.PrismaClientKnownRequestError) {
+        if (input.id && error.code === 'P2002') {
+          const existing = await this.repository.findRelationById(input.id)
+          if (existing) return updateExisting(existing)
+        }
+        // A foreign-key violation here means an endpoint or the layer was
+        // deleted after validation raced ahead of the insert; surface a 400
+        // rather than letting the raw Prisma error escape as a 500.
+        if (error.code === 'P2003') {
+          throw new ValidationError('Relation references an annotation or layer that no longer exists')
+        }
       }
       throw error
     }

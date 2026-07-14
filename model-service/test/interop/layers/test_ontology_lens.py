@@ -111,6 +111,31 @@ def test_parent_resolves_to_typedef_uri() -> None:
     assert dog.parentTypeRef.endswith("/Animal")
 
 
+def test_literal_null_description_survives_the_round_trip() -> None:
+    """A type whose description is the literal string ``"null"`` round-trips.
+
+    The description flows through the fovea complement, not the ``TypeDef.gloss``
+    view field that would coerce the literal ``"null"`` to ``None``, so GetPut
+    preserves it exactly.
+    """
+    source = (
+        (
+            OntologyTypeDTO(
+                name="Thing",
+                description="null",
+                parent=None,
+                confidence=0.5,
+                examples=[],
+            ),
+        ),
+        make_ctx(),
+    )
+    view, complement = ONTOLOGY_LAYERS.forward(source)
+    restored, _ctx = ONTOLOGY_LAYERS.backward(view, complement)
+    assert restored == source[0]
+    assert restored[0].description == "null"
+
+
 # --- property-based GetPut ---------------------------------------------------
 
 _text = st.text(alphabet=st.characters(min_codepoint=32, max_codepoint=126), max_size=24)

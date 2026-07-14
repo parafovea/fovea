@@ -664,9 +664,9 @@ describe('World State API', () => {
           entities: [{ id: 'entity-1', name: 'Alice', description: [], typeAssignments: [] }],
           events: [{ id: 'event-1', name: 'Meeting', description: [], personaInterpretations: [] }],
           times: [{ id: 'time-1', type: 'instant' }],
-          entityCollections: [{ id: 'ec-1', name: 'People', members: ['entity-1'] }],
-          eventCollections: [{ id: 'evc-1', name: 'Events', members: ['event-1'] }],
-          timeCollections: [{ id: 'tc-1', name: 'Times', members: ['time-1'] }],
+          entityCollections: [{ id: 'ec-1', name: 'People', entityIds: ['entity-1'] }],
+          eventCollections: [{ id: 'evc-1', name: 'Events', eventIds: ['event-1'] }],
+          timeCollections: [{ id: 'tc-1', name: 'Times', times: [{ id: 'time-1', type: 'instant' }] }],
           relations: [
             { id: 'rel-e', relationTypeId: 'rt', sourceType: 'entity', sourceId: 'entity-1', targetType: 'event', targetId: 'event-1' },
             { id: 'rel-t', relationTypeId: 'rt', sourceType: 'time', sourceId: 'time-1', targetType: 'entity', targetId: 'entity-1' }
@@ -779,11 +779,11 @@ describe('World State API', () => {
       })).json() as {
         entities: Array<{ id: string }>
         relations: unknown[]
-        entityCollections: Array<{ members: string[] }>
+        entityCollections: Array<{ entityIds: string[] }>
       }
       expect(world.entities.find(e => e.id === 'entity-1')).toBeUndefined()
       expect(world.relations).toHaveLength(0)
-      expect(world.entityCollections[0].members).not.toContain('entity-1')
+      expect(world.entityCollections[0].entityIds).not.toContain('entity-1')
       expect(await prisma.graphNode.findUnique({ where: { id: 'entity-1' } })).toBeNull()
 
       // The entity-object gloss ref became plain text with the entity name.

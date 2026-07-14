@@ -111,15 +111,15 @@ async function importCorpus(input: ImportCorpusInput): Promise<ImportCorpusResul
   // non-empty lines into records here and pass the format tag as `source`.
   const records = input.payload
     .split('\n')
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0)
-    .map((line, index) => {
+    .map((line, index) => ({ line: line.trim(), lineNumber: index + 1 }))
+    .filter(({ line }) => line.length > 0)
+    .map(({ line, lineNumber }) => {
       try {
         return JSON.parse(line) as unknown
       } catch (cause) {
         throw new AppError(
           'INVALID_JSONL',
-          `Line ${index + 1} of the corpus is not valid JSON`,
+          `Line ${lineNumber} of the corpus is not valid JSON`,
           cause,
         )
       }

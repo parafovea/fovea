@@ -55,7 +55,9 @@ export function VideoTextPanel({ videoId, personaId, readOnly }: VideoTextPanelP
   const panelAnchorRef = useTourAnchor('video-text-panel')
 
   useEffect(() => {
-    if (!activeId && expressions.length > 0) setActiveId(expressions[0].id)
+    if (expressions.length === 0) return
+    const isValid = expressions.some((expression) => expression.id === activeId)
+    if (!isValid) setActiveId(expressions[0].id)
   }, [activeId, expressions])
 
   if (isLoading) {

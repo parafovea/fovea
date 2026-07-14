@@ -5,10 +5,13 @@ per-frame, per-object RLE masks a tracker (e.g. SAM2) produces over one video.
 This lens projects that result to a
 :class:`lairs.integrations.codecs.CorpusFragment` of canonical ``lairs`` records:
 
+- one :class:`lairs.records.expression.Expression` (``kind="video"``) naming the
+  tracked video the annotation layer applies to,
 - one :class:`lairs.records.media.Media` (``kind="video"``) describing the
   source video's pixel dimensions, and
 - one span :class:`lairs.records.annotation.AnnotationLayer`
-  (``subkind="custom"``) with one :class:`~lairs.records.annotation.Annotation`
+  (``subkind="custom"``), whose ``expression`` resolves to the video expression
+  above, with one :class:`~lairs.records.annotation.Annotation`
   per tracked ``object_id``. Each annotation anchors by a
   :class:`~lairs.records.defs.SpatioTemporalAnchor` whose keyframes carry a
   per-frame pixel bounding box *derived* from the RLE (via
@@ -34,11 +37,12 @@ from typing import TYPE_CHECKING
 
 import didactic.api as dx
 from lairs.integrations.codecs import CorpusFragment, FragmentRecord
-from lairs.records import annotation, defs, media
+from lairs.records import annotation, defs, expression, media
 from pycocotools import mask as coco_mask
 
 from src.infrastructure.adapters.outbound.layers._convert import (
     ANNOTATION_LAYER_NSID,
+    EXPRESSION_NSID,
     MEDIA_NSID,
     JsonValue,
     conf_to_int,
@@ -73,6 +77,10 @@ def _j_bool(value: JsonValue) -> bool:
 # tracking DTO, so it is not round-trip data: a fixed epoch keeps the lens a
 # pure DTO<->fragment map (the codec stamps real provenance from its context).
 _EPOCH = datetime(1970, 1, 1, tzinfo=UTC)
+
+# Fragment-local identifier for the tracked video's expression record, and the
+# fallback key when the tracking result carries no video id.
+_EXPRESSION_LOCAL_ID = "expression"
 
 
 def _rle_counts_bytes(rle: dict[str, object]) -> dict[str, object]:
@@ -128,7 +136,7 @@ class TrackingLayersLens(dx.Lens["TrackObjectsResponseDTO", CorpusFragment, Json
                     order.append(mask.object_id)
                 by_object[mask.object_id].append((frame.timestamp, mask))
 
-        expr_uri = local_uri("local", MEDIA_NSID, dto.video_id)
+        expr_uri = local_uri("local", EXPRESSION_NSID, dto.video_id or _EXPRESSION_LOCAL_ID)
 
         annotations: list[annotation.Annotation] = []
         for object_id in order:
@@ -166,6 +174,11 @@ class TrackingLayersLens(dx.Lens["TrackObjectsResponseDTO", CorpusFragment, Json
                 )
             )
 
+        expression_record = expression.Expression(
+            id=dto.video_id,
+            kind="video",
+            createdAt=_EPOCH,
+        )
         media_record = media.Media(
             kind="video",
             createdAt=_EPOCH,
@@ -179,6 +192,7 @@ class TrackingLayersLens(dx.Lens["TrackObjectsResponseDTO", CorpusFragment, Json
             subkind="custom",
         )
         records = (
+            _tracking_record(EXPRESSION_NSID, _EXPRESSION_LOCAL_ID, expression_record),
             _tracking_record(MEDIA_NSID, "media", media_record),
             _tracking_record(ANNOTATION_LAYER_NSID, "tracking", layer),
         )

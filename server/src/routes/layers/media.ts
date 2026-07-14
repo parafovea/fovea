@@ -216,6 +216,21 @@ export default async function mediaRoutes(fastify: FastifyInstance): Promise<voi
       throw new ForbiddenError('Cannot create Media in this scope')
     }
 
+    // A project-scoped media row may only be created by a member of that
+    // project. The baseline own-content create rule passes for any self-owned
+    // Media regardless of projectId, so a non-member could otherwise inject a
+    // row into a project's read scope they cannot access; verify direct
+    // membership explicitly. System admins authorize via manage-all rather than
+    // the baseline rule, so they are exempt.
+    if (projectId && !request.ability.can('manage', 'all')) {
+      const membership = await fastify.prisma.projectMembership.findUnique({
+        where: { userId_projectId: { userId, projectId } },
+      })
+      if (!membership) {
+        throw new ForbiddenError('Cannot create Media in this project')
+      }
+    }
+
     try {
       const created = await mediaRepository.create({
         id: data.id,

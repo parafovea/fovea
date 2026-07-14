@@ -172,6 +172,68 @@ def test_relationship_edge_set_shape_and_scale() -> None:
     assert supports.confidence == 800
 
 
+def _index_endpoint_dto() -> ClaimsResultDTO:
+    """Two flat claims joined by a relationship that names them by position."""
+    return ClaimsResultDTO(
+        text=_TEXT,
+        claims=[
+            ExtractedClaimDTO(text="The sky is blue.", confidence=0.9),
+            ExtractedClaimDTO(text="Grass is green.", confidence=0.8),
+        ],
+        relationships=[
+            ClaimRelationshipDTO(
+                source_claim_id="0",
+                target_claim_id="1",
+                relation_type="supports",
+                confidence=0.7,
+            )
+        ],
+    )
+
+
+def test_positional_endpoint_ids_resolve_to_claim_annotation_uuids() -> None:
+    """A relationship that names claims by preorder index resolves to real uuids.
+
+    An endpoint id that is a decimal index into the preorder claim list is
+    rewritten to that claim's minted ``claim-{index}`` uuid, so the edge points
+    at an annotation the layer actually contains rather than a dangling id.
+    """
+    view, _ = LENS.forward(_index_endpoint_dto())
+    by_id = _records_by_id(view)
+
+    layer = annotation.AnnotationLayer.model_validate_json(by_id["claims"])
+    claim_uuids = {ann.uuid.value for ann in layer.annotations}
+    assert claim_uuids == {"claim-0", "claim-1"}
+
+    edge_set = graph.GraphEdgeSet.model_validate_json(by_id["relationships"])
+    (edge,) = edge_set.edges
+    assert edge.source.localId is not None
+    assert edge.target.localId is not None
+    assert edge.source.localId.value == "claim-0"
+    assert edge.target.localId.value == "claim-1"
+    # Both resolved endpoints name annotations the claims layer contains.
+    assert edge.source.localId.value in claim_uuids
+    assert edge.target.localId.value in claim_uuids
+
+
+def test_literal_null_text_survives_the_round_trip() -> None:
+    """A document/claim whose text is the literal string ``"null"`` round-trips.
+
+    Free text flows through the fovea complement, not a view field that would
+    coerce the literal ``"null"`` to ``None``, so ``backward(*forward(dto))``
+    preserves it exactly.
+    """
+    dto = ClaimsResultDTO(
+        text="null",
+        claims=[ExtractedClaimDTO(text="null", confidence=0.5)],
+    )
+    view, complement = LENS.forward(dto)
+    restored = LENS.backward(view, complement)
+    assert restored == dto
+    assert restored.text == "null"
+    assert restored.claims[0].text == "null"
+
+
 def test_flat_dto_omits_relationship_record() -> None:
     view, _ = LENS.forward(_flat_dto())
     by_id = _records_by_id(view)

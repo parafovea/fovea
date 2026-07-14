@@ -15,11 +15,12 @@ two canonical ``lairs`` records:
 
 The layers view puts no floats on the wire (confidence scales to ``0..1000`` and
 seconds to integer milliseconds) and has no home for the audio/fusion fields, so
-the round-trip is a :class:`didactic.api.Lens`: the view captures the summary,
-visual analysis, and keyframe descriptions; the complement carries the
-fovea-only remainder (the exact source confidences and timestamps, the keyframes
-verbatim, the transcript, the model ids, the processing times, and the reasoning
-trace), so the GetPut law ``backward(*forward(dto)) == dto`` holds for every DTO.
+the round-trip is a :class:`didactic.api.Lens`: the view displays the summary,
+visual analysis, and keyframe descriptions, while the complement carries the
+fovea remainder verbatim — the summary and visual-analysis text, the exact source
+confidences and timestamps, the keyframes, the transcript, the model ids, the
+processing times, and the reasoning trace — so the GetPut law
+``backward(*forward(dto)) == dto`` holds for every DTO.
 
 The :class:`~src.application.ports.outbound.layers_codec.EmitContext` supplied at
 construction stamps provenance (``createdAt``, ``tool``, minting authority) onto
@@ -204,6 +205,8 @@ class SummaryLayersLens(dx.Lens[SummarizeResponseDTO, CorpusFragment, JsonValue]
         complement: JsonValue = {
             "id": dto.id,
             "persona_id": dto.persona_id,
+            "summary": dto.summary,
+            "visual_analysis": dto.visual_analysis,
             "audio_transcript": dto.audio_transcript,
             "key_frames": [_keyframe_to_json(kf) for kf in dto.key_frames],
             "confidence": dto.confidence,
@@ -224,19 +227,11 @@ class SummaryLayersLens(dx.Lens[SummarizeResponseDTO, CorpusFragment, JsonValue]
         """Reconstruct a summary result from its fragment and complement."""
         comp = j_obj(complement)
         video_id = ""
-        summary = ""
-        visual_analysis: str | None = None
         for record in view.records:
             if record.nsid == EXPRESSION_NSID:
                 expr = expression.Expression.model_validate_json(record.value_json)
                 video_id = expr.id
-                summary = expr.text if expr.text is not None else ""
-            elif record.nsid == ANNOTATION_LAYER_NSID:
-                layer = annotation.AnnotationLayer.model_validate_json(record.value_json)
-                for ann in layer.annotations:
-                    if ann.label == _SUMMARY_LABEL and ann.anchor is None:
-                        visual_analysis = ann.value
-                        break
+                break
 
         transcript = comp["transcript_json"]
         transcript_json = transcript if isinstance(transcript, dict) else None
@@ -245,8 +240,8 @@ class SummaryLayersLens(dx.Lens[SummarizeResponseDTO, CorpusFragment, JsonValue]
             id=j_str(comp["id"]),
             video_id=video_id,
             persona_id=j_str(comp["persona_id"]),
-            summary=summary,
-            visual_analysis=visual_analysis,
+            summary=j_str(comp["summary"]),
+            visual_analysis=_opt_str(comp["visual_analysis"]),
             audio_transcript=_opt_str(comp["audio_transcript"]),
             key_frames=[_keyframe_from_json(kf) for kf in j_list(comp["key_frames"])],
             confidence=j_float(comp["confidence"]),

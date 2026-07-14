@@ -51,11 +51,37 @@ function toJson(value: unknown): Prisma.InputJsonValue {
   return JSON.parse(JSON.stringify(value ?? null))
 }
 
+/**
+ * Renders an optional bundle for a nullable Json column: the bundle when
+ * present, or undefined so the field is omitted from the write (leaving the
+ * column NULL on create, untouched on update).
+ */
+function optionalJson(value: unknown): Prisma.InputJsonValue | undefined {
+  return value === undefined || value === null ? undefined : JSON.parse(JSON.stringify(value))
+}
+
 /** Narrows an unknown value_json to an indexable record without asserting shape. */
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : {}
+}
+
+/** The ownership stamp every layers content row carries. */
+interface RowScope {
+  createdByUserId: string | null
+  projectId: string | null
+}
+
+/**
+ * True when an existing row's ownership stamp matches the import scope. An
+ * import may only create or update rows under its own (user, project) scope, so
+ * a record whose id resolves to a row owned by a different scope is rejected.
+ */
+function scopeMatches(existing: RowScope, scope: LayersScope): boolean {
+  return (
+    existing.createdByUserId === scope.createdByUserId && existing.projectId === scope.projectId
+  )
 }
 
 /** Reads a string field under either a camelCase or snake_case key. */
@@ -105,9 +131,12 @@ export function targetForNsid(nsid: string): InterchangeTarget | null {
  * `local_id`), reading a corpus back out as normalized records, and recording
  * the import-history audit row.
  *
- * This class performs no authorization: the InterchangeService decides who may
- * invoke a method and supplies the ownership scope and any read filter. Methods
- * return raw Prisma types and propagate Prisma errors to their callers.
+ * The InterchangeService decides who may invoke a method and supplies the
+ * ownership scope and any read filter; this class enforces no CASL policy of its
+ * own, but it does scope every persist to the supplied import scope — an upsert
+ * only touches a row (and a child only attaches to a parent) whose ownership
+ * stamp matches, so an import cannot mutate or graft onto another owner's
+ * content. Methods return raw Prisma types and propagate Prisma errors.
  *
  * @example
  * ```typescript
@@ -129,8 +158,9 @@ export class InterchangeRepository {
    * written in foreign-key-safe order (media/corpus before expression, layers
    * before annotations) so intra-batch references resolve. Each write is an
    * upsert keyed by `local_id`, making a re-import idempotent. Records whose
-   * `nsid` maps to no store, or whose required foreign keys are absent, are
-   * counted as skipped rather than aborting the batch.
+   * `nsid` maps to no store, whose required foreign keys are absent, whose
+   * `local_id` resolves to a row owned by another scope, or whose parent belongs
+   * to another scope are counted as skipped rather than aborting the batch.
    *
    * @param records - the normalized records to persist
    * @param scope - the (projectId, createdByUserId) ownership stamp for new rows
@@ -178,8 +208,16 @@ export class InterchangeRepository {
   /**
    * Upserts one normalized record into its target model, keyed by `local_id`.
    *
-   * @returns true when a row was written, false when required fields (e.g. a
-   *   foreign key) were absent and the record was skipped
+   * An id that already resolves to a row owned by a different (user, project)
+   * scope is never overwritten: the record is skipped so an import cannot mutate
+   * another owner's content by supplying (or colliding with) their `local_id`.
+   * A child record (annotation layer, annotation) is likewise skipped when its
+   * referenced parent (expression, layer) does not exist or belongs to a
+   * different scope, so an import cannot graft rows onto another owner's parent.
+   *
+   * @returns true when a row was written, false when the record was skipped —
+   *   because a required field or foreign key was absent, or because it would
+   *   have touched a row or parent outside the import scope
    */
   private async persistOne(
     tx: Prisma.TransactionClient,
@@ -191,6 +229,11 @@ export class InterchangeRepository {
     const value = asRecord(record.value_json)
     const json = toJson(record.value_json)
     const { projectId, createdByUserId } = scope
+
+    // Re-authorize against the existing row: an id already owned by another
+    // scope is skipped rather than overwritten.
+    const existing = await this.findRowScope(tx, target, id)
+    if (existing && !scopeMatches(existing, scope)) return false
 
     switch (target) {
       case 'media': {
@@ -231,6 +274,18 @@ export class InterchangeRepository {
         const kind = readString(value, 'kind') ?? 'unknown'
         const layersId = readString(value, 'layersId', 'id') ?? id
         const sourceKind = readString(value, 'sourceKind', 'source_kind') ?? 'document'
+        // Carry the container/source foreign keys so a corpus round-trip keeps
+        // its members. Each FK is set only when the referenced parent exists in
+        // the store (media/corpus are written earlier in the batch), leaving it
+        // NULL otherwise so the write stays foreign-key-safe.
+        const corpusId = await this.resolveFk(tx, 'corpus', readString(value, 'corpusId', 'corpus_id'))
+        const mediaId = await this.resolveFk(tx, 'media', readString(value, 'mediaId', 'media_id'))
+        const videoId = await this.resolveFk(tx, 'video', readString(value, 'videoId', 'video_id'))
+        const parentExpressionId = await this.resolveFk(
+          tx,
+          'expression',
+          readString(value, 'parentExpressionId', 'parent_expression_id'),
+        )
         await tx.expression.upsert({
           where: { id },
           create: {
@@ -240,16 +295,34 @@ export class InterchangeRepository {
             sourceKind,
             text: readString(value, 'text'),
             metadata: json,
+            corpusId,
+            mediaId,
+            videoId,
+            parentExpressionId,
             projectId,
             createdByUserId,
           },
-          update: { kind, layersId, sourceKind, text: readString(value, 'text'), metadata: json },
+          update: {
+            kind,
+            layersId,
+            sourceKind,
+            text: readString(value, 'text'),
+            metadata: json,
+            corpusId,
+            mediaId,
+            videoId,
+            parentExpressionId,
+          },
         })
         return true
       }
       case 'annotation-layer': {
         const expressionId = readString(value, 'expressionId', 'expression_id')
         if (!expressionId) return false
+        // The parent expression must exist and belong to the import scope; a
+        // layer must not attach to another owner's expression.
+        const parent = await this.findRowScope(tx, 'expression', expressionId)
+        if (!parent || !scopeMatches(parent, scope)) return false
         const kind = readString(value, 'kind') ?? 'span'
         await tx.annotationLayer.upsert({
           where: { id },
@@ -270,6 +343,14 @@ export class InterchangeRepository {
         const layerId = readString(value, 'layerId', 'layer_id')
         const anchor = value.anchor
         if (!layerId || anchor === undefined) return false
+        // The parent layer must exist and belong to the import scope; an
+        // annotation must not attach to another owner's layer.
+        const parent = await this.findRowScope(tx, 'annotation-layer', layerId)
+        if (!parent || !scopeMatches(parent, scope)) return false
+        // Persist the semantic feature bundle, not the whole record: the
+        // `features` column holds `value.features`, so downstream consumers read
+        // the bundle rather than an id/anchor/label envelope.
+        const features = optionalJson(value.features)
         await tx.layersAnnotation.upsert({
           where: { id },
           create: {
@@ -279,7 +360,7 @@ export class InterchangeRepository {
             label: readString(value, 'label'),
             value: readString(value, 'value'),
             text: readString(value, 'text'),
-            features: json,
+            features,
             projectId,
             createdByUserId,
           },
@@ -288,12 +369,67 @@ export class InterchangeRepository {
             label: readString(value, 'label'),
             value: readString(value, 'value'),
             text: readString(value, 'text'),
-            features: json,
+            features,
           },
         })
         return true
       }
     }
+  }
+
+  /**
+   * Reads the ownership stamp of an existing target row by id, or null when no
+   * row exists. Used to re-authorize an upsert against the row it would touch
+   * and to verify a child record's parent belongs to the import scope.
+   */
+  private async findRowScope(
+    tx: Prisma.TransactionClient,
+    target: InterchangeTarget,
+    id: string,
+  ): Promise<RowScope | null> {
+    const scope = { createdByUserId: true, projectId: true } as const
+    switch (target) {
+      case 'media':
+        return tx.media.findUnique({ where: { id }, select: scope })
+      case 'corpus':
+        return tx.corpus.findUnique({ where: { id }, select: scope })
+      case 'expression':
+        return tx.expression.findUnique({ where: { id }, select: scope })
+      case 'annotation-layer':
+        return tx.annotationLayer.findUnique({ where: { id }, select: scope })
+      case 'annotation':
+        return tx.layersAnnotation.findUnique({ where: { id }, select: scope })
+    }
+  }
+
+  /**
+   * Resolves an optional foreign key to itself when the referenced parent
+   * exists in the store, or undefined otherwise, so a write only sets an FK
+   * whose target is present. Returns undefined for an absent id.
+   */
+  private async resolveFk(
+    tx: Prisma.TransactionClient,
+    model: 'corpus' | 'media' | 'video' | 'expression',
+    id: string | undefined,
+  ): Promise<string | undefined> {
+    if (!id) return undefined
+    const idOnly = { id: true } as const
+    let found: { id: string } | null = null
+    switch (model) {
+      case 'corpus':
+        found = await tx.corpus.findUnique({ where: { id }, select: idOnly })
+        break
+      case 'media':
+        found = await tx.media.findUnique({ where: { id }, select: idOnly })
+        break
+      case 'video':
+        found = await tx.video.findUnique({ where: { id }, select: idOnly })
+        break
+      case 'expression':
+        found = await tx.expression.findUnique({ where: { id }, select: idOnly })
+        break
+    }
+    return found ? id : undefined
   }
 
   /**

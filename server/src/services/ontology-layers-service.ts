@@ -6,7 +6,7 @@ import { NotFoundError, ForbiddenError } from '../lib/errors.js'
 import { GraphRepository } from '../repositories/GraphRepository.js'
 import { LayersOntologyRepository } from '../repositories/LayersOntologyRepository.js'
 import { WorldStateService, resolvePersonalUserId } from './world-state-service.js'
-import { emptyWorldState, type WorldStateAggregate } from './world-layers-mapper.js'
+import { type WorldStateAggregate } from './world-layers-mapper.js'
 import type { PersonaOntologyAggregate } from './ontology-layers-mapper.js'
 
 /** A persona in the `/api/ontology` response shape. */
@@ -88,13 +88,17 @@ function personaResponse(persona: Persona): PersonaResponse {
   }
 }
 
-/** Maps the contract's ontology field names to the type-bucket aggregate. */
-function toAggregate(input: OntologyInput): PersonaOntologyAggregate {
+/**
+ * Maps the contract's ontology field names to the provided type buckets, leaving
+ * an omitted field undefined so a save merges only the buckets the client sent
+ * rather than deleting the types in an omitted bucket.
+ */
+function toBuckets(input: OntologyInput): Partial<PersonaOntologyAggregate> {
   return {
-    entityTypes: input.entities ?? [],
-    eventTypes: input.events ?? [],
-    roleTypes: input.roles ?? [],
-    relationTypes: input.relationTypes ?? [],
+    entityTypes: input.entities,
+    eventTypes: input.events,
+    roleTypes: input.roles,
+    relationTypes: input.relationTypes,
   }
 }
 
@@ -248,7 +252,7 @@ export class OntologyLayersService {
         owningPersonas.get(ontology.personaId) ??
         (await this.prisma.persona.findUnique({ where: { id: ontology.personaId } }))
       if (!persona) throw new NotFoundError('Persona', ontology.personaId)
-      await this.world.writePersonaOntology(persona, toAggregate(ontology))
+      await this.world.writePersonaOntology(persona, toBuckets(ontology))
       const bundle = await this.world.readPersonaOntologyBundle(persona)
       if (bundle) {
         savedOntologies.push(
@@ -257,11 +261,12 @@ export class OntologyLayersService {
       }
     }
 
-    // Save the world when provided.
+    // Save the world when provided: merge the supplied buckets by id under the
+    // per-row lockVersion guard (never a whole-blob prune-and-recreate); omitted
+    // buckets stay untouched and removals go through the explicit delete routes.
     let savedWorld: WorldStateAggregate | undefined
     if (input.world) {
-      const world: WorldStateAggregate = { ...emptyWorldState(), ...input.world }
-      await this.world.writePersonalWorld(userId, world)
+      await this.world.mergePersonalWorld(userId, input.world)
       savedWorld = (await this.world.readPersonalWorld(userId)).aggregate
     }
 

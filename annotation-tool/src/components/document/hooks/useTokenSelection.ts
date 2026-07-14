@@ -223,9 +223,16 @@ export function useTokenSelection(
         rafRef.current = null
       }
 
+      // Apply the last pointer position synchronously before the gesture ends, so
+      // the final tokens of a fast drag are not dropped when their scheduled frame
+      // is canceled on release.
+      processMove()
+
       store.setGesture(false)
 
-      const selection = store.committedSelection
+      // Re-read after processMove: the store replaces state on set, so the
+      // snapshot captured above would hold the pre-teardown selection.
+      const selection = storeApi.getState().committedSelection
       if (!hasTokens(selection)) {
         store.closeLabelDraft()
         return
@@ -235,7 +242,7 @@ export function useTokenSelection(
       const bbox = container ? selectionBBox(container, selection) : null
       store.openLabelDraft({ segments, bbox })
     },
-    [containerRef, storeApi],
+    [containerRef, storeApi, processMove],
   )
 
   return { onPointerDown, onPointerMove, onPointerUp }

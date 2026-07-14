@@ -50,6 +50,23 @@ interface ModelServiceImportResponse {
   records: NormalizedRecordDTO[]
 }
 
+/** The serialized interchange artifact an export returns. */
+export interface ExportResult {
+  /** The corpus's records in wire form: each `value_json` is a JSON string. */
+  records: NormalizedRecordDTO[]
+  /** The exported corpus's name. */
+  corpusName: string
+}
+
+/**
+ * Parses a wire `value_json` — a JSON-encoded string per the model-service
+ * contract — into the object shape the repository persists. A non-string value
+ * is passed through unchanged so an already-parsed payload stays usable.
+ */
+function parseValueJson(value: unknown): unknown {
+  return typeof value === 'string' ? JSON.parse(value) : value
+}
+
 /** Maps a dispatch target to the CASL subject its `create` is authorized against. */
 const TARGET_SUBJECT: Record<InterchangeTarget, SubjectName> = {
   media: 'Media',
@@ -62,15 +79,17 @@ const TARGET_SUBJECT: Record<InterchangeTarget, SubjectName> = {
 /**
  * Owns the layers interchange business rules and RBAC, delegating all data
  * access to an InterchangeRepository and all normalization/serialization to the
- * model-service codec. Construct one per request from the request-scoped CASL
- * ability and the authenticated user's id.
+ * model-service. Construct one per request from the request-scoped CASL ability
+ * and the authenticated user's id.
  *
- * Import normalizes an opaque source payload through the model-service, then
- * persists the returned records under the caller's ownership scope after
- * pre-authorizing a `create` for every layers subject the batch touches. Export
- * reads a corpus the caller may `read` back out as normalized records (filtered
- * by the caller's CASL read scope over expressions) and serializes it through
- * the model-service. The repository performs no authorization.
+ * Import normalizes the posted records through the model-service, then persists
+ * them under the caller's ownership scope after pre-authorizing a `create` for
+ * every layers subject the batch touches; the repository additionally scopes
+ * each upsert to the caller's own rows, so an import never overwrites or grafts
+ * onto content owned by another scope. Export reads a corpus the caller may
+ * `read` back out as normalized records (filtered by the caller's CASL read
+ * scope over expressions) and serializes it through the model-service.
+ * `value_json` crosses the wire as a JSON string in both directions.
  *
  * @example
  * ```typescript
@@ -109,7 +128,9 @@ export class InterchangeService {
     const userId = this.requireUserId()
     const projectId = request.projectId ?? null
 
-    // Normalize the opaque source payload through the model-service codec.
+    // Normalize the posted records through the model-service, which validates
+    // them against the canonical layers record shape and returns them ready to
+    // persist. Records carry `value_json` as a JSON string on the wire.
     const response = await fetchModelService(
       `${config.modelService.url}/api/layers/import`,
       {
@@ -122,8 +143,16 @@ export class InterchangeService {
       const detail = await response.text()
       throw new ValidationError(`Model service rejected import: ${detail}`)
     }
+    // The model-service returns records whose `value_json` is a JSON string;
+    // parse each back to the object shape the repository persists.
     const normalized = (await response.json()) as ModelServiceImportResponse
-    const records = Array.isArray(normalized.records) ? normalized.records : []
+    const records: NormalizedRecordDTO[] = (
+      Array.isArray(normalized.records) ? normalized.records : []
+    ).map((record) => ({
+      local_id: record.local_id,
+      nsid: record.nsid,
+      value_json: parseValueJson(record.value_json),
+    }))
 
     // Pre-authorize a `create` for every distinct layers subject the batch will
     // write, using a candidate carrying the resolved (projectId, createdByUserId)
@@ -173,13 +202,13 @@ export class InterchangeService {
    * serializes it through the model-service codec.
    *
    * @param request - the corpus id or name to export
-   * @returns the model-service export artifact (opaque JSON)
+   * @returns the corpus's records in wire form plus the corpus name
    * @throws {UnauthorizedError} when unauthenticated
    * @throws {ValidationError} when neither corpusId nor corpusName is supplied
    * @throws {NotFoundError} when the corpus does not exist
    * @throws {ForbiddenError} when the caller cannot read the corpus
    */
-  async exportRecords(request: ExportRequest): Promise<unknown> {
+  async exportRecords(request: ExportRequest): Promise<ExportResult> {
     this.requireUserId()
 
     if (!request.corpusId && !request.corpusName) {
@@ -204,18 +233,35 @@ export class InterchangeService {
       : {}
     const records = await this.repository.readCorpusRecords(corpus, expressionScope)
 
+    // The model-service records carry `value_json` as a required JSON string;
+    // serialize each row's value before sending so it matches the wire contract.
+    const wireRecords = records.map((record) => ({
+      local_id: record.local_id,
+      nsid: record.nsid,
+      value_json: JSON.stringify(record.value_json),
+    }))
+
     const response = await fetchModelService(
       `${config.modelService.url}/api/layers/export`,
       {
         method: 'POST',
         timeoutMs: MODEL_SERVICE_TIMEOUTS.layersExport,
-        body: { records, corpus_name: corpus.name },
+        body: { records: wireRecords, corpus_name: corpus.name },
       },
     )
     if (!response.ok) {
       const detail = await response.text()
       throw new ValidationError(`Model service rejected export: ${detail}`)
     }
-    return response.json()
+
+    // The export endpoint answers with newline-delimited JSON (one record per
+    // line); parse each non-empty line back into a wire record.
+    const body = await response.text()
+    const exported: NormalizedRecordDTO[] = body
+      .split('\n')
+      .filter((line) => line.trim().length > 0)
+      .map((line) => JSON.parse(line) as NormalizedRecordDTO)
+
+    return { records: exported, corpusName: corpus.name }
   }
 }

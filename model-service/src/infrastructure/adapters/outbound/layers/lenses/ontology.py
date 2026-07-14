@@ -17,8 +17,9 @@ The layers view scales confidence to an integer ``0..1000`` and drops both the
 reasoning trace and the exact parent-name/example ordering the ``OntologyTypeDTO``
 carries, so the round-trip is a :class:`dx.Lens`: the view is the faithful layers
 projection and the complement carries the fovea-only remainder (the emit context,
-the exact confidence floats, the example order, the resolved parent names, and
-each reasoning trace verbatim), so GetPut holds for every suggestion set.
+the verbatim type descriptions, the exact confidence floats, the example order,
+the resolved parent names, and each reasoning trace verbatim), so GetPut holds
+for every suggestion set.
 """
 
 from __future__ import annotations
@@ -174,6 +175,7 @@ class OntologyLayersLens(dx.Lens[OntologySource, CorpusFragment, JsonValue]):
             )
             type_complements.append(
                 {
+                    "description": dto.description,
                     "confidence": dto.confidence,
                     "examples": list(dto.examples),
                     "parent": dto.parent,
@@ -207,7 +209,7 @@ class OntologyLayersLens(dx.Lens[OntologySource, CorpusFragment, JsonValue]):
             dtos.append(
                 OntologyTypeDTO(
                     name=typedef.name,
-                    description=typedef.gloss if typedef.gloss is not None else "",
+                    description=j_str(entry["description"]),
                     parent=None if parent is None else j_str(parent),
                     confidence=j_float(entry["confidence"]),
                     examples=[j_str(ex) for ex in j_list(entry["examples"])],
