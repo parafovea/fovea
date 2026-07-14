@@ -14,21 +14,18 @@ test.describe('Bounding Box Position (Issue #58)', () => {
     await annotationWorkspace.navigateFromVideoBrowser()
 
     // Draw a bounding box at a specific position
-    await annotationWorkspace.drawSimpleBoundingBox()
+    await annotationWorkspace.drawSimpleBoundingBox({ personaName: testPersona.name })
     await annotationWorkspace.expectBoundingBoxVisible()
 
-    // Verify the box was created
-    const boxExists = await page.evaluate(() => {
-      const rect = document.querySelector('[data-testid="bounding-box"] rect')
-      return rect !== null
-    })
-    expect(boxExists).toBe(true)
+    // Wait for the rendered SVG box element itself: the annotation-count heading
+    // can flip to >= 1 a frame before the overlay paints the rect, so reading it
+    // immediately after expectBoundingBoxVisible() was the flake.
+    const boxRect = page.locator('[data-testid="bounding-box"] rect').first()
+    await expect(boxRect).toBeVisible({ timeout: 10000 })
 
     // Get box position via getBoundingClientRect (screen coordinates)
     // SVG coordinates can be in viewBox space which may differ from screen space
-    const boxCoords = await page.evaluate(() => {
-      const rect = document.querySelector('[data-testid="bounding-box"] rect')
-      if (!rect) return null
+    const boxCoords = await boxRect.evaluate((rect) => {
       const bbox = rect.getBoundingClientRect()
       return {
         width: bbox.width,
@@ -41,15 +38,14 @@ test.describe('Bounding Box Position (Issue #58)', () => {
       }
     })
 
-    expect(boxCoords).not.toBeNull()
     // Verify the box has positive dimensions in screen space
-    expect(boxCoords!.width).toBeGreaterThan(5)
-    expect(boxCoords!.height).toBeGreaterThan(5)
+    expect(boxCoords.width).toBeGreaterThan(5)
+    expect(boxCoords.height).toBeGreaterThan(5)
     // Verify SVG attributes exist
-    expect(boxCoords!.hasX).toBe(true)
-    expect(boxCoords!.hasY).toBe(true)
-    expect(boxCoords!.hasWidth).toBe(true)
-    expect(boxCoords!.hasHeight).toBe(true)
+    expect(boxCoords.hasX).toBe(true)
+    expect(boxCoords.hasY).toBe(true)
+    expect(boxCoords.hasWidth).toBe(true)
+    expect(boxCoords.hasHeight).toBe(true)
   })
 })
 
@@ -70,7 +66,11 @@ test.describe('Selection Persistence (Issue #59)', () => {
   test('can draw multiple consecutive boxes by reselecting type', async ({ annotationWorkspace, page, testPersona, testVideo }) => {
     void testVideo
     await annotationWorkspace.navigateFromVideoBrowser()
-    await annotationWorkspace.drawSimpleBoundingBox({ personaName: testPersona.name })
+    // Await the FIRST box's save so it is committed before the second draw
+    // starts; drawSimpleBoundingBox resolves to the save-response promise, so
+    // the double await waits for both the draw and its persisted save.
+    const firstSave = await annotationWorkspace.drawSimpleBoundingBox({ personaName: testPersona.name })
+    await firstSave
     await annotationWorkspace.expectBoundingBoxVisible()
     const annotationHeading = page.getByRole('heading', { name: /All Annotations/i })
     await expect(annotationHeading).toContainText(/\([1-9]\d*\)/, { timeout: 10000 })
@@ -93,18 +93,18 @@ test.describe('Labels and Visual Distinction (Issue #60)', () => {
     await annotationWorkspace.navigateFromVideoBrowser()
 
     await annotationWorkspace.drawSimpleBoundingBox({ personaName: testPersona.name })
+    await annotationWorkspace.expectBoundingBoxVisible()
 
-    // Verify label shows the actual type name (e.g., "Test Entity Type", not "entity")
-    // The shadcn Badge inside the bounding-box foreignObject renders as a <span>
-    const label = page.locator('[data-testid="bounding-box"] foreignObject span')
-    await expect(label.first()).toBeVisible({ timeout: 5000 })
+    // Verify label shows the actual type name (e.g., "Test Entity Type", not "entity").
+    // The shadcn Badge inside the bounding-box foreignObject renders as a <span>.
+    const label = page.locator('[data-testid="bounding-box"] foreignObject span').first()
+    await expect(label).toBeVisible({ timeout: 10000 })
 
-    // The label should contain the type name, not just the category
-    const labelText = await label.first().textContent()
-    expect(labelText).toBeTruthy()
-    // The label should either match the expected type name or be a valid type name
-    // (not just "entity", "role", or "event")
-    expect(['entity', 'role', 'event']).not.toContain(labelText?.toLowerCase())
+    // The label should carry the resolved type name (non-empty text) and must
+    // not be just the bare category. Web-first text assertions retry, so they
+    // tolerate the badge resolving its label under render load.
+    await expect(label).toHaveText(/\S/, { timeout: 10000 })
+    await expect(label).not.toHaveText(/^(entity|role|event)$/i)
   })
 
   test('type annotation has correct color for its kind', async ({ annotationWorkspace, page, testUser, testPersona, testEntityType, testVideo }) => {
@@ -112,14 +112,12 @@ test.describe('Labels and Visual Distinction (Issue #60)', () => {
     await annotationWorkspace.drawSimpleBoundingBox({ personaName: testPersona.name })
     await annotationWorkspace.expectBoundingBoxVisible()
 
-    // Verify the stroke color indicates the kind
-    const strokeColor = await page.evaluate(() => {
-      const rect = document.querySelector('[data-testid="bounding-box"] rect')
-      return rect ? rect.getAttribute('stroke') : null
-    })
-
-    // Entity types should be green, events orange, roles blue
-    expect(['#4caf50', '#ff9800', '#2196f3']).toContain(strokeColor)
+    // Entity types should be green, events orange, roles blue. Assert on the
+    // rendered rect's stroke attribute directly so the check retries until the
+    // overlay paints instead of reading a possibly-missing element once.
+    const boxRect = page.locator('[data-testid="bounding-box"] rect').first()
+    await expect(boxRect).toBeVisible({ timeout: 10000 })
+    await expect(boxRect).toHaveAttribute('stroke', /^#(4caf50|ff9800|2196f3)$/)
   })
 
   test('type annotations have appropriate stroke width', async ({ annotationWorkspace, page, testUser, testPersona, testEntityType, testVideo }) => {
@@ -129,9 +127,9 @@ test.describe('Labels and Visual Distinction (Issue #60)', () => {
 
     // Verify the stroke width for type annotation
     // Type annotations use baseStroke=3 (object=6), scaled by mode (keyframe=1x, interpolated=0.75x)
-    const strokeWidth = await page.evaluate(() => {
-      const rect = document.querySelector('[data-testid="bounding-box"] rect')
-      if (!rect) return null
+    const boxRect = page.locator('[data-testid="bounding-box"] rect').first()
+    await expect(boxRect).toBeVisible({ timeout: 10000 })
+    const strokeWidth = await boxRect.evaluate((rect) => {
       // Try attribute first, then computed style
       const attr = rect.getAttribute('stroke-width')
       if (attr) return parseFloat(attr)
@@ -169,19 +167,20 @@ test.describe('Annotation Panel Consistency', () => {
 
   test('type and object annotations have consistent colors between box and panel', async ({ annotationWorkspace, page, testUser, testPersona, testEntityType, testVideo }) => {
     await annotationWorkspace.navigateFromVideoBrowser()
-    await annotationWorkspace.drawSimpleBoundingBox()
+    await annotationWorkspace.drawSimpleBoundingBox({ personaName: testPersona.name })
 
     // Wait for annotation to be created and visible with longer timeout
     await annotationWorkspace.expectBoundingBoxVisible()
 
-    // Wait for UI to stabilize
-    await page.waitForTimeout(1000)
+    // Wait for the rendered box and its sidebar row to exist before reading
+    // their colors, instead of a fixed 1s stabilization sleep.
+    const boxRect = page.locator('[data-testid="bounding-box"] rect').first()
+    await expect(boxRect).toBeVisible({ timeout: 10000 })
+    const firstRow = page.locator('[data-tour-anchor="annotation-list-first"]')
+    await expect(firstRow).toBeVisible({ timeout: 10000 })
 
     // Get bounding box stroke color
-    const boxStroke = await page.evaluate(() => {
-      const rect = document.querySelector('[data-testid="bounding-box"] rect')
-      return rect?.getAttribute('stroke')
-    })
+    const boxStroke = await boxRect.getAttribute('stroke')
 
     // Get badge classes from panel (shadcn Badge renders as a span with variant utility classes).
     // Find the first badge inside the annotations sidebar (the panel containing "All Annotations").

@@ -346,10 +346,16 @@ describe('Persona Deletion Integration', () => {
     it('dialog remains open when deletion is slow', async () => {
       const user = userEvent.setup()
 
-      // Make deletion slow to simulate network latency
+      // Hold the deletion in flight with a deferred the test controls, so the
+      // "dialog stays open during deletion" assertion observes a deterministic
+      // pending state instead of racing a fixed timeout.
+      let releaseDeletion: () => void = () => {}
+      const deletionPending = new Promise<void>((resolve) => {
+        releaseDeletion = resolve
+      })
       server.use(
         http.delete('*/api/personas/:personaId', async () => {
-          await new Promise(resolve => setTimeout(resolve, 100))
+          await deletionPending
           return HttpResponse.json({ message: 'Persona deleted successfully' })
         })
       )
@@ -374,10 +380,12 @@ describe('Persona Deletion Integration', () => {
       const confirmButton = screen.getByRole('button', { name: /^delete$/i })
       await user.click(confirmButton)
 
-      // Dialog should remain open during deletion
+      // The deletion is still in flight (blocked on the deferred), so the
+      // dialog is deterministically open here.
       expect(screen.getByRole('dialog')).toBeInTheDocument()
 
-      // Wait for deletion to complete
+      // Release the deletion and confirm the dialog closes on completion.
+      releaseDeletion()
       await waitFor(() => {
         expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
       })

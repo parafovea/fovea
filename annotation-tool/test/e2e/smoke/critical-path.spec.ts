@@ -15,7 +15,7 @@ import { test, expect } from '../fixtures/test-context.js'
  */
 
 test.describe('Smoke Tests - Critical Path', () => {
-  test.describe.configure({ timeout: 30000, retries: 2 })
+  test.describe.configure({ timeout: 30000, retries: 0 })
 
   test('loads application and shows video browser', async ({ videoBrowser }) => {
     await videoBrowser.navigateToHome()
@@ -54,10 +54,16 @@ test.describe('Smoke Tests - Critical Path', () => {
   test('creates simple bounding box annotation', async ({ annotationWorkspace, testPersona, testEntityType }) => {
     await annotationWorkspace.navigateFromVideoBrowser()
 
-    // Draw bounding box
+    // Draw the box. drawSimpleBoundingBox arms a waitForResponse on the
+    // /annotations create call before dragging and returns that promise, so
+    // awaiting it resolves only once the POST/PUT has landed — the assertions
+    // below run against committed state, never a mid-flight render.
     await annotationWorkspace.drawSimpleBoundingBox()
 
-    // Verify box is visible
+    // Wait for the drawn annotation's SVG overlay to actually render on the
+    // canvas, then confirm the sidebar count reflects it. Both are web-first
+    // assertions that retry under load rather than depending on a fixed sleep.
+    await expect(annotationWorkspace.boundingBox.first()).toBeVisible({ timeout: 10000 })
     await annotationWorkspace.expectBoundingBoxVisible()
   })
 
@@ -76,9 +82,9 @@ test.describe('Smoke Tests - Critical Path', () => {
     // Add keyframe with K key
     await annotationWorkspace.timeline.addKeyframe()
 
-    await page.waitForTimeout(300)
-
-    // Verify bounding box still visible at new keyframe
+    // Verify bounding box still visible at new keyframe. expectBoundingBoxVisible
+    // polls the annotation count with a generous timeout, so it settles on its
+    // own without a fixed wait after the keyframe edit.
     await annotationWorkspace.expectBoundingBoxVisible()
   })
 
@@ -97,11 +103,12 @@ test.describe('Smoke Tests - Critical Path', () => {
     const saveButton = page.getByRole('button', { name: /save/i }).first()
     await expect(saveButton).toBeVisible()
     await saveButton.click()
-    await page.waitForTimeout(1000)
 
-    // Verify success message
+    // Verify success message. The toast is the user-visible signal that the
+    // save landed; the web-first assertion retries until it appears, so no
+    // fixed wait is needed between the click and the check.
     const successMessage = page.getByText(/saved/i).or(page.getByText(/success/i))
-    await expect(successMessage.first()).toBeVisible({ timeout: 5000 })
+    await expect(successMessage.first()).toBeVisible({ timeout: 10000 })
   })
 
   test('toggles timeline with T shortcut', async ({ annotationWorkspace, page, testPersona, testEntityType }) => {
@@ -110,20 +117,16 @@ test.describe('Smoke Tests - Critical Path', () => {
 
     const timeline = annotationWorkspace.timeline.canvas
 
-    // Toggle timeline on
+    // The timeline starts hidden after drawing (nothing has revealed it), so the
+    // first T-toggle must reveal it and the second must hide it again. Asserting
+    // each concrete transition with a web-first assertion is deterministic —
+    // replacing the old pattern of two sleep-gated isVisible() reads whose
+    // ordering under load determined whether the "changed" comparison held.
     await annotationWorkspace.timeline.toggle()
-    await page.waitForTimeout(500)
+    await expect(timeline).toBeVisible({ timeout: 10000 })
 
-    const isVisible1 = await timeline.isVisible().catch(() => false)
-
-    // Toggle timeline off
     await annotationWorkspace.timeline.toggle()
-    await page.waitForTimeout(500)
-
-    const isVisible2 = await timeline.isVisible().catch(() => false)
-
-    // Verify visibility changed
-    expect(isVisible1).not.toBe(isVisible2)
+    await expect(timeline).toBeHidden({ timeout: 10000 })
   })
 
   test('plays and pauses video with Space', async ({ annotationWorkspace, page, testPersona, testEntityType }) => {
@@ -134,16 +137,12 @@ test.describe('Smoke Tests - Critical Path', () => {
     await annotationWorkspace.video.togglePlayback()
     // Wait for video to actually start playing
     await annotationWorkspace.video.waitForPlaying()
+    await annotationWorkspace.video.expectPlaying()
 
-    let paused = await annotationWorkspace.video.isPaused()
-    expect(paused).toBe(false)
-
-    // Press Space to pause
+    // Press Space to pause. expectPaused polls the video's `paused` JS property,
+    // so it settles once the pause takes effect instead of guessing with a sleep.
     await annotationWorkspace.video.togglePlayback()
-    await page.waitForTimeout(300)
-
-    paused = await annotationWorkspace.video.isPaused()
-    expect(paused).toBe(true)
+    await annotationWorkspace.video.expectPaused()
   })
 
   test('seeks frames with arrow keys', async ({ annotationWorkspace, page, testPersona, testEntityType }) => {
@@ -151,29 +150,21 @@ test.describe('Smoke Tests - Critical Path', () => {
     await annotationWorkspace.drawSimpleBoundingBox()
 
     // Verify starting at frame 0
-    const initialFrame = await annotationWorkspace.video.getCurrentFrame()
-    expect(initialFrame).toBe(0)
+    await expect.poll(() => annotationWorkspace.video.getCurrentFrame(), { timeout: 10000 }).toBe(0)
 
-    // Seek forward one frame
+    // Seek forward one frame. expect.poll re-reads the video's currentTime until
+    // the seek is reflected, replacing the fixed sleep that could read the frame
+    // before the time update settled under load.
     await annotationWorkspace.video.seekForwardOneFrame()
-    await page.waitForTimeout(100)
-
-    const frame1 = await annotationWorkspace.video.getCurrentFrame()
-    expect(frame1).toBe(1)
+    await expect.poll(() => annotationWorkspace.video.getCurrentFrame(), { timeout: 10000 }).toBe(1)
 
     // Seek forward 10 frames
     await annotationWorkspace.video.seekForward10Frames()
-    await page.waitForTimeout(100)
-
-    const frame11 = await annotationWorkspace.video.getCurrentFrame()
-    expect(frame11).toBe(11)
+    await expect.poll(() => annotationWorkspace.video.getCurrentFrame(), { timeout: 10000 }).toBe(11)
 
     // Seek backward one frame
     await annotationWorkspace.video.seekBackwardOneFrame()
-    await page.waitForTimeout(100)
-
-    const frame10 = await annotationWorkspace.video.getCurrentFrame()
-    expect(frame10).toBe(10)
+    await expect.poll(() => annotationWorkspace.video.getCurrentFrame(), { timeout: 10000 }).toBe(10)
   })
 
   test('timeline renders correctly', async ({ annotationWorkspace, testPersona, testEntityType }) => {
@@ -208,12 +199,12 @@ test.describe('Smoke Tests - Critical Path', () => {
     // Verify playing
     await annotationWorkspace.video.expectPlaying()
 
-    // Wait for playback
-    await page.waitForTimeout(1000)
-
-    // Get new time
-    const newTime = await annotationWorkspace.video.getCurrentTime()
-    expect(newTime).toBeGreaterThan(initialTime)
+    // The playhead advances as the video plays. Polling currentTime until it
+    // exceeds the start time is the deterministic signal that playback made
+    // progress, in place of a fixed 1s wait that assumes a minimum advance.
+    await expect
+      .poll(() => annotationWorkspace.video.getCurrentTime(), { timeout: 10000 })
+      .toBeGreaterThan(initialTime)
 
     // Pause video
     await annotationWorkspace.video.pause()

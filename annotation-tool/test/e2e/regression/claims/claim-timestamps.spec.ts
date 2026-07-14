@@ -39,7 +39,6 @@ test.describe('Claim time spans', () => {
         .filter({ hasText: new RegExp('^' + testPersona.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ' \\(') })
         .first()
         .click()
-      await page.waitForTimeout(500)
     }
 
     // Claims tab -> Add Manual Claim.
@@ -68,13 +67,22 @@ test.describe('Claim time spans', () => {
     await expect(banner).toBeHidden({ timeout: 10000 })
     const reopenedEditor = page.getByRole('dialog', { name: /add manual claim/i })
     await expect(reopenedEditor).toBeVisible({ timeout: 10000 })
-    await expect(reopenedEditor.getByTestId('claim-time-span-chip')).toHaveCount(1)
+    await expect(reopenedEditor.getByTestId('claim-time-span-chip')).toHaveCount(1, { timeout: 10000 })
 
-    // Save the claim, then confirm the time-span badge shows in the viewer.
+    // Save the claim and wait for the create request to resolve, then confirm
+    // the time-span badge shows in the viewer.
+    const created = page.waitForResponse(
+      (r) =>
+        r.request().method() === 'POST' &&
+        /\/api\/summaries\/[^/]+\/claims$/.test(new URL(r.url()).pathname) &&
+        r.ok(),
+      { timeout: 15000 },
+    )
     await reopenedEditor.getByRole('button', { name: /create|save/i }).click()
-    await expect(reopenedEditor).toBeHidden({ timeout: 5000 })
-    await expect(page.getByText(claimText)).toBeVisible({ timeout: 5000 })
-    await expect(page.getByTestId('claim-viewer-time-span').first()).toBeVisible({ timeout: 5000 })
+    await created
+    await expect(reopenedEditor).toBeHidden({ timeout: 10000 })
+    await expect(page.getByText(claimText)).toBeVisible({ timeout: 10000 })
+    await expect(page.getByTestId('claim-viewer-time-span').first()).toBeVisible({ timeout: 10000 })
   })
 
   /**
@@ -135,7 +143,6 @@ test.describe('Claim time spans', () => {
           .filter({ hasText: new RegExp('^' + testPersona.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ' \\(') })
           .first()
           .click()
-        await page.waitForTimeout(500)
       }
       await dialog.locator('[role="tab"]').filter({ hasText: 'Claims' }).click()
     }
@@ -143,11 +150,13 @@ test.describe('Claim time spans', () => {
     await openClaims()
     await expect(page.getByText(claimText)).toBeVisible({ timeout: 10000 })
     // Two discontiguous spans -> two read-only badges.
-    await expect(page.getByTestId('claim-viewer-time-span')).toHaveCount(2)
+    await expect(page.getByTestId('claim-viewer-time-span')).toHaveCount(2, { timeout: 10000 })
 
     await page.reload()
+    // After the reload, re-open the claims list and wait for the seeded claim
+    // to re-render before asserting the spans persisted.
     await openClaims()
     await expect(page.getByText(claimText)).toBeVisible({ timeout: 10000 })
-    await expect(page.getByTestId('claim-viewer-time-span')).toHaveCount(2)
+    await expect(page.getByTestId('claim-viewer-time-span')).toHaveCount(2, { timeout: 10000 })
   })
 })

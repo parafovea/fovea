@@ -1,5 +1,43 @@
+import type { Page } from '@playwright/test'
 import { test, expect } from '../../fixtures/test-context.js'
 import { fillClaimEditor } from '../../utils/claim-editor.js'
+
+/**
+ * Deterministic waits for the claim mutation round-trips. The ClaimEditor
+ * closes its dialog synchronously and fires the mutation in the background,
+ * so each helper must be invoked BEFORE the save/delete click and awaited
+ * after it — replacing the arbitrary `waitForTimeout` sleeps that previously
+ * guessed at how long the request would take.
+ */
+function waitForClaimCreated(page: Page) {
+  return page.waitForResponse(
+    (r) =>
+      r.request().method() === 'POST' &&
+      /\/api\/summaries\/[^/]+\/claims$/.test(new URL(r.url()).pathname) &&
+      r.ok(),
+    { timeout: 15000 },
+  )
+}
+
+function waitForClaimUpdated(page: Page) {
+  return page.waitForResponse(
+    (r) =>
+      r.request().method() === 'PUT' &&
+      /\/api\/summaries\/[^/]+\/claims\/[^/]+$/.test(new URL(r.url()).pathname) &&
+      r.ok(),
+    { timeout: 15000 },
+  )
+}
+
+function waitForClaimDeleted(page: Page) {
+  return page.waitForResponse(
+    (r) =>
+      r.request().method() === 'DELETE' &&
+      /\/api\/summaries\/[^/]+\/claims\/[^/]+$/.test(new URL(r.url()).pathname) &&
+      r.ok(),
+    { timeout: 15000 },
+  )
+}
 
 test.describe('Manual Claim Management', () => {
   test.describe.configure({ mode: 'serial' })
@@ -30,8 +68,6 @@ test.describe('Manual Claim Management', () => {
       // Select the (only) persona option — shadcn's Select renders no disabled placeholder so the first role=option IS the active persona, unlike MUI which used a non-selectable placeholder at index 0
       const personaOption = page.getByRole('option').first()
       await personaOption.click()
-      // Wait for editor to load after persona selection
-      await page.waitForTimeout(500)
     }
 
     // Navigate to Claims tab - MUI Tab with Badge may have varying accessible name
@@ -59,17 +95,17 @@ test.describe('Manual Claim Management', () => {
 
       // Confidence defaults to 0.9 on mount; no adjustment needed.
 
-      // Save the claim
+      // Save the claim and wait for the create request to resolve so the
+      // claims list is populated deterministically rather than after a sleep.
       const saveButton = claimEditorDialog.getByRole('button', { name: /create|save/i })
       await expect(saveButton).not.toBeDisabled()
+      const created = waitForClaimCreated(page)
       await saveButton.click()
+      await created
 
-      // Wait for dialog to close
-      await expect(claimEditorDialog).not.toBeVisible({ timeout: 5000 })
-
-      // Verify claim appears in list
-      await page.waitForTimeout(1000)
-      await expect(page.getByText(/test claim about baseball/i)).toBeVisible({ timeout: 5000 })
+      // The editor closes and the new claim renders in the list.
+      await expect(claimEditorDialog).not.toBeVisible({ timeout: 10000 })
+      await expect(page.getByText(/test claim about baseball/i)).toBeVisible({ timeout: 10000 })
     }
   })
 
@@ -114,31 +150,34 @@ test.describe('Manual Claim Management', () => {
         await fillClaimEditor(claimDialog, { text: 'Original claim text' })
 
     const saveButton = claimDialog.getByRole('button', { name: /create|save/i })
+    const created = waitForClaimCreated(page)
     await saveButton.click()
+    await created
 
-    await expect(claimDialog).not.toBeVisible()
-    await page.waitForTimeout(1000)
+    await expect(claimDialog).not.toBeVisible({ timeout: 10000 })
+    // Wait for the created claim to render before editing it.
+    await expect(summaryDialog.getByText(/original claim text/i)).toBeVisible({ timeout: 10000 })
 
     // Now edit the claim
     const editButton = summaryDialog.getByRole('button', { name: /edit claim/i }).first()
-    await expect(editButton).toBeVisible()
+    await expect(editButton).toBeVisible({ timeout: 10000 })
     await editButton.click()
 
     const editClaimDialog = page.getByRole('dialog', { name: /edit claim/i })
-    await expect(editClaimDialog).toBeVisible({ timeout: 5000 })
+    await expect(editClaimDialog).toBeVisible({ timeout: 10000 })
 
     // Modify the claim text
     await fillClaimEditor(editClaimDialog, { text: 'Modified claim text' })
 
-    // Save changes
+    // Save changes and wait for the update request to resolve.
     const editSaveButton = editClaimDialog.getByRole('button', { name: /save/i })
+    const updated = waitForClaimUpdated(page)
     await editSaveButton.click()
+    await updated
 
-    await expect(editClaimDialog).not.toBeVisible({ timeout: 5000 })
-
-    // Verify changes persisted
-    await page.waitForTimeout(1000)
-    await expect(summaryDialog.getByText(/modified claim text/i)).toBeVisible({ timeout: 5000 })
+    await expect(editClaimDialog).not.toBeVisible({ timeout: 10000 })
+    // The edited text replaces the original in the claims list.
+    await expect(summaryDialog.getByText(/modified claim text/i)).toBeVisible({ timeout: 10000 })
   })
 
   test('deletes claim', async ({
@@ -154,7 +193,6 @@ test.describe('Manual Claim Management', () => {
     await page.getByRole('button', { name: /edit summary/i }).click()
     const summaryDialog = page.getByRole('dialog')
     await expect(summaryDialog).toBeVisible()
-    await page.waitForTimeout(500)
     const personaSelect = summaryDialog.getByLabel(/select persona/i)
     if (await personaSelect.isVisible()) {
       await personaSelect.click()
@@ -178,32 +216,27 @@ test.describe('Manual Claim Management', () => {
         await fillClaimEditor(claimDialog, { text: 'Claim to be deleted' })
 
     const saveButton = claimDialog.getByRole('button', { name: /create/i })
+    const created = waitForClaimCreated(page)
     await saveButton.click()
+    await created
 
-    await expect(claimDialog).not.toBeVisible()
-    await page.waitForTimeout(1000)
-
-    // Get the claim text to verify deletion
-    const claimText = await summaryDialog.locator('text=/claim to be deleted/i').first().textContent()
+    await expect(claimDialog).not.toBeVisible({ timeout: 10000 })
+    // Wait for the claim to render before deleting it.
+    await expect(summaryDialog.getByText(/claim to be deleted/i)).toBeVisible({ timeout: 10000 })
 
     // Click delete button
     const deleteButton = summaryDialog.getByRole('button', { name: /delete claim/i }).first()
-    await expect(deleteButton).toBeVisible()
+    await expect(deleteButton).toBeVisible({ timeout: 10000 })
 
     // Set up dialog handler for confirmation
     page.on('dialog', dialog => dialog.accept())
 
+    const deleted = waitForClaimDeleted(page)
     await deleteButton.click()
+    await deleted
 
-    // Wait for deletion to process
-    await page.waitForTimeout(1000)
-
-    // Verify claim is removed (or "no claims" message appears)
-    const noClaimsMessage = summaryDialog.getByText(/no claims/i)
-    const claimStillExists = await summaryDialog.getByText(claimText || 'NONEXISTENT').isVisible().catch(() => false)
-
-    // Either the claim should be gone or we see "no claims" message
-    expect(!claimStillExists || await noClaimsMessage.isVisible().catch(() => false)).toBeTruthy()
+    // The claim is removed from the list once the delete request resolves.
+    await expect(summaryDialog.getByText(/claim to be deleted/i)).toBeHidden({ timeout: 10000 })
   })
 
   test('adds subclaim to parent', async ({
@@ -219,7 +252,6 @@ test.describe('Manual Claim Management', () => {
     await page.getByRole('button', { name: /edit summary/i }).click()
     const summaryDialog = page.getByRole('dialog')
     await expect(summaryDialog).toBeVisible()
-    await page.waitForTimeout(500)
     const personaSelect = summaryDialog.getByLabel(/select persona/i)
     if (await personaSelect.isVisible()) {
       await personaSelect.click()
@@ -243,58 +275,43 @@ test.describe('Manual Claim Management', () => {
         await fillClaimEditor(claimDialog, { text: 'Parent claim' })
 
     let saveButton = claimDialog.getByRole('button', { name: /create/i })
+    let created = waitForClaimCreated(page)
     await saveButton.click()
+    await created
 
-    await expect(claimDialog).not.toBeVisible()
-    await page.waitForTimeout(1000)
+    await expect(claimDialog).not.toBeVisible({ timeout: 10000 })
 
-    // Click "Add Subclaim" button
+    // Click "Add Subclaim" button — it renders on the parent claim's card.
     const addSubclaimButton = summaryDialog.getByRole('button', { name: /add subclaim/i }).first()
-    await expect(addSubclaimButton).toBeVisible()
+    await expect(addSubclaimButton).toBeVisible({ timeout: 10000 })
     await addSubclaimButton.click()
 
     const subclaimDialog = page.getByRole('dialog', { name: /add subclaim/i })
-    await expect(subclaimDialog).toBeVisible({ timeout: 5000 })
+    await expect(subclaimDialog).toBeVisible({ timeout: 10000 })
 
     // Enter subclaim text
         await fillClaimEditor(subclaimDialog, { text: 'This is a subclaim' })
 
-    // Save
+    // Save and wait for the subclaim create request to resolve.
     saveButton = subclaimDialog.getByRole('button', { name: /create/i })
+    created = waitForClaimCreated(page)
     await saveButton.click()
+    await created
 
-    await expect(subclaimDialog).not.toBeVisible({ timeout: 5000 })
+    await expect(subclaimDialog).not.toBeVisible({ timeout: 10000 })
 
-    // Wait for subclaim to be saved and claims to refresh
-    await page.waitForTimeout(3000)
-
-    // Switch to Summary tab and back to force refresh
+    // Switch to the Summary tab and back to remount the claims viewer so the
+    // parent card re-reads the refreshed claims tree and shows its subclaim.
+    // (The parent's ClaimTreeNode is memoized on claim.updatedAt, which does
+    // not change when a child is added, so a remount is what surfaces it.)
     const summaryTab = summaryDialog.getByRole('tab', { name: /summary/i })
     await summaryTab.click()
-    await page.waitForTimeout(500)
+    await expect(summaryTab).toHaveAttribute('aria-selected', 'true')
     await claimsTab.click()
-    await page.waitForTimeout(1000)
+    await expect(claimsTab).toHaveAttribute('aria-selected', 'true')
 
-    // Verify parent claim shows subclaim indicator OR expand to see subclaim
-    // Try to find the subclaim chip first
-    const subclaimChip = summaryDialog.getByText(/1 subclaim/i)
-    const hasChip = await subclaimChip.isVisible().catch(() => false)
-
-    if (!hasChip) {
-      // If chip not visible, try expanding the parent claim by clicking the expand button
-      const expandButton = summaryDialog.getByRole('button').filter({ has: page.locator('svg') }).first()
-      if (await expandButton.isVisible().catch(() => false)) {
-        await expandButton.click()
-        await page.waitForTimeout(1000)
-        // Now check for subclaim text
-        await expect(page.getByText(/this is a subclaim/i)).toBeVisible({ timeout: 5000 })
-      } else {
-        // Last resort: just verify parent claim exists (subclaim creation may have failed)
-        await expect(summaryDialog.getByText(/parent claim/i)).toBeVisible()
-      }
-    } else {
-      await expect(subclaimChip).toBeVisible()
-    }
+    // The parent claim now carries a subclaim, shown as a "1 subclaim" badge.
+    await expect(summaryDialog.getByText(/1 subclaim/i)).toBeVisible({ timeout: 10000 })
   })
 
   test('cascade deletes subclaims', async ({
@@ -310,7 +327,6 @@ test.describe('Manual Claim Management', () => {
     await page.getByRole('button', { name: /edit summary/i }).click()
     const summaryDialog = page.getByRole('dialog')
     await expect(summaryDialog).toBeVisible()
-    await page.waitForTimeout(500)
     const personaSelect = summaryDialog.getByLabel(/select persona/i)
     if (await personaSelect.isVisible()) {
       await personaSelect.click()
@@ -335,47 +351,41 @@ test.describe('Manual Claim Management', () => {
         await fillClaimEditor(claimDialog, { text: 'Parent to be deleted' })
 
     let saveButton = claimDialog.getByRole('button', { name: /create/i })
+    let created = waitForClaimCreated(page)
     await saveButton.click()
+    await created
 
-    await expect(claimDialog).not.toBeVisible()
-    await page.waitForTimeout(1000)
+    await expect(claimDialog).not.toBeVisible({ timeout: 10000 })
 
     // Add subclaim
     const addSubclaimButton = summaryDialog.getByRole('button', { name: /add subclaim/i }).first()
-    await expect(addSubclaimButton).toBeVisible()
+    await expect(addSubclaimButton).toBeVisible({ timeout: 10000 })
     await addSubclaimButton.click()
 
     const subclaimDialog = page.getByRole('dialog', { name: /add subclaim/i })
-    await expect(subclaimDialog).toBeVisible()
+    await expect(subclaimDialog).toBeVisible({ timeout: 10000 })
 
         await fillClaimEditor(subclaimDialog, { text: 'Subclaim to be cascade deleted' })
 
     saveButton = subclaimDialog.getByRole('button', { name: /create/i })
+    created = waitForClaimCreated(page)
     await saveButton.click()
+    await created
 
-    await expect(subclaimDialog).not.toBeVisible()
-    await page.waitForTimeout(2000)
+    await expect(subclaimDialog).not.toBeVisible({ timeout: 10000 })
 
-    // Try to verify subclaim exists (may not if subclaim creation is broken)
-    const subclaimExists = await summaryDialog.getByText(/subclaim to be cascade deleted/i).isVisible().catch(() => false)
-
-    // Delete parent claim (this should work even if subclaim creation failed)
+    // Delete the parent claim; the confirm() prompt is auto-accepted.
     const deleteButton = summaryDialog.getByRole('button', { name: /delete claim/i }).first()
-    await expect(deleteButton).toBeVisible()
+    await expect(deleteButton).toBeVisible({ timeout: 10000 })
 
     page.on('dialog', dialog => dialog.accept())
+    const deleted = waitForClaimDeleted(page)
     await deleteButton.click()
+    await deleted
 
-    await page.waitForTimeout(1000)
-
-    // Verify parent is removed (and if subclaim existed, it should be removed too)
-    const parentStillExists = await summaryDialog.getByText(/parent to be deleted/i).isVisible().catch(() => false)
-    const subclaimStillExists = await summaryDialog.getByText(/subclaim to be cascade deleted/i).isVisible().catch(() => false)
-
-    expect(parentStillExists).toBeFalsy()
-    if (subclaimExists) {
-      // Only check if subclaim was removed if it existed in the first place
-      expect(subclaimStillExists).toBeFalsy()
-    }
+    // The parent is removed once the delete resolves; its subclaim cascades
+    // with it, so neither text remains in the claims viewer.
+    await expect(summaryDialog.getByText(/parent to be deleted/i)).toBeHidden({ timeout: 10000 })
+    await expect(summaryDialog.getByText(/subclaim to be cascade deleted/i)).toBeHidden({ timeout: 10000 })
   })
 })

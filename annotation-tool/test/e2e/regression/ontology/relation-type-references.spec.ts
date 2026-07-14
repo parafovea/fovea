@@ -42,6 +42,14 @@ test.describe('Relation Type References in Summaries', () => {
   // fix tracks the most recently emitted gloss in a ref and suppresses
   // the prop-driven re-sync when the incoming gloss structurally matches
   // what we just emitted (see GlossEditor.tsx's `lastEmittedGlossRef`).
+  //
+  // The autocomplete popover derives its Entity/Relation Types sections
+  // reactively from the persona ontology (a `useMemo` over the React
+  // Query `activeOntology`), so once `#` is typed the popover repopulates
+  // on its own the moment the ontology fetch lands. Every wait below is
+  // therefore a web-first assertion on the rendered popover/section/
+  // option (which auto-retries until the data arrives) or a
+  // `waitForResponse` on the save/fetch — no fixed sleeps.
 
   test('can insert relation type reference in summary using autocomplete', async ({
     page,
@@ -74,34 +82,28 @@ test.describe('Relation Type References in Summaries', () => {
     // Select the (only) persona option — shadcn's Select has no disabled placeholder
     const personaSelect = dialog.getByLabel(/select persona/i)
     await personaSelect.click()
-    await page.waitForTimeout(300)
     const personaOption = page.getByRole('option').first()
+    await expect(personaOption).toBeVisible({ timeout: 10000 })
     await personaOption.click()
-    await page.waitForTimeout(500)
 
     // Navigate to Summary tab
     const summaryTab = dialog.locator('[role="tab"]').filter({ hasText: /summary/i }).first()
     if (await summaryTab.isVisible({ timeout: 2000 }).catch(() => false)) {
       await summaryTab.click()
-      await page.waitForTimeout(300)
     }
-
-    // Wait for ontology data to load
-    await page.waitForLoadState('networkidle')
-    await page.waitForTimeout(2000)
 
     // Find the summary editor textarea
     const summaryTextarea = dialog.locator('textarea').first()
-    await expect(summaryTextarea).toBeVisible({ timeout: 5000 })
+    await expect(summaryTextarea).toBeVisible({ timeout: 10000 })
 
-    // Use Playwright's native typing which properly triggers React's synthetic events
-    // Focus the element first, then use keyboard input
+    // Use Playwright's native typing which properly triggers React's synthetic events.
+    // Focus the element first, then insert the trigger text.
     await summaryTextarea.click()
-    await page.waitForTimeout(200)
     await page.keyboard.insertText('This video shows #')
-    await page.waitForTimeout(500)
 
-    // Wait for autocomplete popover to appear (GlossEditor renders an absolute-positioned bg-popover container)
+    // Wait for autocomplete popover to appear (GlossEditor renders an absolute-positioned bg-popover container).
+    // The Relation Types section is derived from the persona ontology, so this assertion
+    // auto-retries until the ontology fetch lands and the section renders.
     const autocompletePopper = dialog.locator('.bg-popover').first()
     await expect(autocompletePopper).toBeVisible({ timeout: 10000 })
 
@@ -145,42 +147,38 @@ test.describe('Relation Type References in Summaries', () => {
     // Select the (only) persona option — shadcn's Select has no disabled placeholder
     const personaSelect = dialog.getByLabel(/select persona/i)
     await personaSelect.click()
-    await page.waitForTimeout(300)
     const personaOption = page.getByRole('option').first()
+    await expect(personaOption).toBeVisible({ timeout: 10000 })
     await personaOption.click()
-    await page.waitForTimeout(500)
 
     // Navigate to Summary tab
     const summaryTab = dialog.locator('[role="tab"]').filter({ hasText: /summary/i }).first()
     if (await summaryTab.isVisible({ timeout: 2000 }).catch(() => false)) {
       await summaryTab.click()
-      await page.waitForTimeout(300)
     }
 
     // Find the summary editor textarea
     const summaryTextarea = dialog.locator('textarea').first()
-    await expect(summaryTextarea).toBeVisible({ timeout: 5000 })
+    await expect(summaryTextarea).toBeVisible({ timeout: 10000 })
 
     // Create save promise BEFORE entering content
     const savePromise = createSummarySavePromise(page)
 
     // Use Playwright's native typing which properly triggers React's synthetic events
     await summaryTextarea.click()
-    await page.waitForTimeout(200)
     await page.keyboard.insertText(summaryText)
-    await page.waitForTimeout(500)
 
-    // Wait for save to complete
+    // Wait for the debounced auto-save to reach the API
     await savePromise
 
     // Verify the value was saved
-    await expect(summaryTextarea).toHaveValue(summaryText, { timeout: 5000 })
+    await expect(summaryTextarea).toHaveValue(summaryText, { timeout: 10000 })
 
-    // Close dialog
+    // Close dialog and wait for it to unmount before reloading
     const closeButton = dialog.getByRole('button', { name: /close|done/i })
     if (await closeButton.isVisible({ timeout: 1000 }).catch(() => false)) {
       await closeButton.click()
-      await page.waitForTimeout(500)
+      await expect(dialog).toBeHidden({ timeout: 10000 })
     }
 
     // Reload page
@@ -213,8 +211,8 @@ test.describe('Relation Type References in Summaries', () => {
     // none; when it did, this selects the same value and adds no second fetch.
     const personaSelect2 = dialog2.getByLabel(/select persona/i)
     await personaSelect2.click()
-    await page.waitForTimeout(300)
     const personaOption2 = page.getByRole('option').first()
+    await expect(personaOption2).toBeVisible({ timeout: 10000 })
     await personaOption2.click()
 
     await summariesLoaded
@@ -227,7 +225,7 @@ test.describe('Relation Type References in Summaries', () => {
 
     // Verify the summary text persisted
     const summaryTextarea2 = dialog2.locator('textarea').first()
-    await expect(summaryTextarea2).toBeVisible({ timeout: 5000 })
+    await expect(summaryTextarea2).toBeVisible({ timeout: 10000 })
     await expect(summaryTextarea2).toHaveValue(summaryText, { timeout: 10000 })
   })
 
@@ -258,32 +256,26 @@ test.describe('Relation Type References in Summaries', () => {
     // Select the (only) persona option — shadcn's Select has no disabled placeholder
     const personaSelect = dialog.getByLabel(/select persona/i)
     await personaSelect.click()
-    await page.waitForTimeout(300)
     const personaOption = page.getByRole('option').first()
+    await expect(personaOption).toBeVisible({ timeout: 10000 })
     await personaOption.click()
-
-    // Wait for ontology to load
-    await page.waitForLoadState('networkidle')
-    await page.waitForTimeout(2000)
 
     // Navigate to Summary tab
     const summaryTab = dialog.locator('[role="tab"]').filter({ hasText: /summary/i }).first()
     if (await summaryTab.isVisible({ timeout: 2000 }).catch(() => false)) {
       await summaryTab.click()
-      await page.waitForTimeout(300)
     }
 
     // Find the summary editor textarea
     const summaryTextarea = dialog.locator('textarea').first()
-    await expect(summaryTextarea).toBeVisible({ timeout: 5000 })
+    await expect(summaryTextarea).toBeVisible({ timeout: 10000 })
 
     // Use Playwright's native typing which properly triggers React's synthetic events
     await summaryTextarea.click()
-    await page.waitForTimeout(200)
     await page.keyboard.insertText('Testing #')
-    await page.waitForTimeout(500)
 
-    // Wait for autocomplete popover to appear
+    // Wait for autocomplete popover to appear (its Relation Types section is
+    // derived reactively from the ontology, so this auto-retries until it loads)
     const autocompletePopper = dialog.locator('.bg-popover').first()
     await expect(autocompletePopper).toBeVisible({ timeout: 10000 })
 
@@ -294,9 +286,6 @@ test.describe('Relation Type References in Summaries', () => {
 
     // Continue typing
     await page.keyboard.type(' reference.')
-
-    // Wait for preview to update
-    await page.waitForTimeout(1000)
 
     // Verify the relation type reference renders as a Badge in the preview (shadcn Badge spans).
     // Filter to badges (small inline-flex spans with rounded-4xl), excluding the autocomplete option text.
@@ -335,36 +324,31 @@ test.describe('Relation Type References in Summaries', () => {
     // Select the (only) persona option — shadcn's Select has no disabled placeholder
     const personaSelect = dialog.getByLabel(/select persona/i)
     await personaSelect.click()
-    await page.waitForTimeout(300)
     const personaOption = page.getByRole('option').first()
+    await expect(personaOption).toBeVisible({ timeout: 10000 })
     await personaOption.click()
-
-    // Wait for ontology to load
-    await page.waitForLoadState('networkidle')
-    await page.waitForTimeout(2000)
 
     // Navigate to Summary tab
     const summaryTab = dialog.locator('[role="tab"]').filter({ hasText: /summary/i }).first()
     if (await summaryTab.isVisible({ timeout: 2000 }).catch(() => false)) {
       await summaryTab.click()
-      await page.waitForTimeout(300)
     }
 
     // Find the summary editor textarea and type # to trigger autocomplete
     const summaryTextarea = dialog.locator('textarea').first()
-    await expect(summaryTextarea).toBeVisible({ timeout: 5000 })
+    await expect(summaryTextarea).toBeVisible({ timeout: 10000 })
 
     // Use Playwright's native typing which properly triggers React's synthetic events
     await summaryTextarea.click()
-    await page.waitForTimeout(200)
     await page.keyboard.insertText('#')
-    await page.waitForTimeout(500)
 
     // Wait for autocomplete popover to appear
     const autocompletePopper = dialog.locator('.bg-popover').first()
     await expect(autocompletePopper).toBeVisible({ timeout: 10000 })
 
-    // Verify both Entity Types and Relation Types section headers are visible
+    // Verify both Entity Types and Relation Types section headers are visible.
+    // Both sections are derived reactively from the ontology, so these
+    // assertions auto-retry until the fetch lands.
     const entityTypesHeader = autocompletePopper.getByText('Entity Types', { exact: true })
     await expect(entityTypesHeader).toBeVisible({ timeout: 10000 })
 

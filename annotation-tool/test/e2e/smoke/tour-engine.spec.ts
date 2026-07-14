@@ -264,7 +264,9 @@ test.describe('Tour engine: menu', () => {
       timeout: 5000,
     })
     const tiles = page.locator('[data-tour-anchor^="tour-menu-tile-"]')
-    await expect(tiles).toHaveCount(12)
+    // One tile per built-in tour; keep in sync with getBuiltInTours() in
+    // src/tours/scripts/index.ts (13 tours, incl. the document-annotation tour).
+    await expect(tiles).toHaveCount(13)
   })
 
   test('clicking Start on a tile launches the tour and dismisses the menu', async ({

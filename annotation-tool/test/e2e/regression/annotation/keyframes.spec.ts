@@ -1,4 +1,4 @@
-import { test } from '../../fixtures/test-context.js'
+import { test, expect } from '../../fixtures/test-context.js'
 
 /**
  * Regression tests for keyframe management.
@@ -11,8 +11,9 @@ test.describe('Annotation Keyframes', () => {
   })
 
   test('adds keyframe with K shortcut', async ({ annotationWorkspace, page, testUser, testPersona, testEntityType, testVideo }) => {
+    void page
     await annotationWorkspace.navigateFromVideoBrowser()
-    await annotationWorkspace.drawSimpleBoundingBox()
+    await annotationWorkspace.drawSimpleBoundingBox({ personaName: testPersona.name })
 
     await annotationWorkspace.timeline.show()
 
@@ -22,13 +23,15 @@ test.describe('Annotation Keyframes', () => {
 
     await annotationWorkspace.timeline.addKeyframe()
 
-    await page.waitForTimeout(300)
+    // expectBoundingBoxVisible polls the annotation-count heading, so no fixed
+    // wait is needed after adding the keyframe.
     await annotationWorkspace.expectBoundingBoxVisible()
   })
 
   test('deletes keyframe with Delete key', async ({ annotationWorkspace, page, testUser, testPersona, testEntityType, testVideo }) => {
+    void page
     await annotationWorkspace.navigateFromVideoBrowser()
-    await annotationWorkspace.drawSimpleBoundingBox()
+    await annotationWorkspace.drawSimpleBoundingBox({ personaName: testPersona.name })
 
     await annotationWorkspace.timeline.show()
 
@@ -43,7 +46,8 @@ test.describe('Annotation Keyframes', () => {
     await annotationWorkspace.timeline.addKeyframe()
 
     await annotationWorkspace.video.jumpToStart()
-    await page.waitForTimeout(200)
+    // Confirm the playhead is back at frame 0 before re-seeking, deterministically.
+    await expect.poll(() => annotationWorkspace.video.getCurrentFrame()).toBe(0)
 
     for (let i = 0; i < 20; i++) {
       await annotationWorkspace.video.seekForwardOneFrame()
@@ -56,7 +60,7 @@ test.describe('Annotation Keyframes', () => {
 
   test('copies previous keyframe with C key', async ({ annotationWorkspace, testUser, testPersona, testEntityType, testVideo }) => {
     await annotationWorkspace.navigateFromVideoBrowser()
-    await annotationWorkspace.drawSimpleBoundingBox()
+    await annotationWorkspace.drawSimpleBoundingBox({ personaName: testPersona.name })
 
     await annotationWorkspace.timeline.show()
 
@@ -70,8 +74,9 @@ test.describe('Annotation Keyframes', () => {
   })
 
   test('saves annotation with keyframes', async ({ annotationWorkspace, page, testUser, testPersona, testEntityType, testVideo }) => {
+    void page
     await annotationWorkspace.navigateFromVideoBrowser()
-    await annotationWorkspace.drawSimpleBoundingBox()
+    await annotationWorkspace.drawSimpleBoundingBox({ personaName: testPersona.name })
 
     await annotationWorkspace.timeline.show()
 

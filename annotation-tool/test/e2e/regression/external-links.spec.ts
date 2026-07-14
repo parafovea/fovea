@@ -1,4 +1,5 @@
 import { test, expect } from '../fixtures/test-context.js'
+import { mockWikidata } from '../fixtures/mock-wikidata.js'
 
 /**
  * E2E tests for external link behavior.
@@ -14,62 +15,64 @@ test.describe('External Links', () => {
       testPersona,
       page,
     }) => {
+      // Intercept the wikidata.org REST endpoints (wbsearchentities /
+      // wbgetentities) before any navigation so the search result and
+      // preview render deterministically instead of racing the live API.
+      await mockWikidata(page)
+
       await ontologyWorkspace.navigateTo(testPersona.id)
       await ontologyWorkspace.selectTab('entities')
 
       // Import an entity type from Wikidata to get a Wikidata chip
       await ontologyWorkspace.addTypeFab.click()
-      await page.waitForTimeout(300)
 
       const dialog = page.locator('[role="dialog"]')
       await dialog.waitFor({ state: 'visible' })
 
       const wikidataButton = dialog.getByRole('button', { name: /import from wikidata/i })
       await wikidataButton.click()
-      await page.waitForTimeout(500)
 
+      // Wait on the mocked search response rather than a fixed sleep: the
+      // input is debounced, so the fetch fires ~300ms after fill settles.
       const searchInput = dialog.getByPlaceholder(/search/i)
+      const searchResponse = page.waitForResponse(
+        (r) => r.url().includes('action=wbsearchentities') && r.ok(),
+      )
       await searchInput.fill('Human')
-      await page.waitForTimeout(2000)
+      await searchResponse
 
       const firstOption = page.getByRole('option').first()
-      await expect(firstOption).toBeVisible({ timeout: 5000 })
+      await expect(firstOption).toBeVisible({ timeout: 10000 })
       await firstOption.click()
-      await page.waitForTimeout(1000)
 
-      // Preview should show with Wikidata chip
+      // Selecting the option triggers wbgetentities; the preview card with
+      // the import button renders once that resolves. The web-first
+      // assertion auto-waits, so no sleep is needed.
       const importButton = dialog.getByRole('button', { name: /import as entity type/i })
-      await expect(importButton).toBeVisible({ timeout: 3000 })
+      await expect(importButton).toBeVisible({ timeout: 10000 })
 
       await importButton.click()
-      await page.waitForTimeout(1000)
 
       // Dialog should close
-      await expect(dialog).not.toBeVisible()
+      await expect(dialog).not.toBeVisible({ timeout: 10000 })
 
       // Find the created entity type
       await ontologyWorkspace.expectTypeExists('human')
 
-      // Click on the entity type to see details
-      const typeCard = page.getByText('human', { exact: false }).first()
-      await typeCard.click()
-      await page.waitForTimeout(500)
-
-      // Look for Wikidata badge in the UI (rendered as shadcn Badge wrapped in <a> when external links are enabled)
-      const wikidataChip = page.getByText(/Wikidata:\s*Q/i)
-
-      const chipCount = await wikidataChip.count()
-      if (chipCount > 0) {
-        // The Badge renders inside an anchor when allowExternalLinks is true; locate the enclosing link
-        const chipLink = page.locator('a', { has: page.getByText(/Wikidata:\s*Q/i) })
-        const linkCount = await chipLink.count()
-
-        // In online mode with external links enabled, chip should be a clickable link to Wikidata
-        if (linkCount > 0) {
-          const href = await chipLink.first().getAttribute('href')
-          expect(href).toContain('wikidata.org')
-        }
-      }
+      // The type-list row renders the Wikidata chip inline (an <a> wrapping
+      // a Badge that reads "Wikidata: Q…"). Scope to the imported row so a
+      // chip from any other type cannot satisfy the assertion, then verify
+      // the chip is a clickable link to Wikidata.
+      const humanRow = page
+        .locator('[role="tabpanel"]:not([hidden]) li')
+        .filter({ has: page.getByRole('button', { name: 'Edit human' }) })
+        .first()
+      const chipLink = humanRow.locator('a').filter({
+        has: page.getByText(/Wikidata:\s*Q/i),
+      })
+      await expect(chipLink).toBeVisible({ timeout: 10000 })
+      const href = await chipLink.getAttribute('href')
+      expect(href).toContain('wikidata.org')
     })
   })
 
@@ -84,7 +87,11 @@ test.describe('External Links', () => {
       // Wait for video cards to load and click the first one
       await expect(videoBrowser.firstVideoCard).toBeVisible({ timeout: 10000 })
       await videoBrowser.firstVideoCard.click()
-      await page.waitForTimeout(500)
+
+      // Clicking a card navigates to the annotation workspace; wait for that
+      // landmark to render before inspecting metadata links (replaces a
+      // fixed post-navigation sleep).
+      await expect(page.getByText(/annotation workspace/i)).toBeVisible({ timeout: 10000 })
 
       // Video details should be visible
       // External links (like uploader URL, webpage URL) should be present

@@ -66,7 +66,6 @@ test.describe('Claim card selection', () => {
         .filter({ hasText: new RegExp('^' + testPersona.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ' \\(') })
         .first()
         .click()
-      await page.waitForTimeout(500)
     }
 
     const summaryTab = dialog.locator('[role="tab"]').filter({ hasText: 'Summary' })
