@@ -10,7 +10,7 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, fireEvent, within } from '@testing-library/react'
 
 import type { SpanRelation, TextSpan, TokenizedElement } from '@/lib/spans'
 
@@ -87,5 +87,63 @@ describe('SpanAnnotator', () => {
 
     expect(screen.queryByText('Spans (2)')).not.toBeInTheDocument()
     expect(screen.queryByTestId('relation-arc-overlay')).not.toBeInTheDocument()
+  })
+
+  describe('read-only mode', () => {
+    it('hides editing affordances and keeps pointer gestures inert', () => {
+      const { container } = render(
+        <SpanAnnotator
+          tokenization={element}
+          text={TEXT}
+          spans={spans}
+          relations={relations}
+          relationTypes={[]}
+          config={{ readOnly: true }}
+        />,
+      )
+
+      // No relation-builder entry point and no delete affordances.
+      expect(screen.queryByTestId('start-relation-button')).not.toBeInTheDocument()
+      expect(screen.queryByLabelText('Delete span')).not.toBeInTheDocument()
+      expect(screen.queryByLabelText('Delete relation')).not.toBeInTheDocument()
+      // The label picker stays hidden.
+      expect(screen.queryByTestId('span-label-anchor')).not.toBeInTheDocument()
+
+      // A pointer gesture over the tokens does not commit a selection or open
+      // the label picker.
+      const token = container.querySelector('[data-key="tok:0"]') as HTMLElement
+      fireEvent.pointerDown(token)
+      fireEvent.pointerUp(token)
+      expect(screen.queryByTestId('span-label-anchor')).not.toBeInTheDocument()
+    })
+  })
+
+  describe('relation endpoint picking', () => {
+    it('picks an overlapping span as an endpoint from its side-panel row', () => {
+      const { container } = render(
+        <SpanAnnotator
+          tokenization={element}
+          text={TEXT}
+          spans={spans}
+          relations={[]}
+          relationTypes={[]}
+        />,
+      )
+
+      // Begin the relation builder.
+      fireEvent.click(screen.getByTestId('start-relation-button'))
+      const status = (): HTMLElement => screen.getByTestId('relation-status')
+      expect(within(status()).getByText('Click the source span')).toBeInTheDocument()
+
+      // Both s1 and s2 cover token 0, so a token click can only reach the
+      // primary span. Picking the non-primary span s2 from its row sets it as
+      // the source anyway.
+      fireEvent.click(container.querySelector('[data-span-row="s2"]') as HTMLElement)
+      expect(within(status()).getByText('Click the target span')).toBeInTheDocument()
+
+      // Picking s1 as the target advances the builder to the type step.
+      fireEvent.click(container.querySelector('[data-span-row="s1"]') as HTMLElement)
+      expect(within(status()).getByText('Choose a relation type')).toBeInTheDocument()
+    })
   })
 })

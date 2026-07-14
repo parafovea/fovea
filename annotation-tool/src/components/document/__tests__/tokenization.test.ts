@@ -109,22 +109,36 @@ describe('rowsToSpans', () => {
 })
 
 describe('rowsToRelations', () => {
+  const baseRow: TextAnnotationRelationRow = {
+    id: 'rel-1',
+    layerId: 'layer-2',
+    sourceAnnotationId: 'ann-1',
+    targetAnnotationId: 'ann-2',
+    relationTypeRef: { id: 'rt-5' },
+    label: 'wrote',
+    features: null,
+    createdAt: '2026-07-12T00:00:00.000Z',
+    updatedAt: '2026-07-12T00:00:00.000Z',
+  }
+
   it('maps rows to directed span relations with their type ref', () => {
-    const rows: TextAnnotationRelationRow[] = [
-      {
-        id: 'rel-1',
-        layerId: 'layer-2',
-        sourceAnnotationId: 'ann-1',
-        targetAnnotationId: 'ann-2',
-        relationTypeRef: { id: 'rt-5' },
-        label: 'wrote',
-        features: null,
-        createdAt: '2026-07-12T00:00:00.000Z',
-        updatedAt: '2026-07-12T00:00:00.000Z',
-      },
-    ]
-    expect(rowsToRelations(rows)).toEqual([
+    expect(rowsToRelations([baseRow])).toEqual([
       { id: 'rel-1', sourceSpanId: 'ann-1', targetSpanId: 'ann-2', relationTypeId: 'rt-5', directed: true },
     ])
+  })
+
+  it('derives an undirected relation from a symmetric relation type', () => {
+    const symmetricByTypeId = new Map([['rt-5', true]])
+    expect(rowsToRelations([baseRow], symmetricByTypeId)[0].directed).toBe(false)
+  })
+
+  it('keeps an asymmetric relation type directed', () => {
+    const symmetricByTypeId = new Map([['rt-5', false]])
+    expect(rowsToRelations([baseRow], symmetricByTypeId)[0].directed).toBe(true)
+  })
+
+  it('defaults to directed when the type cannot be resolved', () => {
+    const symmetricByTypeId = new Map([['other-type', true]])
+    expect(rowsToRelations([baseRow], symmetricByTypeId)[0].directed).toBe(true)
   })
 })

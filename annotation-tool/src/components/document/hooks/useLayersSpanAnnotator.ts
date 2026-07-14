@@ -12,6 +12,8 @@
 
 import { useCallback, useMemo, useRef } from 'react'
 
+import { subject } from '@casl/ability'
+
 import {
   useCreateLayersRelation,
   useDeleteLayersAnnotation,
@@ -24,6 +26,7 @@ import {
 import type { LayersAnnotationLayerRow } from '@store/queries'
 import type { SpanRelation, TextSpan, TokenizedElement } from '@/lib/spans'
 import type { RelationType } from '@models/ontology'
+import { useAbility } from '@/lib/ability'
 
 import type { RelationDraftCommit, SpanDraft } from '../SpanAnnotator'
 import type { SpanLabelOption } from '../SpanLabelPicker'
@@ -51,6 +54,12 @@ export interface LayersSpanAnnotatorController {
   relationTypes: RelationType[]
   /** Quick labels (the persona's first entity types) applied by digit keys. */
   quickLabels: SpanLabelOption[]
+  /**
+   * Whether the current user may edit this document's spans. Mirrors the subject
+   * the server authorizes annotation writes on, so a viewer who can read but not
+   * update these annotations sees the surface read-only.
+   */
+  canEdit: boolean
   /** Create a span from a label picker choice. */
   onCreateSpan: (draft: SpanDraft) => void
   /** Delete a span by id. */
@@ -98,6 +107,7 @@ export function useLayersSpanAnnotator(
 ): LayersSpanAnnotatorController {
   const { data: detail, isLoading, isError } = useLayersAnnotations(expressionUri)
   const { data: ontology } = usePersonaOntology(personaId)
+  const ability = useAbility()
 
   const upsertLayer = useUpsertLayer()
   const upsertAnnotation = useUpsertLayersAnnotation()
@@ -136,12 +146,34 @@ export function useLayersSpanAnnotator(
     return rowsToSpans(spanLayer.annotations, tokenizationId, resolvers)
   }, [spanLayer, tokenizationId, resolvers])
 
+  const symmetricByTypeId = useMemo(() => {
+    const map = new Map<string, boolean>()
+    for (const type of ontology?.relationTypes ?? []) map.set(type.id, type.symmetric === true)
+    return map
+  }, [ontology])
+
   const relations = useMemo<SpanRelation[]>(
-    () => layers.flatMap((layer) => rowsToRelations(layer.relations)),
-    [layers],
+    () => layers.flatMap((layer) => rowsToRelations(layer.relations, symmetricByTypeId)),
+    [layers, symmetricByTypeId],
   )
 
   const relationTypes = ontology?.relationTypes ?? []
+
+  const canEdit = useMemo(() => {
+    // A fresh document has no span layer yet; the user will own whatever they
+    // create, so annotation is allowed. Once a span layer exists, mirror the
+    // subject the server authorizes annotation writes on (a LayersAnnotation
+    // scoped by createdByUserId + projectId) and gate on `update`, so a reader
+    // who cannot update another user's spans sees them read-only.
+    if (!spanLayer) return true
+    return ability.can(
+      'update',
+      subject('LayersAnnotation', {
+        createdByUserId: spanLayer.createdByUserId ?? null,
+        projectId: spanLayer.projectId ?? null,
+      }),
+    )
+  }, [ability, spanLayer])
 
   const quickLabels = useMemo<SpanLabelOption[]>(
     () =>
@@ -277,6 +309,7 @@ export function useLayersSpanAnnotator(
     relations,
     relationTypes,
     quickLabels,
+    canEdit,
     onCreateSpan,
     onDeleteSpan,
     onCreateRelation,

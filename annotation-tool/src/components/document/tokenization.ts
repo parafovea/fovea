@@ -173,19 +173,32 @@ function relationTypeRefId(ref: unknown): string | undefined {
 /**
  * Converts a layer's relation rows into view-model relations.
  *
- * Every layers relation is a directed edge from its source annotation to its
- * target; the relation-type ref id (when present) rides along for label
- * resolution.
+ * Directedness is a property of the relation TYPE: a symmetric ontology relation
+ * type is undirected, so its edges render without an arrowhead. This derives each
+ * edge's `directed` flag from `symmetricByTypeId`, keyed by the relation-type ref
+ * id: an edge is undirected when its type is symmetric, and directed when the
+ * type is asymmetric or cannot be resolved (the safe default). The relation-type
+ * ref id (when present) also rides along for label resolution.
  *
  * @param rows - the layer's relation rows
- * @returns one directed {@link SpanRelation} per row
+ * @param symmetricByTypeId - relation-type id to whether that type is symmetric;
+ *   an unresolved id yields a directed edge
+ * @returns one {@link SpanRelation} per row
  */
-export function rowsToRelations(rows: TextAnnotationRelationRow[]): SpanRelation[] {
-  return rows.map((row) => ({
-    id: row.id,
-    sourceSpanId: row.sourceAnnotationId,
-    targetSpanId: row.targetAnnotationId,
-    relationTypeId: relationTypeRefId(row.relationTypeRef),
-    directed: true,
-  }))
+export function rowsToRelations(
+  rows: TextAnnotationRelationRow[],
+  symmetricByTypeId?: Map<string, boolean>,
+): SpanRelation[] {
+  return rows.map((row) => {
+    const relationTypeId = relationTypeRefId(row.relationTypeRef)
+    const symmetric =
+      relationTypeId !== undefined ? symmetricByTypeId?.get(relationTypeId) === true : false
+    return {
+      id: row.id,
+      sourceSpanId: row.sourceAnnotationId,
+      targetSpanId: row.targetAnnotationId,
+      relationTypeId,
+      directed: !symmetric,
+    }
+  })
 }

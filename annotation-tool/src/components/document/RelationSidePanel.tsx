@@ -1,14 +1,15 @@
 /**
  * Side panel listing a document's span relations.
  *
- * Each row shows the source span label, an arrow, the target span label, the
- * relation type, and a delete control. Hovering a row reports the relation id so
- * the arc overlay can emphasize the matching arc.
+ * Each row shows the source span label, a connector, the target span label, the
+ * relation type, and a delete control. The connector is an arrow for a directed
+ * relation and a dash for an undirected (symmetric) one. Hovering a row reports
+ * the relation id so the arc overlay can emphasize the matching arc.
  *
  * @module
  */
 
-import { ArrowRight, Trash2 } from 'lucide-react'
+import { ArrowRight, Minus, Trash2 } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
@@ -33,6 +34,8 @@ export interface RelationSidePanelProps {
   onHoverRelation?: (relationId: string | null) => void
   /** Called when a relation's delete control is clicked. */
   onDeleteRelation: (relationId: string) => void
+  /** When `true`, hides the per-row delete control. Defaults to `false`. */
+  readOnly?: boolean
 }
 
 /** Reads a span's display label by id, falling back to a shortened id. */
@@ -55,6 +58,7 @@ export function RelationSidePanel({
   hoveredRelationId,
   onHoverRelation,
   onDeleteRelation,
+  readOnly = false,
 }: RelationSidePanelProps): JSX.Element {
   const panelAnchorRef = useTourAnchor('relation-side-panel')
   return (
@@ -67,34 +71,55 @@ export function RelationSidePanel({
           </p>
         ) : (
           <ul className="flex flex-col gap-1 pr-2">
-            {relations.map((relation) => (
-              <li key={relation.id}>
-                <div
-                  data-relation-row={relation.id}
-                  onMouseEnter={() => onHoverRelation?.(relation.id)}
-                  onMouseLeave={() => onHoverRelation?.(null)}
-                  className={cn(
-                    'flex items-center gap-1.5 rounded-md border border-transparent px-2 py-1.5 text-sm transition-colors',
-                    hoveredRelationId === relation.id && 'border-primary bg-primary/5',
-                  )}
-                >
-                  <span className="truncate">{spanLabel(spans, relation.sourceSpanId)}</span>
-                  <ArrowRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                  <span className="truncate">{spanLabel(spans, relation.targetSpanId)}</span>
-                  <Badge variant="outline" className="ml-auto text-[0.7rem]">
-                    {resolveLabel(relation)}
-                  </Badge>
-                  <Button
-                    variant="ghost"
-                    size="icon-xs"
-                    aria-label="Delete relation"
-                    onClick={() => onDeleteRelation(relation.id)}
+            {relations.map((relation) => {
+              const source = spanLabel(spans, relation.sourceSpanId)
+              const target = spanLabel(spans, relation.targetSpanId)
+              return (
+                <li key={relation.id}>
+                  <div
+                    data-relation-row={relation.id}
+                    aria-label={
+                      relation.directed
+                        ? `${source} directed to ${target}`
+                        : `${source} undirected, linked with ${target}`
+                    }
+                    onMouseEnter={() => onHoverRelation?.(relation.id)}
+                    onMouseLeave={() => onHoverRelation?.(null)}
+                    className={cn(
+                      'flex items-center gap-1.5 rounded-md border border-transparent px-2 py-1.5 text-sm transition-colors',
+                      hoveredRelationId === relation.id && 'border-primary bg-primary/5',
+                    )}
                   >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              </li>
-            ))}
+                    <span className="truncate">{source}</span>
+                    {relation.directed ? (
+                      <ArrowRight
+                        aria-label="directed to"
+                        className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
+                      />
+                    ) : (
+                      <Minus
+                        aria-label="undirected, linked with"
+                        className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
+                      />
+                    )}
+                    <span className="truncate">{target}</span>
+                    <Badge variant="outline" className="ml-auto text-[0.7rem]">
+                      {resolveLabel(relation)}
+                    </Badge>
+                    {!readOnly && (
+                      <Button
+                        variant="ghost"
+                        size="icon-xs"
+                        aria-label="Delete relation"
+                        onClick={() => onDeleteRelation(relation.id)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
+                </li>
+              )
+            })}
           </ul>
         )}
       </ScrollArea>

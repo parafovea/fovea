@@ -19,11 +19,23 @@ import { DocumentBrowser } from './DocumentBrowser'
 import { DocumentEditor } from './DocumentEditor'
 
 /**
+ * Props for {@link DocumentWorkspace}.
+ */
+export interface DocumentWorkspaceProps {
+  /**
+   * Forces the annotator read-only (`true`) or editable (`false`). When omitted,
+   * editability defaults to the CASL ability on the document's spans.
+   */
+  readOnly?: boolean
+}
+
+/**
  * Renders the document browser or the single-document annotator by route.
  *
+ * @param props - the read-only override forwarded to the editor
  * @returns the workspace element
  */
-export function DocumentWorkspace(): JSX.Element {
+export function DocumentWorkspace({ readOnly }: DocumentWorkspaceProps = {}): JSX.Element {
   const { documentId } = useParams<{ documentId: string }>()
   const navigate = useNavigate()
   const personaId = useAnnotationUiStore((state) => state.selectedPersonaId)
@@ -46,7 +58,7 @@ export function DocumentWorkspace(): JSX.Element {
         </Button>
         <h2 className="text-xl font-semibold">Document</h2>
       </div>
-      <DocumentEditor expressionUri={documentId} personaId={personaId} />
+      <DocumentEditor expressionUri={documentId} personaId={personaId} readOnly={readOnly} />
     </div>
   )
 }

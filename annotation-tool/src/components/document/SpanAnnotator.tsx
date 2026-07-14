@@ -199,6 +199,20 @@ function SpanAnnotatorInner({
     [onCreateSpan, pendingDraft, storeApi],
   )
 
+  const handleSelectSpan = useCallback(
+    (spanId: string) => {
+      // While the relation builder awaits an endpoint, a span-row click picks
+      // that span as the source or target, so an overlapping (non-primary) span
+      // can be a relation endpoint. Read-only mode never enters those phases, so
+      // the click just makes the span active.
+      const phase = storeApi.getState().relationPhase
+      if (!readOnly && phase === 'WAITING_SOURCE') machine.pickSource(spanId)
+      else if (!readOnly && phase === 'WAITING_TARGET') machine.pickTarget(spanId)
+      else storeApi.getState().setActiveSpanId(spanId)
+    },
+    [machine, readOnly, storeApi],
+  )
+
   useSpanAnnotatorHotkeys({
     enabled: !readOnly,
     onCancel: () => {
@@ -313,10 +327,12 @@ function SpanAnnotatorInner({
             spans={spans}
             colorMap={colorMap}
             activeSpanId={activeSpanId}
-            onSelectSpan={(id) => storeApi.getState().setActiveSpanId(id)}
+            onSelectSpan={handleSelectSpan}
             onDeleteSpan={(id) => onDeleteSpan?.(id)}
             onStartRelation={() => machine.start()}
             relationPhase={relationPhase}
+            relationSourceId={relationSourceId}
+            readOnly={readOnly}
           />
           {showRelations && (
             <RelationSidePanel
@@ -326,6 +342,7 @@ function SpanAnnotatorInner({
               hoveredRelationId={hoveredRelationId}
               onHoverRelation={(id) => storeApi.getState().setHoveredRelationId(id)}
               onDeleteRelation={(id) => onDeleteRelation?.(id)}
+              readOnly={readOnly}
             />
           )}
         </div>

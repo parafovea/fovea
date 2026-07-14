@@ -22,15 +22,25 @@ export interface DocumentEditorProps {
   expressionUri: string
   /** The active persona, scoping layers and backing type labels. */
   personaId?: string | null
+  /**
+   * Forces the surface read-only (`true`) or editable (`false`). When omitted,
+   * editability defaults to the CASL ability: the surface is read-only when the
+   * user cannot update this document's spans.
+   */
+  readOnly?: boolean
 }
 
 /**
  * Renders the span annotator for a document.
  *
- * @param props - the document expression and active persona
+ * @param props - the document expression, active persona, and read-only override
  * @returns the editor element
  */
-export function DocumentEditor({ expressionUri, personaId }: DocumentEditorProps): JSX.Element {
+export function DocumentEditor({
+  expressionUri,
+  personaId,
+  readOnly,
+}: DocumentEditorProps): JSX.Element {
   const controller = useLayersSpanAnnotator(expressionUri, personaId)
 
   if (controller.status === 'loading') {
@@ -57,6 +67,8 @@ export function DocumentEditor({ expressionUri, personaId }: DocumentEditorProps
     )
   }
 
+  const effectiveReadOnly = readOnly ?? !controller.canEdit
+
   return (
     <SpanAnnotator
       tokenization={controller.element}
@@ -70,6 +82,7 @@ export function DocumentEditor({ expressionUri, personaId }: DocumentEditorProps
       onDeleteSpan={controller.onDeleteSpan}
       onCreateRelation={controller.onCreateRelation}
       onDeleteRelation={controller.onDeleteRelation}
+      config={{ readOnly: effectiveReadOnly }}
     />
   )
 }
