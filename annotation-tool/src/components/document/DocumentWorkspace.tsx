@@ -13,6 +13,7 @@ import { ArrowLeft } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { useAnnotationUiStore } from '@store/zustand'
+import { useTourAnchor } from '@/tours/engine/anchorRegistry'
 
 import { DocumentBrowser } from './DocumentBrowser'
 import { DocumentEditor } from './DocumentEditor'
@@ -26,13 +27,14 @@ export function DocumentWorkspace(): JSX.Element {
   const { documentId } = useParams<{ documentId: string }>()
   const navigate = useNavigate()
   const personaId = useAnnotationUiStore((state) => state.selectedPersonaId)
+  const workspaceAnchorRef = useTourAnchor('document-workspace')
 
   if (!documentId) {
     return <DocumentBrowser />
   }
 
   return (
-    <div className="space-y-4">
+    <div ref={workspaceAnchorRef} className="space-y-4">
       <div className="flex items-center gap-2">
         <Button
           variant="ghost"

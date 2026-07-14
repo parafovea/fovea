@@ -15,6 +15,7 @@ import { useCallback, useMemo, useRef } from 'react'
 
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
+import { useTourAnchor } from '@/tours/engine/anchorRegistry'
 import {
   assignSpanColors,
   computeTokenSpanMap,
@@ -138,6 +139,7 @@ function SpanAnnotatorInner({
   const { showRelations = true, showSidePanels = true, readOnly = false } = config
 
   const contentRef = useRef<HTMLDivElement>(null)
+  const annotatorAnchorRef = useTourAnchor('span-annotator')
   const storeApi = useSpanAnnotatorStoreApi()
 
   const selection = useSpanAnnotatorStore((state) => state.committedSelection)
@@ -236,7 +238,7 @@ function SpanAnnotatorInner({
   const relationAnchor = relationTargetId ? positions.get(relationTargetId) ?? null : null
 
   return (
-    <div className={cn('flex gap-4', className)} data-testid="span-annotator">
+    <div ref={annotatorAnchorRef} className={cn('flex gap-4', className)} data-testid="span-annotator">
       <div className="min-w-0 flex-1">
         <div className="relative max-h-[60vh] overflow-auto rounded-lg border bg-card p-4">
           <TokenizedTextView

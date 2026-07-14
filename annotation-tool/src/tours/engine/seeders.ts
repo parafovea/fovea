@@ -29,6 +29,9 @@
  *   - `open-time-collection-builder`   open the time-collection builder
  *   - `open-import-dialog`             open the data import dialog
  *   - `open-project-video-assignment`  open the project video-assignment surface
+ *   - `ensure-demo-document`           create the document tour's demo document
+ *   - `open-demo-document`             open the demo document's span annotator
+ *   - `select-token-span`              select a token and open the span label picker
  */
 
 import { anchorCatalog } from './anchorCatalog'
@@ -367,3 +370,118 @@ registerCapability('open-project-video-assignment', async (ctx) => {
 registerCapability('run-transcription', async (ctx) => {
   await reachSurface(ctx, 'transcript-dialog')
 })
+
+// ---------------------------------------------------------------------------
+// document span-annotation demo
+// ---------------------------------------------------------------------------
+
+/** The demo document a document-annotation step drives to, read from its params. */
+interface DemoDocumentParams {
+  /** Client-supplied document id; makes the create idempotent and lets steps route to it. */
+  documentId: string
+  /** Text tokenized into the demo document. */
+  text: string
+  /** Optional document title. */
+  title?: string
+}
+
+/** Read a step's demo-document params, or null when they are missing or malformed. */
+function demoDocumentParams(params?: Record<string, unknown>): DemoDocumentParams | null {
+  const documentId = typeof params?.documentId === 'string' ? params.documentId : null
+  const text = typeof params?.text === 'string' ? params.text : null
+  if (!documentId || !text) return null
+  const title = typeof params?.title === 'string' ? params.title : undefined
+  return { documentId, text, title }
+}
+
+/**
+ * Create the tour's demo document if it does not exist and refresh the caches
+ * that render it. The create is idempotent on the client-supplied id, so
+ * re-running the tour reuses the same row rather than piling up duplicates.
+ * Returns false when the create is rejected (an anonymous demo session lacks
+ * create access), leaving the step to surface its skip affordance rather than
+ * fabricate a document.
+ */
+async function ensureDemoDocument(p: DemoDocumentParams): Promise<boolean> {
+  const response = await fetch('/api/layers/documents', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ id: p.documentId, text: p.text, title: p.title }),
+  })
+  if (!response.ok) return false
+
+  const { queryClient } = await import('@/main')
+  const { documentKeys } = await import('@store/queries/useDocuments')
+  const { layersAnnotationKeys } = await import('@store/queries/useLayersAnnotations')
+  await queryClient.invalidateQueries({ queryKey: documentKeys.all })
+  await queryClient.invalidateQueries({ queryKey: layersAnnotationKeys.byExpression(p.documentId) })
+  return true
+}
+
+/**
+ * Ensure the tour's demo document exists so the document browser lists a card to
+ * open. Navigates to the browser, creates the document if absent, and resolves
+ * once its first card mounts.
+ */
+registerCapability('ensure-demo-document', async (ctx, params) => {
+  const p = demoDocumentParams(params)
+  if (!p) return
+  ctx.navigate('/app/documents')
+  await ensureDemoDocument(p)
+  await waitForSurface(ctx.registry, 'document-card-first')
+})
+
+/**
+ * Open the demo document's span annotator. Creates the document if absent,
+ * navigates to its per-document route, and resolves once the annotator mounts,
+ * so the span, relation-overlay, and relation-panel steps anchor inside it.
+ */
+registerCapability('open-demo-document', async (ctx, params) => {
+  const p = demoDocumentParams(params)
+  if (!p) return
+  await ensureDemoDocument(p)
+  ctx.navigate(`/app/documents/${encodeURIComponent(p.documentId)}`)
+  await waitForSurface(ctx.registry, 'span-annotator')
+})
+
+/**
+ * Drive a real token selection so the span label picker mounts. Opens the demo
+ * document, then dispatches the same pointer gesture a visitor makes: a
+ * pointerdown on the first token and a pointerup on the annotator content, which
+ * commits a one-token selection and opens the label picker at it. Resolves once
+ * the picker registers, or returns quietly when no token is present to select.
+ */
+registerCapability('select-token-span', async (ctx, params) => {
+  const p = demoDocumentParams(params)
+  if (!p) return
+  await ensureDemoDocument(p)
+  ctx.navigate(`/app/documents/${encodeURIComponent(p.documentId)}`)
+
+  const annotator = await waitForSurface(ctx.registry, 'span-annotator')
+  if (!annotator) return
+  await ctx.sleep(SETTLE_MS)
+
+  const content = annotator.querySelector<HTMLElement>('[data-annotator-content]') ?? annotator
+  const token = content.querySelector<HTMLElement>('[data-token]')
+  if (!token) return
+
+  selectTokenViaPointer(content, token)
+  await waitForSurface(ctx.registry, 'span-label-picker')
+})
+
+/** Dispatch a pointerdown/pointerup pair that commits `token` as a one-token selection. */
+function selectTokenViaPointer(content: HTMLElement, token: HTMLElement): void {
+  const rect = token.getBoundingClientRect()
+  const init: PointerEventInit = {
+    bubbles: true,
+    cancelable: true,
+    clientX: rect.left + rect.width / 2,
+    clientY: rect.top + rect.height / 2,
+    pointerId: 1,
+    pointerType: 'mouse',
+    isPrimary: true,
+  }
+  token.dispatchEvent(new PointerEvent('pointerdown', init))
+  content.dispatchEvent(new PointerEvent('pointerup', init))
+}

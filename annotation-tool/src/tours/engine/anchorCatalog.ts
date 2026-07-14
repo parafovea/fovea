@@ -76,6 +76,21 @@ export const anchorCatalog = {
   'gloss-preview': { description: 'The rendered gloss preview.', surface: 'dialog:gloss', conditional: true },
   'gloss-autocomplete-popup': { description: 'The #/@/^ reference autocomplete popup in the gloss editor.', surface: 'dialog:gloss', conditional: true },
 
+  // ---- Document workspace (/app/documents) ----
+  'document-browser': { description: 'The document browser grid container.', surface: '/app/documents' },
+  'document-card-first': { description: 'The first document card in the grid.', surface: '/app/documents', conditional: true },
+
+  // ---- Document span annotator (/app/documents/:documentId) ----
+  'document-workspace': { description: 'The single-document annotation workspace.', surface: '/app/documents/:documentId' },
+  'span-annotator': { description: 'The token span-annotation surface over a document.', surface: '/app/documents/:documentId' },
+  'span-label-picker': { description: 'The span label picker that opens on a token selection.', surface: '/app/documents/:documentId', conditional: true },
+  'relation-type-picker': { description: 'The relation-type picker for a pending span relation.', surface: '/app/documents/:documentId', conditional: true },
+  'relation-arc-overlay': { description: 'The relation-arc overlay drawn over the tokenized text.', surface: '/app/documents/:documentId', conditional: true },
+  'relation-side-panel': { description: 'The span-relations side panel.', surface: '/app/documents/:documentId' },
+
+  // ---- Video associated-text span annotation (/app/annotate/:videoId) ----
+  'video-text-panel': { description: "The video's associated-text (post text / transcript) span annotator.", surface: '/app/annotate/:videoId', conditional: true },
+
   // ---- Ontology workspace (/app/ontology) ----
   'ontology-workspace-tabs': { description: 'The ontology workspace tab bar.', surface: '/app/ontology' },
   'ontology-tab-entities': { description: 'The "Entity types" tab.', surface: '/app/ontology' },

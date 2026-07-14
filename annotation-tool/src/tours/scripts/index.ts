@@ -22,6 +22,7 @@ import { buildEventsRolesClaimsTour } from './events-roles-claims'
 import { buildWorldLayerTour } from './world-layer'
 import { buildModelInTheLoopTour } from './model-in-the-loop'
 import { buildSummariesAndClaimsTour } from './summaries-and-claims'
+import { buildDocumentAnnotationTour } from './document-annotation'
 import { buildCollaborationTour } from './collaboration'
 import { buildAdminTour } from './admin'
 import { buildImportExportTour } from './import-export'
@@ -29,11 +30,12 @@ import { buildWelcomeTour } from './welcome'
 import { buildKeyframesInterpolationTour } from './keyframes-interpolation'
 
 export function getBuiltInTours(bundle: TourContentBundle): Tour[] {
-  // Order matches the public tour catalogue's 4x3 grid: Welcome
-  // first (orientation), followed by the four-layer arc (annotation,
-  // ontology, world), then the model-assisted flows, then
-  // collaboration and operator surfaces. Keyframes + interpolation
-  // closes the grid as the temporal-modeling deep dive.
+  // Order matches the public tour catalogue grid: Welcome first
+  // (orientation), followed by the four-layer arc (annotation,
+  // ontology, world), then the model-assisted flows, then the
+  // document span/relation surfaces, then collaboration and operator
+  // surfaces. Keyframes + interpolation closes the grid as the
+  // temporal-modeling deep dive.
   return [
     buildWelcomeTour(),
     buildFirstAnnotationTour(bundle.firstAnnotation),
@@ -43,6 +45,7 @@ export function getBuiltInTours(bundle: TourContentBundle): Tour[] {
     buildWorldLayerTour(bundle.worldLayer),
     buildModelInTheLoopTour(bundle.modelInTheLoop),
     buildSummariesAndClaimsTour(bundle.summariesAndClaims),
+    buildDocumentAnnotationTour(bundle.documentAnnotation),
     buildCollaborationTour(bundle.collaboration),
     buildAdminTour(),
     buildImportExportTour(bundle.importExport),
@@ -73,6 +76,7 @@ export {
   buildWorldLayerTour,
   buildModelInTheLoopTour,
   buildSummariesAndClaimsTour,
+  buildDocumentAnnotationTour,
   buildCollaborationTour,
   buildAdminTour,
   buildImportExportTour,

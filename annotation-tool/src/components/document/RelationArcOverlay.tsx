@@ -11,10 +11,11 @@
  * @module
  */
 
-import { useId } from 'react'
+import { useCallback, useId } from 'react'
 
 import { cn } from '@/lib/utils'
 import { arcPath, type Rect, type SpanRelation } from '@/lib/spans'
+import { useTourAnchor } from '@/tours/engine/anchorRegistry'
 
 /** Matches `ARC_BASE_HEIGHT` in the span geometry library. */
 const ARC_BASE_HEIGHT = 20
@@ -68,9 +69,18 @@ export function RelationArcOverlay({
   onDeleteRelation,
 }: RelationArcOverlayProps): JSX.Element {
   const markerId = useId().replace(/[:]/g, '')
+  const registerOverlayAnchor = useTourAnchor('relation-arc-overlay')
+  // The registry positions spotlights from a node's bounding rect, which every
+  // Element exposes, so the SVG node feeds the same registry as HTML anchors.
+  const overlayAnchorRef = useCallback(
+    (element: SVGSVGElement | null) =>
+      registerOverlayAnchor(element as Element as HTMLElement | null),
+    [registerOverlayAnchor],
+  )
 
   return (
     <svg
+      ref={overlayAnchorRef}
       className="absolute inset-0 h-full w-full overflow-visible pointer-events-none"
       data-testid="relation-arc-overlay"
       aria-hidden

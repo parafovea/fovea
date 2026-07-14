@@ -16,6 +16,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useVideoTextExpressions } from '@store/queries'
 import type { LayersExpressionWithTokens } from '@store/queries'
+import { useTourAnchor } from '@/tours/engine/anchorRegistry'
 
 import { DocumentEditor } from './DocumentEditor'
 
@@ -46,6 +47,7 @@ function expressionLabel(expression: LayersExpressionWithTokens): string {
 export function VideoTextPanel({ videoId, personaId }: VideoTextPanelProps): JSX.Element {
   const { data: expressions = [], isLoading, isError } = useVideoTextExpressions(videoId)
   const [activeId, setActiveId] = useState<string | null>(null)
+  const panelAnchorRef = useTourAnchor('video-text-panel')
 
   useEffect(() => {
     if (!activeId && expressions.length > 0) setActiveId(expressions[0].id)
@@ -80,19 +82,21 @@ export function VideoTextPanel({ videoId, personaId }: VideoTextPanelProps): JSX
   const active = activeId ?? expressions[0].id
 
   return (
-    <Tabs value={active} onValueChange={setActiveId} className="w-full">
-      <TabsList>
+    <div ref={panelAnchorRef}>
+      <Tabs value={active} onValueChange={setActiveId} className="w-full">
+        <TabsList>
+          {expressions.map((expression) => (
+            <TabsTrigger key={expression.id} value={expression.id}>
+              {expressionLabel(expression)}
+            </TabsTrigger>
+          ))}
+        </TabsList>
         {expressions.map((expression) => (
-          <TabsTrigger key={expression.id} value={expression.id}>
-            {expressionLabel(expression)}
-          </TabsTrigger>
+          <TabsContent key={expression.id} value={expression.id} className="pt-3">
+            <DocumentEditor expressionUri={expression.id} personaId={personaId} />
+          </TabsContent>
         ))}
-      </TabsList>
-      {expressions.map((expression) => (
-        <TabsContent key={expression.id} value={expression.id} className="pt-3">
-          <DocumentEditor expressionUri={expression.id} personaId={personaId} />
-        </TabsContent>
-      ))}
-    </Tabs>
+      </Tabs>
+    </div>
   )
 }

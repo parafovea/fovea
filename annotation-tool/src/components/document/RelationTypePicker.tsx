@@ -23,6 +23,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import type { RelationType } from '@models/ontology'
 import type { Rect } from '@/lib/spans'
 import { glossToText } from '@/utils/glossUtils'
+import { useTourAnchor } from '@/tours/engine/anchorRegistry'
 
 /**
  * Props for {@link RelationTypePicker}.
@@ -56,6 +57,7 @@ export function RelationTypePicker({
   onSelect,
   onCancel,
 }: RelationTypePickerProps): JSX.Element {
+  const anchorRef = useTourAnchor('relation-type-picker')
   const filtered = useMemo(() => {
     return relationTypes.filter((rt) => {
       const okSource =
@@ -76,6 +78,7 @@ export function RelationTypePicker({
       <PopoverTrigger
         render={
           <span
+            ref={anchorRef}
             aria-hidden
             data-testid="relation-type-anchor"
             style={{

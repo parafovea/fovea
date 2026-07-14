@@ -15,6 +15,7 @@ import { useState } from 'react'
 import AnnotationAutocomplete from '@components/annotation/AnnotationAutocomplete'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { useTourAnchor } from '@/tours/engine/anchorRegistry'
 
 import type { PendingLabelSpanDraft } from '@store/zustand/createSpanAnnotatorStore'
 
@@ -60,6 +61,7 @@ export function SpanLabelPicker({
   onCancel,
 }: SpanLabelPickerProps): JSX.Element {
   const [mode, setMode] = useState<SpanLabelMode>('type')
+  const anchorRef = useTourAnchor('span-label-picker')
   const bbox = draft.bbox
 
   return (
@@ -72,6 +74,7 @@ export function SpanLabelPicker({
       <PopoverTrigger
         render={
           <span
+            ref={anchorRef}
             aria-hidden
             data-testid="span-label-anchor"
             style={{

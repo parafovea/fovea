@@ -15,6 +15,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import type { SpanRelation, TextSpan } from '@/lib/spans'
+import { useTourAnchor } from '@/tours/engine/anchorRegistry'
 
 /**
  * Props for {@link RelationSidePanel}.
@@ -55,8 +56,9 @@ export function RelationSidePanel({
   onHoverRelation,
   onDeleteRelation,
 }: RelationSidePanelProps): JSX.Element {
+  const panelAnchorRef = useTourAnchor('relation-side-panel')
   return (
-    <div className="flex flex-col gap-3">
+    <div ref={panelAnchorRef} className="flex flex-col gap-3">
       <h3 className="text-sm font-semibold">Relations ({relations.length})</h3>
       <ScrollArea className="max-h-64">
         {relations.length === 0 ? (

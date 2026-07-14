@@ -13,6 +13,7 @@ import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardFooter } from '@/components/ui/card'
 import type { LayersDocumentRow } from '@store/queries'
+import { useTourAnchor } from '@/tours/engine/anchorRegistry'
 
 import { documentTitle } from './documentTitle'
 
@@ -24,6 +25,8 @@ export interface DocumentCardProps {
   document: LayersDocumentRow
   /** Whether this card is selected for keyboard navigation. */
   selected?: boolean
+  /** The card's position in the grid; the first card carries the tour anchor. */
+  index?: number
   /** Called when the card is clicked. */
   onOpen: (documentId: string) => void
 }
@@ -34,11 +37,15 @@ export interface DocumentCardProps {
  * @param props - the document, selection state, and open handler
  * @returns the card element
  */
-export function DocumentCard({ document, selected, onOpen }: DocumentCardProps): JSX.Element {
+export function DocumentCard({ document, selected, index, onOpen }: DocumentCardProps): JSX.Element {
   const preview = (document.text ?? '').trim()
+  const firstCardAnchorRef = useTourAnchor('document-card-first')
 
   return (
     <Card
+      // The first card carries the first-card anchor so a tour can spotlight a
+      // tangible document without depending on which document renders first.
+      ref={index === 0 ? firstCardAnchorRef : undefined}
       role="button"
       tabIndex={0}
       onClick={() => onOpen(document.id)}

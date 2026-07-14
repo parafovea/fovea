@@ -28,6 +28,7 @@ import { Spinner } from '@/components/ui/spinner'
 import { Textarea } from '@/components/ui/textarea'
 import { useCreateDocument, useDocuments } from '@store/queries'
 import { useDialog } from '@store/zustand/dialogStore'
+import { useTourAnchor } from '@/tours/engine/anchorRegistry'
 
 import { DocumentCard } from './DocumentCard'
 import { documentTitle } from './documentTitle'
@@ -39,6 +40,7 @@ import { documentTitle } from './documentTitle'
  */
 export function DocumentBrowser(): JSX.Element {
   const navigate = useNavigate()
+  const browserAnchorRef = useTourAnchor('document-browser')
   const { data, isLoading } = useDocuments()
   const createDocument = useCreateDocument()
   const importCorpusDialog = useDialog('importCorpus')
@@ -77,7 +79,7 @@ export function DocumentBrowser(): JSX.Element {
   }
 
   return (
-    <div className="space-y-6" data-testid="document-browser">
+    <div ref={browserAnchorRef} className="space-y-6" data-testid="document-browser">
       <div className="flex items-center justify-between gap-4">
         <h2 className="text-xl font-semibold">Documents</h2>
         <div className="flex items-center gap-2">
@@ -120,10 +122,11 @@ export function DocumentBrowser(): JSX.Element {
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {filtered.map((document) => (
+          {filtered.map((document, index) => (
             <DocumentCard
               key={document.id}
               document={document}
+              index={index}
               onOpen={(id) => navigate(`/documents/${id}`)}
             />
           ))}
