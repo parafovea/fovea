@@ -39,6 +39,18 @@ interface SpotlightOverlayProps {
   target: HTMLElement | null
   /** When true, click-through is blocked outside the spotlight. */
   modal?: boolean
+  /**
+   * True when the current step asks the visitor to interact with the
+   * anchor (expectAction click / draw / scrub / …). A large anchor
+   * (e.g. the whole video shelf) trips the full-backdrop path below,
+   * whose single rect has no cutout; with `modal` that rect would
+   * absorb the very click the step needs the visitor to perform. When
+   * the step is interactive we let pointer events fall through the
+   * full backdrop to the spotlighted UI so the guided action lands.
+   * The four-rect (small-anchor) path always leaves a real cutout, so
+   * this flag only affects the full-backdrop branch.
+   */
+  interactive?: boolean
   /** Tinted backdrop (rgba). Defaults to a subtle dim. */
   backdropColor?: string
 }
@@ -57,6 +69,7 @@ function prefersReducedMotion(): boolean {
 export function SpotlightOverlay({
   target,
   modal = true,
+  interactive = false,
   backdropColor = 'rgba(0, 0, 0, 0.55)',
 }: SpotlightOverlayProps) {
   const [rect, setRect] = useState<Rect | null>(null)
@@ -186,7 +199,12 @@ export function SpotlightOverlay({
           width={viewport.width}
           height={viewport.height}
           fill={backdropColor}
-          style={{ pointerEvents: modal ? 'auto' : 'none' }}
+          // A large-but-present anchor lands here (there is no cutout to
+          // click through). If the step is interactive, the visitor must
+          // reach the spotlighted UI underneath, so the backdrop must not
+          // absorb the click. Only block when modal AND non-interactive
+          // (a page-level informational step with nothing to click).
+          style={{ pointerEvents: modal && !interactive ? 'auto' : 'none' }}
         />
       </svg>
     )
