@@ -28,9 +28,7 @@ if TYPE_CHECKING:
     import didactic.api as dx
 
 # A plain JSON value: what a lens complement and a serialized record are made of.
-type JsonValue = (
-    str | int | float | bool | None | list["JsonValue"] | dict[str, "JsonValue"]
-)
+type JsonValue = str | int | float | bool | None | list["JsonValue"] | dict[str, "JsonValue"]
 
 # --- integer scales (layers puts no floats on the wire) ---------------------
 
@@ -125,9 +123,7 @@ def feature_map(features: Mapping[str, JsonValue]) -> defs.FeatureMap | None:
     if not features:
         return None
     return defs.FeatureMap(
-        entries=tuple(
-            defs.Feature(key=key, value=json.dumps(features[key])) for key in features
-        )
+        entries=tuple(defs.Feature(key=key, value=json.dumps(features[key])) for key in features)
     )
 
 
@@ -181,9 +177,7 @@ def loads_meta(value: JsonValue) -> dict[str, JsonValue]:
 
 def _record(nsid: str, local_id: str, model: dx.Model) -> FragmentRecord:
     """Build a :class:`FragmentRecord` from a serialized ``lairs`` model."""
-    return FragmentRecord(
-        local_id=local_id, nsid=nsid, value_json=model.model_dump_json()
-    )
+    return FragmentRecord(local_id=local_id, nsid=nsid, value_json=model.model_dump_json())
 
 
 # --- JsonValue narrowers (for reading complements) --------------------------

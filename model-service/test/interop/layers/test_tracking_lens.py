@@ -121,9 +121,7 @@ def test_view_records_validate_as_lairs_models() -> None:
             assert m.video.width == 30
             assert m.video.height == 20
         else:
-            layer = annotation.AnnotationLayer.model_validate_json(
-                record.value_json
-            )
+            layer = annotation.AnnotationLayer.model_validate_json(record.value_json)
             assert layer.kind == "span"
             assert layer.subkind == "custom"
             # One annotation per tracked object, in first-appearance order.
@@ -191,9 +189,7 @@ def _tracking_dtos(draw: st.DrawFn) -> TrackObjectsResponseDTO:
                 TrackingMaskDTO(
                     object_id=object_id,
                     mask_rle=_rle(height, width, (bx, by, bw, bh)),
-                    confidence=draw(
-                        st.floats(min_value=0.0, max_value=1.0)
-                    ),
+                    confidence=draw(st.floats(min_value=0.0, max_value=1.0)),
                     is_occluded=draw(st.booleans()),
                 )
             )

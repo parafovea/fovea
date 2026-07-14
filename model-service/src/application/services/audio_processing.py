@@ -587,7 +587,7 @@ def check_ffmpeg_available() -> bool:
             check=False,
         )
         return result.returncode == 0
-    except (FileNotFoundError, subprocess.TimeoutExpired):
+    except FileNotFoundError, subprocess.TimeoutExpired:
         return False
 
 
@@ -607,5 +607,5 @@ def check_ffprobe_available() -> bool:
             check=False,
         )
         return result.returncode == 0
-    except (FileNotFoundError, subprocess.TimeoutExpired):
+    except FileNotFoundError, subprocess.TimeoutExpired:
         return False

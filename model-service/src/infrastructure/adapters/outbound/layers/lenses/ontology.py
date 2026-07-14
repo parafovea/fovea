@@ -67,8 +67,7 @@ def _trace_to_json(trace: ThinkingTrace | None) -> JsonValue:
         return None
     return {
         "steps": [
-            {"content": step.content, "tokens_used": step.tokens_used}
-            for step in trace.steps
+            {"content": step.content, "tokens_used": step.tokens_used} for step in trace.steps
         ],
         "total_tokens": trace.total_tokens,
         "model_id": trace.model_id,
@@ -189,9 +188,7 @@ class OntologyLayersLens(dx.Lens[OntologySource, CorpusFragment, JsonValue]):
         }
         return view, complement
 
-    def backward(
-        self, view: CorpusFragment, complement: JsonValue
-    ) -> OntologySource:
+    def backward(self, view: CorpusFragment, complement: JsonValue) -> OntologySource:
         """Reconstruct ontology suggestions and the emit context from the fragment."""
         comp = j_obj(complement)
         ctx = _ctx_from_json(comp["ctx"])

@@ -106,9 +106,7 @@ def _detection_annotation(
         )
     )
     features = (
-        feature_map({_TRACK_ID_KEY: detection.track_id})
-        if detection.track_id is not None
-        else None
+        feature_map({_TRACK_ID_KEY: detection.track_id}) if detection.track_id is not None else None
     )
     return annotation.Annotation(
         uuid=_detection_uuid(video_id, frame.frame_number, index),
@@ -172,24 +170,16 @@ def _frame_from_complement(value: JsonValue) -> FrameDetectionsDTO:
     return FrameDetectionsDTO(
         frame_number=int(j_float(frame["frame_number"])),
         timestamp=j_float(frame["timestamp"]),
-        detections=[
-            _detection_from_complement(det) for det in j_list(frame["detections"])
-        ],
+        detections=[_detection_from_complement(det) for det in j_list(frame["detections"])],
     )
 
 
-class DetectionLayersLens(
-    dx.Lens[DetectObjectsResponseDTO, CorpusFragment, JsonValue]
-):
+class DetectionLayersLens(dx.Lens[DetectObjectsResponseDTO, CorpusFragment, JsonValue]):
     """Lossy lens ``DetectObjectsResponseDTO <-> (layers fragment, complement)``."""
 
-    def forward(
-        self, dto: DetectObjectsResponseDTO
-    ) -> tuple[CorpusFragment, JsonValue]:
+    def forward(self, dto: DetectObjectsResponseDTO) -> tuple[CorpusFragment, JsonValue]:
         """Project a detection response to a layers fragment and complement."""
-        expression_uri = local_uri(
-            "local", EXPRESSION_NSID, dto.video_id or _EXPRESSION_LOCAL_ID
-        )
+        expression_uri = local_uri("local", EXPRESSION_NSID, dto.video_id or _EXPRESSION_LOCAL_ID)
         records: list[FragmentRecord] = [
             _record(
                 EXPRESSION_NSID,
@@ -254,9 +244,7 @@ class DetectionLayersLens(
         }
         return view, complement
 
-    def backward(
-        self, view: CorpusFragment, complement: JsonValue
-    ) -> DetectObjectsResponseDTO:
+    def backward(self, view: CorpusFragment, complement: JsonValue) -> DetectObjectsResponseDTO:
         """Reconstruct a detection response from its fragment and complement."""
         comp = j_obj(complement)
         return DetectObjectsResponseDTO(

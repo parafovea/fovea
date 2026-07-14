@@ -101,9 +101,7 @@ class TranscriptLayersLens(dx.Lens[TranscriptionResultDTO, CorpusFragment, JsonV
     def __init__(self, ctx: EmitContext | None = None) -> None:
         self._ctx = ctx if ctx is not None else _DEFAULT_CTX
 
-    def forward(
-        self, dto: TranscriptionResultDTO
-    ) -> tuple[CorpusFragment, JsonValue]:
+    def forward(self, dto: TranscriptionResultDTO) -> tuple[CorpusFragment, JsonValue]:
         """Project a transcription result to a layers fragment and complement."""
         ctx = self._ctx
         expr_uri = local_uri(ctx.authority, EXPRESSION_NSID, ctx.video_id)
@@ -195,9 +193,7 @@ class TranscriptLayersLens(dx.Lens[TranscriptionResultDTO, CorpusFragment, JsonV
                 speaker = segment.speaker
                 assert speaker is not None
                 members_by_speaker.setdefault(speaker, []).append(
-                    defs.ObjectRef(
-                        localId=_speaker_annotation_uuid(ctx.video_id, index)
-                    )
+                    defs.ObjectRef(localId=_speaker_annotation_uuid(ctx.video_id, index))
                 )
             clusters = tuple(
                 annotation.Cluster(
@@ -256,18 +252,14 @@ class TranscriptLayersLens(dx.Lens[TranscriptionResultDTO, CorpusFragment, JsonV
         }
         return view, complement
 
-    def backward(
-        self, view: CorpusFragment, complement: JsonValue
-    ) -> TranscriptionResultDTO:
+    def backward(self, view: CorpusFragment, complement: JsonValue) -> TranscriptionResultDTO:
         """Reconstruct a transcription result from its fragment and complement."""
         comp = j_obj(complement)
         language = comp["language"]
         speaker_count = comp["speaker_count"]
         return TranscriptionResultDTO(
             text=j_str(comp["text"]),
-            segments=[
-                _segment_from_json(segment) for segment in j_list(comp["segments"])
-            ],
+            segments=[_segment_from_json(segment) for segment in j_list(comp["segments"])],
             language=None if language is None else j_str(language),
             speaker_count=None if speaker_count is None else int(j_float(speaker_count)),
             processing_time=j_float(comp["processing_time"]),

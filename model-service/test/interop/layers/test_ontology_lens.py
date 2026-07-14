@@ -84,9 +84,7 @@ def test_view_records_validate_and_confidence_scaled() -> None:
     assert len(ontology_records) == 1
     assert len(typedef_records) == 2
 
-    parsed_ontology = ontology.Ontology.model_validate_json(
-        ontology_records[0].value_json
-    )
+    parsed_ontology = ontology.Ontology.model_validate_json(ontology_records[0].value_json)
     assert parsed_ontology.name == "fovea"
 
     for record in typedef_records:
@@ -115,9 +113,7 @@ def test_parent_resolves_to_typedef_uri() -> None:
 
 # --- property-based GetPut ---------------------------------------------------
 
-_text = st.text(
-    alphabet=st.characters(min_codepoint=32, max_codepoint=126), max_size=24
-)
+_text = st.text(alphabet=st.characters(min_codepoint=32, max_codepoint=126), max_size=24)
 
 _traces = st.one_of(
     st.none(),

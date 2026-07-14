@@ -194,9 +194,7 @@ def test_fovea_codec_decodes_envelope_to_layers_records() -> None:
     this feeds a serialized envelope (the decode input) and asserts the fragment
     holds validating ``pub.layers`` records tagged ``fovea``.
     """
-    document = json.dumps(
-        {"kind": "transcription", "source": _dump(_transcription_dto())}
-    )
+    document = json.dumps({"kind": "transcription", "source": _dump(_transcription_dto())})
 
     fragment = FoveaCodec().decode(document)
 
@@ -214,9 +212,7 @@ def test_adapter_and_fixture_agree() -> None:
     reproduce the fixture's records (same NSIDs and value JSON).
     """
     ctx = make_ctx(video_id="sample-clip", tool="fovea-interop-fixture")
-    emitted_records = LairsCodecAdapter().encode_transcription(
-        _transcription_dto(), ctx
-    ).records
+    emitted_records = LairsCodecAdapter().encode_transcription(_transcription_dto(), ctx).records
 
     emitted = {(r.nsid, r.value_json) for r in emitted_records}
     fixture = {(r.nsid, r.value_json) for r in _fixture_records()}

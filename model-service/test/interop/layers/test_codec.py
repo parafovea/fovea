@@ -158,9 +158,7 @@ def _claims() -> tuple[str, object]:
                 char_start=0,
                 char_end=16,
                 subclaims=[
-                    ExtractedClaimDTO(
-                        text="blue", confidence=0.8, char_start=12, char_end=16
-                    )
+                    ExtractedClaimDTO(text="blue", confidence=0.8, char_start=12, char_end=16)
                 ],
                 claim_type="observation",
                 reasoning_trace=ThinkingTrace(
@@ -219,7 +217,9 @@ def _records_for(kind: str, source_for_dump: object) -> tuple[FragmentRecord, ..
     lens = _lens_for(kind)
     if kind == "ontology":
         assert isinstance(source_for_dump, dict)
-        lens_in = _lens_input(kind, {"types": source_for_dump["types"], "ctx": source_for_dump["ctx"]})
+        lens_in = _lens_input(
+            kind, {"types": source_for_dump["types"], "ctx": source_for_dump["ctx"]}
+        )
     else:
         lens_in = source_for_dump
     view, complement = lens.forward(lens_in)
@@ -287,9 +287,7 @@ def test_decode_into_extends_existing_fragment() -> None:
     kind, source = _transcription()
     codec = FoveaCodec()
     seed = codec.decode(json.dumps({"kind": kind, "source": _dump(source)}))
-    extended = codec.decode(
-        json.dumps({"kind": kind, "source": _dump(source)}), into=seed
-    )
+    extended = codec.decode(json.dumps({"kind": kind, "source": _dump(source)}), into=seed)
     assert len(extended.records) == 2 * len(seed.records)
 
 

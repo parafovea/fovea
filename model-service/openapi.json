@@ -853,21 +853,18 @@
             "type": "boolean"
           },
           {
-            "items": {
-              "$ref": "#/components/schemas/JsonValue"
-            },
+            "items": {},
             "type": "array"
           },
           {
-            "additionalProperties": {
-              "$ref": "#/components/schemas/JsonValue"
-            },
+            "additionalProperties": {},
             "type": "object"
           },
           {
             "type": "null"
           }
-        ]
+        ],
+        "description": "An arbitrary JSON value."
       },
       "KeyFrame": {
         "description": "Key frame information from video analysis.",

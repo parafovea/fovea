@@ -126,9 +126,7 @@ def test_view_records_validate_as_lairs_models() -> None:
 
 def test_annotation_tree_shape_and_scale() -> None:
     view, _ = LENS.forward(_nested_dto())
-    layer = annotation.AnnotationLayer.model_validate_json(
-        _records_by_id(view)["claims"]
-    )
+    layer = annotation.AnnotationLayer.model_validate_json(_records_by_id(view)["claims"])
     assert layer.kind == "tree"
     assert layer.subkind == "custom"
     # Three claims flattened: root, its subclaim, and the second root.
@@ -159,9 +157,7 @@ def test_annotation_tree_shape_and_scale() -> None:
 
 def test_relationship_edge_set_shape_and_scale() -> None:
     view, _ = LENS.forward(_nested_dto())
-    edge_set = graph.GraphEdgeSet.model_validate_json(
-        _records_by_id(view)["relationships"]
-    )
+    edge_set = graph.GraphEdgeSet.model_validate_json(_records_by_id(view)["relationships"])
     assert len(edge_set.edges) == 2
     supports, refines = edge_set.edges
     assert supports.edgeType == "supports"
@@ -186,9 +182,7 @@ def test_flat_dto_omits_relationship_record() -> None:
 
 def test_empty_dto_has_no_annotations() -> None:
     view, _ = LENS.forward(_empty_dto())
-    layer = annotation.AnnotationLayer.model_validate_json(
-        _records_by_id(view)["claims"]
-    )
+    layer = annotation.AnnotationLayer.model_validate_json(_records_by_id(view)["claims"])
     assert layer.annotations == ()
 
 

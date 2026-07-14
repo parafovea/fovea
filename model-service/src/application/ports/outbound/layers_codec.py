@@ -123,15 +123,11 @@ class ILayersCodec(ABC):
         """Project an object-tracking result to a layers fragment."""
 
     @abstractmethod
-    def encode_summary(
-        self, dto: SummarizeResponseDTO, ctx: EmitContext
-    ) -> NormalizedFragmentDTO:
+    def encode_summary(self, dto: SummarizeResponseDTO, ctx: EmitContext) -> NormalizedFragmentDTO:
         """Project a video summary to a layers fragment."""
 
     @abstractmethod
-    def encode_claims(
-        self, dto: ExtractedClaimDTO, ctx: EmitContext
-    ) -> NormalizedFragmentDTO:
+    def encode_claims(self, dto: ExtractedClaimDTO, ctx: EmitContext) -> NormalizedFragmentDTO:
         """Project an extracted claim (with subclaims) to a layers fragment."""
 
     @abstractmethod
@@ -145,9 +141,7 @@ class ILayersCodec(ABC):
         """Decode a serialized document of format ``fmt`` into a fragment."""
 
     @abstractmethod
-    def encode_corpus(
-        self, records: Sequence[NormalizedRecordDTO], out_dir: Path
-    ) -> list[str]:
+    def encode_corpus(self, records: Sequence[NormalizedRecordDTO], out_dir: Path) -> list[str]:
         """Materialize records as a layers corpus under ``out_dir``.
 
         Returns the paths written, as strings.

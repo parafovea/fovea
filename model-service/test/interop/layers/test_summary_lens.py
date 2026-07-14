@@ -203,6 +203,4 @@ def _dto_strategy() -> st.SearchStrategy[SummarizeResponseDTO]:
 
 def test_lens_laws() -> None:
     """The GetPut law holds across a small generated sample of DTOs."""
-    dx.testing.check_lens_laws(
-        SummaryLayersLens(), _dto_strategy(), max_examples=50
-    )
+    dx.testing.check_lens_laws(SummaryLayersLens(), _dto_strategy(), max_examples=50)

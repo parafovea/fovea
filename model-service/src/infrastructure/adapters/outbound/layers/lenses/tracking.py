@@ -112,14 +112,10 @@ def _spatial_from_rle(rle: dict[str, object]) -> defs.SpatialExpression:
     )
 
 
-class TrackingLayersLens(
-    dx.Lens["TrackObjectsResponseDTO", CorpusFragment, JsonValue]
-):
+class TrackingLayersLens(dx.Lens["TrackObjectsResponseDTO", CorpusFragment, JsonValue]):
     """Lossless lens ``tracking result <-> (layers fragment, fovea complement)``."""
 
-    def forward(
-        self, dto: TrackObjectsResponseDTO
-    ) -> tuple[CorpusFragment, JsonValue]:
+    def forward(self, dto: TrackObjectsResponseDTO) -> tuple[CorpusFragment, JsonValue]:
         """Project a tracking result to a layers fragment and fovea complement."""
         # Group masks by object in first-appearance order, keeping each mask's
         # frame timestamp so keyframes and the temporal span can be built.
@@ -161,9 +157,7 @@ class TrackingLayersLens(
                     confidence=conf_to_int(first_mask.confidence),
                     anchor=defs.Anchor(
                         spatioTemporalAnchor=defs.SpatioTemporalAnchor(
-                            temporalSpan=defs.TemporalSpan(
-                                start=min(times), ending=max(times)
-                            ),
+                            temporalSpan=defs.TemporalSpan(start=min(times), ending=max(times)),
                             keyframes=tuple(keyframes),
                             interpolation="linear",
                         )
@@ -175,9 +169,7 @@ class TrackingLayersLens(
         media_record = media.Media(
             kind="video",
             createdAt=_EPOCH,
-            video=media.VideoInfo(
-                width=dto.video_width, height=dto.video_height
-            ),
+            video=media.VideoInfo(width=dto.video_width, height=dto.video_height),
         )
         layer = annotation.AnnotationLayer(
             annotations=tuple(annotations),
@@ -220,9 +212,7 @@ class TrackingLayersLens(
         }
         return view, complement
 
-    def backward(
-        self, view: CorpusFragment, complement: JsonValue
-    ) -> TrackObjectsResponseDTO:
+    def backward(self, view: CorpusFragment, complement: JsonValue) -> TrackObjectsResponseDTO:
         """Reconstruct a tracking result from its fovea complement.
 
         The exact RLE masks, float confidences, and source-second timestamps are
@@ -268,9 +258,7 @@ class TrackingLayersLens(
 
 
 def _tracking_record(nsid: str, local_id: str, model: dx.Model) -> FragmentRecord:
-    return FragmentRecord(
-        local_id=local_id, nsid=nsid, value_json=model.model_dump_json()
-    )
+    return FragmentRecord(local_id=local_id, nsid=nsid, value_json=model.model_dump_json())
 
 
 TRACKING_LAYERS = TrackingLayersLens()

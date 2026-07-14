@@ -134,9 +134,7 @@ async def extract_claims(
                     ExtractClaimsRequest(
                         summary_text=request.summary_text,
                         sentences=(
-                            list(request.sentences)
-                            if request.sentences is not None
-                            else None
+                            list(request.sentences) if request.sentences is not None else None
                         ),
                         strategy=request.extraction_strategy,
                         max_claims=request.max_claims,
@@ -249,9 +247,7 @@ async def synthesize_summary(
                         source_id=source.source_id,
                         source_type=source.source_type,
                         claims=[dict(claim) for claim in source.claims],
-                        metadata=(
-                            dict(source.metadata) if source.metadata is not None else None
-                        ),
+                        metadata=(dict(source.metadata) if source.metadata is not None else None),
                     )
                     for source in request.claim_sources
                 ]
@@ -304,9 +300,7 @@ async def synthesize_summary(
 
                 # Gloss items carry string values, a subset of the wire field's
                 # JsonValue; the cast widens across dict invariance at the boundary.
-                gloss = cast(
-                    "tuple[dict[str, models.JsonValue], ...]", tuple(summary_gloss)
-                )
+                gloss = cast("tuple[dict[str, models.JsonValue], ...]", tuple(summary_gloss))
                 return dump(
                     models.SummarySynthesisResponse(
                         summary_id=request.summary_id,

@@ -156,9 +156,7 @@ def _load(value: object) -> object:
             return datetime.fromisoformat(str(value["value"]))
         if isinstance(tag, str):
             cls = _DATACLASS_REGISTRY[tag]
-            fields = {
-                key: _load(item) for key, item in value.items() if key != _TYPE_KEY
-            }
+            fields = {key: _load(item) for key, item in value.items() if key != _TYPE_KEY}
             return cls(**fields)
         return {key: _load(item) for key, item in value.items()}
     if isinstance(value, list):
@@ -175,9 +173,7 @@ class FoveaCodec:
 
     name = "fovea"
 
-    def decode(
-        self, src: str | bytes, *, into: CorpusFragment | None = None
-    ) -> CorpusFragment:
+    def decode(self, src: str | bytes, *, into: CorpusFragment | None = None) -> CorpusFragment:
         """Decode a fovea output envelope into a layers fragment.
 
         The envelope's ``source`` is reconstructed to a lens source, run through

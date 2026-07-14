@@ -89,8 +89,7 @@ def _dump_trace(trace: ThinkingTrace | None) -> JsonValue:
         return None
     return {
         "steps": [
-            {"content": step.content, "tokens_used": step.tokens_used}
-            for step in trace.steps
+            {"content": step.content, "tokens_used": step.tokens_used} for step in trace.steps
         ],
         "total_tokens": trace.total_tokens,
         "model_id": trace.model_id,
@@ -228,9 +227,7 @@ class ClaimsLayersLens(dx.Lens[ClaimsResultDTO, CorpusFragment, JsonValue]):
         }
         return view, complement
 
-    def backward(
-        self, view: CorpusFragment, complement: JsonValue
-    ) -> ClaimsResultDTO:
+    def backward(self, view: CorpusFragment, complement: JsonValue) -> ClaimsResultDTO:
         """Reconstruct a claim result from its layers fragment and complement."""
         comp = j_obj(complement)
         text = ""
@@ -241,12 +238,8 @@ class ClaimsLayersLens(dx.Lens[ClaimsResultDTO, CorpusFragment, JsonValue]):
                 break
 
         claims = [_load_claim(claim) for claim in j_list(comp["claims"])]
-        relationships = [
-            _load_relationship(rel) for rel in j_list(comp["relationships"])
-        ]
-        return ClaimsResultDTO(
-            text=text, claims=claims, relationships=relationships
-        )
+        relationships = [_load_relationship(rel) for rel in j_list(comp["relationships"])]
+        return ClaimsResultDTO(text=text, claims=claims, relationships=relationships)
 
 
 def _build_annotations(
@@ -265,9 +258,7 @@ def _build_annotations(
         my_uuid = f"claim-{index}"
         uuids.append(my_uuid)
         child_uuids = [visit(sub, my_uuid) for sub in claim.subclaims]
-        ordered.append(
-            (index, _claim_annotation(text, claim, my_uuid, parent_uuid, child_uuids))
-        )
+        ordered.append((index, _claim_annotation(text, claim, my_uuid, parent_uuid, child_uuids)))
         return my_uuid
 
     for claim in claims:
@@ -315,9 +306,7 @@ def _load_relationship(value: JsonValue) -> ClaimRelationshipDTO:
 
 
 def _record(nsid: str, local_id: str, model: dx.Model) -> FragmentRecord:
-    return FragmentRecord(
-        local_id=local_id, nsid=nsid, value_json=model.model_dump_json()
-    )
+    return FragmentRecord(local_id=local_id, nsid=nsid, value_json=model.model_dump_json())
 
 
 CLAIMS_LAYERS = ClaimsLayersLens()

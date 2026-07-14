@@ -504,59 +504,59 @@ async def get_model_defaults() -> dict[str, object]:
     tracking = TrackingConfig(model_id="__placeholder__")
     vlm = VLMConfig(model_id="__placeholder__")
 
-    return dump(ModelDefaultsResponse(
-        generation=GenerationDefaults(
-            max_tokens=gen.max_tokens,
-            temperature=gen.temperature,
-            top_p=gen.top_p,
-            stop_sequences=(
-                None if gen.stop_sequences is None else tuple(gen.stop_sequences)
+    return dump(
+        ModelDefaultsResponse(
+            generation=GenerationDefaults(
+                max_tokens=gen.max_tokens,
+                temperature=gen.temperature,
+                top_p=gen.top_p,
+                stop_sequences=(None if gen.stop_sequences is None else tuple(gen.stop_sequences)),
             ),
-        ),
-        llm=LLMDefaults(
-            quantization=llm.quantization,
-            framework=str(llm.framework),
-            max_tokens=llm.max_tokens,
-            temperature=llm.temperature,
-            top_p=llm.top_p,
-            context_length=llm.context_length,
-        ),
-        transcription=TranscriptionDefaults(
-            framework=str(transcription.framework),
-            language=transcription.language,
-            task=transcription.task,
-            device=transcription.device,
-            compute_type=transcription.compute_type,
-            beam_size=transcription.beam_size,
-        ),
-        vad=VADDefaults(
-            threshold=vad.threshold,
-            min_speech_duration_ms=vad.min_speech_duration_ms,
-            min_silence_duration_ms=vad.min_silence_duration_ms,
-            device=vad.device,
-        ),
-        diarization=DiarizationDefaults(
-            num_speakers=diarization.num_speakers,
-            min_speakers=diarization.min_speakers,
-            max_speakers=diarization.max_speakers,
-            device=diarization.device,
-        ),
-        detection=DetectionDefaults(
-            framework=str(detection.framework),
-            confidence_threshold=detection.confidence_threshold,
-            device=detection.device,
-        ),
-        tracking=TrackingDefaults(
-            framework=str(tracking.framework),
-            device=tracking.device,
-        ),
-        vlm=VLMDefaults(
-            quantization=str(vlm.quantization),
-            framework=str(vlm.framework),
-            device=vlm.device,
-            trust_remote_code=vlm.trust_remote_code,
-        ),
-    ))
+            llm=LLMDefaults(
+                quantization=llm.quantization,
+                framework=str(llm.framework),
+                max_tokens=llm.max_tokens,
+                temperature=llm.temperature,
+                top_p=llm.top_p,
+                context_length=llm.context_length,
+            ),
+            transcription=TranscriptionDefaults(
+                framework=str(transcription.framework),
+                language=transcription.language,
+                task=transcription.task,
+                device=transcription.device,
+                compute_type=transcription.compute_type,
+                beam_size=transcription.beam_size,
+            ),
+            vad=VADDefaults(
+                threshold=vad.threshold,
+                min_speech_duration_ms=vad.min_speech_duration_ms,
+                min_silence_duration_ms=vad.min_silence_duration_ms,
+                device=vad.device,
+            ),
+            diarization=DiarizationDefaults(
+                num_speakers=diarization.num_speakers,
+                min_speakers=diarization.min_speakers,
+                max_speakers=diarization.max_speakers,
+                device=diarization.device,
+            ),
+            detection=DetectionDefaults(
+                framework=str(detection.framework),
+                confidence_threshold=detection.confidence_threshold,
+                device=detection.device,
+            ),
+            tracking=TrackingDefaults(
+                framework=str(tracking.framework),
+                device=tracking.device,
+            ),
+            vlm=VLMDefaults(
+                quantization=str(vlm.quantization),
+                framework=str(vlm.framework),
+                device=vlm.device,
+                trust_remote_code=vlm.trust_remote_code,
+            ),
+        )
+    )
 
 
 @router.get(

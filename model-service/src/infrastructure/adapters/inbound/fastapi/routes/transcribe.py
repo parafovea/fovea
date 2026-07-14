@@ -134,9 +134,7 @@ async def transcribe(
     # the concrete loader abstract base so downstream `.transcribe(...)`
     # returns a typed TranscriptionResult instead of leaking Any.
     try:
-        model = cast(
-            "AudioTranscriptionLoader", await manager.load_model("audio_transcription")
-        )
+        model = cast("AudioTranscriptionLoader", await manager.load_model("audio_transcription"))
     except Exception as exc:
         logger.exception("Failed to load audio_transcription model")
         raise HTTPException(status_code=500, detail=f"Model load failed: {exc}") from exc

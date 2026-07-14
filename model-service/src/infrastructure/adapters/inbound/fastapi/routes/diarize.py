@@ -68,12 +68,8 @@ class DiarizeRequest(dx.Model):
     num_speakers: int | None = dx.field(
         default=None, description="Exact number of speakers if known."
     )
-    min_speakers: int | None = dx.field(
-        default=None, description="Lower bound on speaker count."
-    )
-    max_speakers: int | None = dx.field(
-        default=None, description="Upper bound on speaker count."
-    )
+    min_speakers: int | None = dx.field(default=None, description="Lower bound on speaker count.")
+    max_speakers: int | None = dx.field(default=None, description="Upper bound on speaker count.")
 
 
 class SpeakerSegmentResponse(dx.Model):

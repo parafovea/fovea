@@ -81,8 +81,7 @@ def _trace_to_json(trace: ThinkingTrace | None) -> JsonValue:
         return None
     return {
         "steps": [
-            {"content": step.content, "tokens_used": step.tokens_used}
-            for step in trace.steps
+            {"content": step.content, "tokens_used": step.tokens_used} for step in trace.steps
         ],
         "total_tokens": trace.total_tokens,
         "model_id": trace.model_id,
@@ -145,9 +144,7 @@ class SummaryLayersLens(dx.Lens[SummarizeResponseDTO, CorpusFragment, JsonValue]
         """Bind the provenance context stamped onto the emitted view."""
         self.ctx = ctx if ctx is not None else _DEFAULT_CTX
 
-    def forward(
-        self, dto: SummarizeResponseDTO
-    ) -> tuple[CorpusFragment, JsonValue]:
+    def forward(self, dto: SummarizeResponseDTO) -> tuple[CorpusFragment, JsonValue]:
         """Project a summary result to a layers fragment and fovea complement."""
         ctx = self.ctx
         expr = expression.Expression(
@@ -223,9 +220,7 @@ class SummaryLayersLens(dx.Lens[SummarizeResponseDTO, CorpusFragment, JsonValue]
         }
         return view, complement
 
-    def backward(
-        self, view: CorpusFragment, complement: JsonValue
-    ) -> SummarizeResponseDTO:
+    def backward(self, view: CorpusFragment, complement: JsonValue) -> SummarizeResponseDTO:
         """Reconstruct a summary result from its fragment and complement."""
         comp = j_obj(complement)
         video_id = ""
@@ -237,9 +232,7 @@ class SummaryLayersLens(dx.Lens[SummarizeResponseDTO, CorpusFragment, JsonValue]
                 video_id = expr.id
                 summary = expr.text if expr.text is not None else ""
             elif record.nsid == ANNOTATION_LAYER_NSID:
-                layer = annotation.AnnotationLayer.model_validate_json(
-                    record.value_json
-                )
+                layer = annotation.AnnotationLayer.model_validate_json(record.value_json)
                 for ann in layer.annotations:
                     if ann.label == _SUMMARY_LABEL and ann.anchor is None:
                         visual_analysis = ann.value
@@ -255,9 +248,7 @@ class SummaryLayersLens(dx.Lens[SummarizeResponseDTO, CorpusFragment, JsonValue]
             summary=summary,
             visual_analysis=visual_analysis,
             audio_transcript=_opt_str(comp["audio_transcript"]),
-            key_frames=[
-                _keyframe_from_json(kf) for kf in j_list(comp["key_frames"])
-            ],
+            key_frames=[_keyframe_from_json(kf) for kf in j_list(comp["key_frames"])],
             confidence=j_float(comp["confidence"]),
             transcript_json=transcript_json,
             audio_language=_opt_str(comp["audio_language"]),

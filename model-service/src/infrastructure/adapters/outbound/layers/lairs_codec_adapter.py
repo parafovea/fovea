@@ -94,16 +94,12 @@ class LairsCodecAdapter(ILayersCodec):
         view, _complement = TRACKING_LAYERS.forward(dto)
         return _to_fragment_dto(view)
 
-    def encode_summary(
-        self, dto: SummarizeResponseDTO, ctx: EmitContext
-    ) -> NormalizedFragmentDTO:
+    def encode_summary(self, dto: SummarizeResponseDTO, ctx: EmitContext) -> NormalizedFragmentDTO:
         """Project a video summary to a normalized layers fragment."""
         view, _complement = SummaryLayersLens(ctx).forward(dto)
         return _to_fragment_dto(view)
 
-    def encode_claims(
-        self, dto: ExtractedClaimDTO, ctx: EmitContext
-    ) -> NormalizedFragmentDTO:
+    def encode_claims(self, dto: ExtractedClaimDTO, ctx: EmitContext) -> NormalizedFragmentDTO:
         """Project one claim tree (subclaims nested) to a normalized fragment."""
         result = ClaimsResultDTO(text=dto.text, claims=[dto])
         view, _complement = ClaimsLayersLens().forward(result)
@@ -122,9 +118,7 @@ class LairsCodecAdapter(ILayersCodec):
             raise ValueError(f"unsupported layers decode format: {fmt!r}")
         return _to_fragment_dto(self._codec.decode(src))
 
-    def encode_corpus(
-        self, records: Sequence[NormalizedRecordDTO], out_dir: Path
-    ) -> list[str]:
+    def encode_corpus(self, records: Sequence[NormalizedRecordDTO], out_dir: Path) -> list[str]:
         """Materialize records as a layers corpus under ``out_dir``."""
         corpus = records_to_corpus(records, corpus_name=out_dir.name or "fovea")
         return [str(path) for path in materialize_corpus(corpus, out_dir)]

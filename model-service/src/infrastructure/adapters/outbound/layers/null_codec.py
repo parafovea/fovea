@@ -62,15 +62,11 @@ class NullLayersCodec(ILayersCodec):
         """Raise: the layers stack is unavailable."""
         _unavailable()
 
-    def encode_summary(
-        self, dto: SummarizeResponseDTO, ctx: EmitContext
-    ) -> NormalizedFragmentDTO:
+    def encode_summary(self, dto: SummarizeResponseDTO, ctx: EmitContext) -> NormalizedFragmentDTO:
         """Raise: the layers stack is unavailable."""
         _unavailable()
 
-    def encode_claims(
-        self, dto: ExtractedClaimDTO, ctx: EmitContext
-    ) -> NormalizedFragmentDTO:
+    def encode_claims(self, dto: ExtractedClaimDTO, ctx: EmitContext) -> NormalizedFragmentDTO:
         """Raise: the layers stack is unavailable."""
         _unavailable()
 
@@ -84,8 +80,6 @@ class NullLayersCodec(ILayersCodec):
         """Raise: the layers stack is unavailable."""
         _unavailable()
 
-    def encode_corpus(
-        self, records: Sequence[NormalizedRecordDTO], out_dir: Path
-    ) -> list[str]:
+    def encode_corpus(self, records: Sequence[NormalizedRecordDTO], out_dir: Path) -> list[str]:
         """Raise: the layers stack is unavailable."""
         _unavailable()

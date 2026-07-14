@@ -46,9 +46,7 @@ def _example_dto() -> DetectObjectsResponseDTO:
                     ),
                     DetectionDTO(
                         label="dog",
-                        bounding_box=BoundingBoxDTO(
-                            x=0.0, y=0.0, width=0.0004, height=0.0004
-                        ),
+                        bounding_box=BoundingBoxDTO(x=0.0, y=0.0, width=0.0004, height=0.0004),
                         confidence=0.5,
                         track_id=None,
                     ),
@@ -60,9 +58,7 @@ def _example_dto() -> DetectObjectsResponseDTO:
                 detections=[
                     DetectionDTO(
                         label="cat",
-                        bounding_box=BoundingBoxDTO(
-                            x=0.55, y=0.6, width=0.2, height=0.15
-                        ),
+                        bounding_box=BoundingBoxDTO(x=0.55, y=0.6, width=0.2, height=0.15),
                         confidence=0.9123,
                         track_id="track-1",
                     ),
@@ -78,9 +74,7 @@ def _example_dto() -> DetectObjectsResponseDTO:
 
 
 def _layer(view: object) -> annotation.AnnotationLayer:
-    record = next(
-        record for record in view.records if record.nsid == ANNOTATION_LAYER_NSID
-    )
+    record = next(record for record in view.records if record.nsid == ANNOTATION_LAYER_NSID)
     return annotation.AnnotationLayer.model_validate_json(record.value_json)
 
 
@@ -139,9 +133,7 @@ class TestViewProjection:
     def test_expression_and_media_shape(self) -> None:
         dto = _example_dto()
         view, _complement = LENS.forward(dto)
-        expr_record = next(
-            r for r in view.records if r.nsid == EXPRESSION_NSID
-        )
+        expr_record = next(r for r in view.records if r.nsid == EXPRESSION_NSID)
         expr = expression.Expression.model_validate_json(expr_record.value_json)
         assert expr.kind == "video"
         assert expr.id == "video-7"
@@ -225,18 +217,10 @@ class TestLensLaws:
         st = hypothesis.strategies
         import didactic.api as dx
 
-        norm = st.floats(
-            min_value=0.0, max_value=1.0, allow_nan=False, allow_infinity=False
-        )
-        conf = st.floats(
-            min_value=0.0, max_value=1.0, allow_nan=False, allow_infinity=False
-        )
-        secs = st.floats(
-            min_value=0.0, max_value=3600.0, allow_nan=False, allow_infinity=False
-        )
-        boxes = st.builds(
-            BoundingBoxDTO, x=norm, y=norm, width=norm, height=norm
-        )
+        norm = st.floats(min_value=0.0, max_value=1.0, allow_nan=False, allow_infinity=False)
+        conf = st.floats(min_value=0.0, max_value=1.0, allow_nan=False, allow_infinity=False)
+        secs = st.floats(min_value=0.0, max_value=3600.0, allow_nan=False, allow_infinity=False)
+        boxes = st.builds(BoundingBoxDTO, x=norm, y=norm, width=norm, height=norm)
         detections = st.builds(
             DetectionDTO,
             label=st.text(min_size=0, max_size=8),

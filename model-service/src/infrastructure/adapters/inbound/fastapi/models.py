@@ -20,9 +20,7 @@ from annotated_types import Ge, Gt, Le, MinLen
 # JSON-shaped recursive payload for free-form fields (RLE masks, gloss items,
 # annotation blobs, provider metadata). didactic classifies this as an opaque
 # JSON fixpoint; Pydantic accepts the recursive alias natively.
-type JsonValue = (
-    str | int | float | bool | None | list["JsonValue"] | dict[str, "JsonValue"]
-)
+type JsonValue = str | int | float | bool | None | list["JsonValue"] | dict[str, "JsonValue"]
 
 # Reusable constrained scalars.
 ConfidenceScore = Annotated[float, Ge(0.0), Le(1.0)]
@@ -66,9 +64,7 @@ class ThumbnailGenerateResponse(dx.Model):
 
     video_id: NonEmptyStr = dx.field(description="Video identifier")
     thumbnail_path: NonEmptyStr = dx.field(description="Path to generated thumbnail")
-    timestamp: Annotated[float, Ge(0.0)] = dx.field(
-        description="Timestamp used for extraction"
-    )
+    timestamp: Annotated[float, Ge(0.0)] = dx.field(description="Timestamp used for extraction")
     size: str = dx.field(description="Size preset used")
 
 
@@ -123,9 +119,7 @@ class FrameDetections(dx.Model):
     """Detections for a single video frame."""
 
     frame_number: NonNegativeInt = dx.field(description="Frame number in the video")
-    timestamp: Annotated[float, Ge(0.0)] = dx.field(
-        description="Time in seconds from video start"
-    )
+    timestamp: Annotated[float, Ge(0.0)] = dx.field(description="Time in seconds from video start")
     detections: tuple[Detection, ...] = dx.field(
         default_factory=tuple, description="Detections in this frame"
     )
@@ -136,18 +130,14 @@ class DetectionRequest(dx.Model):
 
     video_id: NonEmptyStr = dx.field(description="Unique identifier for the video")
     query: NonEmptyStr = dx.field(description="Text query describing objects to detect")
-    video_path: str | None = dx.field(
-        default=None, description="Optional full path to video file"
-    )
+    video_path: str | None = dx.field(default=None, description="Optional full path to video file")
     frame_numbers: tuple[int, ...] = dx.field(
         default_factory=tuple, description="Specific frames to process"
     )
     confidence_threshold: ConfidenceScore = dx.field(
         default=0.3, description="Minimum confidence for detections"
     )
-    enable_tracking: bool = dx.field(
-        default=True, description="Whether to enable object tracking"
-    )
+    enable_tracking: bool = dx.field(default=True, description="Whether to enable object tracking")
 
 
 class DetectionResponse(dx.Model):
@@ -159,9 +149,7 @@ class DetectionResponse(dx.Model):
     frames: tuple[FrameDetections, ...] = dx.field(
         default_factory=tuple, description="Frames with detections"
     )
-    total_detections: NonNegativeInt = dx.field(
-        description="Total detections across all frames"
-    )
+    total_detections: NonNegativeInt = dx.field(description="Total detections across all frames")
     processing_time: ProcessingTime = dx.field(description="Processing time in seconds")
 
 
@@ -187,9 +175,7 @@ class TrackingFrameResult(dx.Model):
     """Tracking results for a single video frame."""
 
     frame_number: NonNegativeInt = dx.field(description="Frame number in the video")
-    timestamp: Annotated[float, Ge(0.0)] = dx.field(
-        description="Time in seconds from video start"
-    )
+    timestamp: Annotated[float, Ge(0.0)] = dx.field(description="Time in seconds from video start")
     masks: tuple[TrackingMaskData, ...] = dx.field(
         default_factory=tuple, description="Tracked object masks"
     )
@@ -223,9 +209,7 @@ class TrackingResponse(dx.Model):
     video_height: PositiveInt = dx.field(description="Video frame height in pixels")
     total_frames: NonNegativeInt = dx.field(description="Total frames processed")
     processing_time: ProcessingTime = dx.field(description="Total processing time in seconds")
-    fps: Annotated[float, Ge(0.0)] = dx.field(
-        description="Processing speed in frames per second"
-    )
+    fps: Annotated[float, Ge(0.0)] = dx.field(description="Processing speed in frames per second")
 
 
 # ---------------------------------------------------------------------------
@@ -240,9 +224,7 @@ class OntologyType(dx.Model):
     description: str = dx.field(description="Type description")
     parent: str | None = dx.field(default=None, description="Parent type name")
     confidence: ConfidenceScore = dx.field(default=0.0, description="Confidence score")
-    examples: tuple[str, ...] = dx.field(
-        default_factory=tuple, description="Example instances"
-    )
+    examples: tuple[str, ...] = dx.field(default_factory=tuple, description="Example instances")
     thinking: ThinkingTrace | None = dx.field(
         default=None, description="Optional reasoning trace from a thinking-capable model"
     )
@@ -285,9 +267,7 @@ class KeyFrame(dx.Model):
     """Key frame information from video analysis."""
 
     frame_number: int = dx.field(description="Frame number in the video")
-    timestamp: Annotated[float, Ge(0.0)] = dx.field(
-        description="Time in seconds from video start"
-    )
+    timestamp: Annotated[float, Ge(0.0)] = dx.field(description="Time in seconds from video start")
     description: str = dx.field(description="Frame description")
     confidence: ConfidenceScore = dx.field(default=0.0, description="Model confidence score")
 
@@ -330,9 +310,7 @@ class SummarizeRequest(dx.Model):
 
     video_id: NonEmptyStr = dx.field(description="Unique identifier for the video")
     persona_id: NonEmptyStr = dx.field(description="Unique identifier for the persona")
-    video_path: str | None = dx.field(
-        default=None, description="Optional full path to video file"
-    )
+    video_path: str | None = dx.field(default=None, description="Optional full path to video file")
     persona_role: str | None = dx.field(
         default=None, description="Optional persona role for context"
     )
@@ -373,9 +351,7 @@ class SummarizeResponse(dx.Model):
     visual_analysis: str | None = dx.field(
         default=None, description="Detailed visual content analysis"
     )
-    audio_transcript: str | None = dx.field(
-        default=None, description="Transcribed audio content"
-    )
+    audio_transcript: str | None = dx.field(default=None, description="Transcribed audio content")
     key_frames: tuple[KeyFrame, ...] = dx.field(
         default_factory=tuple, description="Key frames with descriptions"
     )
@@ -383,18 +359,14 @@ class SummarizeResponse(dx.Model):
     transcript_json: dict[str, JsonValue] | None = dx.field(
         default=None, description="Structured transcript with segments"
     )
-    audio_language: str | None = dx.field(
-        default=None, description="Detected audio language code"
-    )
+    audio_language: str | None = dx.field(default=None, description="Detected audio language code")
     speaker_count: NonNegativeInt | None = dx.field(
         default=None, description="Number of distinct speakers"
     )
     audio_model_used: str | None = dx.field(
         default=None, description="Audio transcription model name"
     )
-    visual_model_used: str | None = dx.field(
-        default=None, description="Visual analysis model name"
-    )
+    visual_model_used: str | None = dx.field(default=None, description="Visual analysis model name")
     fusion_strategy: str | None = dx.field(default=None, description="Fusion strategy used")
     processing_time_audio: ProcessingTime | None = dx.field(
         default=None, description="Audio processing time in seconds"
@@ -442,9 +414,7 @@ class ClaimExtractionRequest(dx.Model):
     """Request body for the claim extraction endpoint."""
 
     summary_id: NonEmptyStr = dx.field(description="Unique identifier for the summary")
-    summary_text: NonEmptyStr = dx.field(
-        description="Full summary text to extract claims from"
-    )
+    summary_text: NonEmptyStr = dx.field(description="Full summary text to extract claims from")
     sentences: tuple[str, ...] | None = dx.field(
         default=None, description="Pre-split sentences (optional)"
     )
@@ -457,8 +427,8 @@ class ClaimExtractionRequest(dx.Model):
     ontology_glosses: dict[str, str] | None = dx.field(
         default=None, description="Map of type ID to gloss text"
     )
-    extraction_strategy: Literal["sentence-based", "semantic-units", "hierarchical"] = (
-        dx.field(default="sentence-based", description="Strategy for extracting claims")
+    extraction_strategy: Literal["sentence-based", "semantic-units", "hierarchical"] = dx.field(
+        default="sentence-based", description="Strategy for extracting claims"
     )
     max_claims: Annotated[int, Ge(1), Le(200)] = dx.field(
         default=50, description="Maximum number of claims to extract"
@@ -525,9 +495,9 @@ class SummarySynthesisRequest(dx.Model):
     persona_context: dict[str, JsonValue] | None = dx.field(
         default=None, description="Persona information for perspective"
     )
-    synthesis_strategy: Literal[
-        "hierarchical", "chronological", "narrative", "analytical"
-    ] = dx.field(default="hierarchical", description="Strategy for organizing summary")
+    synthesis_strategy: Literal["hierarchical", "chronological", "narrative", "analytical"] = (
+        dx.field(default="hierarchical", description="Strategy for organizing summary")
+    )
     max_length: Annotated[int, Ge(100), Le(2000)] = dx.field(
         default=500, description="Maximum summary length in words"
     )

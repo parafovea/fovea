@@ -214,6 +214,25 @@ def _build_components(generator: type[GenerateJsonSchema]) -> dict[str, object]:
     definitions = schemas.get("$defs", {})
     if not isinstance(definitions, dict):
         raise RuntimeError("models_json_schema did not return a $defs mapping")
+    # Flatten the recursive JsonValue schema. Pydantic emits JsonValue's array
+    # items and object values as $refs back to JsonValue; openapi-typescript then
+    # renders a type alias that references itself through indexed access into the
+    # still-computing components map, which tsc rejects with TS2502. JsonValue is
+    # opaque freeform JSON to a contract consumer, so emit the primitive union
+    # with unknown-typed containers: it keeps the top-level shape and compiles.
+    if "JsonValue" in definitions:
+        definitions["JsonValue"] = {
+            "description": "An arbitrary JSON value.",
+            "anyOf": [
+                {"type": "string"},
+                {"type": "integer"},
+                {"type": "number"},
+                {"type": "boolean"},
+                {"type": "array", "items": {}},
+                {"type": "object", "additionalProperties": {}},
+                {"type": "null"},
+            ],
+        }
     # Sort so the emitted document is deterministic regardless of model order.
     return {name: definitions[name] for name in sorted(definitions)}
 

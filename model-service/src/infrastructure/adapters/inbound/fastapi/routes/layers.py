@@ -78,9 +78,7 @@ else:
     response_model=as_response(ImportResponse),
     summary="Decode a fovea envelope to layers records.",
 )
-async def import_layers(
-    request: _ImportRequestBody, codec: LayersCodecDep
-) -> dict[str, object]:
+async def import_layers(request: _ImportRequestBody, codec: LayersCodecDep) -> dict[str, object]:
     """Decode a serialized fovea envelope into normalized layers records."""
     try:
         fragment = codec.decode(request.payload, request.format)
@@ -109,9 +107,7 @@ async def import_layers(
     response_class=PlainTextResponse,
     summary="Export layers records as JSONL.",
 )
-async def export_layers(
-    request: _ExportRequestBody, codec: LayersCodecDep
-) -> PlainTextResponse:
+async def export_layers(request: _ExportRequestBody, codec: LayersCodecDep) -> PlainTextResponse:
     """Serialize posted layers records as newline-delimited JSON (JSONL)."""
     records = [
         NormalizedRecordDTO(
@@ -120,9 +116,7 @@ async def export_layers(
         for record in request.records
     ]
     lines = "\n".join(
-        json.dumps(
-            {"local_id": r.local_id, "nsid": r.nsid, "value_json": r.value_json}
-        )
+        json.dumps({"local_id": r.local_id, "nsid": r.nsid, "value_json": r.value_json})
         for r in records
     )
     return PlainTextResponse(content=lines, media_type="application/x-ndjson")
