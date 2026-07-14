@@ -6,12 +6,14 @@ Google clients as appropriate.
 """
 
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from .anthropic_client import AnthropicClient
-from .base import ExternalAPIClient, ExternalAPIConfig
 from .google_client import GoogleClient
 from .openai_client import OpenAIClient
+
+if TYPE_CHECKING:
+    from .base import ExternalAPIClient, ExternalAPIConfig
 
 logger = logging.getLogger(__name__)
 

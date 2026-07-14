@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import pytest
+
+pytest.importorskip("torch")  # requires the ML backend; skipped in the torch-free venv
+
 import sys
 
 import pytest

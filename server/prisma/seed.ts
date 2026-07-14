@@ -1,6 +1,10 @@
 import { PrismaClient } from '@prisma/client'
 import bcrypt from 'bcrypt'
 
+import { writeOntologyAggregate } from '../src/services/layers-bridge/ontology-bridge.js'
+import { writeVideoAnnotation } from '../src/services/layers-bridge/annotation-bridge.js'
+import { deriveId } from '../src/services/layers-id-map.js'
+import type { BoundingBoxSequence } from '../src/services/layers-conversion-service.js'
 import { seedPermissions } from './seed-permissions.js'
 
 /**
@@ -147,41 +151,45 @@ export async function seedDatabase(prismaClient?: PrismaClient) {
     )
   }
 
-  // Create test ontology for Automated persona (for E2E tests)
-  const existingOntology = await prisma.ontology.findUnique({
-    where: { personaId: automatedPersona.id },
-  })
-
-  if (!existingOntology) {
-    await prisma.ontology.create({
-      data: {
-        personaId: automatedPersona.id,
-        entityTypes: [
-          {
-            id: 'test-entity-person',
-            name: 'Person',
-            description: 'A person in the video',
-            color: '#FF5722',
-          },
-          {
-            id: 'test-entity-vehicle',
-            name: 'Vehicle',
-            description: 'A vehicle in the video',
-            color: '#2196F3',
-          },
-          {
-            id: 'test-entity-object',
-            name: 'Object',
-            description: 'An object in the video',
-            color: '#4CAF50',
-          },
-        ],
-      },
-    })
-    console.log('✓ Created test ontology for Automated persona')
-  } else {
-    console.log('✓ Ontology for Automated persona already exists')
-  }
+  // Create test ontology for Automated persona (for E2E tests) in the layers
+  // store. writeOntologyAggregate upserts the LayersOntology and recreates its
+  // TypeDefs, so re-seeding is idempotent.
+  await writeOntologyAggregate(
+    prisma,
+    automatedPersona.id,
+    {
+      entityTypes: [
+        {
+          id: 'test-entity-person',
+          name: 'Person',
+          description: 'A person in the video',
+          color: '#FF5722',
+        },
+        {
+          id: 'test-entity-vehicle',
+          name: 'Vehicle',
+          description: 'A vehicle in the video',
+          color: '#2196F3',
+        },
+        {
+          id: 'test-entity-object',
+          name: 'Object',
+          description: 'An object in the video',
+          color: '#4CAF50',
+        },
+      ],
+      eventTypes: [],
+      roleTypes: [],
+      relationTypes: [],
+    },
+    {
+      name: `${automatedPersona.name} ontology`,
+      description: automatedPersona.informationNeed,
+      domain: automatedPersona.domain,
+    },
+    { projectId: automatedPersona.projectId, createdByUserId: automatedPersona.userId },
+  )
+  console.log('✓ Seeded test ontology for Automated persona')
 
   // ─────────────────────────────────────────────────────────────
   // Demo-mode hand-authored personas + ontologies.
@@ -238,23 +246,19 @@ export async function seedDatabase(prismaClient?: PrismaClient) {
       })
       console.log(`✓ Created demo persona: ${persona.name} (hidden: ${demoPersonaHidden})`)
     }
-    const existingOntology = await prisma.ontology.findUnique({
-      where: { personaId: persona.id },
-    })
-    const data = {
-      personaId: persona.id,
-      entityTypes: args.ontology.entityTypes,
-      roleTypes: args.ontology.roleTypes ?? [],
-      eventTypes: args.ontology.eventTypes ?? [],
-      relationTypes: args.ontology.relationTypes ?? [],
-    }
-    if (existingOntology) {
-      await prisma.ontology.update({ where: { personaId: persona.id }, data })
-      console.log(`  ✓ Updated ontology for ${persona.name}`)
-    } else {
-      await prisma.ontology.create({ data })
-      console.log(`  ✓ Created ontology for ${persona.name}`)
-    }
+    await writeOntologyAggregate(
+      prisma,
+      persona.id,
+      {
+        entityTypes: args.ontology.entityTypes,
+        roleTypes: args.ontology.roleTypes ?? [],
+        eventTypes: args.ontology.eventTypes ?? [],
+        relationTypes: args.ontology.relationTypes ?? [],
+      },
+      { name: `${persona.name} ontology`, description: persona.informationNeed, domain: persona.domain },
+      { projectId: persona.projectId, createdByUserId: persona.userId },
+    )
+    console.log(`  ✓ Seeded ontology for ${persona.name}`)
     return persona
   }
 
@@ -405,41 +409,25 @@ export async function seedDatabase(prismaClient?: PrismaClient) {
     confidence: number
     notes?: string
   }) {
-    // The stableId is the upsert key so multiple distinct tracks
-    // with the same label (three Spectator instances on Crossing
-    // Broad: Karen, son, father) each persist as their own row.
-    // We store it in the metadata-ish `source` field by encoding
-    // 'demo-fixture:<stableId>' so the read-side filter still
-    // matches the LIKE 'demo-fixture%' family.
-    const sourceKey = `demo-fixture:${args.stableId}`
-    const existing = await prisma.annotation.findFirst({
-      where: { videoId: args.videoId, source: sourceKey },
-    })
-    if (existing) {
-      await prisma.annotation.update({
-        where: { id: existing.id },
-        data: {
-          frames: args.frames as never,
-          confidence: args.confidence,
-          label: args.label,
-          personaId: args.personaId,
-        },
-      })
-    } else {
-      await prisma.annotation.create({
-        data: {
-          videoId: args.videoId,
-          personaId: args.personaId,
-          type: 'type',
-          label: args.label,
-          frames: args.frames as never,
-          confidence: args.confidence,
-          source: sourceKey,
-          userId: personaOwner.id,
-          createdByUserId: personaOwner.id,
-        },
-      })
-    }
+    // The stableId derives the annotation's layers id so multiple distinct
+    // tracks with the same label (three Spectator instances on Crossing Broad:
+    // Karen, son, father) each persist as their own row, and re-seeding upserts
+    // the same rows idempotently. The source is tagged 'demo-fixture:<stableId>'.
+    await writeVideoAnnotation(
+      prisma,
+      {
+        id: deriveId('demo-annotation', args.stableId),
+        videoId: args.videoId,
+        personaId: args.personaId,
+        type: 'type',
+        label: args.label,
+        linkType: null,
+        frames: args.frames as BoundingBoxSequence,
+        confidence: args.confidence,
+        source: `demo-fixture:${args.stableId}`,
+      },
+      { userId: personaOwner.id, projectId: null },
+    )
   }
 
   // Verify the demo videos are in the database (they get there via
@@ -455,17 +443,8 @@ export async function seedDatabase(prismaClient?: PrismaClient) {
   const haveAllVideos = presentVideos.length === Object.values(VIDEO_IDS).length
 
   if (haveAllVideos) {
-    // Wipe prior demo-fixture annotations before re-seeding. Idempotent:
-    // produces identical state on every run regardless of whether the
-    // last run used the same upsert key shape. Demo-mode rows are
-    // tagged with source: 'demo-fixture:<stableId>' so this deletion
-    // never touches a self-hoster's real annotations.
-    const wiped = await prisma.annotation.deleteMany({
-      where: { source: { startsWith: 'demo-fixture' } },
-    })
-    if (wiped.count > 0) {
-      console.log(`  ↻ Wiped ${wiped.count} prior demo annotations before re-seeding`)
-    }
+    // Demo-fixture annotations are seeded with deterministic ids derived from
+    // their stableId, so re-seeding upserts the same rows idempotently.
 
     // ABC7 shipping containers — model-in-the-loop tour. Three
     // tracked objects: Container A falls first (ease-in segments

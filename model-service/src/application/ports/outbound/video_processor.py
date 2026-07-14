@@ -4,10 +4,13 @@ This module defines the interface for video processing adapters.
 """
 
 from abc import ABC, abstractmethod
-from collections.abc import Iterator
+from typing import TYPE_CHECKING
 
-from src.domain.entities import Frame, VideoInfo
-from src.domain.value_objects import TimeRange
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+
+    from src.domain.entities import Frame, VideoInfo
+    from src.domain.value_objects import TimeRange
 
 
 class IVideoProcessor(ABC):

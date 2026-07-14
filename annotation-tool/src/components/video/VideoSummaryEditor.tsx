@@ -53,6 +53,7 @@ import { useAutoSave } from '@hooks/data/useAutoSave'
 import { GlossItem, Claim, ClaimExtractionConfig, ClaimTextSpan, UpdateClaimRequest } from '@models/types'
 import { logError, logWarning } from '@services/errorLogging'
 import { config } from '@/config'
+import { useTourAnchor } from '@/tours/engine/anchorRegistry'
 
 interface VideoSummaryEditorProps {
   videoId: string
@@ -73,6 +74,12 @@ const VideoSummaryEditor = forwardRef<VideoSummaryEditorRef, VideoSummaryEditorP
   disabled = false,
 }, ref) {
   const queryClient = useQueryClient()
+
+  const editorAnchorRef = useTourAnchor('video-summary-editor')
+  const extractClaimsAnchorRef = useTourAnchor('extract-claims-button')
+  const addManualClaimAnchorRef = useTourAnchor('add-manual-claim-button')
+  const summaryTabSummaryAnchorRef = useTourAnchor('summary-tab-summary')
+  const summaryTabClaimsAnchorRef = useTourAnchor('summary-tab-claims')
 
   // TanStack Query for video summary
   const {
@@ -454,7 +461,7 @@ const VideoSummaryEditor = forwardRef<VideoSummaryEditorRef, VideoSummaryEditorP
   }
 
   return (
-    <div data-tour-id="video-summary-editor">
+    <div ref={editorAnchorRef}>
       {/* Header with save status */}
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">
@@ -477,10 +484,10 @@ const VideoSummaryEditor = forwardRef<VideoSummaryEditorRef, VideoSummaryEditorP
                 <TooltipTrigger>
                   <span>
                     <Button
+                      ref={extractClaimsAnchorRef}
                       onClick={() => setExtractDialogOpen(true)}
                       disabled={extracting || !summaryId || localSummary.length === 0 || modelsDisabled}
                       size="sm"
-                      data-tour-id="extract-claims-button"
                     >
                       Extract Claims
                     </Button>
@@ -505,7 +512,7 @@ const VideoSummaryEditor = forwardRef<VideoSummaryEditorRef, VideoSummaryEditorP
               // into — the editor's Save is the no-op path for
               // anonymous visitors but the dialog still renders.
               disabled={!summaryId && !config.deploymentMode.publicBooth}
-              data-tour-id="add-manual-claim-button"
+              ref={addManualClaimAnchorRef}
             >
               <Plus className="size-4 mr-1" />
               Add Manual Claim
@@ -519,8 +526,8 @@ const VideoSummaryEditor = forwardRef<VideoSummaryEditorRef, VideoSummaryEditorP
         <CardContent className="p-0">
           <Tabs value={activeTab} onValueChange={handleTabChange}>
             <TabsList className="m-2">
-              <TabsTrigger value="summary" data-tour-id="summary-tab-summary">Summary</TabsTrigger>
-              <TabsTrigger value="claims" data-tour-id="summary-tab-claims">
+              <TabsTrigger value="summary" ref={summaryTabSummaryAnchorRef}>Summary</TabsTrigger>
+              <TabsTrigger value="claims" ref={summaryTabClaimsAnchorRef}>
                 <span className="flex items-center gap-1">
                   Claims
                   {claims.length > 0 && (

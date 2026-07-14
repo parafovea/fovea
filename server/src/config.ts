@@ -136,6 +136,8 @@ const MODEL_SERVICE_TIMEOUT_DEFAULTS = {
   extractClaims: { env: 'MODEL_SERVICE_TIMEOUT_EXTRACT_CLAIMS_MS', ms: 300_000 },
   synthesize: { env: 'MODEL_SERVICE_TIMEOUT_SYNTHESIZE_MS', ms: 300_000 },
   transcribe: { env: 'MODEL_SERVICE_TIMEOUT_TRANSCRIBE_MS', ms: 300_000 },
+  layersImport: { env: 'MODEL_SERVICE_TIMEOUT_LAYERS_IMPORT_MS', ms: 300_000 },
+  layersExport: { env: 'MODEL_SERVICE_TIMEOUT_LAYERS_EXPORT_MS', ms: 300_000 },
 } as const
 
 /** Names of the per-endpoint model-service timeouts. */

@@ -33,6 +33,7 @@ import { EntityCollection, EventCollection, GlossItem } from '@models/types'
 import GlossEditor from '@components/ontology/GlossEditor'
 import { TypeObjectBadge } from '../shared/TypeObjectToggle'
 import { useUnsavedChangesPrompt } from '../../hooks/data'
+import { useTourAnchor } from '@/tours/engine/anchorRegistry'
 
 /** Entity collection type options */
 type EntityCollectionTypeOption = 'group' | 'kind' | 'functional' | 'stage' | 'portion' | 'variant'
@@ -59,6 +60,7 @@ export default function CollectionEditor({ open, onClose, collection, collection
   const { mutateAsync: updateEntityCollection } = useUpdateEntityCollection()
   const { mutateAsync: addEventCollection } = useAddEventCollection()
   const { mutateAsync: updateEventCollection } = useUpdateEventCollection()
+  const builderRef = useTourAnchor('collection-builder')
 
   const [collectionType, setCollectionType] = useState<'entity' | 'event'>(initialType || 'entity')
   const [name, setName] = useState('')
@@ -171,7 +173,7 @@ export default function CollectionEditor({ open, onClose, collection, collection
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) handleCancel() }}>
-      <DialogContent data-tour-id="collection-builder" className="sm:max-w-2xl">
+      <DialogContent ref={builderRef} className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Library className="size-5 text-secondary" />

@@ -718,12 +718,12 @@ export const handlers = [
   // These match requests from hooks that use the ApiClient singleton with relative URLs
   // Required for SSH port forwarding compatibility where all requests go through Vite proxy
 
-  http.get('/api/annotations/:videoId', () => {
+  http.get('/api/layers/videos/:videoId/annotations', () => {
     return HttpResponse.json([])
   }),
 
   // Annotation mutations - with wildcard for both absolute and relative URLs
-  http.post('*/api/annotations', async ({ request }) => {
+  http.post('*/api/layers/videos/:videoId/annotations', async ({ request }) => {
     const body = await request.json() as Record<string, unknown>
     return HttpResponse.json({
       id: 'annotation-new',
@@ -733,7 +733,7 @@ export const handlers = [
     }, { status: 201 })
   }),
 
-  http.put('*/api/annotations/:annotationId', async ({ request, params }) => {
+  http.put('*/api/layers/videos/:videoId/annotations/:annotationId', async ({ request, params }) => {
     const body = await request.json() as Record<string, unknown>
     return HttpResponse.json({
       id: params.annotationId,
@@ -742,11 +742,11 @@ export const handlers = [
     })
   }),
 
-  http.delete('*/api/annotations/:videoId/:annotationId', () => {
+  http.delete('*/api/layers/videos/:videoId/annotations/:annotationId', () => {
     return new HttpResponse(null, { status: 204 })
   }),
 
-  http.put('*/api/annotations', async ({ request }) => {
+  http.put('*/api/layers/videos/:videoId/annotations', async ({ request }) => {
     const body = await request.json() as Record<string, unknown>[]
     return HttpResponse.json(body)
   }),

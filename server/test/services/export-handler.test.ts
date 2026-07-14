@@ -1,17 +1,20 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { AnnotationExporter } from '../../src/services/export-handler.js'
-import type { Annotation, Persona, Ontology, VideoSummary, Claim, ClaimRelation } from '@prisma/client'
+import type { Persona, Ontology, VideoSummary, Claim, ClaimRelation } from '@prisma/client'
+import type { VideoAnnotationOutput } from '../../src/services/video-annotation-mapper.js'
 
 /**
- * Creates a test annotation with the given overrides.
+ * Creates a reconstructed layers annotation (the annotation wire shape the
+ * exporter converts) with the given overrides.
  */
-function createTestAnnotation(overrides: Partial<Annotation> = {}): Annotation {
+function createTestVideoAnnotation(overrides: Partial<VideoAnnotationOutput> = {}): VideoAnnotationOutput {
   return {
     id: 'ann-1',
     videoId: 'vid-1',
     personaId: 'persona-1',
     type: 'type',
     label: 'entity-type-1',
+    linkType: null,
     frames: {
       boxes: [{ x: 10, y: 20, width: 100, height: 50, frameNumber: 0, isKeyframe: true }],
       interpolationSegments: [],
@@ -22,8 +25,9 @@ function createTestAnnotation(overrides: Partial<Annotation> = {}): Annotation {
     },
     confidence: 0.95,
     source: 'manual',
-    createdAt: new Date('2024-01-01'),
-    updatedAt: new Date('2024-01-02'),
+    linkedObjectName: null,
+    createdAt: '2024-01-01T00:00:00.000Z',
+    updatedAt: '2024-01-02T00:00:00.000Z',
     ...overrides
   }
 }
@@ -147,23 +151,24 @@ describe('AnnotationExporter', () => {
     exporter = new AnnotationExporter()
   })
 
-  describe('convertPrismaAnnotation', () => {
-    it('correctly reads annotation type from type column', () => {
-      const prismaAnnotation = createTestAnnotation()
+  describe('convertVideoAnnotationOutput', () => {
+    it('correctly reads a type annotation from the wire shape', () => {
+      const output = createTestVideoAnnotation()
 
-      const result = exporter.convertPrismaAnnotation(prismaAnnotation)
+      const result = exporter.convertVideoAnnotationOutput(output)
 
-      expect(result).not.toBeNull()
-      expect(result!.annotationType).toBe('type')
-      expect(result!.personaId).toBe('persona-1')
+      expect(result.annotationType).toBe('type')
+      expect(result.personaId).toBe('persona-1')
+      expect(result.typeId).toBe('entity-type-1')
     })
 
-    it('correctly reads object annotation type', () => {
-      const prismaAnnotation = createTestAnnotation({
+    it('correctly reads an object annotation from the wire shape', () => {
+      const output = createTestVideoAnnotation({
         id: 'ann-2',
         personaId: null,
         type: 'object',
         label: 'entity-1',
+        linkType: 'entity',
         frames: {
           boxes: [],
           interpolationSegments: [],
@@ -175,15 +180,14 @@ describe('AnnotationExporter', () => {
         confidence: null
       })
 
-      const result = exporter.convertPrismaAnnotation(prismaAnnotation)
+      const result = exporter.convertVideoAnnotationOutput(output)
 
-      expect(result).not.toBeNull()
-      expect(result!.annotationType).toBe('object')
-      expect(result!.linkedEntityId).toBe('entity-1')
+      expect(result.annotationType).toBe('object')
+      expect(result.linkedEntityId).toBe('entity-1')
     })
 
     it('uses frames directly as boundingBoxSequence', () => {
-      const prismaAnnotation = createTestAnnotation({
+      const output = createTestVideoAnnotation({
         id: 'ann-3',
         frames: {
           boxes: [
@@ -200,39 +204,31 @@ describe('AnnotationExporter', () => {
         confidence: null
       })
 
-      const result = exporter.convertPrismaAnnotation(prismaAnnotation)
+      const result = exporter.convertVideoAnnotationOutput(output)
 
-      expect(result).not.toBeNull()
-      expect(result!.boundingBoxSequence.boxes).toHaveLength(2)
-      expect(result!.boundingBoxSequence.interpolationSegments).toHaveLength(1)
-      expect(result!.boundingBoxSequence.trackingSource).toBe('manual')
+      expect(result.boundingBoxSequence.boxes).toHaveLength(2)
+      expect(result.boundingBoxSequence.interpolationSegments).toHaveLength(1)
+      expect(result.boundingBoxSequence.trackingSource).toBe('manual')
     })
 
-    it('handles annotations without bounding boxes gracefully', () => {
-      const prismaAnnotation = createTestAnnotation({
+    it('handles annotations with an empty bounding-box sequence gracefully', () => {
+      const output = createTestVideoAnnotation({
         id: 'ann-4',
-        frames: {}, // Empty frames - valid for ontology-only annotations
+        frames: {
+          boxes: [],
+          interpolationSegments: [],
+          visibilityRanges: [],
+          totalFrames: 0,
+          keyframeCount: 0,
+          interpolatedFrameCount: 0
+        },
         confidence: null
       })
 
-      const result = exporter.convertPrismaAnnotation(prismaAnnotation)
+      const result = exporter.convertVideoAnnotationOutput(output)
 
-      expect(result).not.toBeNull()
-      expect(result!.boundingBoxSequence.boxes).toHaveLength(0)
-      expect(result!.boundingBoxSequence.totalFrames).toBe(0)
-    })
-
-    it('handles null frames gracefully', () => {
-      const prismaAnnotation = createTestAnnotation({
-        id: 'ann-5',
-        frames: null,
-        confidence: null
-      })
-
-      const result = exporter.convertPrismaAnnotation(prismaAnnotation)
-
-      expect(result).not.toBeNull()
-      expect(result!.boundingBoxSequence.boxes).toHaveLength(0)
+      expect(result.boundingBoxSequence.boxes).toHaveLength(0)
+      expect(result.boundingBoxSequence.totalFrames).toBe(0)
     })
   })
 

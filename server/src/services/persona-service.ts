@@ -1,8 +1,8 @@
-import { Persona, Ontology, WorldState, Prisma } from '@prisma/client'
+import { Persona, Prisma } from '@prisma/client'
 import { accessibleBy } from '@casl/prisma'
 import { subject } from '@casl/ability'
 import type { AppAbility } from '../lib/abilities.js'
-import { NotFoundError, ForbiddenError, ConflictError } from '../lib/errors.js'
+import { NotFoundError, ForbiddenError } from '../lib/errors.js'
 import { prisma } from '../lib/prisma.js'
 import { demoPersonaListWhere, demoPermitsSystemPersonaRead } from '../lib/demo-rbac.js'
 import { isSingleUserMode } from './user-service.js'
@@ -131,80 +131,6 @@ export class PersonaService {
   }
 
   /**
-   * Applies a version-guarded optimistic update to a persona's ontology inside
-   * an existing transaction.
-   *
-   * Reads the current ontology row through `tx`, lets `transform` compute the
-   * new column values from it, then writes them guarded by the row's `version`;
-   * a missed guard (count 0) retries against the freshly read row so a
-   * concurrent edit (a rapid gloss change, a second tab) is not clobbered by the
-   * type-deletion cleanup. Running through `tx` lets the cleanup commit or roll
-   * back atomically with the annotation deletes and world-state cleanup.
-   *
-   * @param tx - the transaction client to run the read/write inside
-   * @param personaId - Persona UUID owning the ontology
-   * @param transform - computes the Prisma update input from the current row
-   * @throws {NotFoundError} when no ontology row exists
-   * @throws {ConflictError} when the write keeps conflicting after retries
-   */
-  private async updateOntologyOptimisticTx(
-    tx: Prisma.TransactionClient,
-    personaId: string,
-    transform: (current: Ontology) => Prisma.OntologyUpdateInput,
-  ): Promise<void> {
-    for (let attempt = 0; attempt < 5; attempt++) {
-      const current = await tx.ontology.findUnique({ where: { personaId } })
-      if (!current) {
-        throw new NotFoundError('Ontology', personaId)
-      }
-      const result = await tx.ontology.updateMany({
-        where: { id: current.id, version: current.version },
-        data: { ...transform(current), version: { increment: 1 } },
-      })
-      if (result.count === 1) {
-        return
-      }
-    }
-    throw new ConflictError('Ontology update conflicted after retries')
-  }
-
-  /**
-   * Applies a version-guarded optimistic update to a user's personal world
-   * state inside an existing transaction.
-   *
-   * Mirrors {@link updateOntologyOptimisticTx} for the world-state row the
-   * type- and persona-deletion cleanup paths mutate, so the world-state write
-   * commits or rolls back atomically with the ontology cleanup and never
-   * clobbers a concurrent world edit.
-   *
-   * @param tx - the transaction client to run the read/write inside
-   * @param userId - owning user ID
-   * @param transform - computes the Prisma update input from the current row
-   * @throws {NotFoundError} when no personal world state row exists
-   * @throws {ConflictError} when the write keeps conflicting after retries
-   */
-  private async updatePersonalWorldStateOptimisticTx(
-    tx: Prisma.TransactionClient,
-    userId: string,
-    transform: (current: WorldState) => Prisma.WorldStateUpdateInput,
-  ): Promise<void> {
-    for (let attempt = 0; attempt < 5; attempt++) {
-      const current = await tx.worldState.findFirst({ where: { userId, projectId: null } })
-      if (!current) {
-        throw new NotFoundError('World state', userId)
-      }
-      const result = await tx.worldState.updateMany({
-        where: { id: current.id, version: current.version },
-        data: { ...transform(current), version: { increment: 1 } },
-      })
-      if (result.count === 1) {
-        return
-      }
-    }
-    throw new ConflictError('Personal world state update conflicted after retries')
-  }
-
-  /**
    * Lists the personas visible to the caller.
    *
    * Applies the four mode branches in order:
@@ -263,8 +189,9 @@ export class PersonaService {
     // A project-scoped persona may only be created by a member of that project.
     // The generic create ability passes for any self-owned persona regardless
     // of projectId, so a non-member could otherwise attach a persona to a
-    // project they cannot access; verify membership explicitly.
-    if (projectId) {
+    // project they cannot access; verify membership explicitly. System admins
+    // authorize via manage-all rather than the baseline rule, so they are exempt.
+    if (projectId && !ability.can('manage', 'all')) {
       const membership = await prisma.projectMembership.findUnique({
         where: { userId_projectId: { userId, projectId } },
       })
@@ -290,14 +217,6 @@ export class PersonaService {
       hidden: input.hidden,
       user: { connect: { id: userId } },
       ...(projectId ? { project: { connect: { id: projectId } } } : {}),
-      ontology: {
-        create: {
-          entityTypes: [],
-          eventTypes: [],
-          roleTypes: [],
-          relationTypes: []
-        }
-      }
     })
   }
 
@@ -463,60 +382,57 @@ export class PersonaService {
       [key: string]: unknown
     }
 
-    // Clean the owner's personal world state of this persona's type assignments
-    // and interpretations, then delete the persona (cascading its ontology,
-    // summaries, and annotations) — both inside one transaction so a partial
-    // failure cannot leave the world state referencing a deleted persona. The
-    // world cleanup runs through the version guard so it does not clobber a
-    // concurrent world edit.
-    await prisma.$transaction(async (tx) => {
-      const worldState = await tx.worldState.findFirst({
-        where: { userId: existing.userId, projectId: null },
-      })
-      if (worldState) {
-        await this.updatePersonalWorldStateOptimisticTx(tx, existing.userId, (current) => {
-          const entities = (current.entities as EntityWithAssignments[]) || []
+    // Strip this persona's type assignments and interpretations out of the
+    // owner's personal world state, then delete the persona, inside ONE
+    // transaction so a partial failure rolls back rather than leaving the world
+    // state referencing a deleted persona. The world write recomputes from a
+    // fresh read within the transaction; deleting the persona cascades its
+    // ontology, its type/world annotations, and its summaries through the layers
+    // store's foreign keys.
+    try {
+      await prisma.$transaction(async (tx) => {
+        const worldState = await this.repository.findPersonalWorldState(existing.userId, tx)
+        if (worldState) {
+          const entities = (worldState.entities as EntityWithAssignments[]) || []
           const cleanedEntities = entities.map(entity => ({
             ...entity,
             typeAssignments: (entity.typeAssignments || []).filter(a => a.personaId !== id)
           }))
 
-          const events = (current.events as EventWithInterpretations[]) || []
+          const events = (worldState.events as EventWithInterpretations[]) || []
           const cleanedEvents = events.map(event => ({
             ...event,
             personaInterpretations: (event.personaInterpretations || []).filter(i => i.personaId !== id)
           }))
 
-          const entityCollections = (current.entityCollections as CollectionWithAssignments[]) || []
+          const entityCollections = (worldState.entityCollections as CollectionWithAssignments[]) || []
           const cleanedEntityCollections = entityCollections.map(collection => ({
             ...collection,
             typeAssignments: (collection.typeAssignments || []).filter(a => a.personaId !== id)
           }))
 
-          const eventCollections = (current.eventCollections as CollectionWithAssignments[]) || []
+          const eventCollections = (worldState.eventCollections as CollectionWithAssignments[]) || []
           const cleanedEventCollections = eventCollections.map(collection => ({
             ...collection,
             typeAssignments: (collection.typeAssignments || []).filter(a => a.personaId !== id)
           }))
 
-          return {
+          await this.repository.updateWorldState(worldState.userId, {
             entities: toJson(cleanedEntities),
             events: toJson(cleanedEvents),
             entityCollections: toJson(cleanedEntityCollections),
             eventCollections: toJson(cleanedEventCollections)
-          }
-        })
-      }
-
-      try {
-        await tx.persona.delete({ where: { id } })
-      } catch (error: unknown) {
-        if (error && typeof error === 'object' && 'code' in error && error.code === 'P2025') {
-          throw new NotFoundError('Persona', id)
+          }, tx)
         }
-        throw error
+
+        await this.repository.delete(id, tx)
+      })
+    } catch (error: unknown) {
+      if (error && typeof error === 'object' && 'code' in error && error.code === 'P2025') {
+        throw new NotFoundError('Persona', id)
       }
-    })
+      throw error
+    }
   }
 
   /**
@@ -751,21 +667,18 @@ export class PersonaService {
 
     // Delete the matching annotations, rewrite every ontology gloss that
     // referenced the type to plain text, and strip the type's world-state
-    // assignments — all inside one transaction so a partial failure cannot
-    // leave annotations, glosses, and world state disagreeing. The ontology and
-    // world writes recompute from a fresh, version-guarded read so the cleanup
-    // does not clobber a concurrent edit. Counts are taken from the row each
-    // guarded write actually lands on.
+    // assignments, all inside ONE transaction so a partial failure rolls back
+    // rather than leaving annotations, glosses, and world state disagreeing. The
+    // ontology write recomputes from a fresh, version-guarded read so the cleanup
+    // does not clobber a concurrent edit; counts are taken from the row the
+    // guarded write lands on.
     let glossReferences = 0
     let worldAssignments = 0
     let annotations = 0
     await prisma.$transaction(async (tx) => {
-      const deleteResult = await tx.annotation.deleteMany({
-        where: { personaId, type: 'entity', label: typeId }
-      })
-      annotations = deleteResult.count
+      annotations = (await this.repository.deleteAnnotations({ personaId, type: 'entity', label: typeId }, tx)).count
 
-      await this.updateOntologyOptimisticTx(tx, personaId, (current) => {
+      await this.repository.updateOntologyOptimistic(personaId, (current) => {
         const currentEntityTypes = asTypesWithGloss(current.entityTypes)
         const currentRoleTypes = asTypesWithGloss(current.roleTypes)
         const currentEventTypes = asTypesWithGloss(current.eventTypes)
@@ -784,17 +697,15 @@ export class PersonaService {
           eventTypes: toJson(updateGlossesInTypes(currentEventTypes, typeId, personaId, 'entity', typeName)),
           relationTypes: toJson(updateGlossesInTypes(currentRelationTypes, typeId, personaId, 'entity', typeName)),
         }
-      })
+      }, tx)
 
-      const worldState = await tx.worldState.findFirst({
-        where: { userId: persona.userId, projectId: null },
-      })
+      const worldState = await this.repository.findPersonalWorldState(persona.userId, tx)
       if (worldState) {
-        await this.updatePersonalWorldStateOptimisticTx(tx, persona.userId, (current) => {
-          const entities = asEntities(current.entities)
-          worldAssignments = countTypeAssignments(entities, typeId, personaId)
-          return { entities: toJson(removeTypeAssignmentsFromEntities(entities, typeId, personaId)) }
-        })
+        const entities = asEntities(worldState.entities)
+        worldAssignments = countTypeAssignments(entities, typeId, personaId)
+        await this.repository.updateWorldState(worldState.userId, {
+          entities: toJson(removeTypeAssignmentsFromEntities(entities, typeId, personaId)),
+        }, tx)
       }
     })
 
@@ -862,22 +773,18 @@ export class PersonaService {
     }
     const typeName = targetType.name
 
-    // Delete the matching annotations and rewrite the ontology — dropping the
+    // Delete the matching annotations and rewrite the ontology, dropping the
     // role, converting its glosses to text, and removing it from every event
-    // type's role slots — inside one transaction so a partial failure cannot
-    // leave annotations and ontology disagreeing. The ontology write recomputes
-    // from a fresh, version-guarded read so the cleanup does not clobber a
-    // concurrent edit.
+    // type's role slots, all inside ONE transaction so a partial failure rolls
+    // back. The ontology write recomputes from a fresh, version-guarded read so
+    // the cleanup does not clobber a concurrent edit.
     let glossReferences = 0
     let eventRoleReferences = 0
     let annotations = 0
     await prisma.$transaction(async (tx) => {
-      const deleteResult = await tx.annotation.deleteMany({
-        where: { personaId, type: 'role', label: typeId }
-      })
-      annotations = deleteResult.count
+      annotations = (await this.repository.deleteAnnotations({ personaId, type: 'role', label: typeId }, tx)).count
 
-      await this.updateOntologyOptimisticTx(tx, personaId, (current) => {
+      await this.repository.updateOntologyOptimistic(personaId, (current) => {
         const currentEntityTypes = asTypesWithGloss(current.entityTypes)
         const currentRoleTypes = asTypesWithGloss(current.roleTypes)
         const currentEventTypesForGloss = asTypesWithGloss(current.eventTypes)
@@ -922,7 +829,7 @@ export class PersonaService {
           eventTypes: toJson(cleanedEventTypes),
           relationTypes: toJson(cleanedRelationTypes),
         }
-      })
+      }, tx)
     })
 
     return {
@@ -1024,12 +931,9 @@ export class PersonaService {
     let worldInterpretations = 0
     let annotations = 0
     await prisma.$transaction(async (tx) => {
-      const deleteResult = await tx.annotation.deleteMany({
-        where: { personaId, type: 'event', label: typeId }
-      })
-      annotations = deleteResult.count
+      annotations = (await this.repository.deleteAnnotations({ personaId, type: 'event', label: typeId }, tx)).count
 
-      await this.updateOntologyOptimisticTx(tx, personaId, (current) => {
+      await this.repository.updateOntologyOptimistic(personaId, (current) => {
         const currentEntityTypes = asTypesWithGloss(current.entityTypes)
         const currentRoleTypes = asTypesWithGloss(current.roleTypes)
         const currentEventTypes = asTypesWithGloss(current.eventTypes)
@@ -1048,17 +952,15 @@ export class PersonaService {
           eventTypes: toJson(updateGlossesInTypes(updatedEventTypes, typeId, personaId, 'event', typeName)),
           relationTypes: toJson(updateGlossesInTypes(currentRelationTypes, typeId, personaId, 'event', typeName)),
         }
-      })
+      }, tx)
 
-      const worldState = await tx.worldState.findFirst({
-        where: { userId: persona.userId, projectId: null },
-      })
+      const worldState = await this.repository.findPersonalWorldState(persona.userId, tx)
       if (worldState) {
-        await this.updatePersonalWorldStateOptimisticTx(tx, persona.userId, (current) => {
-          const events = asEvents(current.events)
-          worldInterpretations = countEventInterpretations(events, typeId, personaId)
-          return { events: toJson(removeEventInterpretationsFromEvents(events, typeId, personaId)) }
-        })
+        const events = asEvents(worldState.events)
+        worldInterpretations = countEventInterpretations(events, typeId, personaId)
+        await this.repository.updateWorldState(worldState.userId, {
+          events: toJson(removeEventInterpretationsFromEvents(events, typeId, personaId)),
+        }, tx)
       }
     })
 

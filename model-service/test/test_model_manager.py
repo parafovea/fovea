@@ -5,6 +5,10 @@ This module contains tests for model loading, unloading, memory management,
 and configuration validation.
 """
 
+import pytest
+
+pytest.importorskip("psutil")  # requires the ML backend; skipped in the torch-free venv
+
 import asyncio
 import tempfile
 from pathlib import Path

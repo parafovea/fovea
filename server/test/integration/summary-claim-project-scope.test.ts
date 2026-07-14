@@ -3,6 +3,7 @@ import { buildApp } from '../../src/app.js'
 import { FastifyInstance } from 'fastify'
 import { PrismaClient } from '@prisma/client'
 import { hashPassword } from '../../src/lib/password.js'
+import { readSummaryClaims } from '../../src/services/layers-bridge/claim-bridge.js'
 
 /**
  * Reproduces the project-scope collaboration defect: a VideoSummary (and the
@@ -63,12 +64,15 @@ describe('Summary/Claim project scope for collaborators', () => {
 
   beforeEach(async () => {
     await prisma.loginAttempt.deleteMany()
-    await prisma.claimRelation.deleteMany()
-    await prisma.claim.deleteMany()
-    await prisma.annotation.deleteMany()
+    await prisma.graphEdge.deleteMany()
+    await prisma.layersAnnotation.deleteMany()
+    await prisma.annotationLayer.deleteMany()
+    await prisma.expression.deleteMany()
+    await prisma.media.deleteMany()
+    await prisma.graphNode.deleteMany()
+    await prisma.typeDef.deleteMany()
+    await prisma.layersOntology.deleteMany()
     await prisma.videoSummary.deleteMany()
-    await prisma.ontology.deleteMany()
-    await prisma.worldState.deleteMany()
     await prisma.persona.deleteMany()
     await prisma.video.deleteMany()
     await prisma.session.deleteMany()
@@ -152,8 +156,8 @@ describe('Summary/Claim project scope for collaborators', () => {
     })
     expect(claimRes.statusCode).toBe(201)
 
-    const claim = await prisma.claim.findFirst({ where: { summaryId } })
-    expect(claim?.projectId).toBe(PROJECT_ID)
+    const { claims } = await readSummaryClaims(prisma, summaryId)
+    expect(claims[0]?.projectId).toBe(PROJECT_ID)
   })
 
   it('auto-creates a project-scoped, owned summary when a collaborator adds the first claim', async () => {

@@ -36,6 +36,11 @@ import {
   ExistingDataWithRelations
 } from './import/conflict-resolver.js'
 import { EntityImporter, ImportedIds } from './import/entity-importers.js'
+import { readAllAnnotationRefs } from './layers-bridge/annotation-bridge.js'
+import { readAllClaimRefs, readAllClaimRelationRefs } from './layers-bridge/claim-bridge.js'
+import { readAllOntologyPersonaIds } from './layers-bridge/ontology-bridge.js'
+import { readAllWorldObjectIds, readWorldAggregate, writeWorldAggregate } from './layers-bridge/world-bridge.js'
+import { personalWorldStateId, projectWorldStateId } from './world-layers-mapper.js'
 
 /**
  * Handles parsing, validation, and execution of imports.
@@ -148,23 +153,32 @@ export class ImportHandler {
    * @returns existing data
    */
   async loadExistingData(): Promise<ExistingDataWithRelations> {
-    const [personas, videos, allWorldStates, userWorldState, annotations, summaries, claims, claimRelations, ontologies] = await Promise.all([
+    // Personas, videos, and summaries remain their own models; annotations,
+    // claims, claim relations, ontologies, and world objects are read from the
+    // layers store via the bridge, so conflict detection sees an id regardless
+    // of which store holds it. The importer's own world is read with the same
+    // (userId, projectId) scope importLines writes to, so ownership-based
+    // conflict detection reads the row that will actually be mutated.
+    const [
+      personas,
+      videos,
+      summaries,
+      annotationRefs,
+      claimRefs,
+      claimRelationRefs,
+      ontologyPersonaIds,
+      allWorldIds,
+      ownWorld,
+    ] = await Promise.all([
       this.prisma.persona.findMany({ select: { id: true, userId: true } }),
       this.prisma.video.findMany({ select: { id: true } }),
-      this.prisma.worldState.findMany(),
-      // Scope the read to the same (userId, projectId) row the importer WRITES
-      // in importLines, so ownership-based conflict detection reads the row
-      // that will actually be mutated rather than an unrelated personal one.
-      // orderBy gives a deterministic pick if duplicates ever exist.
-      this.prisma.worldState.findFirst({
-        where: { userId: this.userId, projectId: this.projectId },
-        orderBy: { createdAt: 'asc' }
-      }),
-      this.prisma.annotation.findMany({ select: { id: true, personaId: true } }),
       this.prisma.videoSummary.findMany({ select: { id: true, personaId: true } }),
-      this.prisma.claim.findMany({ select: { id: true, summaryId: true } }),
-      this.prisma.claimRelation.findMany({ select: { id: true, sourceClaimId: true } }),
-      this.prisma.ontology.findMany({ select: { personaId: true } })
+      readAllAnnotationRefs(this.prisma),
+      readAllClaimRefs(this.prisma),
+      readAllClaimRelationRefs(this.prisma),
+      readAllOntologyPersonaIds(this.prisma),
+      readAllWorldObjectIds(this.prisma),
+      readWorldAggregate(this.prisma, { userId: this.userId, projectId: this.projectId }),
     ])
 
     // Build ownership sets
@@ -175,54 +189,50 @@ export class ImportHandler {
       summaries.filter(s => ownedPersonaIds.has(s.personaId)).map(s => s.id)
     )
     const ownedClaimIds = new Set(
-      claims.filter(c => ownedSummaryIds.has(c.summaryId)).map(c => c.id)
+      claimRefs.filter(c => ownedSummaryIds.has(c.summaryId)).map(c => c.id)
     )
     const ownedClaimRelationIds = new Set(
-      claimRelations.filter(r => ownedClaimIds.has(r.sourceClaimId)).map(r => r.id)
+      claimRelationRefs.filter(r => ownedClaimIds.has(r.sourceClaimId)).map(r => r.id)
     )
     const ownedAnnotationIds = new Set(
-      annotations
+      annotationRefs
         .filter(a => a.personaId ? ownedPersonaIds.has(a.personaId) : false)
         .map(a => a.id)
     )
 
-    // Extract owned world state object IDs
+    // Extract owned world object IDs from the caller's reconstructed world
     const ownedEntityIds = new Set<string>()
     const ownedEventIds = new Set<string>()
     const ownedTimeIds = new Set<string>()
     const ownedCollectionIds = new Set<string>()
-    if (userWorldState) {
-      for (const entity of (Array.isArray(userWorldState.entities) ? userWorldState.entities : [])) {
-        if (entity && typeof entity === 'object' && 'id' in entity) ownedEntityIds.add(entity.id as string)
-      }
-      for (const event of (Array.isArray(userWorldState.events) ? userWorldState.events : [])) {
-        if (event && typeof event === 'object' && 'id' in event) ownedEventIds.add(event.id as string)
-      }
-      for (const time of (Array.isArray(userWorldState.times) ? userWorldState.times : [])) {
-        if (time && typeof time === 'object' && 'id' in time) ownedTimeIds.add(time.id as string)
-      }
-      for (const arr of [userWorldState.entityCollections, userWorldState.eventCollections, userWorldState.timeCollections]) {
-        if (Array.isArray(arr)) {
-          for (const col of arr) {
-            if (col && typeof col === 'object' && 'id' in col) ownedCollectionIds.add(col.id as string)
-          }
-        }
+    const addOwnedId = (bucket: Set<string>, object: unknown): void => {
+      if (object && typeof object === 'object' && 'id' in object) {
+        const id = (object as { id: unknown }).id
+        if (typeof id === 'string') bucket.add(id)
       }
     }
+    for (const object of ownWorld.aggregate.entities) addOwnedId(ownedEntityIds, object)
+    for (const object of ownWorld.aggregate.events) addOwnedId(ownedEventIds, object)
+    for (const object of ownWorld.aggregate.times) addOwnedId(ownedTimeIds, object)
+    for (const object of ownWorld.aggregate.entityCollections) addOwnedId(ownedCollectionIds, object)
+    for (const object of ownWorld.aggregate.eventCollections) addOwnedId(ownedCollectionIds, object)
+    for (const object of ownWorld.aggregate.timeCollections) addOwnedId(ownedCollectionIds, object)
 
     const existingData: ExistingDataWithRelations = {
       personaIds: new Set(personas.map(p => p.id)),
-      entityIds: new Set<string>(),
-      eventIds: new Set<string>(),
-      timeIds: new Set<string>(),
-      collectionIds: new Set<string>(),
-      relationIds: new Set<string>(),
-      annotationIds: new Set(annotations.map(a => a.id)),
+      entityIds: allWorldIds.entityIds,
+      eventIds: allWorldIds.eventIds,
+      timeIds: allWorldIds.timeIds,
+      collectionIds: allWorldIds.collectionIds,
+      // World relations key their own id space; the conflict resolver tests an
+      // imported relation id against this set, not collectionIds.
+      relationIds: allWorldIds.relationIds,
+      annotationIds: new Set(annotationRefs.map(a => a.id)),
       videoIds: new Set(videos.map(v => v.id)),
       summaryIds: new Set(summaries.map(s => s.id)),
-      claimIds: new Set(claims.map(c => c.id)),
-      claimRelationIds: new Set(claimRelations.map(r => r.id)),
-      ontologyPersonaIds: new Set(ontologies.map(o => o.personaId)),
+      claimIds: new Set(claimRefs.map(c => c.id)),
+      claimRelationIds: new Set(claimRelationRefs.map(r => r.id)),
+      ontologyPersonaIds,
       ownedPersonaIds,
       ownedAnnotationIds,
       ownedSummaryIds,
@@ -232,48 +242,14 @@ export class ImportHandler {
       ownedEventIds,
       ownedTimeIds,
       ownedCollectionIds,
-      ownedWorldStateId: userWorldState?.id ?? null,
-    }
-
-    // Extract IDs from ALL world states for global conflict detection
-    for (const worldState of allWorldStates) {
-      if (Array.isArray(worldState.entities)) {
-        for (const entity of worldState.entities) {
-          if (entity && typeof entity === 'object' && 'id' in entity) {
-            existingData.entityIds.add(entity.id as string)
-          }
-        }
-      }
-      if (Array.isArray(worldState.events)) {
-        for (const event of worldState.events) {
-          if (event && typeof event === 'object' && 'id' in event) {
-            existingData.eventIds.add(event.id as string)
-          }
-        }
-      }
-      if (Array.isArray(worldState.times)) {
-        for (const time of worldState.times) {
-          if (time && typeof time === 'object' && 'id' in time) {
-            existingData.timeIds.add(time.id as string)
-          }
-        }
-      }
-      for (const collectionArray of [worldState.entityCollections, worldState.eventCollections, worldState.timeCollections]) {
-        if (Array.isArray(collectionArray)) {
-          for (const collection of collectionArray) {
-            if (collection && typeof collection === 'object' && 'id' in collection) {
-              existingData.collectionIds.add(collection.id as string)
-            }
-          }
-        }
-      }
-      if (Array.isArray(worldState.relations)) {
-        for (const relation of worldState.relations) {
-          if (relation && typeof relation === 'object' && 'id' in relation) {
-            existingData.relationIds?.add(relation.id as string)
-          }
-        }
-      }
+      // The synthetic world-state id for the scope importLines writes to; the
+      // layers store keys world objects by (userId, projectId) rather than a
+      // single row, so the id derives from that scope.
+      ownedWorldStateId: ownWorld.exists
+        ? (this.projectId
+            ? projectWorldStateId(this.userId, this.projectId)
+            : personalWorldStateId(this.userId))
+        : null,
     }
 
     return existingData
@@ -447,10 +423,14 @@ export class ImportHandler {
       await this.importer.importOntology(line, resolutionMap, result, options, tx, importedIds)
     }
 
-    // 3. Import world state objects
-    // Get or create world state scoped to (importer, activeProject)
-    let worldState = await tx.worldState.findFirst({ where: { userId: this.userId, projectId: this.projectId } })
-    if (!worldState) {
+    // 3. Import world state objects. World objects live in the layers graph; the
+    // import merges each item into the reconstructed aggregate (legacy read-
+    // through when no layers rows exist yet), then materializes the merged
+    // aggregate into the layers store once.
+    const worldRead = await readWorldAggregate(tx, { userId: this.userId, projectId: this.projectId })
+    const worldAggregate = worldRead.aggregate
+    let worldWritable = true
+    if (!worldRead.exists) {
       if (!this.importer.canCreate('WorldState', { userId: this.userId, projectId: this.projectId })) {
         result.errors.push({
           line: 0,
@@ -458,56 +438,36 @@ export class ImportHandler {
           message: 'Cannot create WorldState in this scope'
         })
         if (options.transaction.atomic) throw new ValidationError('Cannot create WorldState in this scope')
-      } else {
-        worldState = await tx.worldState.create({
-          data: {
-            userId: this.userId,
-            projectId: this.projectId,
-            entities: [],
-            events: [],
-            times: [],
-            entityCollections: [],
-            eventCollections: [],
-            timeCollections: [],
-            relations: []
-          }
-        })
+        worldWritable = false
       }
     }
-    // When worldState is still null (denied create), skip world-object loops
-    // but continue with summaries/claims/annotations below.
-    if (worldState) {
-    // Import entities
-    for (const line of entityLines) {
-      await this.importer.importWorldStateItem(line, 'entity', worldState.id, resolutionMap, result, options, tx)
-    }
+    // When world creation is denied, skip world-object merges but continue with
+    // summaries/claims/annotations below.
+    if (worldWritable) {
+      for (const line of entityLines) {
+        this.importer.mergeWorldStateItem(line, 'entity', worldAggregate, resolutionMap, result)
+      }
+      for (const line of eventLines) {
+        this.importer.mergeWorldStateItem(line, 'event', worldAggregate, resolutionMap, result)
+      }
+      for (const line of timeLines) {
+        this.importer.mergeWorldStateItem(line, 'time', worldAggregate, resolutionMap, result)
+      }
+      for (const line of entityCollectionLines) {
+        this.importer.mergeWorldStateItem(line, 'entityCollection', worldAggregate, resolutionMap, result)
+      }
+      for (const line of eventCollectionLines) {
+        this.importer.mergeWorldStateItem(line, 'eventCollection', worldAggregate, resolutionMap, result)
+      }
+      for (const line of timeCollectionLines) {
+        this.importer.mergeWorldStateItem(line, 'timeCollection', worldAggregate, resolutionMap, result)
+      }
+      for (const line of relationLines) {
+        this.importer.mergeWorldStateItem(line, 'relation', worldAggregate, resolutionMap, result)
+      }
 
-    // Import events
-    for (const line of eventLines) {
-      await this.importer.importWorldStateItem(line, 'event', worldState.id, resolutionMap, result, options, tx)
+      await writeWorldAggregate(tx, { userId: this.userId, projectId: this.projectId }, worldAggregate)
     }
-
-    // Import times
-    for (const line of timeLines) {
-      await this.importer.importWorldStateItem(line, 'time', worldState.id, resolutionMap, result, options, tx)
-    }
-
-    // Import collections
-    for (const line of entityCollectionLines) {
-      await this.importer.importWorldStateItem(line, 'entityCollection', worldState.id, resolutionMap, result, options, tx)
-    }
-    for (const line of eventCollectionLines) {
-      await this.importer.importWorldStateItem(line, 'eventCollection', worldState.id, resolutionMap, result, options, tx)
-    }
-    for (const line of timeCollectionLines) {
-      await this.importer.importWorldStateItem(line, 'timeCollection', worldState.id, resolutionMap, result, options, tx)
-    }
-
-    // Import relations
-    for (const line of relationLines) {
-      await this.importer.importWorldStateItem(line, 'relation', worldState.id, resolutionMap, result, options, tx)
-    }
-    } // end if (worldState)
 
     // 4. Import summaries (depend on videos and personas)
     for (const line of summaryLines) {

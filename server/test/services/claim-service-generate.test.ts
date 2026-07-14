@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import type { PrismaClient } from '@prisma/client'
 
 // Mock the queue module before importing the service. This both lets us assert
 // the enqueued job payload and avoids the real BullMQ/Redis connections the
@@ -11,7 +12,8 @@ vi.mock('../../src/queues/setup.js', () => ({
 }))
 
 import { ClaimService } from '../../src/services/claim-service.js'
-import { ClaimRepository } from '../../src/repositories/ClaimRepository.js'
+import { GraphRepository } from '../../src/repositories/GraphRepository.js'
+import { AnnotationLayerRepository } from '../../src/repositories/AnnotationLayerRepository.js'
 import { defineAbilitiesFor, type UserRoles } from '../../src/lib/abilities.js'
 
 /**
@@ -29,11 +31,23 @@ describe('ClaimService.generateClaims threads the requesting user into the job',
   })
 
   it('enqueues the extraction job with createdBy set to the caller', async () => {
-    const repository = {
-      findVideoSummaryById: vi.fn().mockResolvedValue({ id: 'summary-1', projectId: null, createdBy: 'user-1' }),
-    } as unknown as ClaimRepository
+    // The layers ClaimService reads the summary through prisma.videoSummary; stub
+    // just that lookup. The graph/annotation repositories are unused by
+    // generateClaims, so minimal stand-ins suffice.
+    const prisma = {
+      videoSummary: {
+        findUnique: vi.fn().mockResolvedValue({ id: 'summary-1', projectId: null, createdBy: 'user-1' }),
+      },
+    } as unknown as PrismaClient
     const ability = defineAbilitiesFor('user-1', adminRoles, [])
-    const service = new ClaimService(repository, ability, 'user-1', 'system_admin')
+    const service = new ClaimService(
+      {} as GraphRepository,
+      {} as AnnotationLayerRepository,
+      prisma,
+      ability,
+      'user-1',
+      'system_admin',
+    )
 
     await service.generateClaims('summary-1', {
       inputSources: {

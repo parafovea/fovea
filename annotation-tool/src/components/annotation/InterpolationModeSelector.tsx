@@ -18,6 +18,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Label } from '@/components/ui/label'
 import { Slider } from '@/components/ui/slider'
 import { Annotation, InterpolationType, INTERPOLATION_PRESETS, BezierControlPoint } from '@models/types'
+import { useTourAnchor } from '@/tours/engine/anchorRegistry'
 
 /**
  * Control points for bezier interpolation, organized by property.
@@ -56,6 +57,8 @@ export const InterpolationModeSelector: React.FC<InterpolationModeSelectorProps>
   onClose,
   onApply,
 }) => {
+  const interpolationSelectorAnchor = useTourAnchor('interpolation-mode-selector')
+
   // Find segment containing current frame
   const segment = useMemo(() => {
     return annotation?.boundingBoxSequence?.interpolationSegments.find(
@@ -114,7 +117,7 @@ export const InterpolationModeSelector: React.FC<InterpolationModeSelectorProps>
   if (!segment) {
     return (
       <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) onClose() }}>
-        <DialogContent data-tour-id="interpolation-mode-selector">
+        <DialogContent ref={interpolationSelectorAnchor}>
           <DialogHeader>
             <DialogTitle>Interpolation Mode</DialogTitle>
           </DialogHeader>

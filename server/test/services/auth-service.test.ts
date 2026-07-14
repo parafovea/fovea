@@ -23,9 +23,7 @@ describe('AuthService', () => {
     // Clean database
     await prisma.session.deleteMany()
     await prisma.apiKey.deleteMany()
-    await prisma.annotation.deleteMany()
     await prisma.videoSummary.deleteMany()
-    await prisma.ontology.deleteMany()
     await prisma.persona.deleteMany()
     await prisma.user.deleteMany()
 

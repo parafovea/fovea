@@ -9,32 +9,30 @@
 // - Each index adds ~1-5MB storage overhead but provides 50-90% query speedup on large datasets
 
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
   previewFeatures = ["postgresqlExtensions"]
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
   extensions = [pgvector(map: "vector")]
 }
 
 /// User represents an authenticated user of the system
 model User {
-  id           String    @id @default(uuid())
-  username     String    @unique
-  email        String?   @unique
-  passwordHash String?   // Nullable for single-user mode default user
+  id           String  @id @default(uuid())
+  username     String  @unique
+  email        String? @unique
+  passwordHash String? // Nullable for single-user mode default user
   displayName  String
-  isAdmin      Boolean   @default(false)
-  systemRole   String    @default("user") // "system_admin" or "user"
+  isAdmin      Boolean @default(false)
+  systemRole   String  @default("user") // "system_admin" or "user"
 
   // Relationships
-  personas     Persona[]
-  apiKeys      ApiKey[]
-  sessions     Session[]
-  worldStates  WorldState[]
-  annotations  Annotation[]
+  personas Persona[]
+  apiKeys  ApiKey[]
+  sessions Session[]
 
   // RBAC relationships
   groupMemberships   GroupMembership[]
@@ -45,11 +43,11 @@ model User {
   sharedWithMe       ResourceShare[]          @relation("SharedWithMe")
 
   // Per-user inference preferences (1:1, created on-demand)
-  preferences        UserPreferences?
-  systemConfigEdits  SystemConfig[]           @relation("SystemConfigUpdatedBy")
+  preferences       UserPreferences?
+  systemConfigEdits SystemConfig[]   @relation("SystemConfigUpdatedBy")
 
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@map("users")
 }
@@ -62,29 +60,29 @@ model User {
 /// into every row. The row is created lazily when a user first writes a
 /// preference and upserted on every subsequent edit.
 model UserPreferences {
-  id                     String   @id @default(uuid())
-  userId                 String   @unique
-  user                   User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id     String @id @default(uuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   /// JSON structure: InferencePreferences (see annotation-tool/src/store/preferences/useInferencePreferences.ts)
-  inferencePreferences   Json     @default("{}")
+  inferencePreferences Json @default("{}")
 
-  createdAt              DateTime @default(now())
-  updatedAt              DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@map("user_preferences")
 }
 
 /// Session stores user authentication sessions
 model Session {
-  id        String   @id @default(uuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  token     String   @unique
-  expiresAt DateTime
-  ipAddress String?
-  userAgent String?
+  token          String   @unique
+  expiresAt      DateTime
+  ipAddress      String?
+  userAgent      String?
   lastActivityAt DateTime @default(now())
 
   createdAt DateTime @default(now())
@@ -108,9 +106,9 @@ model LoginAttempt {
 
 /// ApiKey stores encrypted API keys for external services (user-level or admin-level)
 model ApiKey {
-  id           String    @id @default(uuid())
-  userId       String?   // NULL for admin-level keys
-  user         User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id     String  @id @default(uuid())
+  userId String? // NULL for admin-level keys
+  user   User?   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   /// Provider: anthropic, openai, google, cohere, mistral, aws, azure, roboflow, cloudsight, edenai
   provider     String
@@ -127,8 +125,8 @@ model ApiKey {
   /// Number of times this key has been used
   usageCount   Int       @default(0)
 
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([userId, provider])
   @@index([provider])
@@ -137,29 +135,39 @@ model ApiKey {
 
 /// Persona represents an analyst or user with their own ontology and interpretations
 model Persona {
-  id              String   @id @default(uuid())
-  userId          String
-  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  name            String
-  role            String
-  informationNeed String
-  details         String?
+  name              String
+  role              String
+  informationNeed   String
+  details           String?
   isSystemGenerated Boolean @default(false)
-  hidden          Boolean  @default(false)
+  hidden            Boolean @default(false)
 
-  projectId       String?
-  project         Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  /// Layers persona fields (mirror pub.layers.persona.persona).
+  /// domain scopes the annotator; kind distinguishes human/model/ensemble;
+  /// guidelines holds the annotation instructions in guidelinesFormat (e.g. markdown).
+  domain           String?
+  kind             String?
+  guidelines       String? @db.Text
+  guidelinesFormat String?
 
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  projectId String?
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
 
-  ontology        Ontology?
-  videoSummaries  VideoSummary[]
-  annotations     Annotation[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  videoSummaries VideoSummary[]
+
+  // Layers annotation store back-relations
+  annotationLayers AnnotationLayer[]
+  layersOntologies LayersOntology[]
 
   // Per-persona inference preferences (1:1, created on-demand)
-  preferences     PersonaPreferences?
+  preferences PersonaPreferences?
 
   @@index([projectId])
   @@map("personas")
@@ -172,15 +180,15 @@ model Persona {
 /// overrides (most specific wins). The `inferencePreferences` column stores a
 /// partial object; omitted fields fall through to the user level.
 model PersonaPreferences {
-  id                     String   @id @default(uuid())
-  personaId              String   @unique
-  persona                Persona  @relation(fields: [personaId], references: [id], onDelete: Cascade)
+  id        String  @id @default(uuid())
+  personaId String  @unique
+  persona   Persona @relation(fields: [personaId], references: [id], onDelete: Cascade)
 
   /// JSON structure: Partial<InferencePreferences>
-  inferencePreferences   Json     @default("{}")
+  inferencePreferences Json @default("{}")
 
-  createdAt              DateTime @default(now())
-  updatedAt              DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@map("persona_preferences")
 }
@@ -193,95 +201,30 @@ model PersonaPreferences {
 /// boundary so the `value` column always matches the shape advertised for
 /// its key.
 model SystemConfig {
-  key             String   @id
+  key             String  @id
   value           Json
-  version         Int      @default(1)
+  version         Int     @default(1)
   updatedByUserId String?
-  updatedBy       User?    @relation("SystemConfigUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+  updatedBy       User?   @relation("SystemConfigUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
 
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@map("system_config")
 }
 
-/// Ontology defines the types (entities, events, roles, relations) for a specific persona
-model Ontology {
-  id             String   @id @default(uuid())
-  personaId      String   @unique
-  persona        Persona  @relation(fields: [personaId], references: [id], onDelete: Cascade)
-
-  /// JSON structure: EntityType[]
-  entityTypes    Json     @default("[]")
-  /// JSON structure: EventType[]
-  eventTypes     Json     @default("[]")
-  /// JSON structure: RoleType[]
-  roleTypes      Json     @default("[]")
-  /// JSON structure: RelationType[]
-  relationTypes  Json     @default("[]")
-
-  /// Monotonic optimistic-concurrency token. Incremented on every guarded
-  /// write; the compare-and-swap guard matches on it (not on updatedAt, which
-  /// can fail to advance for two writes landing in the same millisecond).
-  version        Int      @default(0)
-
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-
-  @@map("ontologies")
-}
-
-/// WorldState stores the actual instances of entities, events, locations, times, and collections
-/// This is shared across all personas (personas assign types to these instances)
-/// Each user can have multiple world states (one per project + one personal)
-model WorldState {
-  id                String   @id @default(uuid())
-  userId            String
-  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  /// JSON structure: Entity[]
-  entities          Json     @default("[]")
-  /// JSON structure: Event[]
-  events            Json     @default("[]")
-  /// JSON structure: Time[]
-  times             Json     @default("[]")
-  /// JSON structure: EntityCollection[]
-  entityCollections Json     @default("[]")
-  /// JSON structure: EventCollection[]
-  eventCollections  Json     @default("[]")
-  /// JSON structure: TimeCollection[]
-  timeCollections   Json     @default("[]")
-  /// JSON structure: OntologyRelation[]
-  relations         Json     @default("[]")
-
-  /// Monotonic optimistic-concurrency token. Incremented on every guarded
-  /// write; the compare-and-swap guard matches on it (not on updatedAt, which
-  /// can fail to advance for two writes landing in the same millisecond).
-  version           Int      @default(0)
-
-  projectId         String?
-  project           Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
-
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-
-  @@unique([userId, projectId])
-  @@index([projectId])
-  @@map("world_state")
-}
-
 /// Video represents a video file with its metadata
 model Video {
-  id          String   @id @default(uuid())
-  filename    String   @unique
-  path        String
-  duration    Float?
-  frameRate   Float?
-  resolution  String?
+  id         String   @id @default(uuid())
+  filename   String   @unique
+  path       String
+  duration   Float?
+  frameRate  Float?
+  resolution String?
   /// Additional metadata stored as JSON
-  metadata    Json?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  metadata   Json?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
   /// Local thumbnail path (relative to STORAGE_PATH/thumbnails)
   localThumbnailPath String?
@@ -295,22 +238,25 @@ model Video {
   metadataSyncStatus String?
 
   summaries          VideoSummary[]
-  annotations        Annotation[]
   projectAssignments ProjectVideoAssignment[]
+
+  // Layers annotation store back-relations
+  mediaRecords Media[]
+  expressions  Expression[]
 
   @@map("videos")
 }
 
 /// VideoSummary stores AI-generated or manual summaries of videos for specific personas
 model VideoSummary {
-  id              String   @id @default(uuid())
-  videoId         String
-  video           Video    @relation(fields: [videoId], references: [id], onDelete: Cascade)
-  personaId       String
-  persona         Persona  @relation(fields: [personaId], references: [id], onDelete: Cascade)
+  id        String  @id @default(uuid())
+  videoId   String
+  video     Video   @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  personaId String
+  persona   Persona @relation(fields: [personaId], references: [id], onDelete: Cascade)
 
   /// JSON structure: GlossItem[] - array of {type, content, refType?, refPersonaId?, refClaimId?}
-  summary         Json     @default("[]")
+  summary         Json    @default("[]")
   visualAnalysis  String?
   audioTranscript String?
   /// JSON structure for key frame data
@@ -319,11 +265,11 @@ model VideoSummary {
 
   /// Audio metadata fields
   /// JSON structure: {segments: [{start, end, text, speaker, confidence, sentiment}], speakers, language}
-  transcriptJson  Json?
+  transcriptJson Json?
   /// ISO language code detected from audio (e.g., "en", "es")
-  audioLanguage   String?
+  audioLanguage  String?
   /// Number of distinct speakers detected
-  speakerCount    Int?
+  speakerCount   Int?
 
   /// Model metadata
   /// Name of audio transcription model used (e.g., "whisper-v3-turbo", "assemblyai-universal")
@@ -344,31 +290,31 @@ model VideoSummary {
   processedAtFusion DateTime?
 
   /// Vector embedding for semantic search (1536 dimensions for OpenAI embeddings)
-  embedding       Unsupported("vector(1536)")?
+  embedding Unsupported("vector(1536)")?
 
   /// Claims extraction metadata
   /// Denormalized claims structure for fast access (JSON)
   /// Structure: { version: string, claims: Claim[], metadata: {...} }
-  claimsJson      Json?
+  claimsJson        Json?
   /// Version of claim extraction algorithm used
-  claimsVersion   String?
+  claimsVersion     String?
   /// Timestamp when claims were last extracted
   claimsExtractedAt DateTime?
 
   /// Comment/notes field for annotator notes at video level
-  comment         String?  @db.Text
+  comment String? @db.Text
 
-  /// Relation to Claim model
-  claims          Claim[]
+  /// Layers expressions projected from this summary
+  expressions Expression[]
 
   /// User who created this summary (or service ID for automated summaries)
-  createdBy       String?
+  createdBy String?
 
-  projectId       String?
-  project         Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  projectId String?
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
 
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([videoId, personaId])
   @@index([videoId])
@@ -377,51 +323,6 @@ model VideoSummary {
   @@index([videoId, personaId])
   @@index([projectId])
   @@map("video_summaries")
-}
-
-/// Annotation represents a temporal-spatial annotation on a video
-/// Type annotations (persona-scoped ontology assignments) require personaId
-/// Object annotations (world object links) have null personaId as they are persona-agnostic
-model Annotation {
-  id              String   @id @default(uuid())
-  videoId         String
-  video           Video    @relation(fields: [videoId], references: [id], onDelete: Cascade)
-  personaId       String?
-  persona         Persona? @relation(fields: [personaId], references: [id], onDelete: Cascade)
-  userId          String?
-  user            User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
-
-  type            String
-  label           String
-  /// For object annotations, the kind of world object the `label` references:
-  /// 'entity' | 'event' | 'time' | 'location'. NULL for type annotations and
-  /// for legacy object annotations created before this column was added (in
-  /// which case the frontend treats them as entity-linked, matching the
-  /// previous behavior). Required to round-trip event/time/location-linked
-  /// annotations through export+import — without it the backend cannot
-  /// distinguish which `linked*Id` field the export should emit.
-  linkType        String?
-  /// JSON structure for frame-level data (bounding boxes, timestamps, etc.)
-  frames          Json
-  confidence      Float?
-  /// Source of annotation: manual, ai-assisted, automatic
-  source          String   @default("manual")
-
-  createdByUserId String?
-  projectId       String?
-  project         Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
-
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-
-  @@index([videoId])
-  @@index([personaId])
-  @@index([videoId, personaId])
-  @@index([userId])
-  @@index([createdAt])
-  @@index([projectId])
-  @@index([createdByUserId])
-  @@map("annotations")
 }
 
 /// ImportHistory tracks data imports from JSON Lines files
@@ -439,142 +340,20 @@ model ImportHistory {
   @@map("import_history")
 }
 
-/// Claim represents an atomic factual statement from a summary
-/// Supports hierarchical decomposition and claim sourcing
-model Claim {
-  id              String   @id @default(uuid())
-
-  // Association with summary
-  summaryId       String
-  summaryType     String   // "video" or "collection"
-
-  // Relation to VideoSummary (currently only video summaries supported)
-  videoSummary    VideoSummary  @relation(fields: [summaryId], references: [id], onDelete: Cascade)
-
-  // Claim content
-  text            String   @db.Text
-  /// JSON structure: GlossItem[] with #/@/^/$ references (types/objects/annotations/claims)
-  gloss           Json     @default("[]")
-
-  // Hierarchical structure (parent/child decomposition)
-  parentClaimId   String?
-  parentClaim     Claim?   @relation("ClaimHierarchy", fields: [parentClaimId], references: [id], onDelete: Cascade)
-  subclaims       Claim[]  @relation("ClaimHierarchy")
-
-  // Text span mapping - support discontiguous spans
-  /// JSON structure: Array of {sentenceIndex?: number, charStart: number, charEnd: number}
-  textSpans       Json?
-
-  // Video time spans (seconds) the claim is grounded in - supports discontiguous spans
-  /// JSON structure: Array of {start: number, end: number, source: "scrub" | "annotation", annotationIds?: string[]}
-  timeSpans       Json?
-
-  // Claim source/claimer (who makes this claim)
-  /// null = standalone claim for reference only (not asserted by anyone)
-  /// "author" = video creator explicitly asserts this claim
-  /// other = specified entity/type asserts this claim
-  claimerType     String?  // null, "entity", "entity_type", "author", "mixed"
-  /// JSON structure: GlossItem[] - mixed text and #/@/^/$ references for claimer
-  claimerGloss    Json?
-
-  // Relation between claimer and claim (how claimer relates to claim)
-  /// JSON structure: GlossItem[] - mixed text and references (e.g., "says", "#claims", "denied that")
-  claimRelation   Json?
-
-  // Context of the claiming event itself (when/where claim was made)
-  /// Reference to world state event object
-  claimEventId    String?
-  /// Reference to world state time object
-  claimTimeId     String?
-  /// Reference to world state location object
-  claimLocationId String?
-
-  // Metadata
-  confidence      Float?   // Model confidence in claim extraction (0.0-1.0)
-  modelUsed       String?  // Model that generated this claim (e.g., "llama-4-scout")
-  extractionStrategy String? // "sentence-based", "semantic-units", "hierarchical", "manual"
-
-  // Modality metadata - indicates what sources support the claim
-  /// JSON structure: Array of "speech" and/or "non-speech" - claim is based at least in part on audio
-  audio           Json?    // null or ["speech"], ["non-speech"], or ["speech", "non-speech"]
-  /// JSON structure: Array of "text" and/or "non-text" - claim is based at least in part on non-audio video information
-  video           Json?    // null or ["text"], ["non-text"], or ["text", "non-text"]
-  /// JSON structure: Array of "text" and/or "non-text" - claim is based on metadata (text = caption metadata, non-text = other metadata like location from .info.json)
-  metadata        Json?    // null or ["text"], ["non-text"], or ["text", "non-text"]
-
-  // Comment/notes field for annotator notes
-  comment         String?  @db.Text
-
-  // Audit fields
-  createdBy       String?  // User ID who created/approved this claim
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-
-  projectId       String?
-  project         Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
-
-  // Relations to other claims (this claim as source or target)
-  sourceClaimRelations ClaimRelation[] @relation("SourceClaim")
-  targetClaimRelations ClaimRelation[] @relation("TargetClaim")
-
-  @@index([summaryId, summaryType])
-  @@index([parentClaimId])
-  @@index([projectId])
-  @@map("claims")
-}
-
-/// ClaimRelation represents a typed relation between claims or claim spans
-/// Supports any relation type from the ontology (conflicts, supports, elaborates, etc.)
-/// Can relate entire claims or specific (discontiguous) spans within claims
-model ClaimRelation {
-  id              String   @id @default(uuid())
-
-  sourceClaimId   String
-  sourceClaim     Claim    @relation("SourceClaim", fields: [sourceClaimId], references: [id], onDelete: Cascade)
-
-  targetClaimId   String
-  targetClaim     Claim    @relation("TargetClaim", fields: [targetClaimId], references: [id], onDelete: Cascade)
-
-  /// Reference to ontology relation type (e.g., "conflicts", "supports", "denies")
-  relationTypeId  String
-
-  // Optional span specification (if null, relation applies to entire claim)
-  /// JSON structure: Array of {charStart: number, charEnd: number}
-  /// Specifies discontiguous spans within source claim
-  sourceSpans     Json?
-  /// JSON structure: Array of {charStart: number, charEnd: number}
-  /// Specifies discontiguous spans within target claim
-  targetSpans     Json?
-
-  // Optional metadata
-  confidence      Float?
-  notes           String?  @db.Text
-
-  createdBy       String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-
-  @@unique([sourceClaimId, targetClaimId, relationTypeId])
-  @@index([sourceClaimId])
-  @@index([targetClaimId])
-  @@index([relationTypeId])
-  @@map("claim_relations")
-}
-
 // =============================================================================
 // RBAC Models (Role-Based Access Control)
 // =============================================================================
 
 /// UserGroup represents a collection of users who share access to projects and resources
 model UserGroup {
-  id          String   @id @default(uuid())
+  id          String  @id @default(uuid())
   name        String
   description String?
-  slug        String   @unique
+  slug        String  @unique
 
-  createdBy   String
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdBy String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   members        GroupMembership[]
   projects       Project[]
@@ -585,13 +364,13 @@ model UserGroup {
 
 /// GroupMembership tracks user membership and role within a group
 model GroupMembership {
-  id       String   @id @default(uuid())
+  id       String    @id @default(uuid())
   userId   String
-  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   groupId  String
   group    UserGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  role     String   // "group_owner", "group_admin", "group_member"
-  joinedAt DateTime @default(now())
+  role     String // "group_owner", "group_admin", "group_member"
+  joinedAt DateTime  @default(now())
 
   @@unique([userId, groupId])
   @@index([userId])
@@ -601,28 +380,40 @@ model GroupMembership {
 
 /// Project organizes videos, annotations, and team members around a shared goal
 model Project {
-  id           String    @id @default(uuid())
+  id           String     @id @default(uuid())
   name         String
   description  String?
-  slug         String    @unique
+  slug         String     @unique
   ownerUserId  String?
-  ownerUser    User?     @relation("OwnedProjects", fields: [ownerUserId], references: [id], onDelete: SetNull)
+  ownerUser    User?      @relation("OwnedProjects", fields: [ownerUserId], references: [id], onDelete: SetNull)
   ownerGroupId String?
   ownerGroup   UserGroup? @relation(fields: [ownerGroupId], references: [id], onDelete: SetNull)
-  settings     Json      @default("{}")
-  isArchived   Boolean   @default(false)
+  settings     Json       @default("{}")
+  isArchived   Boolean    @default(false)
 
-  createdBy    String
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  createdBy String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   members          ProjectMembership[]
   videoAssignments ProjectVideoAssignment[]
   personas         Persona[]
-  worldStates      WorldState[]
-  annotations      Annotation[]
   videoSummaries   VideoSummary[]
-  claims           Claim[]
+
+  // Layers annotation store back-relations
+  media                   Media[]
+  expressions             Expression[]
+  segmentations           Segmentation[]
+  annotationLayers        AnnotationLayer[]
+  layersAnnotations       LayersAnnotation[]
+  textAnnotationRelations TextAnnotationRelation[]
+  graphNodes              GraphNode[]
+  graphEdges              GraphEdge[]
+  layersOntologies        LayersOntology[]
+  typeDefs                TypeDef[]
+  corpora                 Corpus[]
+  clusterSets             ClusterSet[]
+  alignments              Alignment[]
 
   @@map("projects")
 }
@@ -634,7 +425,7 @@ model ProjectMembership {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   projectId String
   project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  role      String   // "project_owner", "project_manager", "annotator", "reviewer", "viewer"
+  role      String // "project_owner", "project_manager", "annotator", "reviewer", "viewer"
   joinedAt  DateTime @default(now())
 
   @@unique([userId, projectId])
@@ -666,35 +457,35 @@ model ProjectVideoAssignment {
 
 /// VideoAssignmentRule defines automatic video-to-project/user/group assignment logic
 model VideoAssignmentRule {
-  id          String   @id @default(uuid())
+  id          String  @id @default(uuid())
   name        String
   description String?
-  conditions  Json     // [{field, operator, value}]
-  targetType  String   // "user", "project", "group"
+  conditions  Json // [{field, operator, value}]
+  targetType  String // "user", "project", "group"
   targetId    String
-  isActive    Boolean  @default(true)
+  isActive    Boolean @default(true)
 
-  createdBy   String
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdBy String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@map("video_assignment_rules")
 }
 
 /// ResourceShare tracks sharing of resources (annotations, summaries, claims, etc.) between users and groups
 model ResourceShare {
-  id               String   @id @default(uuid())
-  resourceType     String   // "annotation", "summary", "claim", "persona", "world_state"
-  resourceId       String
-  sharedByUserId   String
-  sharedByUser     User     @relation("SharedByMe", fields: [sharedByUserId], references: [id], onDelete: Cascade)
-  sharedWithUserId String?
-  sharedWithUser   User?    @relation("SharedWithMe", fields: [sharedWithUserId], references: [id], onDelete: Cascade)
+  id                String     @id @default(uuid())
+  resourceType      String // "annotation", "summary", "claim", "persona", "world_state"
+  resourceId        String
+  sharedByUserId    String
+  sharedByUser      User       @relation("SharedByMe", fields: [sharedByUserId], references: [id], onDelete: Cascade)
+  sharedWithUserId  String?
+  sharedWithUser    User?      @relation("SharedWithMe", fields: [sharedWithUserId], references: [id], onDelete: Cascade)
   sharedWithGroupId String?
-  sharedWithGroup  UserGroup? @relation(fields: [sharedWithGroupId], references: [id], onDelete: Cascade)
-  permissionLevel  String   @default("read_only") // "read_only" or "forkable"
-  expiresAt        DateTime?
-  createdAt        DateTime @default(now())
+  sharedWithGroup   UserGroup? @relation(fields: [sharedWithGroupId], references: [id], onDelete: Cascade)
+  permissionLevel   String     @default("read_only") // "read_only" or "forkable"
+  expiresAt         DateTime?
+  createdAt         DateTime   @default(now())
 
   @@index([sharedByUserId])
   @@index([sharedWithUserId])
@@ -705,16 +496,601 @@ model ResourceShare {
 
 /// RolePermission defines what actions each role can perform on each resource type
 model RolePermission {
-  id           String   @id @default(uuid())
-  scope        String   // "system", "group", "project"
-  role         String   // e.g., "system_admin", "group_owner", "annotator"
-  resourceType String   // "video", "persona", "annotation", "summary", "claim", "world_state", "project", "group"
-  action       String   // "create", "read", "update", "delete", "share", "export", "assign", "manage_members", "fork", "review"
-  ownOnly      Boolean  @default(false)
+  id           String  @id @default(uuid())
+  scope        String // "system", "group", "project"
+  role         String // e.g., "system_admin", "group_owner", "annotator"
+  resourceType String // "video", "persona", "annotation", "summary", "claim", "world_state", "project", "group"
+  action       String // "create", "read", "update", "delete", "share", "export", "assign", "manage_members", "fork", "review"
+  ownOnly      Boolean @default(false)
 
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([scope, role, resourceType, action])
   @@map("role_permissions")
+}
+
+// =============================================================================
+// Layers-Shaped Unified Annotation Store
+// =============================================================================
+// Relational mirror of the pub.layers.* schema. These rows are the source of
+// truth across video, audio, and text; layers records are a projection produced
+// by the codec at export. Conventions across every model in this section:
+//   - Fovea String uuid PK == layers Uuid.value; cross-record refs are internal
+//     FK columns (String), never at-uris (the codec emits at-uris on export).
+//   - Integer-scale layers facts: confidence is 0-1000, times are ms, frameRate
+//     is x100, and TemporalSpan uses `ending` (not `end`).
+//   - JSON columns hold layers value-objects, typed as @fovea/layers-schema at
+//     the repository layer (not modeled here).
+//   - projectId + createdByUserId scope rows for CASL accessibleBy; layersUri is
+//     a nullable placeholder for a future PDS publish (unused now).
+
+/// Media mirrors pub.layers.media.media: a piece of source material (or a clip
+/// of one) that expressions and annotations attach to.
+model Media {
+  id String @id @default(uuid())
+
+  /// audio | video | image | document
+  kind        String
+  title       String?
+  description String? @db.Text
+  externalUri String?
+  blobPath    String?
+  mimeType    String?
+  /// Duration in milliseconds.
+  durationMs  Int?
+
+  /// Self-relation: a clip references the media it was cut from.
+  parentMediaId String?
+  parentMedia   Media?  @relation("MediaClip", fields: [parentMediaId], references: [id], onDelete: SetNull)
+  clips         Media[] @relation("MediaClip")
+  /// Clip start offset within the parent media, in milliseconds.
+  startOffsetMs Int?
+
+  /// Layers value-objects (audio/video/document descriptors, knowledge refs).
+  audio         Json?
+  video         Json?
+  document      Json?
+  knowledgeRefs Json?
+  metadata      Json?
+  features      Json?
+  languages     String[]
+
+  /// The Fovea Video this media was derived from, when applicable.
+  /// Named `sourceVideo` because `video` is the layers video descriptor above.
+  videoId     String?
+  sourceVideo Video?  @relation(fields: [videoId], references: [id], onDelete: SetNull)
+
+  expressions Expression[]
+
+  projectId       String?
+  project         Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  createdByUserId String?
+  layersUri       String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([videoId])
+  @@index([parentMediaId])
+  @@index([projectId])
+  @@index([createdByUserId])
+  @@map("media")
+}
+
+/// Expression mirrors expression.expression: a unit of text or signal (document,
+/// transcript, video, summary) that carries tokenizations and annotation layers.
+model Expression {
+  id String @id @default(uuid())
+
+  /// The layers Expression.id / corpus id this row projects to.
+  layersId     String
+  kind         String
+  text         String? @db.Text
+  /// sha256(text) captured at ingest for drift detection.
+  sourceDigest String?
+
+  /// Self-relation: sub-expression tree (e.g. document -> sentence).
+  parentExpressionId String?
+  parentExpression   Expression?  @relation("ExprTree", fields: [parentExpressionId], references: [id], onDelete: Cascade)
+  children           Expression[] @relation("ExprTree")
+
+  anchor     Json?
+  /// document | video-metadata-text | asr-transcript | video | summary
+  sourceKind String
+
+  mediaId        String?
+  media          Media?        @relation(fields: [mediaId], references: [id], onDelete: SetNull)
+  videoId        String?
+  video          Video?        @relation(fields: [videoId], references: [id], onDelete: SetNull)
+  videoSummaryId String?
+  videoSummary   VideoSummary? @relation(fields: [videoSummaryId], references: [id], onDelete: SetNull)
+  corpusId       String?
+  corpus         Corpus?       @relation(fields: [corpusId], references: [id], onDelete: SetNull)
+
+  metadata  Json?
+  features  Json?
+  languages String[]
+  sourceUrl String?
+
+  tokenizations    Tokenization[]
+  annotationLayers AnnotationLayer[]
+  segmentations    Segmentation[]
+  memberships      CorpusMembership[]
+  clusterSets      ClusterSet[]
+  alignments       Alignment[]
+
+  projectId       String?
+  project         Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  createdByUserId String?
+  layersUri       String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([parentExpressionId])
+  @@index([videoId])
+  @@index([videoSummaryId])
+  @@index([mediaId])
+  @@index([corpusId])
+  @@index([sourceKind])
+  @@index([projectId])
+  @@index([createdByUserId])
+  @@map("expressions")
+}
+
+/// Segmentation groups tokenizations that share a segmentation of one expression.
+model Segmentation {
+  id           String     @id @default(uuid())
+  expressionId String
+  expression   Expression @relation(fields: [expressionId], references: [id], onDelete: Cascade)
+
+  metadata Json?
+  features Json?
+
+  tokenizations Tokenization[]
+
+  projectId       String?
+  project         Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  createdByUserId String?
+  layersUri       String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([expressionId])
+  @@map("segmentations")
+}
+
+/// Tokenization holds one token stream over a segmentation. `id` == the layers
+/// tokenization Uuid.value; annotation token offsets index into these tokens.
+model Tokenization {
+  id String @id @default(uuid())
+
+  segmentationId String
+  segmentation   Segmentation @relation(fields: [segmentationId], references: [id], onDelete: Cascade)
+  /// The expression whose text the token offsets index into.
+  expressionId   String?
+  expression     Expression?  @relation(fields: [expressionId], references: [id], onDelete: Cascade)
+
+  kind        String
+  isCanonical Boolean @default(true)
+  /// JSON: Token[] as [{ tokenIndex, text, textSpan: { byteStart, byteEnd,
+  /// charStart?, charEnd? }, temporalSpan?: { start, ending } }].
+  tokens      Json
+  metadata    Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([segmentationId])
+  @@index([expressionId])
+  @@map("tokenizations")
+}
+
+/// AnnotationLayer mirrors annotation.annotationLayer: a homogeneous layer of
+/// annotations over one expression. A set personaId marks an ontology-type layer;
+/// a null personaId marks a world-object layer (mirrors Annotation.personaId).
+model AnnotationLayer {
+  id String @id @default(uuid())
+
+  expressionId String
+  expression   Expression @relation(fields: [expressionId], references: [id], onDelete: Cascade)
+
+  /// span | relation | token-tag | tree | graph | tier | document-tag
+  kind           String
+  subkind        String?
+  formalism      String?
+  sourceMethod   String  @default("manual-native")
+  labelSet       String?
+  tokenizationId String?
+
+  ontologyId String?
+  ontology   LayersOntology? @relation(fields: [ontologyId], references: [id], onDelete: SetNull)
+
+  /// Self-relation: layer derived from a parent layer.
+  parentLayerId String?
+  parentLayer   AnnotationLayer?  @relation("LayerTree", fields: [parentLayerId], references: [id], onDelete: SetNull)
+  childLayers   AnnotationLayer[] @relation("LayerTree")
+
+  personaId String?
+  persona   Persona? @relation(fields: [personaId], references: [id], onDelete: Cascade)
+
+  metadata  Json?
+  features  Json?
+  languages String[]
+
+  annotations LayersAnnotation[]
+  relations   TextAnnotationRelation[]
+
+  projectId       String?
+  project         Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  createdByUserId String?
+  layersUri       String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([expressionId, kind])
+  @@index([personaId])
+  @@index([ontologyId])
+  @@index([parentLayerId])
+  @@index([projectId])
+  @@index([createdByUserId])
+  @@map("annotation_layers")
+}
+
+/// LayersAnnotation mirrors annotation.defs#annotation: one span/annotation row.
+/// `id` == the layers Annotation Uuid.value. startMs/endMs denormalize the
+/// anchor's temporal extent for timeline filtering.
+model LayersAnnotation {
+  id String @id @default(uuid())
+
+  layerId        String
+  layer          AnnotationLayer @relation(fields: [layerId], references: [id], onDelete: Cascade)
+  tokenizationId String?
+
+  /// Polymorphic anchor: tokenRefSequence | temporalSpan | spatioTemporalAnchor
+  /// | textSpan | ...
+  anchor     Json
+  tokenIndex Int?
+  label      String?
+  value      String? @db.Text
+  text       String? @db.Text
+
+  /// Self-relation: nesting within a layer (e.g. constituency tree).
+  parentAnnotationId String?
+  parentAnnotation   LayersAnnotation?  @relation("AnnTree", fields: [parentAnnotationId], references: [id], onDelete: SetNull)
+  childAnnotations   LayersAnnotation[] @relation("AnnTree")
+  childIds           Json?
+
+  headIndex   Int?
+  targetIndex Int?
+  /// JSON: argumentRef[].
+  arguments   Json?
+  /// Confidence on the layers 0-1000 integer scale.
+  confidence  Int?
+
+  /// Soft FK to a TypeDef id when the label denotes an ontology type.
+  ontologyTypeRefId String?
+  /// World-object link: the graph node this annotation denotes.
+  denotesNodeId     String?
+  denotesNode       GraphNode? @relation(fields: [denotesNodeId], references: [id], onDelete: SetNull)
+
+  knowledgeRefs Json?
+  temporal      Json?
+  spatial       Json?
+  features      Json?
+
+  /// Denormalized from the anchor's temporalSpan/spatioTemporalAnchor (ms).
+  startMs Int?
+  endMs   Int?
+
+  sourceRelations TextAnnotationRelation[] @relation("RelSource")
+  targetRelations TextAnnotationRelation[] @relation("RelTarget")
+
+  projectId       String?
+  project         Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  createdByUserId String?
+  layersUri       String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([layerId])
+  @@index([tokenizationId])
+  @@index([startMs, endMs])
+  @@index([denotesNodeId])
+  @@index([ontologyTypeRefId])
+  @@index([projectId])
+  @@index([createdByUserId])
+  @@map("layers_annotations")
+}
+
+/// TextAnnotationRelation mirrors the bead relation layer: a labeled directed
+/// edge between two LayersAnnotations.
+model TextAnnotationRelation {
+  id String @id @default(uuid())
+
+  layerId String
+  layer   AnnotationLayer @relation(fields: [layerId], references: [id], onDelete: Cascade)
+
+  sourceAnnotationId String
+  sourceAnnotation   LayersAnnotation @relation("RelSource", fields: [sourceAnnotationId], references: [id], onDelete: Cascade)
+  targetAnnotationId String
+  targetAnnotation   LayersAnnotation @relation("RelTarget", fields: [targetAnnotationId], references: [id], onDelete: Cascade)
+
+  /// JSON: { personaId, relationTypeId }.
+  relationTypeRef Json
+  label           String?
+  features        Json?
+
+  projectId       String?
+  project         Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  createdByUserId String?
+  layersUri       String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([layerId])
+  @@index([sourceAnnotationId])
+  @@index([targetAnnotationId])
+  @@map("text_annotation_relations")
+}
+
+/// GraphNode mirrors graph.graphNode: a world object (entity, situation, claim,
+/// etc.). `id` == the node Uuid.value (reuse the Fovea world-object id on backfill).
+model GraphNode {
+  id String @id @default(uuid())
+  /// Optimistic-concurrency counter: every guarded update compares-and-swaps
+  /// on it, so a concurrent writer cannot silently clobber a same-object edit.
+  lockVersion Int @default(0)
+
+  /// entity | situation | state | time | location | claim | concept | ...
+  nodeType      String
+  label         String?
+  properties    Json?
+  knowledgeRefs Json?
+  metadata      Json?
+
+  denotedByAnnotations LayersAnnotation[]
+
+  projectId       String?
+  project         Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  createdByUserId String?
+  layersUri       String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([nodeType])
+  @@index([projectId])
+  @@index([createdByUserId])
+  @@map("graph_nodes")
+}
+
+/// GraphEdge mirrors graph.graphEdge: a typed edge between world objects.
+/// source/target hold objectRef value-objects; sourceLocalId/targetLocalId
+/// denormalize the referenced node ids for indexed lookup.
+model GraphEdge {
+  id String @id @default(uuid())
+  /// Optimistic-concurrency counter: every guarded update compares-and-swaps
+  /// on it, so a concurrent writer cannot silently clobber a same-object edit.
+  lockVersion Int @default(0)
+
+  /// objectRef value-objects.
+  source        Json
+  target        Json
+  sourceLocalId String?
+  targetLocalId String?
+  edgeType      String
+  label         String?
+  ordinal       Int?
+  /// Confidence on the layers 0-1000 integer scale.
+  confidence    Int?
+  properties    Json?
+  metadata      Json?
+
+  projectId       String?
+  project         Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  createdByUserId String?
+  layersUri       String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([sourceLocalId])
+  @@index([targetLocalId])
+  @@index([edgeType])
+  @@index([projectId])
+  @@index([createdByUserId])
+  @@map("graph_edges")
+}
+
+/// LayersOntology mirrors ontology.ontology: a named type system.
+model LayersOntology {
+  id String @id @default(uuid())
+  /// Optimistic-concurrency counter: every guarded update compares-and-swaps
+  /// on it, so a concurrent writer cannot silently clobber a same-object edit.
+  lockVersion Int @default(0)
+
+  name        String
+  description String?
+  version     String?
+  domain      String?
+
+  /// Self-relation: ontology extends a parent ontology.
+  parentOntologyId String?
+  parentOntology   LayersOntology?  @relation("OntologyTree", fields: [parentOntologyId], references: [id], onDelete: SetNull)
+  childOntologies  LayersOntology[] @relation("OntologyTree")
+
+  personaId String?
+  persona   Persona? @relation(fields: [personaId], references: [id], onDelete: Cascade)
+
+  knowledgeRefs Json?
+
+  typeDefs         TypeDef[]
+  annotationLayers AnnotationLayer[]
+
+  projectId       String?
+  project         Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  createdByUserId String?
+  layersUri       String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([personaId])
+  @@index([projectId])
+  @@index([createdByUserId])
+  @@map("layers_ontologies")
+}
+
+/// TypeDef mirrors ontology.typeDef: one type in an ontology. `id` preserves the
+/// original Fovea type id on backfill.
+model TypeDef {
+  id String @id @default(uuid())
+
+  ontologyId String
+  ontology   LayersOntology @relation(fields: [ontologyId], references: [id], onDelete: Cascade)
+
+  name     String
+  /// entity-type | situation-type | role-type | relation-type | attribute-type
+  typeKind String
+  gloss    String? @db.Text
+
+  /// Self-relation: type extends a parent type.
+  parentTypeId String?
+  parentType   TypeDef?  @relation("TypeTree", fields: [parentTypeId], references: [id], onDelete: SetNull)
+  childTypes   TypeDef[] @relation("TypeTree")
+
+  allowedRoles  Json?
+  allowedValues Json?
+  knowledgeRefs Json?
+  features      Json?
+
+  projectId       String?
+  project         Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  createdByUserId String?
+  layersUri       String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([ontologyId])
+  @@index([typeKind])
+  @@index([projectId])
+  @@index([createdByUserId])
+  @@map("type_defs")
+}
+
+/// Corpus groups expressions into a named, versioned collection.
+model Corpus {
+  id String @id @default(uuid())
+
+  name         String
+  description  String?
+  version      String?
+  domain       String?
+  ontologyRefs Json?
+  languages    String[]
+  metadata     Json?
+
+  expressions Expression[]
+  memberships CorpusMembership[]
+
+  projectId       String?
+  project         Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  createdByUserId String?
+  layersUri       String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId])
+  @@index([createdByUserId])
+  @@map("corpora")
+}
+
+/// CorpusMembership is the join between a corpus and one of its expressions,
+/// carrying the split and ordinal for that membership.
+model CorpusMembership {
+  id String @id @default(uuid())
+
+  corpusId     String
+  corpus       Corpus     @relation(fields: [corpusId], references: [id], onDelete: Cascade)
+  expressionId String
+  expression   Expression @relation(fields: [expressionId], references: [id], onDelete: Cascade)
+
+  split    String?
+  ordinal  Int?
+  metadata Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([corpusId, expressionId])
+  @@index([corpusId])
+  @@index([expressionId])
+  @@map("corpus_memberships")
+}
+
+/// ClusterSet holds a clustering over annotations or expressions (e.g. coref).
+model ClusterSet {
+  id String @id @default(uuid())
+
+  expressionId String?
+  expression   Expression? @relation(fields: [expressionId], references: [id], onDelete: SetNull)
+  corpusId     String?
+  kind         String
+  layerId      String?
+  /// JSON: the clusters (members and cluster metadata).
+  clusters     Json
+  metadata     Json?
+
+  projectId       String?
+  project         Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  createdByUserId String?
+  layersUri       String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([expressionId])
+  @@index([corpusId])
+  @@index([projectId])
+  @@index([createdByUserId])
+  @@map("cluster_sets")
+}
+
+/// Alignment links two token/annotation streams (e.g. source/target translation).
+model Alignment {
+  id String @id @default(uuid())
+
+  expressionId String?
+  expression   Expression? @relation(fields: [expressionId], references: [id], onDelete: SetNull)
+  kind         String
+  subkind      String?
+  /// objectRef/streamRef value-objects for the two aligned sides.
+  source       Json
+  target       Json
+  sourceLang   String?
+  targetLang   String?
+  /// JSON: the alignment links between source and target units.
+  links        Json
+  metadata     Json?
+
+  projectId       String?
+  project         Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  createdByUserId String?
+  layersUri       String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([expressionId])
+  @@index([projectId])
+  @@index([createdByUserId])
+  @@map("alignments")
 }

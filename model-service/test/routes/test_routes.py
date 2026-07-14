@@ -5,8 +5,10 @@ This module contains tests for the video summarization, ontology augmentation,
 and object detection endpoints.
 """
 
-from collections.abc import Generator
+from __future__ import annotations
+
 from pathlib import Path
+from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
@@ -21,9 +23,12 @@ from src.domain.entities.architectures import (
 )
 from src.main import app
 
+if TYPE_CHECKING:
+    from collections.abc import Generator
+
 
 @pytest.fixture(autouse=True)
-def mock_model_manager() -> Generator[Mock, None, None]:
+def mock_model_manager() -> Generator[Mock]:
     """Mock the global model manager for all tests."""
     mock_manager = Mock()
 
@@ -99,8 +104,12 @@ def mock_model_manager() -> Generator[Mock, None, None]:
 
 
 @pytest.fixture
-def test_client_with_mocks(mock_model_manager: Mock) -> Generator[TestClient, None, None]:
+def test_client_with_mocks(mock_model_manager: Mock) -> Generator[TestClient]:
     """Test client fixture for API requests with mocked model manager."""
+    # Patching the vlm/llm loader factories imports their modules, which pull
+    # in the ML backend; skip these cases in the torch-free environment.
+    pytest.importorskip("torch")
+
     from src.infrastructure.adapters.inbound.fastapi.dependencies import get_model_manager
 
     app.dependency_overrides[get_model_manager] = lambda: mock_model_manager

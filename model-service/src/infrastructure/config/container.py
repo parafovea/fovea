@@ -23,6 +23,7 @@ if TYPE_CHECKING:
     from src.application.ports.outbound.detection_model import IDetectionModel
     from src.application.ports.outbound.external_api_router import IExternalAPIRouter
     from src.application.ports.outbound.frame_sampler import IFrameSampler
+    from src.application.ports.outbound.layers_codec import ILayersCodec
     from src.application.ports.outbound.llm import ILanguageModel
     from src.application.ports.outbound.model_capability import IModelCapabilityProbe
     from src.application.ports.outbound.tracking_model import ITrackingModel
@@ -203,6 +204,27 @@ class Container:
         device = "cuda" if self.model_capability_probe().is_cuda_available() else "cpu"
         loader = SileroVADLoader(VADConfig(model_id=model_id, device=device))
         return SileroVADAdapter(loader)
+
+    def layers_codec(self) -> ILayersCodec:
+        """Build an :class:`ILayersCodec` adapter.
+
+        Binds :class:`LairsCodecAdapter` when the ``lairs`` / ``didactic`` stack is
+        importable (the codec virtualenv); otherwise falls back to
+        :class:`NullLayersCodec`, whose methods raise a clear ``RuntimeError`` so
+        the HTTP layer can answer ``501 Not Implemented`` instead of crashing.
+        """
+        try:
+            from src.infrastructure.adapters.outbound.layers.lairs_codec_adapter import (  # noqa: PLC0415
+                LairsCodecAdapter,
+            )
+
+            return LairsCodecAdapter()
+        except ImportError:
+            from src.infrastructure.adapters.outbound.layers.null_codec import (  # noqa: PLC0415
+                NullLayersCodec,
+            )
+
+            return NullLayersCodec()
 
     def external_api_router(self) -> IExternalAPIRouter:
         """Build an :class:`IExternalAPIRouter` adapter."""

@@ -22,6 +22,7 @@ import { cn } from '@/lib/utils'
 import { usePersonas, useVideos } from '@store/queries'
 import { api } from '@services/api'
 import { ExportOptions, ExportStats, VideoMetadata } from '@models/types'
+import { useTourAnchor } from '@/tours/engine/anchorRegistry'
 
 /**
  * Props for the ExportDialog component.
@@ -62,6 +63,7 @@ function hasAnyData(stats: ExportStats | null): boolean {
 export function ExportDialog({ open, onClose }: ExportDialogProps): JSX.Element {
   const { data: personas = [] } = usePersonas()
   const { data: videos = [] } = useVideos()
+  const exportDialogRef = useTourAnchor('export-dialog')
 
   const [includeInterpolated, setIncludeInterpolated] = useState(false)
   const [selectedPersonaIds, setSelectedPersonaIds] = useState<string[]>([])
@@ -188,7 +190,7 @@ export function ExportDialog({ open, onClose }: ExportDialogProps): JSX.Element 
       open={open}
       onOpenChange={(isOpen) => { if (!isOpen) onClose() }}
     >
-      <DialogContent data-tour-id="export-dialog" className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
+      <DialogContent ref={exportDialogRef} className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Export All Data</DialogTitle>
         </DialogHeader>

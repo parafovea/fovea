@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { TrackingResult } from '@models/types'
+import { useTourAnchor } from '@/tours/engine/anchorRegistry'
 
 /**
  * Props for TrackingResultsPanel component.
@@ -66,6 +67,7 @@ export function TrackingResultsPanel({
   onPreviewTrack,
 }: TrackingResultsPanelProps) {
   const [hoveredTrack, setHoveredTrack] = useState<string | number | null>(null)
+  const trackingResultsAnchor = useTourAnchor('tracking-results-panel')
 
   const handleAcceptAll = () => {
     trackingResults
@@ -81,7 +83,7 @@ export function TrackingResultsPanel({
 
   return (
     <div
-      data-tour-id="tracking-results-panel"
+      ref={trackingResultsAnchor}
       className="p-4 max-h-[400px] overflow-y-auto bg-card rounded-lg ring-1 ring-foreground/10 shadow-sm"
     >
       <div className="flex justify-between items-center mb-4">

@@ -7,6 +7,10 @@ paths against mocked HuggingFace primitives. Dispatch contract tests for
 that the registry-based factory has a single, authoritative test surface.
 """
 
+import pytest
+
+pytest.importorskip("torch")  # requires the ML backend; skipped in the torch-free venv
+
 from unittest.mock import MagicMock, patch
 
 import pytest

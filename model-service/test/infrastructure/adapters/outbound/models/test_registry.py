@@ -11,16 +11,16 @@ loader from a model config. These tests lock the contract:
     no-op (idempotent under double-import)
   * the create() helper passes the architecture model and any extras
     through to the loader constructor unchanged
-  * the registry rejects non-Pydantic architecture arguments at runtime
-    even when a caller bypasses static typing
+  * the registry rejects non-didactic-Model architecture arguments at
+    runtime even when a caller bypasses static typing
 """
 
 from __future__ import annotations
 
 from typing import Literal
 
+import didactic.api as dx
 import pytest
-from pydantic import BaseModel
 
 from src.infrastructure.adapters.outbound.models.registry import (
     DuplicateArchitectureError,
@@ -29,22 +29,22 @@ from src.infrastructure.adapters.outbound.models.registry import (
 )
 
 
-class _ArchA(BaseModel):
+class _ArchA(dx.Model):
     kind: Literal["arch-a"] = "arch-a"
 
 
-class _ArchB(BaseModel):
+class _ArchB(dx.Model):
     kind: Literal["arch-b"] = "arch-b"
 
 
-class _ArchUnknown(BaseModel):
+class _ArchUnknown(dx.Model):
     kind: Literal["arch-unknown"] = "arch-unknown"
 
 
 class _LoaderProtocol:
     """Minimal loader stub: accepts the architecture model + extras and stashes them."""
 
-    def __init__(self, arch: BaseModel, *args: object, **kwargs: object) -> None:
+    def __init__(self, arch: dx.Model, *args: object, **kwargs: object) -> None:
         self.arch = arch
         self.args = args
         self.kwargs = kwargs
@@ -116,19 +116,19 @@ class TestLoaderRegistry:
         assert instance.args == ("extra-positional",)
         assert instance.kwargs == {"named": "extra-named"}
 
-    def test_register_rejects_non_pydantic_architecture(self) -> None:
-        reg: LoaderRegistry[BaseModel, _LoaderProtocol] = LoaderRegistry(family="test")
+    def test_register_rejects_non_model_architecture(self) -> None:
+        reg: LoaderRegistry[dx.Model, _LoaderProtocol] = LoaderRegistry(family="test")
 
-        with pytest.raises(TypeError, match="Pydantic model class"):
+        with pytest.raises(TypeError, match="didactic Model class"):
             reg.register("not-a-class")  # type: ignore[arg-type]
 
-        with pytest.raises(TypeError, match="Pydantic model class"):
+        with pytest.raises(TypeError, match="didactic Model class"):
             reg.register(_LoaderProtocol)  # type: ignore[arg-type]
 
-    def test_register_rejects_pydantic_instance_instead_of_class(self) -> None:
+    def test_register_rejects_model_instance_instead_of_class(self) -> None:
         reg: LoaderRegistry[_ArchA, _LoaderProtocol] = LoaderRegistry(family="test")
 
-        with pytest.raises(TypeError, match="Pydantic model class"):
+        with pytest.raises(TypeError, match="didactic Model class"):
             reg.register(_ArchA())  # type: ignore[arg-type]
 
     def test_family_is_required_and_non_empty(self) -> None:
@@ -139,7 +139,7 @@ class TestLoaderRegistry:
             LoaderRegistry(family=None)  # type: ignore[arg-type]
 
     def test_registered_architectures_preserves_insertion_order(self) -> None:
-        reg: LoaderRegistry[BaseModel, _LoaderProtocol] = LoaderRegistry(family="test")
+        reg: LoaderRegistry[dx.Model, _LoaderProtocol] = LoaderRegistry(family="test")
         reg.register(_ArchA)(_LoaderA)
         reg.register(_ArchB)(_LoaderB)
 
@@ -161,7 +161,7 @@ class TestLoaderRegistry:
         assert after is before
 
     def test_unknown_architecture_error_lists_registered_alphabetically(self) -> None:
-        reg: LoaderRegistry[BaseModel, _LoaderProtocol] = LoaderRegistry(family="test")
+        reg: LoaderRegistry[dx.Model, _LoaderProtocol] = LoaderRegistry(family="test")
         reg.register(_ArchB)(_LoaderB)
         reg.register(_ArchA)(_LoaderA)
 

@@ -1,5 +1,9 @@
 """Tests for tracking_loader module with multiple model architectures."""
 
+import pytest
+
+pytest.importorskip("torch")  # requires the ML backend; skipped in the torch-free venv
+
 from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock, Mock, patch

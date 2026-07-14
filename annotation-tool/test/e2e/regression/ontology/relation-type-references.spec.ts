@@ -191,13 +191,12 @@ test.describe('Relation Type References in Summaries', () => {
     await annotationWorkspace.navigateTo(testVideo.id)
     await page.waitForSelector('[data-testid="video-player"], video', { timeout: 10000 })
 
-    // Re-open summary dialog and arm the GET wait BEFORE selecting the
-    // persona that triggers the summaries fetch, so the response is
-    // observed deterministically rather than raced against a sleep.
-    await page.getByRole('button', { name: /edit summary/i }).click()
-    const dialog2 = page.getByRole('dialog')
-    await expect(dialog2).toBeVisible()
-
+    // The workspace persona persists across the reload (annotation UI store),
+    // so the reopened dialog inherits it and fetches its summary the moment it
+    // opens. Arm the GET wait BEFORE opening the dialog to observe that fetch
+    // rather than racing it; re-selecting the same persona afterward is a no-op
+    // that fires no second fetch, so an arm placed after the open would wait
+    // forever for a request that already landed.
     const summariesLoaded = page.waitForResponse(
       (resp) =>
         resp.url().includes(`/api/videos/${testVideo.id}/summaries`) &&
@@ -206,7 +205,12 @@ test.describe('Relation Type References in Summaries', () => {
       { timeout: 10000 },
     )
 
-    // Re-select persona
+    await page.getByRole('button', { name: /edit summary/i }).click()
+    const dialog2 = page.getByRole('dialog')
+    await expect(dialog2).toBeVisible()
+
+    // Reassert the persona so the summary loads even if the dialog restored
+    // none; when it did, this selects the same value and adds no second fetch.
     const personaSelect2 = dialog2.getByLabel(/select persona/i)
     await personaSelect2.click()
     await page.waitForTimeout(300)

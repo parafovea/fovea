@@ -6,10 +6,11 @@ AI models. Serves as the composition root, wiring the dependency injection
 container to the FastAPI application.
 """
 
-from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
+from didactic.fastapi import register_validation_handler
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -22,6 +23,9 @@ from .infrastructure.config.container import (
 )
 from .infrastructure.config.settings import get_settings
 from .infrastructure.observability import configure_observability, instrument_app
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
 
 
 @asynccontextmanager
@@ -67,6 +71,10 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+
+# Map didactic ValidationError raised inside a route to a 422 response shaped
+# like FastAPI's own validation-error body.
+register_validation_handler(app)
 
 # Configure OpenTelemetry instrumentation
 instrument_app(app)

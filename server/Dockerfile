@@ -17,15 +17,25 @@ RUN corepack enable && corepack prepare pnpm@10.15.0 --activate
 
 WORKDIR /repo
 
-# Copy workspace metadata + every package's package.json so pnpm can resolve
-# the workspace graph from a single frozen lockfile install.
+# Copy workspace metadata + the server/annotation-tool manifests so pnpm can
+# resolve the workspace graph from a single frozen lockfile install.
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY server/package.json ./server/
 COPY annotation-tool/package.json ./annotation-tool/
 
+# Copy the full @fovea/layers-schema package (src + tsconfig) before install:
+# its `prepare` script runs `tsc` during `pnpm install`, so the tsconfig and
+# source must already be present or the install aborts with TS5058 before any
+# explicit build step is reached.
+COPY packages/layers-schema ./packages/layers-schema
+
 # Install dependencies with cache mount for pnpm
 RUN --mount=type=cache,target=/root/.local/share/pnpm/store \
     pnpm install --frozen-lockfile
+
+# Build @fovea/layers-schema so its compiled dist is present for the server
+# compile, which depends on its generated types.
+RUN pnpm --filter @fovea/layers-schema build
 
 # Copy server source (Prisma first for layer caching)
 COPY server/prisma ./server/prisma
@@ -35,10 +45,18 @@ COPY server/. ./server/
 # Build TypeScript
 RUN pnpm --filter @fovea/server build
 
-# Compile seed script for production use (tsx not available in production).
-# Use .cjs extension since server/package.json has "type": "module".
-RUN cd server && pnpm exec tsc prisma/seed.ts --outDir prisma --module commonjs --esModuleInterop --target ES2015 && \
-    mv prisma/seed.js prisma/seed.cjs
+# Bundle the seed script into a self-contained CommonJS file for the
+# production image (tsx is dev-only, and the image ships dist/ + node_modules
+# but not src/). The seed pulls the layers-bridge/conversion helpers from
+# ../src; esbuild inlines that whole closure so seed.cjs resolves only real
+# node_modules at runtime — no ../src or ../dist path dependency survives.
+# @prisma/client (generated, native query engine) and bcrypt (native addon)
+# stay external and load from node_modules at runtime. The .cjs extension is
+# required because server/package.json declares "type": "module".
+RUN cd server && pnpm exec esbuild prisma/seed.ts \
+      --bundle --platform=node --format=cjs --target=node22 \
+      --external:@prisma/client --external:bcrypt \
+      --outfile=prisma/seed.cjs
 
 # Production dependencies stage
 FROM node:${NODE_VERSION}-alpine AS deps
@@ -50,8 +68,11 @@ WORKDIR /repo
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY server/package.json ./server/
 COPY annotation-tool/package.json ./annotation-tool/
+COPY packages/layers-schema/package.json ./packages/layers-schema/
 
-# Install production dependencies for the server filter only
+# Install production dependencies for the server filter only. @fovea/layers-schema
+# is a types-only workspace dependency (never imported at runtime), so its
+# package.json is enough for the frozen-lockfile resolution to succeed here.
 RUN --mount=type=cache,target=/root/.local/share/pnpm/store \
     pnpm install --frozen-lockfile --filter @fovea/server --prod
 

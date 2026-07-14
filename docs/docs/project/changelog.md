@@ -11,6 +11,64 @@ All notable changes to the Fovea project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2026-07-14
+
+The 0.6.0 release is two coordinated rebuilds. First, Fovea's annotations move onto one unified model: the video bounding-box tracks, ASR transcripts, ontologies, world objects, and claims that five bespoke shapes used to hold are now projected onto the `pub.layers.*` schema, with a single panproto-generated type layer shared by the TypeScript server, the React frontend, and the Python model-service. Second, the guided-tour engine becomes data-authored — a tour is now a validated document over a typed anchor catalog rather than code. Both are breaking; the annotation migration removes the legacy models and migrates the data in, and the tour rebuild replaces the previous tour module's internals.
+
+### Added
+
+#### Unified layers annotation model
+
+- Video, audio, and text annotation persist through one layers-shaped store (`Expression`/`Segmentation`/`AnnotationLayer`/`LayersAnnotation`/`GraphNode`/`GraphEdge`/`TypeDef`), replacing the per-concept `Annotation`/`WorldState`/`Ontology`/`Claim` tables. A `BoundingBoxSequence` round-trips bit-exactly through a `spatioTemporalAnchor` via a lossless feature-bag complement, so the video timeline is unchanged. The `@fovea/layers-schema` workspace package vendors the generated `pub.layers.*` types + JSON Schema as the one annotation vocabulary for the server and frontend.
+- A document-annotation workspace adds token-standoff span labeling with discontiguous spans and typed, directed span relations; spans link to ontology types or world objects, and video-associated text (tweets, ASR transcripts) annotates in a side panel.
+- Corpora import and export as layers JSONL, so annotations interchange losslessly with any `pub.layers.*` consumer.
+
+### Changed
+
+#### Model-service on didactic and Python 3.14
+
+- The model-service is rebuilt on didactic: every domain entity, DTO, and FastAPI request body is a `dx.Model`, the architecture dispatch is a `dx.TaggedUnion`, config is didactic-settings, and no first-party Pydantic remains (FastAPI keeps it transitively through the didactic-fastapi bridge). The service moves to Python 3.14, gating the inference backends that lack cp314 support (vLLM, SGLang, GGUF, bitsandbytes, SAM-2) behind a version marker so torch and the audio/vision stack install from cp314 wheels.
+
+The 0.6.0 release rebuilds the guided-tour engine so a deployment can author and tailor tours from data rather than code ([#180](https://github.com/parafovea/fovea/pull/180)). A tour is now a validated data document an administrator ships under `public/tours/`, every UI surface a tour points at is a named entry in a typed anchor catalog the build checks, and the runner drives each step's prerequisites declaratively. The change is breaking for anyone who built on the previous tour module's internals; the built-in tours and the in-app tour menu are unchanged for end users.
+
+### Added
+
+#### Typed Anchor Catalog as a Tour Contract
+
+- `annotation-tool/src/tours/engine/anchorCatalog.ts` declares every tour-addressable UI surface once, as a typed entry recording its description, the route or dialog it lives on, whether it is conditional, and the `reachedBy` controls that open it. `AnchorId` is `keyof typeof anchorCatalog`, so a tour step or seeder that names an anchor the catalog does not define fails to compile. A component publishes its element for an anchor with `useTourAnchor(id)` (`annotation-tool/src/tours/engine/anchorRegistry.tsx`), which registers the live node in an `AnchorRegistry` and tags it `data-tour-anchor` for the inspector and tests.
+
+#### Validated Tour Schema and File-Based Authoring
+
+- A tour is a single zod schema (`annotation-tool/src/tours/engine/tourSchema.ts`); `parseTour` validates a document and narrows it to the `Tour` type, so a malformed tour fails loudly with a field-anchored message instead of dropping out silently. `annotation-tool/src/tours/content/tourLoader.ts` assembles the catalogue a deployment runs: the first-party tours merged with an administrator's tours served from `public/tours/` (a manifest at `/tours/index.json` listing tour JSON files). An override replaces the built-in sharing its id, a new id is appended, and a tour marked `enabled: false` is dropped, so an administrator tailors the tour set for their user base without touching application code.
+
+#### Hexagonal Tour Runner with Declarative Step Drivers
+
+- `annotation-tool/src/tours/engine/TourRunner.tsx` drives a tour as a state machine that, for each step, navigates to the step's route, runs its `driver` capability to put the workspace into the state the step needs, resolves the anchor by clicking the catalog `reachedBy` controls, and simulates the step's expected action. Capabilities are named side effects (`annotation-tool/src/tours/engine/capabilities.ts`, `annotation-tool/src/tours/engine/seeders.ts`) a step references by name, so a step declares the state it needs rather than scripting how to reach it. The runner emits a `TourEvent` for every transition (`annotation-tool/src/tours/engine/events.ts`) and is policy-free: the host decides which tour to run and what to do on close.
+
+#### Tour Analytics, a Resume Cursor, and a Pause Control
+
+- The provider folds the runner's event stream into an analytics log (`annotation-tool/src/tours/menu/tourTelemetry.ts`): a `started`, a `step_viewed` per step left carrying its dwell time, and a terminal `completed` with total time or `abandoned` with the reason and last step. It persists a lightweight `fovea.tour.cursor` so a reload resumes in place, and the step card carries a Pause control that snapshots the step for the resume pill. An author-mode anchor inspector (`annotation-tool/src/tours/engine/AnchorInspector.tsx`) lists the anchors currently on the page so a tour can be authored by reading ids off the running UI.
+
+### Changed
+
+#### Dialogs Yield to a Running Tour
+
+- `annotation-tool/src/components/ui/dialog.tsx` reads whether a tour is active and, while one runs, renders non-modal and ignores outside-press and focus-out close reasons, so the tour's step card stays reachable over an open dialog and the engine can drive a surface inside it. Outside a tour, dialog behavior is unchanged. This replaces a deployment-mode check, so dialogs behave the same whether a tour runs in the public booth or a signed-in workspace.
+
+### Fixed
+
+#### Tour Catalogue Load Tolerates a Missing Manifest
+
+- `annotation-tool/src/tours/content/tourLoader.ts` requested `/tours/index.json` and threw when the response was not JSON. A deployment that ships no administrator manifest still answers that path, since the single-page-app history fallback serves `index.html` with a 200, so every page load logged a catalogue-load error. The loader now reads an HTML response as "no manifest" and returns the built-in tours, while a manifest the server genuinely serves as JSON still validates loudly.
+
+### Removed
+
+- The previous tour engine's internal modules and the `data-tour-id` attribute convention are removed; tours and anchors are expressed through the catalog, schema, registry, and capabilities above.
+
+### Testing
+
+- Every built-in tour has a regression spec that launches it through the engine and asserts each step's anchor resolves and the tour completes (`annotation-tool/test/e2e/regression/tours/`), run against the real backend and the MP4 video corpus. A comprehensive engine smoke suite (`annotation-tool/test/e2e/smoke/tour-engine.spec.ts`) covers the runner, spotlight, step card, telemetry, the resume cursor, pause and resume, focus, and keyboard handling.
+
 ## [0.5.11] - 2026-07-02
 
 The 0.5.11 patch is the third and final release remediating the second swarm audit — the model-service slice — fixing event-loop starvation, ffmpeg subprocess leaks, a shared-model inference race, and a DNS-rebinding SSRF gap in the Python inference service ([#198](https://github.com/parafovea/fovea/pull/198)). Nothing is breaking. This completes the second-audit three-patch series (0.5.9 backend, 0.5.10 frontend, 0.5.11 model-service).

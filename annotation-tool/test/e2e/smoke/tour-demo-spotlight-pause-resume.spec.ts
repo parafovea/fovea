@@ -34,7 +34,7 @@ async function waitForHandle(page: Page): Promise<void> {
 
 /**
  * Inject a synthetic 240x120 fixed-positioned div carrying the given
- * data-tour-id so the SpotlightOverlay has a non-zero rect to draw
+ * data-tour-anchor so the SpotlightOverlay has a non-zero rect to draw
  * against on any page (including /login when no testUser is wired up).
  */
 async function injectAnchor(
@@ -45,7 +45,7 @@ async function injectAnchor(
   await page.evaluate(
     ({ tourId, id }) => {
       const el = document.createElement('div')
-      el.setAttribute('data-tour-id', tourId)
+      el.setAttribute('data-tour-anchor', tourId)
       el.id = id
       Object.assign(el.style, {
         position: 'fixed',

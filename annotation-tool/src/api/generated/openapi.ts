@@ -7372,14 +7372,1039 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/annotations/{videoId}": {
+    "/api/layers/expressions/{id}": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** @description Get annotations for a specific video that the caller is authorized to read */
+        /** @description Get an expression with its tokenizations, annotation layers, and relations */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": unknown;
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/layers/videos/{videoId}/text-expressions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Materialize and return a video's metadata-text and ASR-transcript expressions */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    videoId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": unknown[];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/layers/documents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description List document expressions the caller is authorized to read */
+        get: {
+            parameters: {
+                query?: {
+                    limit?: number;
+                    offset?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            items: unknown[];
+                            total: number;
+                            limit: number;
+                            offset: number;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** @description Create a standalone document expression (sourceKind=document) from pasted text */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** Format: uuid */
+                        id?: string;
+                        text: string;
+                        title?: string;
+                        languages?: string[];
+                        projectId?: null | string;
+                        metadata?: unknown;
+                        features?: unknown;
+                    };
+                };
+            };
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": unknown;
+                    };
+                };
+                /** @description Default Response */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": unknown;
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/layers/media": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description List media rows the caller is authorized to read */
+        get: {
+            parameters: {
+                query?: {
+                    limit?: number;
+                    offset?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            items: {
+                                id: string;
+                                kind: string;
+                                title: null | string;
+                                description: null | string;
+                                externalUri: null | string;
+                                blobPath: null | string;
+                                mimeType: null | string;
+                                durationMs: null | number;
+                                parentMediaId: null | string;
+                                startOffsetMs: null | number;
+                                audio: unknown;
+                                video: unknown;
+                                document: unknown;
+                                knowledgeRefs: unknown;
+                                metadata: unknown;
+                                features: unknown;
+                                languages: string[];
+                                videoId: null | string;
+                                projectId: null | string;
+                                createdByUserId: null | string;
+                                layersUri: null | string;
+                                createdAt: string;
+                                updatedAt: string;
+                            }[];
+                            total: number;
+                            limit: number;
+                            offset: number;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** @description Create a media row, or return the existing one when a client-supplied id already exists (idempotent create) */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** Format: uuid */
+                        id?: string;
+                        kind: string;
+                        title?: string;
+                        description?: string;
+                        externalUri?: string;
+                        blobPath?: string;
+                        mimeType?: string;
+                        durationMs?: number;
+                        parentMediaId?: string;
+                        startOffsetMs?: number;
+                        videoId?: null | string;
+                        projectId?: null | string;
+                        audio?: unknown;
+                        video?: unknown;
+                        document?: unknown;
+                        knowledgeRefs?: unknown;
+                        metadata?: unknown;
+                        features?: unknown;
+                        languages?: string[];
+                    };
+                };
+            };
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            kind: string;
+                            title: null | string;
+                            description: null | string;
+                            externalUri: null | string;
+                            blobPath: null | string;
+                            mimeType: null | string;
+                            durationMs: null | number;
+                            parentMediaId: null | string;
+                            startOffsetMs: null | number;
+                            audio: unknown;
+                            video: unknown;
+                            document: unknown;
+                            knowledgeRefs: unknown;
+                            metadata: unknown;
+                            features: unknown;
+                            languages: string[];
+                            videoId: null | string;
+                            projectId: null | string;
+                            createdByUserId: null | string;
+                            layersUri: null | string;
+                            createdAt: string;
+                            updatedAt: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            kind: string;
+                            title: null | string;
+                            description: null | string;
+                            externalUri: null | string;
+                            blobPath: null | string;
+                            mimeType: null | string;
+                            durationMs: null | number;
+                            parentMediaId: null | string;
+                            startOffsetMs: null | number;
+                            audio: unknown;
+                            video: unknown;
+                            document: unknown;
+                            knowledgeRefs: unknown;
+                            metadata: unknown;
+                            features: unknown;
+                            languages: string[];
+                            videoId: null | string;
+                            projectId: null | string;
+                            createdByUserId: null | string;
+                            layersUri: null | string;
+                            createdAt: string;
+                            updatedAt: string;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/layers/media/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Get a media row */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            kind: string;
+                            title: null | string;
+                            description: null | string;
+                            externalUri: null | string;
+                            blobPath: null | string;
+                            mimeType: null | string;
+                            durationMs: null | number;
+                            parentMediaId: null | string;
+                            startOffsetMs: null | number;
+                            audio: unknown;
+                            video: unknown;
+                            document: unknown;
+                            knowledgeRefs: unknown;
+                            metadata: unknown;
+                            features: unknown;
+                            languages: string[];
+                            videoId: null | string;
+                            projectId: null | string;
+                            createdByUserId: null | string;
+                            layersUri: null | string;
+                            createdAt: string;
+                            updatedAt: string;
+                        };
+                    };
+                };
+            };
+        };
+        /** @description Update a media row */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        kind?: string;
+                        title?: null | string;
+                        description?: null | string;
+                        externalUri?: null | string;
+                        blobPath?: null | string;
+                        mimeType?: null | string;
+                        durationMs?: null | number;
+                        parentMediaId?: null | string;
+                        startOffsetMs?: null | number;
+                        videoId?: null | string;
+                        audio?: unknown;
+                        video?: unknown;
+                        document?: unknown;
+                        knowledgeRefs?: unknown;
+                        metadata?: unknown;
+                        features?: unknown;
+                        languages?: string[];
+                    };
+                };
+            };
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            kind: string;
+                            title: null | string;
+                            description: null | string;
+                            externalUri: null | string;
+                            blobPath: null | string;
+                            mimeType: null | string;
+                            durationMs: null | number;
+                            parentMediaId: null | string;
+                            startOffsetMs: null | number;
+                            audio: unknown;
+                            video: unknown;
+                            document: unknown;
+                            knowledgeRefs: unknown;
+                            metadata: unknown;
+                            features: unknown;
+                            languages: string[];
+                            videoId: null | string;
+                            projectId: null | string;
+                            createdByUserId: null | string;
+                            layersUri: null | string;
+                            createdAt: string;
+                            updatedAt: string;
+                        };
+                    };
+                };
+            };
+        };
+        post?: never;
+        /** @description Delete a media row */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/layers/annotation-layers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description List annotation layers the caller can read, optionally filtered by expression */
+        get: {
+            parameters: {
+                query?: {
+                    expressionId?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            expressionId: string;
+                            kind: string;
+                            subkind: null | string;
+                            formalism: null | string;
+                            sourceMethod: string;
+                            labelSet: null | string;
+                            tokenizationId: null | string;
+                            ontologyId: null | string;
+                            parentLayerId: null | string;
+                            personaId: null | string;
+                            metadata: unknown;
+                            features: unknown;
+                            languages: string[];
+                            projectId: null | string;
+                            createdByUserId: null | string;
+                            layersUri: null | string;
+                            createdAt: string;
+                            updatedAt: string;
+                        }[];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** @description Create an annotation layer over an expression (idempotent by client id) */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** Format: uuid */
+                        id?: string;
+                        expressionId: string;
+                        kind: string;
+                        subkind?: null | string;
+                        formalism?: null | string;
+                        sourceMethod?: string;
+                        labelSet?: null | string;
+                        tokenizationId?: null | string;
+                        ontologyId?: null | string;
+                        parentLayerId?: null | string;
+                        personaId?: null | string;
+                        metadata?: unknown;
+                        features?: unknown;
+                        languages?: string[];
+                        layersUri?: null | string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            expressionId: string;
+                            kind: string;
+                            subkind: null | string;
+                            formalism: null | string;
+                            sourceMethod: string;
+                            labelSet: null | string;
+                            tokenizationId: null | string;
+                            ontologyId: null | string;
+                            parentLayerId: null | string;
+                            personaId: null | string;
+                            metadata: unknown;
+                            features: unknown;
+                            languages: string[];
+                            projectId: null | string;
+                            createdByUserId: null | string;
+                            layersUri: null | string;
+                            createdAt: string;
+                            updatedAt: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            expressionId: string;
+                            kind: string;
+                            subkind: null | string;
+                            formalism: null | string;
+                            sourceMethod: string;
+                            labelSet: null | string;
+                            tokenizationId: null | string;
+                            ontologyId: null | string;
+                            parentLayerId: null | string;
+                            personaId: null | string;
+                            metadata: unknown;
+                            features: unknown;
+                            languages: string[];
+                            projectId: null | string;
+                            createdByUserId: null | string;
+                            layersUri: null | string;
+                            createdAt: string;
+                            updatedAt: string;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/layers/annotation-layers/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** @description Delete an annotation layer */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/layers/annotations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Create a layers annotation on a layer (idempotent by client id) */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** Format: uuid */
+                        id?: string;
+                        layerId: string;
+                        tokenizationId?: null | string;
+                        anchor?: unknown;
+                        tokenIndex?: null | number;
+                        label?: null | string;
+                        value?: null | string;
+                        text?: null | string;
+                        parentAnnotationId?: null | string;
+                        childIds?: unknown;
+                        headIndex?: null | number;
+                        targetIndex?: null | number;
+                        arguments?: unknown;
+                        confidence?: null | number;
+                        ontologyTypeRefId?: null | string;
+                        denotesNodeId?: null | string;
+                        knowledgeRefs?: unknown;
+                        temporal?: unknown;
+                        spatial?: unknown;
+                        features?: unknown;
+                        layersUri?: null | string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            layerId: string;
+                            tokenizationId: null | string;
+                            anchor: unknown;
+                            tokenIndex: null | number;
+                            label: null | string;
+                            value: null | string;
+                            text: null | string;
+                            parentAnnotationId: null | string;
+                            childIds: unknown;
+                            headIndex: null | number;
+                            targetIndex: null | number;
+                            arguments: unknown;
+                            confidence: null | number;
+                            ontologyTypeRefId: null | string;
+                            denotesNodeId: null | string;
+                            knowledgeRefs: unknown;
+                            temporal: unknown;
+                            spatial: unknown;
+                            features: unknown;
+                            startMs: null | number;
+                            endMs: null | number;
+                            projectId: null | string;
+                            createdByUserId: null | string;
+                            layersUri: null | string;
+                            createdAt: string;
+                            updatedAt: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            layerId: string;
+                            tokenizationId: null | string;
+                            anchor: unknown;
+                            tokenIndex: null | number;
+                            label: null | string;
+                            value: null | string;
+                            text: null | string;
+                            parentAnnotationId: null | string;
+                            childIds: unknown;
+                            headIndex: null | number;
+                            targetIndex: null | number;
+                            arguments: unknown;
+                            confidence: null | number;
+                            ontologyTypeRefId: null | string;
+                            denotesNodeId: null | string;
+                            knowledgeRefs: unknown;
+                            temporal: unknown;
+                            spatial: unknown;
+                            features: unknown;
+                            startMs: null | number;
+                            endMs: null | number;
+                            projectId: null | string;
+                            createdByUserId: null | string;
+                            layersUri: null | string;
+                            createdAt: string;
+                            updatedAt: string;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/layers/annotations/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** @description Update a layers annotation */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        tokenizationId?: null | string;
+                        anchor?: unknown;
+                        tokenIndex?: null | number;
+                        label?: null | string;
+                        value?: null | string;
+                        text?: null | string;
+                        parentAnnotationId?: null | string;
+                        childIds?: unknown;
+                        headIndex?: null | number;
+                        targetIndex?: null | number;
+                        arguments?: unknown;
+                        confidence?: null | number;
+                        ontologyTypeRefId?: null | string;
+                        denotesNodeId?: null | string;
+                        knowledgeRefs?: unknown;
+                        temporal?: unknown;
+                        spatial?: unknown;
+                        features?: unknown;
+                        layersUri?: null | string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            layerId: string;
+                            tokenizationId: null | string;
+                            anchor: unknown;
+                            tokenIndex: null | number;
+                            label: null | string;
+                            value: null | string;
+                            text: null | string;
+                            parentAnnotationId: null | string;
+                            childIds: unknown;
+                            headIndex: null | number;
+                            targetIndex: null | number;
+                            arguments: unknown;
+                            confidence: null | number;
+                            ontologyTypeRefId: null | string;
+                            denotesNodeId: null | string;
+                            knowledgeRefs: unknown;
+                            temporal: unknown;
+                            spatial: unknown;
+                            features: unknown;
+                            startMs: null | number;
+                            endMs: null | number;
+                            projectId: null | string;
+                            createdByUserId: null | string;
+                            layersUri: null | string;
+                            createdAt: string;
+                            updatedAt: string;
+                        };
+                    };
+                };
+            };
+        };
+        post?: never;
+        /** @description Delete a layers annotation */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/layers/annotation-relations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Create a relation between two layers annotations (idempotent by client id) */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** Format: uuid */
+                        id?: string;
+                        layerId: string;
+                        sourceAnnotationId: string;
+                        targetAnnotationId: string;
+                        relationTypeRef: unknown;
+                        label?: null | string;
+                        features?: unknown;
+                        layersUri?: null | string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            layerId: string;
+                            sourceAnnotationId: string;
+                            targetAnnotationId: string;
+                            relationTypeRef: unknown;
+                            label: null | string;
+                            features: unknown;
+                            projectId: null | string;
+                            createdByUserId: null | string;
+                            layersUri: null | string;
+                            createdAt: string;
+                            updatedAt: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            layerId: string;
+                            sourceAnnotationId: string;
+                            targetAnnotationId: string;
+                            relationTypeRef: unknown;
+                            label: null | string;
+                            features: unknown;
+                            projectId: null | string;
+                            createdByUserId: null | string;
+                            layersUri: null | string;
+                            createdAt: string;
+                            updatedAt: string;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/layers/annotation-relations/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** @description Delete a text annotation relation */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/layers/videos/{videoId}/annotations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description List a video's annotations from the layers store that the caller can read */
         get: {
             parameters: {
                 query?: never;
@@ -7408,6 +8433,7 @@ export interface paths {
                             confidence: null | number;
                             source: string;
                             linkedObjectName?: null | string;
+                            createdBy: null | string;
                             createdAt: string;
                             updatedAt: string;
                         }[];
@@ -7416,28 +8442,14 @@ export interface paths {
             };
         };
         put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/annotations": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** @description Create an annotation, or update it in place when a client-supplied id already exists (idempotent create) */
+        /** @description Create a video annotation in the layers store (idempotent by client id) */
         post: {
             parameters: {
                 query?: never;
                 header?: never;
-                path?: never;
+                path: {
+                    videoId: string;
+                };
                 cookie?: never;
             };
             requestBody: {
@@ -7445,7 +8457,7 @@ export interface paths {
                     "application/json": {
                         /** Format: uuid */
                         id?: string;
-                        videoId: string;
+                        videoId?: string;
                         personaId?: null | string;
                         type: string;
                         label: string;
@@ -7474,6 +8486,7 @@ export interface paths {
                             confidence: null | number;
                             source: string;
                             linkedObjectName?: null | string;
+                            createdBy: null | string;
                             createdAt: string;
                             updatedAt: string;
                         };
@@ -7496,6 +8509,7 @@ export interface paths {
                             confidence: null | number;
                             source: string;
                             linkedObjectName?: null | string;
+                            createdBy: null | string;
                             createdAt: string;
                             updatedAt: string;
                         };
@@ -7509,7 +8523,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/annotations/{id}": {
+    "/api/layers/videos/{videoId}/annotations/{id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -7517,12 +8531,13 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** @description Update an annotation */
+        /** @description Update a video annotation in the layers store */
         put: {
             parameters: {
                 query?: never;
                 header?: never;
                 path: {
+                    videoId: string;
                     id: string;
                 };
                 cookie?: never;
@@ -7557,6 +8572,7 @@ export interface paths {
                             confidence: null | number;
                             source: string;
                             linkedObjectName?: null | string;
+                            createdBy: null | string;
                             createdAt: string;
                             updatedAt: string;
                         };
@@ -7565,23 +8581,7 @@ export interface paths {
             };
         };
         post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/annotations/{videoId}/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /** @description Delete an annotation */
+        /** @description Delete a video annotation from the layers store */
         delete: {
             parameters: {
                 query?: never;
@@ -7603,6 +8603,2013 @@ export interface paths {
                 };
             };
         };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/layers/graph/nodes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description List graph nodes the caller can read */
+        get: {
+            parameters: {
+                query?: {
+                    nodeType?: string;
+                    projectId?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            nodeType: string;
+                            label: null | string;
+                            properties: unknown;
+                            knowledgeRefs: unknown;
+                            metadata: unknown;
+                            projectId: null | string;
+                            createdByUserId: null | string;
+                            layersUri: null | string;
+                            createdAt: string;
+                            updatedAt: string;
+                        }[];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** @description Create a graph node, or update it in place when a client-supplied id already exists (idempotent create) */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** Format: uuid */
+                        id?: string;
+                        nodeType: string;
+                        label?: null | string;
+                        properties?: unknown;
+                        knowledgeRefs?: unknown;
+                        metadata?: unknown;
+                        projectId?: null | string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            nodeType: string;
+                            label: null | string;
+                            properties: unknown;
+                            knowledgeRefs: unknown;
+                            metadata: unknown;
+                            projectId: null | string;
+                            createdByUserId: null | string;
+                            layersUri: null | string;
+                            createdAt: string;
+                            updatedAt: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            nodeType: string;
+                            label: null | string;
+                            properties: unknown;
+                            knowledgeRefs: unknown;
+                            metadata: unknown;
+                            projectId: null | string;
+                            createdByUserId: null | string;
+                            layersUri: null | string;
+                            createdAt: string;
+                            updatedAt: string;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/layers/graph/nodes/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Get a graph node by id */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            nodeType: string;
+                            label: null | string;
+                            properties: unknown;
+                            knowledgeRefs: unknown;
+                            metadata: unknown;
+                            projectId: null | string;
+                            createdByUserId: null | string;
+                            layersUri: null | string;
+                            createdAt: string;
+                            updatedAt: string;
+                        };
+                    };
+                };
+            };
+        };
+        /** @description Update a graph node */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        nodeType?: string;
+                        label?: null | string;
+                        properties?: unknown;
+                        knowledgeRefs?: unknown;
+                        metadata?: unknown;
+                    };
+                };
+            };
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            nodeType: string;
+                            label: null | string;
+                            properties: unknown;
+                            knowledgeRefs: unknown;
+                            metadata: unknown;
+                            projectId: null | string;
+                            createdByUserId: null | string;
+                            layersUri: null | string;
+                            createdAt: string;
+                            updatedAt: string;
+                        };
+                    };
+                };
+            };
+        };
+        post?: never;
+        /** @description Delete a graph node */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/layers/graph/edges": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description List graph edges the caller can read */
+        get: {
+            parameters: {
+                query?: {
+                    edgeType?: string;
+                    projectId?: string;
+                    nodeId?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            source: unknown;
+                            target: unknown;
+                            sourceLocalId: null | string;
+                            targetLocalId: null | string;
+                            edgeType: string;
+                            label: null | string;
+                            ordinal: null | number;
+                            confidence: null | number;
+                            properties: unknown;
+                            metadata: unknown;
+                            projectId: null | string;
+                            createdByUserId: null | string;
+                            layersUri: null | string;
+                            createdAt: string;
+                            updatedAt: string;
+                        }[];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** @description Create a graph edge, or update it in place when a client-supplied id already exists (idempotent create) */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** Format: uuid */
+                        id?: string;
+                        source: unknown;
+                        target: unknown;
+                        edgeType: string;
+                        label?: null | string;
+                        ordinal?: null | number;
+                        confidence?: null | number;
+                        properties?: unknown;
+                        metadata?: unknown;
+                        projectId?: null | string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            source: unknown;
+                            target: unknown;
+                            sourceLocalId: null | string;
+                            targetLocalId: null | string;
+                            edgeType: string;
+                            label: null | string;
+                            ordinal: null | number;
+                            confidence: null | number;
+                            properties: unknown;
+                            metadata: unknown;
+                            projectId: null | string;
+                            createdByUserId: null | string;
+                            layersUri: null | string;
+                            createdAt: string;
+                            updatedAt: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            source: unknown;
+                            target: unknown;
+                            sourceLocalId: null | string;
+                            targetLocalId: null | string;
+                            edgeType: string;
+                            label: null | string;
+                            ordinal: null | number;
+                            confidence: null | number;
+                            properties: unknown;
+                            metadata: unknown;
+                            projectId: null | string;
+                            createdByUserId: null | string;
+                            layersUri: null | string;
+                            createdAt: string;
+                            updatedAt: string;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/layers/graph/edges/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Get a graph edge by id */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            source: unknown;
+                            target: unknown;
+                            sourceLocalId: null | string;
+                            targetLocalId: null | string;
+                            edgeType: string;
+                            label: null | string;
+                            ordinal: null | number;
+                            confidence: null | number;
+                            properties: unknown;
+                            metadata: unknown;
+                            projectId: null | string;
+                            createdByUserId: null | string;
+                            layersUri: null | string;
+                            createdAt: string;
+                            updatedAt: string;
+                        };
+                    };
+                };
+            };
+        };
+        /** @description Update a graph edge */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        source?: unknown;
+                        target?: unknown;
+                        edgeType?: string;
+                        label?: null | string;
+                        ordinal?: null | number;
+                        confidence?: null | number;
+                        properties?: unknown;
+                        metadata?: unknown;
+                    };
+                };
+            };
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            source: unknown;
+                            target: unknown;
+                            sourceLocalId: null | string;
+                            targetLocalId: null | string;
+                            edgeType: string;
+                            label: null | string;
+                            ordinal: null | number;
+                            confidence: null | number;
+                            properties: unknown;
+                            metadata: unknown;
+                            projectId: null | string;
+                            createdByUserId: null | string;
+                            layersUri: null | string;
+                            createdAt: string;
+                            updatedAt: string;
+                        };
+                    };
+                };
+            };
+        };
+        post?: never;
+        /** @description Delete a graph edge */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/layers/ontologies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description List layers ontologies the caller can read */
+        get: {
+            parameters: {
+                query?: {
+                    personaId?: string;
+                    projectId?: string;
+                    domain?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** Format: uuid */
+                            id: string;
+                            name: string;
+                            description: null | string;
+                            version: null | string;
+                            domain: null | string;
+                            parentOntologyId: null | string;
+                            personaId: null | string;
+                            knowledgeRefs: unknown;
+                            projectId: null | string;
+                            createdByUserId: null | string;
+                            layersUri: null | string;
+                            /** Format: date-time */
+                            createdAt: string;
+                            /** Format: date-time */
+                            updatedAt: string;
+                        }[];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** @description Create a layers ontology, or update it in place when a client-supplied id already exists (idempotent create) */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** Format: uuid */
+                        id?: string;
+                        name: string;
+                        description?: null | string;
+                        version?: null | string;
+                        domain?: null | string;
+                        parentOntologyId?: null | string;
+                        personaId?: null | string;
+                        knowledgeRefs?: unknown;
+                        projectId?: null | string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** Format: uuid */
+                            id: string;
+                            name: string;
+                            description: null | string;
+                            version: null | string;
+                            domain: null | string;
+                            parentOntologyId: null | string;
+                            personaId: null | string;
+                            knowledgeRefs: unknown;
+                            projectId: null | string;
+                            createdByUserId: null | string;
+                            layersUri: null | string;
+                            /** Format: date-time */
+                            createdAt: string;
+                            /** Format: date-time */
+                            updatedAt: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** Format: uuid */
+                            id: string;
+                            name: string;
+                            description: null | string;
+                            version: null | string;
+                            domain: null | string;
+                            parentOntologyId: null | string;
+                            personaId: null | string;
+                            knowledgeRefs: unknown;
+                            projectId: null | string;
+                            createdByUserId: null | string;
+                            layersUri: null | string;
+                            /** Format: date-time */
+                            createdAt: string;
+                            /** Format: date-time */
+                            updatedAt: string;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/layers/ontologies/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Get a layers ontology by id */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** Format: uuid */
+                            id: string;
+                            name: string;
+                            description: null | string;
+                            version: null | string;
+                            domain: null | string;
+                            parentOntologyId: null | string;
+                            personaId: null | string;
+                            knowledgeRefs: unknown;
+                            projectId: null | string;
+                            createdByUserId: null | string;
+                            layersUri: null | string;
+                            /** Format: date-time */
+                            createdAt: string;
+                            /** Format: date-time */
+                            updatedAt: string;
+                        };
+                    };
+                };
+            };
+        };
+        /** @description Update a layers ontology */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        name?: string;
+                        description?: null | string;
+                        version?: null | string;
+                        domain?: null | string;
+                        parentOntologyId?: null | string;
+                        knowledgeRefs?: unknown;
+                    };
+                };
+            };
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** Format: uuid */
+                            id: string;
+                            name: string;
+                            description: null | string;
+                            version: null | string;
+                            domain: null | string;
+                            parentOntologyId: null | string;
+                            personaId: null | string;
+                            knowledgeRefs: unknown;
+                            projectId: null | string;
+                            createdByUserId: null | string;
+                            layersUri: null | string;
+                            /** Format: date-time */
+                            createdAt: string;
+                            /** Format: date-time */
+                            updatedAt: string;
+                        };
+                    };
+                };
+            };
+        };
+        post?: never;
+        /** @description Delete a layers ontology */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/layers/ontologies/{ontologyId}/type-defs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description List a layers ontology's type definitions */
+        get: {
+            parameters: {
+                query?: {
+                    typeKind?: string;
+                };
+                header?: never;
+                path: {
+                    ontologyId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** Format: uuid */
+                            id: string;
+                            /** Format: uuid */
+                            ontologyId: string;
+                            name: string;
+                            typeKind: string;
+                            gloss: null | string;
+                            parentTypeId: null | string;
+                            allowedRoles: unknown;
+                            allowedValues: unknown;
+                            knowledgeRefs: unknown;
+                            features: unknown;
+                            projectId: null | string;
+                            createdByUserId: null | string;
+                            layersUri: null | string;
+                            /** Format: date-time */
+                            createdAt: string;
+                            /** Format: date-time */
+                            updatedAt: string;
+                        }[];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** @description Create a type definition under a layers ontology, or update it in place when a client-supplied id already exists (idempotent create) */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    ontologyId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** Format: uuid */
+                        id?: string;
+                        name: string;
+                        typeKind: string;
+                        gloss?: null | string;
+                        parentTypeId?: null | string;
+                        allowedRoles?: unknown;
+                        allowedValues?: unknown;
+                        knowledgeRefs?: unknown;
+                        features?: unknown;
+                    };
+                };
+            };
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** Format: uuid */
+                            id: string;
+                            /** Format: uuid */
+                            ontologyId: string;
+                            name: string;
+                            typeKind: string;
+                            gloss: null | string;
+                            parentTypeId: null | string;
+                            allowedRoles: unknown;
+                            allowedValues: unknown;
+                            knowledgeRefs: unknown;
+                            features: unknown;
+                            projectId: null | string;
+                            createdByUserId: null | string;
+                            layersUri: null | string;
+                            /** Format: date-time */
+                            createdAt: string;
+                            /** Format: date-time */
+                            updatedAt: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** Format: uuid */
+                            id: string;
+                            /** Format: uuid */
+                            ontologyId: string;
+                            name: string;
+                            typeKind: string;
+                            gloss: null | string;
+                            parentTypeId: null | string;
+                            allowedRoles: unknown;
+                            allowedValues: unknown;
+                            knowledgeRefs: unknown;
+                            features: unknown;
+                            projectId: null | string;
+                            createdByUserId: null | string;
+                            layersUri: null | string;
+                            /** Format: date-time */
+                            createdAt: string;
+                            /** Format: date-time */
+                            updatedAt: string;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/layers/type-defs/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Get a type definition by id */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** Format: uuid */
+                            id: string;
+                            /** Format: uuid */
+                            ontologyId: string;
+                            name: string;
+                            typeKind: string;
+                            gloss: null | string;
+                            parentTypeId: null | string;
+                            allowedRoles: unknown;
+                            allowedValues: unknown;
+                            knowledgeRefs: unknown;
+                            features: unknown;
+                            projectId: null | string;
+                            createdByUserId: null | string;
+                            layersUri: null | string;
+                            /** Format: date-time */
+                            createdAt: string;
+                            /** Format: date-time */
+                            updatedAt: string;
+                        };
+                    };
+                };
+            };
+        };
+        /** @description Update a type definition */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        name?: string;
+                        typeKind?: string;
+                        gloss?: null | string;
+                        parentTypeId?: null | string;
+                        allowedRoles?: unknown;
+                        allowedValues?: unknown;
+                        knowledgeRefs?: unknown;
+                        features?: unknown;
+                    };
+                };
+            };
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** Format: uuid */
+                            id: string;
+                            /** Format: uuid */
+                            ontologyId: string;
+                            name: string;
+                            typeKind: string;
+                            gloss: null | string;
+                            parentTypeId: null | string;
+                            allowedRoles: unknown;
+                            allowedValues: unknown;
+                            knowledgeRefs: unknown;
+                            features: unknown;
+                            projectId: null | string;
+                            createdByUserId: null | string;
+                            layersUri: null | string;
+                            /** Format: date-time */
+                            createdAt: string;
+                            /** Format: date-time */
+                            updatedAt: string;
+                        };
+                    };
+                };
+            };
+        };
+        post?: never;
+        /** @description Delete a type definition */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/layers/corpora": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description List corpora the caller is authorized to read */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            name: string;
+                            description: null | string;
+                            version: null | string;
+                            domain: null | string;
+                            ontologyRefs: unknown;
+                            languages: string[];
+                            metadata: unknown;
+                            projectId: null | string;
+                            createdByUserId: null | string;
+                            layersUri: null | string;
+                            createdAt: string;
+                            updatedAt: string;
+                        }[];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** @description Create a corpus, or update it in place when a client-supplied id already exists (idempotent create) */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** Format: uuid */
+                        id?: string;
+                        name: string;
+                        description?: null | string;
+                        version?: null | string;
+                        domain?: null | string;
+                        ontologyRefs?: string[];
+                        languages?: string[];
+                        metadata?: unknown;
+                        projectId?: null | string;
+                        layersUri?: null | string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            name: string;
+                            description: null | string;
+                            version: null | string;
+                            domain: null | string;
+                            ontologyRefs: unknown;
+                            languages: string[];
+                            metadata: unknown;
+                            projectId: null | string;
+                            createdByUserId: null | string;
+                            layersUri: null | string;
+                            createdAt: string;
+                            updatedAt: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            name: string;
+                            description: null | string;
+                            version: null | string;
+                            domain: null | string;
+                            ontologyRefs: unknown;
+                            languages: string[];
+                            metadata: unknown;
+                            projectId: null | string;
+                            createdByUserId: null | string;
+                            layersUri: null | string;
+                            createdAt: string;
+                            updatedAt: string;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/layers/corpora/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Get a single corpus */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            name: string;
+                            description: null | string;
+                            version: null | string;
+                            domain: null | string;
+                            ontologyRefs: unknown;
+                            languages: string[];
+                            metadata: unknown;
+                            projectId: null | string;
+                            createdByUserId: null | string;
+                            layersUri: null | string;
+                            createdAt: string;
+                            updatedAt: string;
+                        };
+                    };
+                };
+            };
+        };
+        /** @description Update a corpus */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        name?: string;
+                        description?: null | string;
+                        version?: null | string;
+                        domain?: null | string;
+                        ontologyRefs?: string[];
+                        languages?: string[];
+                        metadata?: unknown;
+                        layersUri?: null | string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            name: string;
+                            description: null | string;
+                            version: null | string;
+                            domain: null | string;
+                            ontologyRefs: unknown;
+                            languages: string[];
+                            metadata: unknown;
+                            projectId: null | string;
+                            createdByUserId: null | string;
+                            layersUri: null | string;
+                            createdAt: string;
+                            updatedAt: string;
+                        };
+                    };
+                };
+            };
+        };
+        post?: never;
+        /** @description Delete a corpus */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/layers/corpora/{id}/memberships": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description List the expressions belonging to a corpus */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            corpusId: string;
+                            expressionId: string;
+                            split: null | string;
+                            ordinal: null | number;
+                            metadata: unknown;
+                            createdAt: string;
+                            updatedAt: string;
+                        }[];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** @description Add an expression to a corpus, or update the membership in place when it already exists (idempotent) */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** Format: uuid */
+                        id?: string;
+                        expressionId: string;
+                        split?: null | string;
+                        ordinal?: null | number;
+                        metadata?: unknown;
+                    };
+                };
+            };
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            corpusId: string;
+                            expressionId: string;
+                            split: null | string;
+                            ordinal: null | number;
+                            metadata: unknown;
+                            createdAt: string;
+                            updatedAt: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            corpusId: string;
+                            expressionId: string;
+                            split: null | string;
+                            ordinal: null | number;
+                            metadata: unknown;
+                            createdAt: string;
+                            updatedAt: string;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/layers/corpora/{id}/memberships/{membershipId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** @description Remove an expression from a corpus */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                    membershipId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/layers/cluster-sets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description List cluster sets the caller is authorized to read */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            expressionId: null | string;
+                            corpusId: null | string;
+                            kind: string;
+                            layerId: null | string;
+                            clusters: unknown;
+                            metadata: unknown;
+                            projectId: null | string;
+                            createdByUserId: null | string;
+                            layersUri: null | string;
+                            createdAt: string;
+                            updatedAt: string;
+                        }[];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** @description Create a cluster set, or update it in place when a client-supplied id already exists (idempotent create) */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** Format: uuid */
+                        id?: string;
+                        expressionId?: null | string;
+                        corpusId?: null | string;
+                        kind: string;
+                        layerId?: null | string;
+                        clusters: unknown;
+                        metadata?: unknown;
+                        layersUri?: null | string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            expressionId: null | string;
+                            corpusId: null | string;
+                            kind: string;
+                            layerId: null | string;
+                            clusters: unknown;
+                            metadata: unknown;
+                            projectId: null | string;
+                            createdByUserId: null | string;
+                            layersUri: null | string;
+                            createdAt: string;
+                            updatedAt: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            expressionId: null | string;
+                            corpusId: null | string;
+                            kind: string;
+                            layerId: null | string;
+                            clusters: unknown;
+                            metadata: unknown;
+                            projectId: null | string;
+                            createdByUserId: null | string;
+                            layersUri: null | string;
+                            createdAt: string;
+                            updatedAt: string;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/layers/cluster-sets/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Get a single cluster set */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            expressionId: null | string;
+                            corpusId: null | string;
+                            kind: string;
+                            layerId: null | string;
+                            clusters: unknown;
+                            metadata: unknown;
+                            projectId: null | string;
+                            createdByUserId: null | string;
+                            layersUri: null | string;
+                            createdAt: string;
+                            updatedAt: string;
+                        };
+                    };
+                };
+            };
+        };
+        /** @description Update a cluster set */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        kind?: string;
+                        layerId?: null | string;
+                        clusters?: unknown;
+                        metadata?: unknown;
+                        layersUri?: null | string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            expressionId: null | string;
+                            corpusId: null | string;
+                            kind: string;
+                            layerId: null | string;
+                            clusters: unknown;
+                            metadata: unknown;
+                            projectId: null | string;
+                            createdByUserId: null | string;
+                            layersUri: null | string;
+                            createdAt: string;
+                            updatedAt: string;
+                        };
+                    };
+                };
+            };
+        };
+        post?: never;
+        /** @description Delete a cluster set */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/layers/alignments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description List alignments the caller is authorized to read */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            expressionId: null | string;
+                            kind: string;
+                            subkind: null | string;
+                            source: unknown;
+                            target: unknown;
+                            sourceLang: null | string;
+                            targetLang: null | string;
+                            links: unknown;
+                            metadata: unknown;
+                            projectId: null | string;
+                            createdByUserId: null | string;
+                            layersUri: null | string;
+                            createdAt: string;
+                            updatedAt: string;
+                        }[];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** @description Create an alignment, or update it in place when a client-supplied id already exists (idempotent create) */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** Format: uuid */
+                        id?: string;
+                        expressionId?: null | string;
+                        kind: string;
+                        subkind?: null | string;
+                        source?: unknown;
+                        target?: unknown;
+                        sourceLang?: null | string;
+                        targetLang?: null | string;
+                        links: unknown;
+                        metadata?: unknown;
+                        layersUri?: null | string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            expressionId: null | string;
+                            kind: string;
+                            subkind: null | string;
+                            source: unknown;
+                            target: unknown;
+                            sourceLang: null | string;
+                            targetLang: null | string;
+                            links: unknown;
+                            metadata: unknown;
+                            projectId: null | string;
+                            createdByUserId: null | string;
+                            layersUri: null | string;
+                            createdAt: string;
+                            updatedAt: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            expressionId: null | string;
+                            kind: string;
+                            subkind: null | string;
+                            source: unknown;
+                            target: unknown;
+                            sourceLang: null | string;
+                            targetLang: null | string;
+                            links: unknown;
+                            metadata: unknown;
+                            projectId: null | string;
+                            createdByUserId: null | string;
+                            layersUri: null | string;
+                            createdAt: string;
+                            updatedAt: string;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/layers/alignments/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Get a single alignment */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            expressionId: null | string;
+                            kind: string;
+                            subkind: null | string;
+                            source: unknown;
+                            target: unknown;
+                            sourceLang: null | string;
+                            targetLang: null | string;
+                            links: unknown;
+                            metadata: unknown;
+                            projectId: null | string;
+                            createdByUserId: null | string;
+                            layersUri: null | string;
+                            createdAt: string;
+                            updatedAt: string;
+                        };
+                    };
+                };
+            };
+        };
+        /** @description Update an alignment */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        kind?: string;
+                        subkind?: null | string;
+                        source?: unknown;
+                        target?: unknown;
+                        sourceLang?: null | string;
+                        targetLang?: null | string;
+                        links?: unknown;
+                        metadata?: unknown;
+                        layersUri?: null | string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            expressionId: null | string;
+                            kind: string;
+                            subkind: null | string;
+                            source: unknown;
+                            target: unknown;
+                            sourceLang: null | string;
+                            targetLang: null | string;
+                            links: unknown;
+                            metadata: unknown;
+                            projectId: null | string;
+                            createdByUserId: null | string;
+                            layersUri: null | string;
+                            createdAt: string;
+                            updatedAt: string;
+                        };
+                    };
+                };
+            };
+        };
+        post?: never;
+        /** @description Delete an alignment */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/layers/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Normalize an interchange payload through the model-service and persist the resulting layers records */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        records: unknown[];
+                        source: string;
+                        filename?: string;
+                        projectId?: null | string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            importId: string;
+                            source: string;
+                            persisted: number;
+                            skipped: number;
+                            byNsid: {
+                                [key: string]: number;
+                            };
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/layers/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Serialize a corpus into an interchange artifact via the model-service */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        corpusId?: string;
+                        corpusName?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": unknown;
+                    };
+                };
+            };
+        };
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;

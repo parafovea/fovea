@@ -4,12 +4,15 @@ import {
   Video,
   Fingerprint,
   Globe,
+  FileText,
   Users,
   Folder,
   Share2,
   Save,
   Download,
   Upload,
+  PackagePlus,
+  PackageOpen,
   Keyboard,
   X,
 } from 'lucide-react'
@@ -60,16 +63,20 @@ import { KeyboardShortcutsDialog } from '@components/shared/KeyboardShortcutsDia
 import { BreadcrumbNavigation } from '@components/shared/BreadcrumbNavigation'
 import { ImportDataDialog } from '@components/data-management/ImportDataDialog'
 import { ExportDialog } from '@components/data-management/ExportDialog'
+import { ImportCorpusDialog } from '@components/data-management/ImportCorpusDialog'
+import { ExportLayersDialog } from '@components/data-management/ExportLayersDialog'
 import { UserMenu } from '@components/auth/UserMenu'
 import UserSettingsDialog from '@components/settings/UserSettingsDialog'
 import ModelSettingsDialog from '@components/settings/ModelSettingsDialog'
 import AboutDialog from '@components/settings/AboutDialog'
 import AdminPanelDialog from '@components/settings/AdminPanelDialog'
+import { useTourAnchor } from '@/tours/engine/anchorRegistry'
 
 const menuItems = [
   { text: 'Video Browser', icon: Video, path: '/', shortcut: 'Cmd/Ctrl+1' },
   { text: 'Persona Builder', icon: Fingerprint, path: '/ontology', shortcut: 'Cmd/Ctrl+2' },
   { text: 'World Builder', icon: Globe, path: '/objects', shortcut: 'Cmd/Ctrl+3' },
+  { text: 'Documents', icon: FileText, path: '/documents', shortcut: 'Cmd/Ctrl+4' },
 ]
 
 const collaborationItems = [
@@ -83,9 +90,16 @@ export default function Layout() {
   const navigate = useNavigate()
   const [saving, setSaving] = useState(false)
 
+  const appShellRef = useTourAnchor('app-shell')
+  const appSidebarRef = useTourAnchor('app-sidebar')
+  const exportTriggerRef = useTourAnchor('export-trigger')
+  const importTriggerRef = useTourAnchor('import-trigger')
+
   // Use Zustand dialogStore for dialog state management
   const exportDialog = useDialog('export')
   const importDialog = useDialog('import')
+  const importCorpusDialog = useDialog('importCorpus')
+  const exportLayersDialog = useDialog('exportLayers')
   const shortcutsDialog = useDialog('keyboardShortcuts')
   const userSettingsDialog = useDialog('userSettings')
   const modelSettingsDialog = useDialog('modelSettings')
@@ -196,6 +210,9 @@ export default function Layout() {
     if (location.pathname === '/') return 'videoBrowser'
     if (location.pathname === '/ontology') return 'ontologyWorkspace'
     if (location.pathname === '/objects') return 'objectWorkspace'
+    // The document workspace has no dedicated keyboard-shortcut context in the
+    // shortcuts dialog yet, so it falls through to the default help view.
+    if (location.pathname.startsWith('/documents')) return undefined
     return undefined
   }
 
@@ -257,8 +274,8 @@ export default function Layout() {
   })
 
   return (
-    <SidebarProvider defaultOpen data-tour-id="app-shell">
-      <Sidebar collapsible="icon" side="left" data-tour-id="app-sidebar">
+    <SidebarProvider defaultOpen ref={appShellRef}>
+      <Sidebar collapsible="icon" side="left" ref={appSidebarRef}>
         <SidebarHeader className="p-3">
           <Link to="/" className="flex items-center gap-2 group-data-[collapsible=icon]:justify-center">
             <img src={logo} alt="FOVEA Logo" className="h-8 w-8 shrink-0" />
@@ -391,10 +408,10 @@ export default function Layout() {
               <TooltipTrigger
                 render={
                   <Button
+                    ref={exportTriggerRef}
                     variant="ghost"
                     size="sm"
                     onClick={handleExport}
-                    data-tour-id="export-trigger"
                   />
                 }
               >
@@ -407,10 +424,10 @@ export default function Layout() {
               <TooltipTrigger
                 render={
                   <Button
+                    ref={importTriggerRef}
                     variant="ghost"
                     size="sm"
                     onClick={importDialog.openDialog}
-                    data-tour-id="import-trigger"
                   />
                 }
               >
@@ -418,6 +435,40 @@ export default function Layout() {
                 Import
               </TooltipTrigger>
               <TooltipContent>Import Data</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={importCorpusDialog.openDialog}
+                    aria-label="Import Corpus"
+                    data-tour-id="import-corpus-trigger"
+                  />
+                }
+              >
+                <PackagePlus className="h-4 w-4" />
+              </TooltipTrigger>
+              <TooltipContent>Import Corpus</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={exportLayersDialog.openDialog}
+                    aria-label="Export Corpus"
+                    data-tour-id="export-layers-trigger"
+                  />
+                }
+              >
+                <PackageOpen className="h-4 w-4" />
+              </TooltipTrigger>
+              <TooltipContent>Export Corpus</TooltipContent>
             </Tooltip>
             <Separator orientation="vertical" className="mx-1 h-4" />
             <Tooltip>
@@ -468,6 +519,16 @@ export default function Layout() {
       <ExportDialog
         open={exportDialog.open}
         onClose={exportDialog.close}
+      />
+
+      <ImportCorpusDialog
+        open={importCorpusDialog.open}
+        onClose={importCorpusDialog.close}
+      />
+
+      <ExportLayersDialog
+        open={exportLayersDialog.open}
+        onClose={exportLayersDialog.close}
       />
 
       <UserSettingsDialog

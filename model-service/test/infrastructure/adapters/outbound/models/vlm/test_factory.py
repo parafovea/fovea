@@ -17,6 +17,10 @@ architecture Pydantic class is the only legitimate dispatch key.
 
 from __future__ import annotations
 
+import pytest
+
+pytest.importorskip("torch")  # requires the ML backend; skipped in the torch-free venv
+
 from typing import get_args
 
 import pytest
@@ -105,8 +109,7 @@ class TestRegistryBindings:
         them out by name suffix and locks the negative (no external-API
         architecture may accidentally be registered).
         """
-        union_type = get_args(VLMArchitecture)[0]
-        members = set(get_args(union_type))
+        members = set(get_args(VLMArchitecture))
         external_api_markers = {cls for cls in members if cls.__name__.endswith("VisionAPI")}
         local_members = members - external_api_markers
         registered = set(vlm_registry.registered_architectures)

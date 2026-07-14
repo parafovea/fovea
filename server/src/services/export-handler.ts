@@ -1,13 +1,94 @@
 import {
-  Annotation as PrismaAnnotation,
   Persona as PrismaPersona,
-  Ontology as PrismaOntology,
-  WorldState as PrismaWorldState,
   VideoSummary as PrismaVideoSummary,
-  Claim as PrismaClaim,
-  ClaimRelation as PrismaClaimRelation,
   PrismaClient
 } from '@prisma/client'
+
+import type { VideoAnnotationOutput } from './video-annotation-mapper.js'
+import { readOntologyAggregate } from './layers-bridge/ontology-bridge.js'
+import { readWorldAggregate } from './layers-bridge/world-bridge.js'
+import { readSummaryClaims } from './layers-bridge/claim-bridge.js'
+import { readLayersAnnotations } from './layers-bridge/annotation-bridge.js'
+
+/** Coerces a Date or ISO string to an ISO string. */
+function toIso(value: Date | string): string {
+  return typeof value === 'string' ? value : value.toISOString()
+}
+
+/**
+ * The ontology fields the exporter serializes. Satisfied by the legacy Ontology
+ * row and by an aggregate reconstructed from the layers store.
+ */
+interface OntologyExportInput {
+  personaId: string
+  entityTypes: unknown
+  eventTypes: unknown
+  roleTypes: unknown
+  relationTypes: unknown
+}
+
+/**
+ * The world-state fields the exporter serializes. Satisfied by the legacy
+ * WorldState row and by an aggregate reconstructed from the layers store.
+ */
+interface WorldStateExportInput {
+  entities: unknown
+  events: unknown
+  times: unknown
+  entityCollections: unknown
+  eventCollections: unknown
+  timeCollections: unknown
+  relations: unknown
+}
+
+/**
+ * The claim fields the exporter serializes. Satisfied by the legacy Claim row
+ * and by a claim reconstructed from the layers store (ISO string timestamps).
+ */
+interface ClaimExportInput {
+  id: string
+  summaryId: string
+  summaryType: string
+  text: string
+  gloss: unknown
+  parentClaimId?: string | null
+  textSpans?: unknown
+  timeSpans?: unknown
+  claimerType?: string | null
+  claimerGloss?: unknown
+  claimRelation?: unknown
+  claimEventId?: string | null
+  claimTimeId?: string | null
+  claimLocationId?: string | null
+  confidence?: number | null
+  modelUsed?: string | null
+  extractionStrategy?: string | null
+  audio?: unknown
+  video?: unknown
+  metadata?: unknown
+  comment?: string | null
+  createdBy?: string | null
+  createdAt: Date | string
+  updatedAt: Date | string
+}
+
+/**
+ * The claim-relation fields the exporter serializes. Satisfied by the legacy
+ * ClaimRelation row and by a relation reconstructed from the layers store.
+ */
+interface ClaimRelationExportInput {
+  id: string
+  sourceClaimId: string
+  targetClaimId: string
+  relationTypeId: string
+  sourceSpans?: unknown
+  targetSpans?: unknown
+  confidence?: number | null
+  notes?: string | null
+  createdBy?: string | null
+  createdAt: Date | string
+  updatedAt: Date | string
+}
 
 /**
  * @interface BoundingBox
@@ -542,96 +623,43 @@ export class AnnotationExporter {
   }
 
   /**
-   * Convert Prisma annotation to export format.
-   * This handles the conversion from database format to the typed Annotation interface.
+   * Convert a reconstructed layers annotation (the annotation wire shape) to the
+   * export format. It maps the semantic `type`/`label`/`linkType` triple onto the
+   * export's `annotationType` plus the per-link `linked*Id` / `typeId` fields.
    *
-   * Database storage format:
-   * - `type` column: 'type' | 'object' (annotation type)
-   * - `label` column: typeId (for type annotations) or linkedEntityId (for object annotations)
-   * - `frames` column: BoundingBoxSequence directly (NOT nested as frames.boundingBoxSequence)
-   * - `personaId` column: persona ID for type annotations
-   * - `confidence` column: confidence score
-   *
-   * @param prismaAnnotation - Annotation from Prisma
-   * @returns Typed annotation, or null if annotation has invalid data
+   * @param output - the reconstructed legacy annotation
+   * @returns the typed export annotation
    */
-  convertPrismaAnnotation(prismaAnnotation: PrismaAnnotation): Annotation | null {
-    // The frames field IS the BoundingBoxSequence directly (not nested)
-    const frames = prismaAnnotation.frames as BoundingBoxSequence | Record<string, unknown> | null
-
-    // Create a default empty sequence for annotations without bounding boxes
-    // This supports ontology-only annotations (summaries, claims without spatial data)
-    const emptySequence: BoundingBoxSequence = {
-      boxes: [],
-      interpolationSegments: [],
-      visibilityRanges: [],
-      totalFrames: 0,
-      keyframeCount: 0,
-      interpolatedFrameCount: 0
-    }
-
-    // Determine if frames contains a valid bounding box sequence
-    let boundingBoxSequence: BoundingBoxSequence
-    if (frames && typeof frames === 'object' && 'boxes' in frames && Array.isArray(frames.boxes)) {
-      // Valid sequence structure
-      boundingBoxSequence = {
-        boxes: frames.boxes || [],
-        interpolationSegments: (frames as BoundingBoxSequence).interpolationSegments || [],
-        visibilityRanges: (frames as BoundingBoxSequence).visibilityRanges || [],
-        trackId: (frames as BoundingBoxSequence).trackId,
-        trackingSource: (frames as BoundingBoxSequence).trackingSource,
-        trackingConfidence: (frames as BoundingBoxSequence).trackingConfidence,
-        totalFrames: (frames as BoundingBoxSequence).totalFrames || 0,
-        keyframeCount: (frames as BoundingBoxSequence).keyframeCount || 0,
-        interpolatedFrameCount: (frames as BoundingBoxSequence).interpolatedFrameCount || 0
-      }
-    } else {
-      // No bounding box data - use empty sequence (valid for ontology-only exports)
-      boundingBoxSequence = emptySequence
-    }
-
-    // Annotation type is stored in the 'type' column, NOT inside frames
-    const annotationType = (prismaAnnotation.type === 'type' || prismaAnnotation.type === 'object')
-      ? prismaAnnotation.type as 'type' | 'object'
-      : 'type'
-
-    // Build the annotation object
+  convertVideoAnnotationOutput(output: VideoAnnotationOutput): Annotation {
+    const annotationType: 'type' | 'object' = output.type === 'object' ? 'object' : 'type'
     const annotation: Annotation = {
-      id: prismaAnnotation.id,
-      videoId: prismaAnnotation.videoId,
+      id: output.id,
+      videoId: output.videoId,
       annotationType,
-      boundingBoxSequence,
-      createdAt: prismaAnnotation.createdAt.toISOString(),
-      updatedAt: prismaAnnotation.updatedAt.toISOString()
+      boundingBoxSequence: output.frames as unknown as BoundingBoxSequence,
+      createdAt: output.createdAt,
+      updatedAt: output.updatedAt,
     }
 
-    // Type-specific fields - read from database columns, not frames
     if (annotationType === 'type') {
-      annotation.personaId = prismaAnnotation.personaId ?? undefined
-      // For type annotations, label contains the typeId
-      annotation.typeId = prismaAnnotation.label
-      // Default typeCategory since it's not stored separately
+      annotation.personaId = output.personaId ?? undefined
+      annotation.typeId = output.label
       annotation.typeCategory = 'entity'
     } else {
-      // For object annotations, `label` is the linked id and `linkType`
-      // tells us which kind of world object it points at. NULL linkType
-      // (legacy rows) is treated as entity-linked, matching the historical
-      // behavior of always populating linkedEntityId.
-      const linkType = (prismaAnnotation as PrismaAnnotation & { linkType?: string | null }).linkType ?? 'entity'
+      const linkType = output.linkType ?? 'entity'
       if (linkType === 'event') {
-        annotation.linkedEventId = prismaAnnotation.label
+        annotation.linkedEventId = output.label
       } else if (linkType === 'time') {
-        annotation.linkedTimeId = prismaAnnotation.label
+        annotation.linkedTimeId = output.label
       } else if (linkType === 'location') {
-        annotation.linkedLocationId = prismaAnnotation.label
+        annotation.linkedLocationId = output.label
       } else {
-        annotation.linkedEntityId = prismaAnnotation.label
+        annotation.linkedEntityId = output.label
       }
     }
 
-    // Add confidence from database column
-    if (prismaAnnotation.confidence !== null) {
-      annotation.confidence = prismaAnnotation.confidence
+    if (output.confidence !== null) {
+      annotation.confidence = output.confidence
     }
 
     return annotation
@@ -664,7 +692,7 @@ export class AnnotationExporter {
   /**
    * Export an ontology to JSONL format.
    */
-  exportOntology(ontology: PrismaOntology): string {
+  exportOntology(ontology: OntologyExportInput): string {
     const exportData = {
       type: 'ontology',
       data: {
@@ -684,12 +712,12 @@ export class AnnotationExporter {
    */
   exportPersonasWithOntologies(
     personas: PrismaPersona[],
-    ontologies: PrismaOntology[]
+    ontologies: OntologyExportInput[]
   ): string {
     const lines: string[] = []
 
     // Create a map of ontologies by personaId
-    const ontologyMap = new Map<string, PrismaOntology>()
+    const ontologyMap = new Map<string, OntologyExportInput>()
     for (const ontology of ontologies) {
       ontologyMap.set(ontology.personaId, ontology)
     }
@@ -714,7 +742,7 @@ export class AnnotationExporter {
    * Export world state objects to JSONL format.
    * Exports entities, events, times, collections, and relations.
    */
-  exportWorldState(worldState: PrismaWorldState): string {
+  exportWorldState(worldState: WorldStateExportInput): string {
     const lines: string[] = []
 
     // Export entities
@@ -840,7 +868,7 @@ export class AnnotationExporter {
   /**
    * Export a claim to JSONL format.
    */
-  exportClaim(claim: PrismaClaim): string {
+  exportClaim(claim: ClaimExportInput): string {
     const exportData = {
       type: 'claim',
       data: {
@@ -866,8 +894,8 @@ export class AnnotationExporter {
         metadata: claim.metadata ?? undefined,
         comment: claim.comment || undefined,
         createdBy: claim.createdBy || undefined,
-        createdAt: claim.createdAt.toISOString(),
-        updatedAt: claim.updatedAt.toISOString(),
+        createdAt: toIso(claim.createdAt),
+        updatedAt: toIso(claim.updatedAt),
       }
     }
     return JSON.stringify(exportData)
@@ -876,7 +904,7 @@ export class AnnotationExporter {
   /**
    * Export a claim relation to JSONL format.
    */
-  exportClaimRelation(relation: PrismaClaimRelation): string {
+  exportClaimRelation(relation: ClaimRelationExportInput): string {
     const exportData = {
       type: 'claim_relation',
       data: {
@@ -889,8 +917,8 @@ export class AnnotationExporter {
         confidence: relation.confidence || undefined,
         notes: relation.notes || undefined,
         createdBy: relation.createdBy || undefined,
-        createdAt: relation.createdAt.toISOString(),
-        updatedAt: relation.updatedAt.toISOString(),
+        createdAt: toIso(relation.createdAt),
+        updatedAt: toIso(relation.updatedAt),
       }
     }
     return JSON.stringify(exportData)
@@ -901,13 +929,13 @@ export class AnnotationExporter {
    */
   exportSummariesWithClaims(
     summaries: PrismaVideoSummary[],
-    claims: PrismaClaim[],
-    claimRelations: PrismaClaimRelation[]
+    claims: ClaimExportInput[],
+    claimRelations: ClaimRelationExportInput[]
   ): string {
     const lines: string[] = []
 
     // Create maps for efficient lookup
-    const claimsBySummary = new Map<string, PrismaClaim[]>()
+    const claimsBySummary = new Map<string, ClaimExportInput[]>()
     for (const claim of claims) {
       const summaryId = claim.summaryId
       if (!claimsBySummary.has(summaryId)) {
@@ -966,71 +994,84 @@ export class AnnotationExporter {
       },
     }))
 
-    // 1. Export personas with ontologies
+    // 1. Export personas with ontologies. Personas remain their own model; each
+    // persona's ontology is reconstructed from the layers store (legacy
+    // read-through when no layers rows exist yet).
     const personas = await prisma.persona.findMany({
       where: { userId },
       orderBy: { createdAt: 'asc' }
     })
-    const ontologies = await prisma.ontology.findMany({
-      where: { persona: { userId } },
-      orderBy: { createdAt: 'asc' }
-    })
+    const personaIds = personas.map(p => p.id)
+    const ontologies: OntologyExportInput[] = []
+    for (const persona of personas) {
+      const { aggregate, exists } = await readOntologyAggregate(prisma, persona.id)
+      if (!exists) continue
+      ontologies.push({ personaId: persona.id, ...aggregate })
+    }
     if (personas.length > 0) {
       lines.push(this.exportPersonasWithOntologies(personas, ontologies))
     }
 
-    // 2. Export world state
-    const worldState = await prisma.worldState.findFirst({
-      where: { userId, projectId: null }
+    // 2. Export world state (reconstructed from the layers store).
+    const { aggregate: worldAggregate, exists: worldExists } = await readWorldAggregate(prisma, {
+      userId,
+      projectId: null,
     })
-    if (worldState) {
-      const worldLines = this.exportWorldState(worldState)
+    if (worldExists) {
+      const worldLines = this.exportWorldState(worldAggregate)
       if (worldLines) {
         lines.push(worldLines)
       }
     }
 
-    // 3. Export summaries with claims
+    // 3. Export summaries with claims. Summaries remain their own model; claims
+    // and claim relations are reconstructed from the layers store per summary.
     const summaries = await prisma.videoSummary.findMany({
       where: { persona: { userId } },
       orderBy: { createdAt: 'asc' }
     })
-    const summaryIds = summaries.map(s => s.id)
-    const claims = await prisma.claim.findMany({
-      where: { summaryId: { in: summaryIds } },
-      orderBy: { createdAt: 'asc' }
-    })
-    const claimIds = claims.map(c => c.id)
-    const claimRelations = await prisma.claimRelation.findMany({
-      where: {
-        OR: [
-          { sourceClaimId: { in: claimIds } },
-          { targetClaimId: { in: claimIds } }
-        ]
-      },
-      orderBy: { createdAt: 'asc' }
-    })
+    const claims: ClaimExportInput[] = []
+    const claimRelations: ClaimRelationExportInput[] = []
+    for (const summary of summaries) {
+      const { claims: summaryClaims, relations } = await readSummaryClaims(prisma, summary.id)
+      claims.push(...summaryClaims)
+      claimRelations.push(...relations)
+    }
     if (summaries.length > 0 || claims.length > 0) {
       lines.push(this.exportSummariesWithClaims(summaries, claims, claimRelations))
     }
 
-    // 4. Export annotations
-    const annotations = await prisma.annotation.findMany({
-      where: {
+    // 4. Export annotations (reconstructed from the layers store).
+    const outputs = await this.readAnnotationOutputs(prisma, {
+      layersWhere: {
         OR: [
-          { personaId: { in: personas.map(p => p.id) } },
-          { personaId: null, userId } // Object annotations scoped to user
-        ]
+          { layer: { personaId: { in: personaIds } } },
+          { layer: { personaId: null }, createdByUserId: userId },
+        ],
       },
-      orderBy: { createdAt: 'asc' }
     })
-    const convertedAnnotations = annotations
-      .map(a => this.convertPrismaAnnotation(a))
-      .filter((a): a is NonNullable<typeof a> => a !== null)
+    const convertedAnnotations = outputs.map(o => this.convertVideoAnnotationOutput(o))
     if (convertedAnnotations.length > 0) {
       lines.push(this.exportAnnotations(convertedAnnotations))
     }
 
     return lines.filter(Boolean).join('\n')
+  }
+
+  /**
+   * Reads a scope's annotations from the layers store, reconstructed into the
+   * annotation wire shape.
+   *
+   * @param prisma - the Prisma client
+   * @param where - the layers WHERE clause selecting the scope
+   * @returns the reconstructed annotations
+   */
+  async readAnnotationOutputs(
+    prisma: PrismaClient,
+    where: {
+      layersWhere: Parameters<typeof readLayersAnnotations>[1]
+    },
+  ): Promise<VideoAnnotationOutput[]> {
+    return readLayersAnnotations(prisma, where.layersWhere)
   }
 }

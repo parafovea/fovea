@@ -135,20 +135,7 @@ export interface components {
         };
         /**
          * AugmentRequest
-         * @description Request model for ontology augmentation endpoint.
-         *
-         *     Attributes
-         *     ----------
-         *     persona_id : str
-         *         Unique identifier for the persona.
-         *     domain : str
-         *         Domain description for context.
-         *     existing_types : list[str]
-         *         Existing type names.
-         *     target_category : str
-         *         Category to augment (entity, event, role, relation).
-         *     max_suggestions : int
-         *         Maximum suggestions to return.
+         * @description Request body for the ontology augmentation endpoint.
          */
         AugmentRequest: {
             /**
@@ -181,20 +168,7 @@ export interface components {
         };
         /**
          * AugmentResponse
-         * @description Response model for ontology augmentation endpoint.
-         *
-         *     Attributes
-         *     ----------
-         *     id : str
-         *         Unique identifier for this augmentation.
-         *     persona_id : str
-         *         Persona identifier.
-         *     target_category : str
-         *         Category that was augmented.
-         *     suggestions : list[OntologyType]
-         *         Suggested types.
-         *     reasoning : str
-         *         Explanation of why these types were suggested.
+         * @description Response body for the ontology augmentation endpoint.
          */
         AugmentResponse: {
             /**
@@ -216,7 +190,7 @@ export interface components {
              * Suggestions
              * @description Suggested types
              */
-            suggestions: components["schemas"]["OntologyType"][];
+            suggestions?: components["schemas"]["OntologyType"][];
             /**
              * Target Category
              * @description Category that was augmented
@@ -225,20 +199,7 @@ export interface components {
         };
         /**
          * BoundingBox
-         * @description Bounding box coordinates for object detection.
-         *
-         *     All coordinates are normalized to [0, 1] range.
-         *
-         *     Attributes
-         *     ----------
-         *     x : float
-         *         X coordinate (normalized).
-         *     y : float
-         *         Y coordinate (normalized).
-         *     width : float
-         *         Box width (normalized).
-         *     height : float
-         *         Box height (normalized).
+         * @description Bounding box coordinates, normalized to [0, 1].
          */
         BoundingBox: {
             /**
@@ -264,37 +225,16 @@ export interface components {
         };
         /**
          * ClaimExtractionRequest
-         * @description Request model for claim extraction endpoint.
-         *
-         *     Attributes
-         *     ----------
-         *     summary_id : str
-         *         Unique identifier for the summary.
-         *     summary_text : str
-         *         Full summary text to extract claims from.
-         *     sentences : list[str] | None
-         *         Pre-split sentences (optional).
-         *     annotations : list[dict[str, Any]] | None
-         *         Annotation data for context.
-         *     ontology_types : list[dict[str, Any]] | None
-         *         Ontology type definitions for context.
-         *     ontology_glosses : dict[str, str] | None
-         *         Map of type ID to gloss text.
-         *     extraction_strategy : str
-         *         Strategy for extracting claims.
-         *     max_claims : int
-         *         Maximum number of claims to extract.
-         *     min_confidence : float
-         *         Minimum confidence threshold for claims.
+         * @description Request body for the claim extraction endpoint.
          */
         ClaimExtractionRequest: {
             /**
              * Annotations
-             * @description Annotation data for context (object names, times, etc.)
+             * @description Annotation data for context
              * @default null
              */
             annotations?: {
-                [key: string]: unknown;
+                [key: string]: components["schemas"]["JsonValue"];
             }[] | null;
             /**
              * Extraction Strategy
@@ -329,11 +269,11 @@ export interface components {
              * @default null
              */
             ontology_types?: {
-                [key: string]: unknown;
+                [key: string]: components["schemas"]["JsonValue"];
             }[] | null;
             /**
              * Sentences
-             * @description Pre-split sentences (optional, will split if not provided)
+             * @description Pre-split sentences (optional)
              * @default null
              */
             sentences?: string[] | null;
@@ -350,25 +290,14 @@ export interface components {
         };
         /**
          * ClaimExtractionResponse
-         * @description Response model for claim extraction endpoint.
-         *
-         *     Attributes
-         *     ----------
-         *     summary_id : str
-         *         Summary identifier.
-         *     claims : list[ExtractedClaim]
-         *         Extracted claims.
-         *     model_used : str
-         *         LLM model used for extraction.
-         *     processing_time : float
-         *         Processing time in seconds.
+         * @description Response body for the claim extraction endpoint.
          */
         ClaimExtractionResponse: {
             /**
              * Claims
              * @description Extracted claims
              */
-            claims: components["schemas"]["ExtractedClaim"][];
+            claims?: components["schemas"]["ExtractedClaim"][];
             /**
              * Model Used
              * @description LLM model used for extraction
@@ -388,19 +317,6 @@ export interface components {
         /**
          * ClaimRelationship
          * @description Relationship between claims across sources.
-         *
-         *     Attributes
-         *     ----------
-         *     source_claim_id : str
-         *         Source claim ID.
-         *     target_claim_id : str
-         *         Target claim ID.
-         *     relation_type : str
-         *         Type of relationship.
-         *     confidence : float
-         *         Confidence score.
-         *     notes : str | None
-         *         Optional notes.
          */
         ClaimRelationship: {
             /**
@@ -435,25 +351,14 @@ export interface components {
         /**
          * ClaimSource
          * @description Source of claims for synthesis (single video or collection).
-         *
-         *     Attributes
-         *     ----------
-         *     source_id : str
-         *         Video ID or collection ID.
-         *     source_type : str
-         *         Type of source (video or collection).
-         *     claims : list[dict[str, Any]]
-         *         Hierarchical claim structure.
-         *     metadata : dict[str, Any] | None
-         *         Source metadata (video title, date, etc.).
          */
         ClaimSource: {
             /**
              * Claims
              * @description Hierarchical claim structure
              */
-            claims: {
-                [key: string]: unknown;
+            claims?: {
+                [key: string]: components["schemas"]["JsonValue"];
             }[];
             /**
              * Metadata
@@ -461,7 +366,7 @@ export interface components {
              * @default null
              */
             metadata?: {
-                [key: string]: unknown;
+                [key: string]: components["schemas"]["JsonValue"];
             } | null;
             /**
              * Source Id
@@ -478,17 +383,6 @@ export interface components {
         /**
          * Detection
          * @description Single object detection result.
-         *
-         *     Attributes
-         *     ----------
-         *     label : str
-         *         Detected object label.
-         *     bounding_box : BoundingBox
-         *         Bounding box coordinates.
-         *     confidence : float
-         *         Detection confidence score.
-         *     track_id : str | None
-         *         Tracking ID across frames.
          */
         Detection: {
             /** @description Bounding box coordinates */
@@ -512,22 +406,7 @@ export interface components {
         };
         /**
          * DetectionRequest
-         * @description Request model for object detection endpoint.
-         *
-         *     Attributes
-         *     ----------
-         *     video_id : str
-         *         Unique identifier for the video.
-         *     query : str
-         *         Text query describing objects to detect.
-         *     video_path : str | None
-         *         Optional full path to video file.
-         *     frame_numbers : list[int]
-         *         Specific frames to process.
-         *     confidence_threshold : float
-         *         Minimum confidence for detections.
-         *     enable_tracking : bool
-         *         Whether to enable object tracking.
+         * @description Request body for the object detection endpoint.
          */
         DetectionRequest: {
             /**
@@ -566,29 +445,14 @@ export interface components {
         };
         /**
          * DetectionResponse
-         * @description Response model for object detection endpoint.
-         *
-         *     Attributes
-         *     ----------
-         *     id : str
-         *         Unique identifier for this detection job.
-         *     video_id : str
-         *         Video identifier.
-         *     query : str
-         *         Query that was used.
-         *     frames : list[FrameDetections]
-         *         Frames with detections.
-         *     total_detections : int
-         *         Total detections across all frames.
-         *     processing_time : float
-         *         Processing time in seconds.
+         * @description Response body for the object detection endpoint.
          */
         DetectionResponse: {
             /**
              * Frames
              * @description Frames with detections
              */
-            frames: components["schemas"]["FrameDetections"][];
+            frames?: components["schemas"]["FrameDetections"][];
             /**
              * Id
              * @description Unique identifier for this detection job
@@ -617,24 +481,7 @@ export interface components {
         };
         /**
          * ExtractedClaim
-         * @description Single extracted claim with metadata.
-         *
-         *     Attributes
-         *     ----------
-         *     text : str
-         *         Claim text.
-         *     sentence_index : int | None
-         *         Index of source sentence (if sentence-based).
-         *     char_start : int | None
-         *         Character offset in summary text.
-         *     char_end : int | None
-         *         Character offset end in summary text.
-         *     subclaims : list[ExtractedClaim]
-         *         Nested subclaims.
-         *     confidence : float
-         *         Model confidence in claim extraction.
-         *     claim_type : str | None
-         *         Semantic type of claim.
+         * @description Single extracted claim with metadata and nested subclaims.
          */
         ExtractedClaim: {
             /**
@@ -680,27 +527,18 @@ export interface components {
              * @description Optional reasoning trace from a thinking-capable model
              * @default null
              */
-            thinking?: components["schemas"]["ThinkingTraceSchema"] | null;
+            thinking?: components["schemas"]["ThinkingTrace"] | null;
         };
         /**
          * FrameDetections
          * @description Detections for a single video frame.
-         *
-         *     Attributes
-         *     ----------
-         *     frame_number : int
-         *         Frame number in the video.
-         *     timestamp : float
-         *         Time in seconds from video start.
-         *     detections : list[Detection]
-         *         Detections in this frame.
          */
         FrameDetections: {
             /**
              * Detections
              * @description Detections in this frame
              */
-            detections: components["schemas"]["Detection"][];
+            detections?: components["schemas"]["Detection"][];
             /**
              * Frame Number
              * @description Frame number in the video
@@ -715,10 +553,6 @@ export interface components {
         /**
          * GenerationOverrides
          * @description Per-request overrides for LLM/VLM sampling parameters.
-         *
-         *     Each field defaults to ``None``; a ``None`` field means "use the backend
-         *     default" (see ``GET /api/models/defaults``). Non-null values are passed
-         *     through to the inference call site unchanged.
          */
         GenerationOverrides: {
             /**
@@ -740,20 +574,13 @@ export interface components {
              */
             top_p?: number | null;
         };
+        /** @description An arbitrary JSON value. */
+        JsonValue: string | number | boolean | unknown[] | {
+            [key: string]: unknown;
+        } | null;
         /**
          * KeyFrame
          * @description Key frame information from video analysis.
-         *
-         *     Attributes
-         *     ----------
-         *     frame_number : int
-         *         Frame number in the video.
-         *     timestamp : float
-         *         Time in seconds from video start.
-         *     description : str
-         *         Frame description.
-         *     confidence : float
-         *         Model confidence score (0-1).
          */
         KeyFrame: {
             /**
@@ -781,19 +608,6 @@ export interface components {
         /**
          * OntologyType
          * @description Suggested ontology type from augmentation.
-         *
-         *     Attributes
-         *     ----------
-         *     name : str
-         *         Type name.
-         *     description : str
-         *         Type description.
-         *     parent : str | None
-         *         Parent type name.
-         *     confidence : float
-         *         Confidence score.
-         *     examples : list[str]
-         *         Example instances.
          */
         OntologyType: {
             /**
@@ -827,40 +641,11 @@ export interface components {
              * @description Optional reasoning trace from a thinking-capable model
              * @default null
              */
-            thinking?: components["schemas"]["ThinkingTraceSchema"] | null;
+            thinking?: components["schemas"]["ThinkingTrace"] | null;
         };
         /**
          * SummarizeRequest
-         * @description Request model for video summarization endpoint.
-         *
-         *     Attributes
-         *     ----------
-         *     video_id : str
-         *         Unique identifier for the video.
-         *     persona_id : str
-         *         Unique identifier for the persona.
-         *     video_path : str | None
-         *         Optional full path to video file.
-         *     persona_role : str | None
-         *         Optional persona role for context.
-         *     information_need : str | None
-         *         Optional information need for context.
-         *     frame_sample_rate : int
-         *         Frames to sample per second (1-10).
-         *     max_frames : int
-         *         Maximum frames to process (1-100).
-         *     enable_audio : bool
-         *         Enable audio transcription.
-         *     audio_language : str | None
-         *         Audio language code (e.g., 'en').
-         *     enable_speaker_diarization : bool
-         *         Enable speaker identification.
-         *     fusion_strategy : str | None
-         *         Audio-visual fusion strategy.
-         *     generation_overrides : GenerationOverrides | None
-         *         Optional per-request VLM sampling overrides.
-         *     audio_overrides : AudioOverrides | None
-         *         Optional per-request transcription/diarization overrides.
+         * @description Request body for the video summarization endpoint.
          */
         SummarizeRequest: {
             /**
@@ -940,26 +725,7 @@ export interface components {
         };
         /**
          * SummarizeResponse
-         * @description Response model for video summarization endpoint.
-         *
-         *     Attributes
-         *     ----------
-         *     id : str
-         *         Unique identifier for this summary.
-         *     video_id : str
-         *         Video identifier.
-         *     persona_id : str
-         *         Persona identifier.
-         *     summary : str
-         *         Text summary of video content.
-         *     visual_analysis : str | None
-         *         Detailed visual content analysis.
-         *     audio_transcript : str | None
-         *         Transcribed audio content.
-         *     key_frames : list[KeyFrame]
-         *         Key frames with descriptions.
-         *     confidence : float
-         *         Overall confidence score.
+         * @description Response body for the video summarization endpoint.
          */
         SummarizeResponse: {
             /**
@@ -1040,14 +806,14 @@ export interface components {
              * @description Optional reasoning trace from a thinking-capable model
              * @default null
              */
-            thinking?: components["schemas"]["ThinkingTraceSchema"] | null;
+            thinking?: components["schemas"]["ThinkingTrace"] | null;
             /**
              * Transcript Json
              * @description Structured transcript with segments
              * @default null
              */
             transcript_json?: {
-                [key: string]: unknown;
+                [key: string]: components["schemas"]["JsonValue"];
             } | null;
             /**
              * Video Id
@@ -1069,33 +835,12 @@ export interface components {
         };
         /**
          * SummarySynthesisRequest
-         * @description Request model for summary synthesis endpoint.
-         *
-         *     Attributes
-         *     ----------
-         *     summary_id : str
-         *         Target summary identifier.
-         *     claim_sources : list[ClaimSource]
-         *         Claim hierarchies from one or more sources.
-         *     claim_relations : list[ClaimRelationship] | None
-         *         Relationships between claims.
-         *     ontology_context : dict[str, Any] | None
-         *         Ontology types and glosses for references.
-         *     persona_context : dict[str, Any] | None
-         *         Persona information for perspective.
-         *     synthesis_strategy : str
-         *         Strategy for organizing summary.
-         *     max_length : int
-         *         Maximum summary length in words.
-         *     include_conflicts : bool
-         *         Explicitly mention informational conflicts.
-         *     include_citations : bool
-         *         Include inline citations to source claims.
+         * @description Request body for the summary synthesis endpoint.
          */
         SummarySynthesisRequest: {
             /**
              * Claim Relations
-             * @description Relationships between claims (conflicts, support, etc.)
+             * @description Relationships between claims
              * @default null
              */
             claim_relations?: components["schemas"]["ClaimRelationship"][] | null;
@@ -1124,11 +869,11 @@ export interface components {
             max_length?: number;
             /**
              * Ontology Context
-             * @description Ontology types and glosses for # references
+             * @description Ontology types and glosses for references
              * @default null
              */
             ontology_context?: {
-                [key: string]: unknown;
+                [key: string]: components["schemas"]["JsonValue"];
             } | null;
             /**
              * Persona Context
@@ -1136,7 +881,7 @@ export interface components {
              * @default null
              */
             persona_context?: {
-                [key: string]: unknown;
+                [key: string]: components["schemas"]["JsonValue"];
             } | null;
             /**
              * Summary Id
@@ -1153,22 +898,7 @@ export interface components {
         };
         /**
          * SummarySynthesisResponse
-         * @description Response model for summary synthesis endpoint.
-         *
-         *     Attributes
-         *     ----------
-         *     summary_id : str
-         *         Summary identifier.
-         *     summary_gloss : list[dict[str, Any]]
-         *         Generated summary as GlossItem array with references.
-         *     model_used : str
-         *         LLM model used for synthesis.
-         *     processing_time : float
-         *         Processing time in seconds.
-         *     claims_used : int
-         *         Total claims synthesized.
-         *     synthesis_metadata : dict[str, Any]
-         *         Metadata about synthesis.
+         * @description Response body for the summary synthesis endpoint.
          */
         SummarySynthesisResponse: {
             /**
@@ -1188,10 +918,10 @@ export interface components {
             processing_time: number;
             /**
              * Summary Gloss
-             * @description Generated summary as GlossItem array with # and @ references
+             * @description Generated summary as GlossItem array with references
              */
-            summary_gloss: {
-                [key: string]: unknown;
+            summary_gloss?: {
+                [key: string]: components["schemas"]["JsonValue"];
             }[];
             /**
              * Summary Id
@@ -1200,22 +930,22 @@ export interface components {
             summary_id: string;
             /**
              * Synthesis Metadata
-             * @description Metadata about synthesis (strategy, conflicts, etc.)
+             * @description Metadata about synthesis
              */
-            synthesis_metadata: {
-                [key: string]: unknown;
+            synthesis_metadata?: {
+                [key: string]: components["schemas"]["JsonValue"];
             };
             /**
              * @description Optional reasoning trace from a thinking-capable model
              * @default null
              */
-            thinking?: components["schemas"]["ThinkingTraceSchema"] | null;
+            thinking?: components["schemas"]["ThinkingTrace"] | null;
         };
         /**
-         * ThinkingStepSchema
+         * ThinkingStep
          * @description One step of a chain-of-thought trace.
          */
-        ThinkingStepSchema: {
+        ThinkingStep: {
             /**
              * Content
              * @description Reasoning step text
@@ -1229,10 +959,10 @@ export interface components {
             tokens_used?: number | null;
         };
         /**
-         * ThinkingTraceSchema
+         * ThinkingTrace
          * @description Captured reasoning trace from a thinking-capable model.
          */
-        ThinkingTraceSchema: {
+        ThinkingTrace: {
             /**
              * Model Id
              * @description Producing model identifier
@@ -1243,7 +973,7 @@ export interface components {
              * Steps
              * @description Reasoning steps in order
              */
-            steps?: components["schemas"]["ThinkingStepSchema"][];
+            steps?: components["schemas"]["ThinkingStep"][];
             /**
              * Total Tokens
              * @description Optional total tokens across steps

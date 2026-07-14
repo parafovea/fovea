@@ -42,9 +42,13 @@ def _model_manager_with(task_types: dict[str, str]) -> Mock:
 
 
 @pytest.fixture
-def client_with_full_manager() -> Generator[TestClient, None, None]:
+def client_with_full_manager() -> Generator[TestClient]:
     """TestClient for a manager configured with both claim tasks."""
     from src.infrastructure.adapters.inbound.fastapi.dependencies import get_model_manager
+
+    # Patching create_llm_loader imports the llm.loader module, which pulls in
+    # the ML backend; skip these cases in the torch-free environment.
+    pytest.importorskip("torch")
 
     manager = _model_manager_with(
         {
@@ -70,7 +74,7 @@ def client_with_full_manager() -> Generator[TestClient, None, None]:
 
 
 @pytest.fixture
-def client_with_no_tasks() -> Generator[TestClient, None, None]:
+def client_with_no_tasks() -> Generator[TestClient]:
     """TestClient for a manager with an empty ``tasks`` dict."""
     from src.infrastructure.adapters.inbound.fastapi.dependencies import get_model_manager
 

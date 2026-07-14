@@ -44,7 +44,7 @@ describe('useAnnotations hooks', () => {
   describe('useAnnotations', () => {
     it('fetches annotations for a video', async () => {
       server.use(
-        http.get('/api/annotations/:videoId', () => {
+        http.get('/api/layers/videos/:videoId/annotations', () => {
           return HttpResponse.json([
             {
               id: 'annotation-1',
@@ -80,7 +80,7 @@ describe('useAnnotations hooks', () => {
 
     it('handles errors', async () => {
       server.use(
-        http.get('/api/annotations/:videoId', () => {
+        http.get('/api/layers/videos/:videoId/annotations', () => {
           return HttpResponse.json(
             { message: 'Error' },
             { status: 500 }
@@ -125,7 +125,7 @@ describe('useAnnotations hooks', () => {
 
     it('handles errors', async () => {
       server.use(
-        http.post('/api/annotations', () => {
+        http.post('/api/layers/videos/:videoId/annotations',() => {
           return HttpResponse.json(
             { message: 'Error' },
             { status: 500 }
@@ -175,7 +175,7 @@ describe('useAnnotations hooks', () => {
 
     it('handles errors', async () => {
       server.use(
-        http.put('/api/annotations/:annotationId', () => {
+        http.put('/api/layers/videos/:videoId/annotations/:annotationId', () => {
           return HttpResponse.json(
             { message: 'Error' },
             { status: 500 }
@@ -218,7 +218,7 @@ describe('useAnnotations hooks', () => {
 
     it('handles errors', async () => {
       server.use(
-        http.delete('/api/annotations/:videoId/:annotationId', () => {
+        http.delete('/api/layers/videos/:videoId/annotations/:annotationId', () => {
           return HttpResponse.json(
             { message: 'Error' },
             { status: 500 }
@@ -276,7 +276,7 @@ describe('useAnnotations hooks', () => {
     it('handles errors', async () => {
       // Mock the POST endpoint for new annotations to return an error
       server.use(
-        http.post('/api/annotations', () => {
+        http.post('/api/layers/videos/:videoId/annotations',() => {
           return HttpResponse.json(
             { message: 'Error' },
             { status: 500 }
@@ -324,13 +324,13 @@ describe('useAnnotations hooks', () => {
       const postCalls: unknown[] = []
       const putCalls: Array<{ id: string; body: unknown }> = []
       server.use(
-        http.post('/api/annotations', async ({ request }) => {
+        http.post('/api/layers/videos/:videoId/annotations',async ({ request }) => {
           postCalls.push(await request.json())
           return HttpResponse.json(
             { id: 'should-not-fire', videoId: 'video-1', label: 'oops' },
           )
         }),
-        http.put('/api/annotations/:id', async ({ params, request }) => {
+        http.put('/api/layers/videos/:videoId/annotations/:id',async ({ params, request }) => {
           putCalls.push({ id: String(params.id), body: await request.json() })
           return HttpResponse.json({
             id: String(params.id),
@@ -391,7 +391,7 @@ describe('useAnnotations hooks', () => {
     it('sends the client id in the create POST body so client and server ids stay in sync', async () => {
       const postBodies: Array<Record<string, unknown>> = []
       server.use(
-        http.post('/api/annotations', async ({ request }) => {
+        http.post('/api/layers/videos/:videoId/annotations',async ({ request }) => {
           const body = await request.json() as Record<string, unknown>
           postBodies.push(body)
           return HttpResponse.json(
@@ -453,11 +453,11 @@ describe('useAnnotations hooks', () => {
       const postCalls: unknown[] = []
       const putCalls: string[] = []
       server.use(
-        http.post('/api/annotations', async ({ request }) => {
+        http.post('/api/layers/videos/:videoId/annotations',async ({ request }) => {
           postCalls.push(await request.json())
           return HttpResponse.json({ id: 'should-not-fire' }, { status: 201 })
         }),
-        http.put('/api/annotations/:id', ({ params }) => {
+        http.put('/api/layers/videos/:videoId/annotations/:id',({ params }) => {
           putCalls.push(String(params.id))
           return HttpResponse.json({ id: String(params.id) })
         }),
@@ -511,11 +511,11 @@ describe('useAnnotations hooks', () => {
       const postCalls: unknown[] = []
       const putCalls: string[] = []
       server.use(
-        http.post('/api/annotations', async ({ request }) => {
+        http.post('/api/layers/videos/:videoId/annotations',async ({ request }) => {
           postCalls.push(await request.json())
           return HttpResponse.json({ id: 'should-not-fire' })
         }),
-        http.put('/api/annotations/:id', ({ params }) => {
+        http.put('/api/layers/videos/:videoId/annotations/:id',({ params }) => {
           putCalls.push(String(params.id))
           return HttpResponse.json({ id: String(params.id) })
         }),

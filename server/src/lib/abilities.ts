@@ -11,19 +11,32 @@
  * @module
  */
 
-import { Prisma } from '@prisma/client'
 import { createPrismaAbility } from '@casl/prisma'
 import type { ForcedSubject, PureAbility, RawRuleFrom } from '@casl/ability'
 import type { PrismaQuery } from '@casl/prisma'
 
 /**
  * Narrow string-only form of subjects, used in rule definitions and
- * class-level authorize() checks. Must match Prisma.ModelName values
- * exactly so accessibleBy() can resolve them to Prisma WHERE clauses.
+ * class-level authorize() checks.
+ *
+ * The layers-store subjects (Media, Expression, ... TypeDef) name real Prisma
+ * models, so accessibleBy() resolves them to Prisma WHERE clauses. The remaining
+ * subjects (Annotation, Claim, WorldState) are authorization concepts: their
+ * rows live in the layers store and are reconstructed and authorized under these
+ * names, so they carry `create`/`read`/`update`/`delete` rules but are never
+ * passed to accessibleBy().
  */
 export type SubjectName =
   | 'Annotation' | 'Claim' | 'Persona' | 'WorldState' | 'Video'
   | 'VideoSummary' | 'Project' | 'UserGroup' | 'User'
+  // Layers-shaped annotation store. Every content model scopes on
+  // createdByUserId (+ optional projectId); Tokenization and CorpusMembership
+  // carry no scope columns of their own and are authorized via their parent
+  // (the tokenization's expression, the membership's corpus).
+  | 'Media' | 'Expression' | 'Segmentation' | 'Tokenization'
+  | 'AnnotationLayer' | 'LayersAnnotation' | 'TextAnnotationRelation'
+  | 'GraphNode' | 'GraphEdge' | 'LayersOntology' | 'TypeDef'
+  | 'Corpus' | 'CorpusMembership' | 'ClusterSet' | 'Alignment'
 
 /**
  * All actions that can be performed on resources.
@@ -43,13 +56,14 @@ export type Actions =
   | 'manage'
 
 /**
- * Subject type for CASL abilities. Includes both string model names (for
- * accessibleBy) and ForcedSubject-tagged objects (for subject() helper).
+ * Subject type for CASL abilities. Includes both string subject names (for
+ * accessibleBy on the layers models) and ForcedSubject-tagged objects (for the
+ * subject() helper).
  */
 type Subjects =
-  | Prisma.ModelName
+  | SubjectName
   | 'all'
-  | ForcedSubject<Prisma.ModelName>
+  | ForcedSubject<SubjectName>
 
 /**
  * CASL ability parameterized with Fovea actions and Prisma model names.
@@ -108,7 +122,7 @@ export function defineAbilitiesFor(
 
   // Ownership field varies per model. CASL's MongoQuery conditions match
   // against actual Prisma row fields, so we must use the correct column name.
-  const ownershipField = (modelName: Prisma.ModelName): string => {
+  const ownershipField = (modelName: SubjectName): string => {
     switch (modelName) {
       case 'Persona':
       case 'WorldState':
@@ -215,6 +229,25 @@ export function defineAbilitiesFor(
   rules.push({ action: 'update', subject: 'WorldState', conditions: { userId } })
   rules.push({ action: 'delete', subject: 'WorldState', conditions: { userId } })
 
+  // Layers-shaped store: every user can always CRUD the layers content they
+  // own, mirroring the Annotation baseline. Each of these models carries a
+  // createdByUserId column, so the ownership condition resolves against real
+  // Prisma rows both in accessibleBy() WHERE clauses and in single-row
+  // ability.can() checks. Tokenization and CorpusMembership are intentionally
+  // excluded — they hold no scope column and are authorized through their
+  // parent (the tokenization's expression, the membership's corpus).
+  const layersOwnedSubjects: SubjectName[] = [
+    'Media', 'Expression', 'Segmentation', 'AnnotationLayer', 'LayersAnnotation',
+    'TextAnnotationRelation', 'GraphNode', 'GraphEdge', 'LayersOntology',
+    'TypeDef', 'Corpus', 'ClusterSet', 'Alignment',
+  ]
+  for (const layerSubject of layersOwnedSubjects) {
+    rules.push({ action: 'create', subject: layerSubject, conditions: { createdByUserId: userId } })
+    rules.push({ action: 'read', subject: layerSubject, conditions: { createdByUserId: userId } })
+    rules.push({ action: 'update', subject: layerSubject, conditions: { createdByUserId: userId } })
+    rules.push({ action: 'delete', subject: layerSubject, conditions: { createdByUserId: userId } })
+  }
+
   // Projects: every user can fully manage projects they personally own
   // (ownerUserId === userId). The create baseline is load-bearing — personal
   // project creation has no pre-existing project_memberships row to authorize
@@ -236,11 +269,11 @@ export function defineAbilitiesFor(
 }
 
 /**
- * Maps a RolePermission resourceType string to the corresponding Prisma
- * model name. Returns null for unmapped types.
+ * Maps a RolePermission resourceType string to the corresponding CASL subject
+ * name. Returns null for unmapped types.
  */
-function mapResourceTypeToModelName(resourceType: string): Prisma.ModelName | null {
-  const map: Record<string, Prisma.ModelName> = {
+function mapResourceTypeToModelName(resourceType: string): SubjectName | null {
+  const map: Record<string, SubjectName> = {
     annotation: 'Annotation',
     claim: 'Claim',
     persona: 'Persona',
@@ -250,6 +283,22 @@ function mapResourceTypeToModelName(resourceType: string): Prisma.ModelName | nu
     project: 'Project',
     group: 'UserGroup',
     user: 'User',
+    // Layers-shaped annotation store.
+    media: 'Media',
+    expression: 'Expression',
+    segmentation: 'Segmentation',
+    tokenization: 'Tokenization',
+    annotation_layer: 'AnnotationLayer',
+    layers_annotation: 'LayersAnnotation',
+    text_annotation_relation: 'TextAnnotationRelation',
+    graph_node: 'GraphNode',
+    graph_edge: 'GraphEdge',
+    layers_ontology: 'LayersOntology',
+    type_def: 'TypeDef',
+    corpus: 'Corpus',
+    corpus_membership: 'CorpusMembership',
+    cluster_set: 'ClusterSet',
+    alignment: 'Alignment',
   }
   return map[resourceType] ?? null
 }

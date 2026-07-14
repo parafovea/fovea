@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vites
 import { buildApp } from '../../src/app.js'
 import { hashPassword } from '../../src/lib/password.js'
 import { seedBaselinePermissions } from '../helpers/rbac-test-setup.js'
+import { seedOntology } from '../helpers/seed-layers.js'
 import { FastifyInstance } from 'fastify'
 import { PrismaClient } from '@prisma/client'
 
@@ -43,10 +44,18 @@ describe('Videos API - Detection', () => {
     // Clean database in dependency order
     await prisma.apiKey.deleteMany()
     await prisma.session.deleteMany()
-    await prisma.annotation.deleteMany()
+    // Layers store (reverse-FK order): persona ontologies seed the layers
+    // ontology tables, so clear them before the personas they reference.
+    await prisma.layersAnnotation.deleteMany()
+    await prisma.annotationLayer.deleteMany()
+    await prisma.graphEdge.deleteMany()
+    await prisma.graphNode.deleteMany()
+    await prisma.typeDef.deleteMany()
+    await prisma.layersOntology.deleteMany()
+    await prisma.expression.deleteMany()
+    await prisma.media.deleteMany()
     await prisma.videoSummary.deleteMany()
     await prisma.video.deleteMany()
-    await prisma.ontology.deleteMany()
     await prisma.persona.deleteMany()
     await prisma.user.deleteMany()
     await prisma.rolePermission.deleteMany()
@@ -107,17 +116,18 @@ describe('Videos API - Detection', () => {
           role: 'Analyst',
           informationNeed: 'Testing',
           userId: testUserId,
-          ontology: {
-            create: {
-              entityTypes: [
-                { id: '1', name: 'Person', description: 'Human' },
-                { id: '2', name: 'Car', description: 'Vehicle' },
-              ],
-              eventTypes: [],
-              roleTypes: [],
-              relationTypes: [],
-            },
-          },
+        },
+      })
+      await seedOntology(prisma, {
+        data: {
+          personaId: persona.id,
+          entityTypes: [
+            { id: '1', name: 'Person', description: 'Human' },
+            { id: '2', name: 'Car', description: 'Vehicle' },
+          ],
+          eventTypes: [],
+          roleTypes: [],
+          relationTypes: [],
         },
       })
 
@@ -179,18 +189,19 @@ describe('Videos API - Detection', () => {
           role: 'Player Development Analyst',
           informationNeed: 'Tracking pitcher mechanics',
           userId: testUserId,
-          ontology: {
-            create: {
-              entityTypes: [
-                { id: '1', name: 'Pitcher', description: 'Throws the ball' },
-              ],
-              eventTypes: [
-                { id: '1', name: 'Pitch', description: 'Throwing action' },
-              ],
-              roleTypes: [],
-              relationTypes: [],
-            },
-          },
+        },
+      })
+      await seedOntology(prisma, {
+        data: {
+          personaId: persona.id,
+          entityTypes: [
+            { id: '1', name: 'Pitcher', description: 'Throws the ball' },
+          ],
+          eventTypes: [
+            { id: '1', name: 'Pitch', description: 'Throwing action' },
+          ],
+          roleTypes: [],
+          relationTypes: [],
         },
       })
 
@@ -322,14 +333,15 @@ describe('Videos API - Detection', () => {
           role: 'Analyst',
           informationNeed: 'Testing',
           userId: testUserId,
-          ontology: {
-            create: {
-              entityTypes: [],
-              eventTypes: [],
-              roleTypes: [],
-              relationTypes: [],
-            },
-          },
+        },
+      })
+      await seedOntology(prisma, {
+        data: {
+          personaId: persona.id,
+          entityTypes: [],
+          eventTypes: [],
+          roleTypes: [],
+          relationTypes: [],
         },
       })
 
@@ -389,14 +401,15 @@ describe('Videos API - Detection', () => {
           role: 'Analyst',
           informationNeed: 'Testing',
           userId: testUserId,
-          ontology: {
-            create: {
-              entityTypes: [{ id: '1', name: 'Person', description: 'Human' }],
-              eventTypes: [],
-              roleTypes: [],
-              relationTypes: [],
-            },
-          },
+        },
+      })
+      await seedOntology(prisma, {
+        data: {
+          personaId: persona.id,
+          entityTypes: [{ id: '1', name: 'Person', description: 'Human' }],
+          eventTypes: [],
+          roleTypes: [],
+          relationTypes: [],
         },
       })
 
@@ -451,14 +464,15 @@ describe('Videos API - Detection', () => {
           role: 'Analyst',
           informationNeed: 'Testing',
           userId: testUserId,
-          ontology: {
-            create: {
-              entityTypes: [{ id: '1', name: 'Person', description: 'Human' }],
-              eventTypes: [],
-              roleTypes: [],
-              relationTypes: [],
-            },
-          },
+        },
+      })
+      await seedOntology(prisma, {
+        data: {
+          personaId: persona.id,
+          entityTypes: [{ id: '1', name: 'Person', description: 'Human' }],
+          eventTypes: [],
+          roleTypes: [],
+          relationTypes: [],
         },
       })
 
