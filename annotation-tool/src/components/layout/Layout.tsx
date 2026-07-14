@@ -70,6 +70,7 @@ import UserSettingsDialog from '@components/settings/UserSettingsDialog'
 import ModelSettingsDialog from '@components/settings/ModelSettingsDialog'
 import AboutDialog from '@components/settings/AboutDialog'
 import AdminPanelDialog from '@components/settings/AdminPanelDialog'
+import { useTourAnchor } from '@/tours/engine/anchorRegistry'
 
 const menuItems = [
   { text: 'Video Browser', icon: Video, path: '/', shortcut: 'Cmd/Ctrl+1' },
@@ -88,6 +89,11 @@ export default function Layout() {
   const location = useLocation()
   const navigate = useNavigate()
   const [saving, setSaving] = useState(false)
+
+  const appShellRef = useTourAnchor('app-shell')
+  const appSidebarRef = useTourAnchor('app-sidebar')
+  const exportTriggerRef = useTourAnchor('export-trigger')
+  const importTriggerRef = useTourAnchor('import-trigger')
 
   // Use Zustand dialogStore for dialog state management
   const exportDialog = useDialog('export')
@@ -268,8 +274,8 @@ export default function Layout() {
   })
 
   return (
-    <SidebarProvider defaultOpen data-tour-id="app-shell">
-      <Sidebar collapsible="icon" side="left" data-tour-id="app-sidebar">
+    <SidebarProvider defaultOpen ref={appShellRef}>
+      <Sidebar collapsible="icon" side="left" ref={appSidebarRef}>
         <SidebarHeader className="p-3">
           <Link to="/" className="flex items-center gap-2 group-data-[collapsible=icon]:justify-center">
             <img src={logo} alt="FOVEA Logo" className="h-8 w-8 shrink-0" />
@@ -402,10 +408,10 @@ export default function Layout() {
               <TooltipTrigger
                 render={
                   <Button
+                    ref={exportTriggerRef}
                     variant="ghost"
                     size="sm"
                     onClick={handleExport}
-                    data-tour-id="export-trigger"
                   />
                 }
               >
@@ -418,10 +424,10 @@ export default function Layout() {
               <TooltipTrigger
                 render={
                   <Button
+                    ref={importTriggerRef}
                     variant="ghost"
                     size="sm"
                     onClick={importDialog.openDialog}
-                    data-tour-id="import-trigger"
                   />
                 }
               >

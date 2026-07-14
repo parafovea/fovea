@@ -1,5 +1,5 @@
 /**
- * Tour-anchor smoke test — asserts that every `data-tour-id` referenced
+ * Tour-anchor smoke test — asserts that every `data-tour-anchor` referenced
  * by a built-in tour script resolves to at least one element on the
  * route it's expected to live on. Catches the most likely failure mode
  * of the tour system: a component rename or refactor that quietly drops
@@ -108,11 +108,11 @@ test.describe('Tour anchors smoke', () => {
 
     async function checkRoute(specs: AnchorSpec[]): Promise<void> {
       for (const { anchor, optional } of specs) {
-        const count = await page.locator(`[data-tour-id="${anchor}"]`).count()
+        const count = await page.locator(`[data-tour-anchor="${anchor}"]`).count()
         if (optional) {
-          expect(count, `optional anchor [data-tour-id="${anchor}"] must resolve to 0 or 1`).toBeLessThanOrEqual(1)
+          expect(count, `optional anchor [data-tour-anchor="${anchor}"] must resolve to 0 or 1`).toBeLessThanOrEqual(1)
         } else {
-          expect(count, `anchor [data-tour-id="${anchor}"] must resolve to >= 1`).toBeGreaterThanOrEqual(1)
+          expect(count, `anchor [data-tour-anchor="${anchor}"] must resolve to >= 1`).toBeGreaterThanOrEqual(1)
         }
       }
     }
@@ -135,7 +135,7 @@ test.describe('Tour anchors smoke', () => {
       .locator(`[data-persona-id="${testPersona.id}"]`)
       .getByRole('button', { name: 'Open' })
       .click()
-    await page.waitForSelector('[data-tour-id="ontology-workspace-tabs"]', { timeout: 5000 })
+    await page.waitForSelector('[data-tour-anchor="ontology-workspace-tabs"]', { timeout: 5000 })
     await checkRoute(ALL_STATIC_ANCHORS.filter((a) => a.route === 'ontology'))
 
     // World / object workspace.

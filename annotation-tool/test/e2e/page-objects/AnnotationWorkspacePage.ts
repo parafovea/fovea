@@ -245,7 +245,7 @@ export class AnnotationWorkspacePage extends BasePage {
    * seeks the playhead to the annotation's start.
    */
   async selectFirstAnnotation(): Promise<void> {
-    const firstRow = this.page.locator('[data-tour-id="annotation-list-first"]')
+    const firstRow = this.page.locator('[data-tour-anchor="annotation-list-first"]')
     await expect(firstRow).toBeVisible({ timeout: 10000 })
     await firstRow.click()
     await this.page.waitForTimeout(300)

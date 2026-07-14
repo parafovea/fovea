@@ -35,6 +35,7 @@ import { ImportOptions, ImportPreview, ImportResult, Conflict } from '@models/ty
 import { ImportResultDialog } from './ImportResultDialog'
 import { shouldShowOrphanSkippedBanner } from './importResultBanner'
 import { ExpandableJsonViewer } from '@components/shared/ExpandableJsonViewer'
+import { useTourAnchor } from '@/tours/engine/anchorRegistry'
 
 /**
  * Props for the ImportDataDialog component.
@@ -58,6 +59,9 @@ interface ImportDataDialogProps {
  * @returns Import dialog component
  */
 export function ImportDataDialog({ open, onClose, onImportComplete }: ImportDataDialogProps): JSX.Element {
+  const importDialogRef = useTourAnchor('import-dialog')
+  const importFormatSpecRef = useTourAnchor('import-format-spec-trigger')
+
   // File management
   const [file, setFile] = useState<File | null>(null)
   const [dragActive, setDragActive] = useState(false)
@@ -514,7 +518,7 @@ export function ImportDataDialog({ open, onClose, onImportComplete }: ImportData
         open={open}
         onOpenChange={(isOpen) => { if (!isOpen) onClose() }}
       >
-        <DialogContent data-tour-id="import-dialog" className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
+        <DialogContent ref={importDialogRef} className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Import Data</DialogTitle>
           </DialogHeader>
@@ -534,7 +538,7 @@ export function ImportDataDialog({ open, onClose, onImportComplete }: ImportData
             {/* Format Documentation Accordion */}
             <Accordion>
               <AccordionItem value="format-spec">
-                <AccordionTrigger data-tour-id="import-format-spec-trigger">
+                <AccordionTrigger ref={importFormatSpecRef}>
                   Format Specification & Example
                 </AccordionTrigger>
                 <AccordionContent>

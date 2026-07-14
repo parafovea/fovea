@@ -62,7 +62,7 @@ async function readTelemetry(page: Page): Promise<TelemetryEvent[]> {
 }
 
 /**
- * Inject a synthetic anchor on the page with the given `data-tour-id`,
+ * Inject a synthetic anchor on the page with the given `data-tour-anchor`,
  * sized and positioned so the SpotlightOverlay has a non-zero rect to
  * draw against. Returns a cleanup callback to remove the element.
  *
@@ -79,7 +79,7 @@ async function injectAnchor(
   await page.evaluate(
     ({ tourId, id, opts }) => {
       const el = document.createElement('div')
-      el.setAttribute('data-tour-id', tourId)
+      el.setAttribute('data-tour-anchor', tourId)
       el.id = id
       Object.assign(el.style, {
         position: 'fixed',
@@ -263,7 +263,7 @@ test.describe('Tour engine: menu', () => {
     await page.waitForSelector('role=dialog[name="Guided tours"]', {
       timeout: 5000,
     })
-    const tiles = page.locator('[data-tour-id^="tour-menu-tile-"]')
+    const tiles = page.locator('[data-tour-anchor^="tour-menu-tile-"]')
     await expect(tiles).toHaveCount(12)
   })
 
@@ -274,7 +274,7 @@ test.describe('Tour engine: menu', () => {
     await waitForHandle(page)
     await page.evaluate(() => window.__foveaTour?.openMenu())
     const firstTile = page.locator(
-      '[data-tour-id="tour-menu-tile-first-annotation"]',
+      '[data-tour-anchor="tour-menu-tile-first-annotation"]',
     )
     await firstTile.getByRole('button', { name: 'Start' }).click()
     await page.waitForSelector('[data-fovea-tour-step-card]')
@@ -425,7 +425,7 @@ test.describe('Tour engine: SpotlightOverlay', () => {
     // assert the spotlight resizes with it.
     await page.evaluate(() => {
       const el = document.createElement('div')
-      el.setAttribute('data-tour-id', 'app-shell')
+      el.setAttribute('data-tour-anchor', 'app-shell')
       el.id = 'e2e-resize-anchor'
       Object.assign(el.style, {
         position: 'fixed',
@@ -604,11 +604,11 @@ test.describe('Tour engine: keyboard', () => {
     await page.goto('/')
     await waitForHandle(page)
     // Inject a focusable input so we can park focus inside it before
-    // launching the tour. Anchor it to a known data-tour-id so the
+    // launching the tour. Anchor it to a known data-tour-anchor so the
     // engine has something to spotlight too.
     await page.evaluate(() => {
       const wrap = document.createElement('div')
-      wrap.setAttribute('data-tour-id', 'app-shell')
+      wrap.setAttribute('data-tour-anchor', 'app-shell')
       wrap.id = 'e2e-input-host'
       const input = document.createElement('input')
       input.id = 'e2e-input'
@@ -631,7 +631,7 @@ test.describe('Tour engine: keyboard', () => {
     await waitForHandle(page)
     await page.evaluate(() => {
       const wrap = document.createElement('div')
-      wrap.setAttribute('data-tour-id', 'app-shell')
+      wrap.setAttribute('data-tour-anchor', 'app-shell')
       wrap.id = 'e2e-esc-host'
       const input = document.createElement('input')
       input.id = 'e2e-esc-input'
@@ -891,7 +891,7 @@ test.describe('Tour engine: auto-advance on click', () => {
     // shelf never mounts — and we can test the click pathway.
     await page.evaluate(() => {
       const btn = document.createElement('button')
-      btn.setAttribute('data-tour-id', 'video-browser-root')
+      btn.setAttribute('data-tour-anchor', 'video-browser-root')
       btn.id = 'e2e-click-target'
       btn.textContent = 'click me'
       Object.assign(btn.style, {
@@ -1125,7 +1125,7 @@ test.describe('Tour engine: pause + resume', () => {
       // Synthetic anchor in the visible viewport so SpotlightOverlay's
       // scrollIntoView never fires (anchor is on-screen at top: 300).
       const anchor = document.createElement('div')
-      anchor.setAttribute('data-tour-id', 'app-shell')
+      anchor.setAttribute('data-tour-anchor', 'app-shell')
       anchor.id = 'e2e-resume-scroll-anchor'
       Object.assign(anchor.style, {
         position: 'fixed',
@@ -1163,7 +1163,7 @@ test.describe('Tour engine: pause + resume', () => {
       Object.assign(filler.style, { height: '4000px', width: '1px' })
       document.body.appendChild(filler)
       const anchor = document.createElement('div')
-      anchor.setAttribute('data-tour-id', 'app-shell')
+      anchor.setAttribute('data-tour-anchor', 'app-shell')
       anchor.id = 'e2e-resume-scroll-anchor-2'
       Object.assign(anchor.style, {
         position: 'fixed',
@@ -1360,7 +1360,7 @@ test.describe('Tour engine: runtime DOM mutations', () => {
     await waitForHandle(page)
     await page.evaluate(() => {
       const el = document.createElement('div')
-      el.setAttribute('data-tour-id', 'app-shell')
+      el.setAttribute('data-tour-anchor', 'app-shell')
       el.id = 'e2e-disappearing-anchor'
       Object.assign(el.style, {
         position: 'fixed',
@@ -1401,7 +1401,7 @@ test.describe('Tour engine: runtime DOM mutations', () => {
     await waitForHandle(page)
     await page.evaluate(() => {
       const el = document.createElement('div')
-      el.setAttribute('data-tour-id', 'app-shell')
+      el.setAttribute('data-tour-anchor', 'app-shell')
       el.id = 'e2e-moving-anchor'
       Object.assign(el.style, {
         position: 'fixed',

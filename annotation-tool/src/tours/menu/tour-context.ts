@@ -5,13 +5,13 @@
  */
 
 import { createContext, useContext } from 'react'
-import type { TourScript } from '../engine/types'
+import type { Tour } from '../engine'
 
 export interface TourContextValue {
   openMenu: () => void
   closeMenu: () => void
-  launch: (tour: TourScript) => void
-  active: TourScript | null
+  launch: (tour: Tour) => void
+  active: Tour | null
 }
 
 export const TourContext = createContext<TourContextValue | null>(null)
