@@ -102,14 +102,15 @@ export class ExpressionRepository {
   }
 
   /**
-   * Finds the first summary of a video that carries a structured ASR
-   * transcript, ordered by creation so re-materialization is deterministic.
+   * Finds every summary of a video that carries a structured ASR transcript,
+   * ordered by creation (earliest first) so the caller can pick a transcript
+   * source deterministically.
    *
    * @param videoId - Video UUID
-   * @returns a summary with a non-null transcriptJson, or null if none exists
+   * @returns the transcript-bearing summaries, earliest first (empty if none)
    */
-  async findSummaryWithTranscript(videoId: string): Promise<VideoSummary | null> {
-    return this.prisma.videoSummary.findFirst({
+  async findSummariesWithTranscript(videoId: string): Promise<VideoSummary[]> {
+    return this.prisma.videoSummary.findMany({
       where: { videoId, transcriptJson: { not: Prisma.DbNull } },
       orderBy: { createdAt: 'asc' },
     })

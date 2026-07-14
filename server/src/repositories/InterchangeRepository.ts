@@ -93,6 +93,15 @@ function readString(rec: Record<string, unknown>, ...keys: string[]): string | u
   return undefined
 }
 
+/** Reads a numeric field under either a camelCase or snake_case key. */
+function readNumber(rec: Record<string, unknown>, ...keys: string[]): number | undefined {
+  for (const key of keys) {
+    const v = rec[key]
+    if (typeof v === 'number') return v
+  }
+  return undefined
+}
+
 /**
  * Resolves an `nsid` to the layers model it persists into. The nsid is a
  * namespaced layers id (e.g. `pub.layers.expression#Expression`); we key off
@@ -214,6 +223,9 @@ export class InterchangeRepository {
    * A child record (annotation layer, annotation) is likewise skipped when its
    * referenced parent (expression, layer) does not exist or belongs to a
    * different scope, so an import cannot graft rows onto another owner's parent.
+   * An expression whose resolved corpus or parent expression belongs to another
+   * scope is skipped for the same reason; an absent or unresolved container
+   * leaves the foreign key null rather than skipping the record.
    *
    * @returns true when a row was written, false when the record was skipped —
    *   because a required field or foreign key was absent, or because it would
@@ -286,6 +298,18 @@ export class InterchangeRepository {
           'expression',
           readString(value, 'parentExpressionId', 'parent_expression_id'),
         )
+        // A resolved container or parent must belong to the import scope; an
+        // expression must not be grafted onto another owner's corpus or parent
+        // expression. An absent or unresolved reference leaves the FK null (the
+        // FK-safe behavior above) rather than skipping the record.
+        if (corpusId) {
+          const corpusOwner = await this.findRowScope(tx, 'corpus', corpusId)
+          if (corpusOwner && !scopeMatches(corpusOwner, scope)) return false
+        }
+        if (parentExpressionId) {
+          const parentOwner = await this.findRowScope(tx, 'expression', parentExpressionId)
+          if (parentOwner && !scopeMatches(parentOwner, scope)) return false
+        }
         await tx.expression.upsert({
           where: { id },
           create: {
@@ -351,24 +375,51 @@ export class InterchangeRepository {
         // `features` column holds `value.features`, so downstream consumers read
         // the bundle rather than an id/anchor/label envelope.
         const features = optionalJson(value.features)
+        // denotesNodeId is a real GraphNode FK: only set it when the referenced
+        // node is present in the store, so an import never violates the FK (the
+        // node is not part of the corpus export). ontologyTypeRefId is a soft
+        // ref with no DB constraint and rides through as a plain scalar.
+        const denotesNodeId = await this.resolveFk(
+          tx,
+          'graph-node',
+          readString(value, 'denotesNodeId', 'denotes_node_id'),
+        )
         await tx.layersAnnotation.upsert({
           where: { id },
           create: {
             id,
             layerId,
             anchor: toJson(anchor),
+            tokenIndex: readNumber(value, 'tokenIndex', 'token_index'),
             label: readString(value, 'label'),
             value: readString(value, 'value'),
             text: readString(value, 'text'),
+            headIndex: readNumber(value, 'headIndex', 'head_index'),
+            targetIndex: readNumber(value, 'targetIndex', 'target_index'),
+            arguments: optionalJson(value.arguments),
+            confidence: readNumber(value, 'confidence'),
+            ontologyTypeRefId: readString(value, 'ontologyTypeRefId', 'ontology_type_ref_id'),
+            denotesNodeId,
+            temporal: optionalJson(value.temporal),
+            spatial: optionalJson(value.spatial),
             features,
             projectId,
             createdByUserId,
           },
           update: {
             anchor: toJson(anchor),
+            tokenIndex: readNumber(value, 'tokenIndex', 'token_index'),
             label: readString(value, 'label'),
             value: readString(value, 'value'),
             text: readString(value, 'text'),
+            headIndex: readNumber(value, 'headIndex', 'head_index'),
+            targetIndex: readNumber(value, 'targetIndex', 'target_index'),
+            arguments: optionalJson(value.arguments),
+            confidence: readNumber(value, 'confidence'),
+            ontologyTypeRefId: readString(value, 'ontologyTypeRefId', 'ontology_type_ref_id'),
+            denotesNodeId,
+            temporal: optionalJson(value.temporal),
+            spatial: optionalJson(value.spatial),
             features,
           },
         })
@@ -409,7 +460,7 @@ export class InterchangeRepository {
    */
   private async resolveFk(
     tx: Prisma.TransactionClient,
-    model: 'corpus' | 'media' | 'video' | 'expression',
+    model: 'corpus' | 'media' | 'video' | 'expression' | 'graph-node',
     id: string | undefined,
   ): Promise<string | undefined> {
     if (!id) return undefined
@@ -427,6 +478,9 @@ export class InterchangeRepository {
         break
       case 'expression':
         found = await tx.expression.findUnique({ where: { id }, select: idOnly })
+        break
+      case 'graph-node':
+        found = await tx.graphNode.findUnique({ where: { id }, select: idOnly })
         break
     }
     return found ? id : undefined

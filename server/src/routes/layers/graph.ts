@@ -10,6 +10,21 @@ import {
 } from '../../services/graph-service.js'
 
 /**
+ * TypeBox schema for the `@fovea/layers-schema` ObjectRef primitive used as a
+ * graph edge's source/target endpoint. Every field is optional — a consumer
+ * dispatches on which is populated — but each carries a concrete shape so a
+ * null or structurally-invalid endpoint is rejected at validation rather than
+ * reaching the service. `localId`/`objectId` are Uuid objects carrying a string
+ * `value`; the denormalized incident-node ids are derived from `localId.value`.
+ */
+const ObjectRefSchema = Type.Object({
+  knowledgeRef: Type.Optional(Type.Unknown()),
+  localId: Type.Optional(Type.Object({ value: Type.String() })),
+  objectId: Type.Optional(Type.Object({ value: Type.String() })),
+  recordRef: Type.Optional(Type.String())
+})
+
+/**
  * TypeBox schema for a graph-node response. JSON record columns
  * (properties/knowledgeRefs/metadata) pass through as Type.Unknown(); their
  * compile-time shape is the `@fovea/layers-schema` GraphNode interface.
@@ -190,8 +205,8 @@ export default async function graphRoutes(fastify: FastifyInstance): Promise<voi
       tags: ['layers-graph'],
       body: Type.Object({
         id: Type.Optional(Type.String({ format: 'uuid' })),
-        source: Type.Unknown(),
-        target: Type.Unknown(),
+        source: ObjectRefSchema,
+        target: ObjectRefSchema,
         edgeType: Type.String(),
         label: Type.Optional(Type.Union([Type.Null(), Type.String()])),
         ordinal: Type.Optional(Type.Union([Type.Null(), Type.Number()])),
@@ -230,8 +245,8 @@ export default async function graphRoutes(fastify: FastifyInstance): Promise<voi
       tags: ['layers-graph'],
       params: Type.Object({ id: Type.String() }),
       body: Type.Object({
-        source: Type.Optional(Type.Unknown()),
-        target: Type.Optional(Type.Unknown()),
+        source: Type.Optional(ObjectRefSchema),
+        target: Type.Optional(ObjectRefSchema),
         edgeType: Type.Optional(Type.String()),
         label: Type.Optional(Type.Union([Type.Null(), Type.String()])),
         ordinal: Type.Optional(Type.Union([Type.Null(), Type.Number()])),

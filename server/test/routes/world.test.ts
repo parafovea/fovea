@@ -320,13 +320,13 @@ describe('World State API', () => {
         events: [{ id: 'event-1', name: 'Event 1' }],
         times: [{ id: 'time-1', type: 'instant' }],
         entityCollections: [
-          { id: 'ecoll-1', name: 'Entity Collection 1', members: ['entity-1', 'entity-2'] }
+          { id: 'ecoll-1', name: 'Entity Collection 1', entityIds: ['entity-1', 'entity-2'] }
         ],
         eventCollections: [
-          { id: 'ecoll-2', name: 'Event Collection 1', members: ['event-1'] }
+          { id: 'ecoll-2', name: 'Event Collection 1', eventIds: ['event-1'] }
         ],
         timeCollections: [
-          { id: 'tcoll-1', name: 'Time Collection 1', members: ['time-1'] }
+          { id: 'tcoll-1', name: 'Time Collection 1', times: [{ id: 'time-1', type: 'instant' }] }
         ],
         relations: [
           { id: 'rel-1', relationTypeId: 'knows', sourceType: 'entity', sourceId: 'entity-1', targetType: 'entity', targetId: 'entity-2' }
@@ -454,13 +454,13 @@ describe('World State API', () => {
           { id: 'time-noon', label: 'Noon', type: 'instant' }
         ],
         entityCollections: [
-          { id: 'ec-people', name: 'People', description: [], members: ['entity-alice'], collectionType: 'group', typeAssignments: [] }
+          { id: 'ec-people', name: 'People', description: [], entityIds: ['entity-alice'], collectionType: 'group', typeAssignments: [] }
         ],
         eventCollections: [
-          { id: 'evc-agenda', name: 'Agenda', description: [], members: ['event-meeting'], collectionType: 'sequence', typeAssignments: [] }
+          { id: 'evc-agenda', name: 'Agenda', description: [], eventIds: ['event-meeting'], collectionType: 'sequence', typeAssignments: [] }
         ],
         timeCollections: [
-          { id: 'tc-day', name: 'Day', description: [], members: ['time-noon'], collectionType: 'group' }
+          { id: 'tc-day', name: 'Day', description: [], times: [{ id: 'time-noon', type: 'instant' }], collectionType: 'group' }
         ],
         relations: [
           { id: 'rel-attends', relationTypeId: 'attends', sourceType: 'entity', sourceId: 'entity-alice', targetType: 'event', targetId: 'event-meeting', metadata: { note: 'chair' } },

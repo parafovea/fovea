@@ -189,8 +189,9 @@ export class PersonaService {
     // A project-scoped persona may only be created by a member of that project.
     // The generic create ability passes for any self-owned persona regardless
     // of projectId, so a non-member could otherwise attach a persona to a
-    // project they cannot access; verify membership explicitly.
-    if (projectId) {
+    // project they cannot access; verify membership explicitly. System admins
+    // authorize via manage-all rather than the baseline rule, so they are exempt.
+    if (projectId && !ability.can('manage', 'all')) {
       const membership = await prisma.projectMembership.findUnique({
         where: { userId_projectId: { userId, projectId } },
       })

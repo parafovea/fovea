@@ -6,7 +6,7 @@ import { Prisma, type LayersAnnotation } from '@prisma/client'
 import { accessibleBy } from '@casl/prisma'
 import { subject } from '@casl/ability'
 
-import { NotFoundError, ForbiddenError } from '../../lib/errors.js'
+import { NotFoundError, ForbiddenError, ConflictError } from '../../lib/errors.js'
 import {
   annotationToLayers,
   layersToAnnotation,
@@ -362,6 +362,12 @@ const videoAnnotationsRoutes: FastifyPluginAsync = async (fastify: FastifyInstan
       ) {
         const existing = await findUpdateTarget(annotationId)
         if (existing) return updateExisting(existing)
+        // The client-supplied id already belongs to a row that is not an
+        // updatable bounding-box annotation under this grouping layer (e.g. a
+        // claim text span sharing the id space, or an annotation under another
+        // layer). It cannot be adopted as an update target, so the collision is
+        // a genuine conflict rather than a server fault.
+        throw new ConflictError(`An annotation with id ${annotationId} already exists`)
       }
       throw error
     }

@@ -84,3 +84,17 @@ export function claimSpanLayerId(summaryId: string): string {
 export function claimSpanAnnotationId(claimId: string, spanIndex: number): string {
   return deriveId('ann:claim-span', claimId, String(spanIndex))
 }
+
+/**
+ * The claim-relation edge id for a directed (source, target, relationType)
+ * triple. Deriving the id from the triple lets two concurrent identical
+ * requests resolve to the same primary-key row, so a retry or double-submit
+ * collapses to one edge rather than minting a duplicate.
+ */
+export function claimRelationEdgeId(
+  sourceClaimId: string,
+  targetClaimId: string,
+  relationTypeId: string,
+): string {
+  return deriveId('edge:claim-relation', sourceClaimId, targetClaimId, relationTypeId)
+}

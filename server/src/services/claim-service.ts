@@ -14,7 +14,7 @@ import { GraphRepository } from '../repositories/GraphRepository.js'
 import { AnnotationLayerRepository } from '../repositories/AnnotationLayerRepository.js'
 import { readOntologyAggregate } from './layers-bridge/ontology-bridge.js'
 import { getOrCreateVideoExpression } from './video-expression-service.js'
-import { claimSpanLayerId, deriveId, expressionTranscriptId } from './layers-id-map.js'
+import { claimRelationEdgeId, claimSpanLayerId, expressionTranscriptId } from './layers-id-map.js'
 import {
   claimSpanAnnotations,
   claimToNode,
@@ -956,7 +956,7 @@ export class ClaimService {
     // above cannot see an insert that has not committed, but both writes then
     // target the same id and the loser hits a unique violation, which collapses
     // to the stored edge rather than a second identical relation.
-    const relationId = deriveId('edge:claim-relation', claimId, targetClaimId, relationTypeId)
+    const relationId = claimRelationEdgeId(claimId, targetClaimId, relationTypeId)
     const now = new Date().toISOString()
     const relation: StoredRelation = {
       id: relationId,

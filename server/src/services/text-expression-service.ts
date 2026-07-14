@@ -258,17 +258,19 @@ export class TextExpressionService {
       results.push(metaExpr)
     }
 
-    // 2. ASR-transcript expression + segmentation, built from the first summary
-    //    that carries a structured transcript. Gate on the source summary's
-    //    CASL read, mirroring the /summaries routes: a summary the caller
-    //    cannot read is skipped rather than having its transcript materialized
-    //    into a caller-owned expression, so another user's private transcript
-    //    is never exposed.
-    const summary = await this.repository.findSummaryWithTranscript(videoId)
+    // 2. ASR-transcript expression + segmentation, built from the first
+    //    transcript-bearing summary the caller can read. Gate on the source
+    //    summary's CASL read, mirroring the /summaries routes: a summary the
+    //    caller cannot read is skipped rather than having its transcript
+    //    materialized into a caller-owned expression, so another user's
+    //    private transcript is never exposed. When an earlier summary is
+    //    unreadable but a later one is readable, the readable transcript is
+    //    still materialized.
+    const summaries = await this.repository.findSummariesWithTranscript(videoId)
     const readableSummary =
-      summary && (!this.ability || this.ability.can('read', subject('VideoSummary', summary)))
-        ? summary
-        : null
+      summaries.find(
+        (candidate) => !this.ability || this.ability.can('read', subject('VideoSummary', candidate))
+      ) ?? null
     const transcript = readableSummary ? asTranscriptJson(readableSummary.transcriptJson) : null
     if (readableSummary && transcript && transcript.segments.length > 0) {
       const { text, tokens } = transcriptToTokens(transcript.segments)
