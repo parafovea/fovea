@@ -58,6 +58,7 @@ describe('Import/export field-level round-trip fidelity', () => {
     await prisma.textAnnotationRelation.deleteMany()
     await prisma.layersAnnotation.deleteMany()
     await prisma.annotationLayer.deleteMany()
+    await prisma.clusterSet.deleteMany()
     await prisma.graphEdge.deleteMany()
     await prisma.graphNode.deleteMany()
     await prisma.typeDef.deleteMany()

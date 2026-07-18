@@ -503,9 +503,14 @@ describe('World State API', () => {
       // time = 4 GraphNodes; the 3 collections are ClusterSets, not nodes.
       const nodeCount = await prisma.graphNode.count({ where: { createdByUserId: testUserId } })
       expect(nodeCount).toBe(4)
-      // Edges are the 2 relations + entity-alice's 1 instance-of type assignment.
+      // Edges are the 2 relations; type assignments are LayersAnnotations, not edges.
       const edgeCount = await prisma.graphEdge.count({ where: { createdByUserId: testUserId } })
-      expect(edgeCount).toBe(3)
+      expect(edgeCount).toBe(2)
+      // entity-alice's type assignment lands as a LayersAnnotation, not an edge.
+      const typeAssignments = await prisma.layersAnnotation.count({
+        where: { createdByUserId: testUserId, label: 'type-assignment', denotesNodeId: 'entity-alice' },
+      })
+      expect(typeAssignments).toBe(1)
       // Collections are ClusterSets keyed by their own id.
       const clusterCount = await prisma.clusterSet.count({ where: { createdByUserId: testUserId } })
       expect(clusterCount).toBe(3)
@@ -798,10 +803,12 @@ describe('World State API', () => {
       expect(world.entityCollections[0].entityIds).not.toContain('entity-1')
       expect(await prisma.graphNode.findUnique({ where: { id: 'entity-1' } })).toBeNull()
 
-      // The entity-object gloss ref became plain text with the entity name.
+      // The entity-object gloss ref became plain text with the entity name. Under
+      // the native stand-off the newly-plain text merges with its neighbor, so the
+      // entity-1 reference is gone and the entity name now rides in a text segment.
       const gloss = await readEntityTypeGloss()
-      const converted = gloss.find(g => g.content === 'Alice')
-      expect(converted?.type).toBe('text')
+      expect(gloss.some(g => g.type === 'objectRef' && g.content === 'entity-1')).toBe(false)
+      expect(gloss.some(g => g.type === 'text' && g.content.includes('Alice'))).toBe(true)
     })
 
     it('deletes an event with reference cleanup', async () => {

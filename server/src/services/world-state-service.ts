@@ -7,11 +7,10 @@ import { config } from '../config.js'
 import { convertObjectRefsToText, countObjectRefsInGlosses, type TypeWithGloss } from '../lib/reference-cleanup.js'
 import { LayersOntologyRepository } from '../repositories/LayersOntologyRepository.js'
 import { isSingleUserMode } from './user-service.js'
-import { layersOntologyForPersonaId, worldScaffoldLayerId } from './layers-id-map.js'
+import { layersOntologyForPersonaId, worldScaffoldExpressionId, worldScaffoldLayerId } from './layers-id-map.js'
 import {
   worldStateToLayers,
   layersToWorldState,
-  worldClusterBucket,
   emptyWorldState,
   personalWorldStateId,
   type WorldStateAggregate,
@@ -351,10 +350,33 @@ export class WorldStateService {
   }
 
   /**
+   * The ids of the world-scaffold annotations attached to a collection — its
+   * type-assignment and description annotations, which have no GraphNode to
+   * denote and instead carry the collection in an `argumentRef` role `subject`.
+   */
+  private async collectionAnnotationIds(userId: string, collectionId: string): Promise<string[]> {
+    const rows = await this.prisma.layersAnnotation.findMany({
+      where: { layerId: worldScaffoldLayerId(userId, null), denotesNodeId: null },
+      select: { id: true, arguments: true },
+    })
+    return rows
+      .filter((row) => {
+        const args = Array.isArray(row.arguments) ? row.arguments : []
+        return args.some(
+          (a) =>
+            (a as { role?: unknown; target?: { localId?: { value?: unknown } } } | null)?.role === 'subject' &&
+            (a as { target?: { localId?: { value?: unknown } } }).target?.localId?.value === collectionId,
+        )
+      })
+      .map((row) => row.id)
+  }
+
+  /**
    * Removes a single object (by id) from one of the personal world's collection
-   * or relation buckets. Collections are GraphNode rows and relations are
-   * GraphEdge rows, so removal deletes the matching row directly (scoped to the
-   * caller so another user's row cannot be touched). Removal is explicit, never
+   * or relation buckets. A collection is a ClusterSet and a relation is a
+   * GraphEdge, so removal deletes the matching row directly (scoped to the caller
+   * so another user's row cannot be touched); a collection's type-assignment and
+   * description annotations are removed with it. Removal is explicit, never
    * omission from a whole-blob PUT, so the merge-by-id update cannot resurrect a
    * deleted object.
    *
@@ -391,12 +413,11 @@ export class WorldStateService {
     if (field === 'relations') {
       await this.prisma.graphEdge.deleteMany({ where: { id: objectId, ...owner } })
     } else {
-      // A collection is a ClusterSet; its type assignments are instance-of edges
-      // keyed by the collection id.
+      const annotationIds = await this.collectionAnnotationIds(userId, objectId)
       await this.prisma.clusterSet.deleteMany({ where: { id: objectId, ...owner } })
-      await this.prisma.graphEdge.deleteMany({
-        where: { edgeType: 'instance-of', sourceLocalId: objectId, ...owner },
-      })
+      if (annotationIds.length > 0) {
+        await this.prisma.layersAnnotation.deleteMany({ where: { id: { in: annotationIds } } })
+      }
     }
   }
 
@@ -738,10 +759,17 @@ export class WorldStateService {
     memberId: string,
     userId: string,
   ): Promise<number> {
-    const scope = { createdByUserId: userId, projectId: null }
-    const clusterSets = (await tx.clusterSet.findMany({ where: scope })).filter(
-      (c) => worldClusterBucket(c) === collectionBucket,
-    )
+    void collectionBucket
+    // World collections are the ClusterSets bound to the scope's scaffold
+    // expression; a member id is unique to its object, so stripping it from every
+    // world collection that lists it removes it from exactly the right bucket.
+    const clusterSets = await tx.clusterSet.findMany({
+      where: {
+        createdByUserId: userId,
+        projectId: null,
+        expressionId: worldScaffoldExpressionId(userId, null),
+      },
+    })
     let memberships = 0
     for (const clusterSet of clusterSets) {
       const clusters = Array.isArray(clusterSet.clusters) ? [...clusterSet.clusters] : []
@@ -842,18 +870,17 @@ export class WorldStateService {
     )
     const scope = { createdByUserId: userId, projectId: null }
     // Delete the object node and its native derivations (the scaffold annotations
-    // it denotes, its instance-of type-assignment edges), its incident relation
-    // edges, strip its collection memberships, and convert the ontology gloss
-    // references, all in ONE transaction so a partial failure rolls back rather than
-    // orphaning glosses on a half-deleted world object.
+    // it denotes — its presence, type-assignment, interpretation, and gloss rows),
+    // its incident relation edges, strip its collection memberships, and convert
+    // the ontology gloss references, all in ONE transaction so a partial failure
+    // rolls back rather than orphaning glosses on a half-deleted world object. The
+    // annotations are deleted before the node so `denotesNode`'s SetNull cannot
+    // strand them with a null reference.
     const { glossReferences, memberships } = await this.prisma.$transaction(async (tx) => {
-      await tx.graphNode.deleteMany({ where: { id: objectId, ...scope } })
       await tx.layersAnnotation.deleteMany({
         where: { denotesNodeId: objectId, layerId: worldScaffoldLayerId(userId, null) },
       })
-      await tx.graphEdge.deleteMany({
-        where: { edgeType: 'instance-of', sourceLocalId: objectId, ...scope },
-      })
+      await tx.graphNode.deleteMany({ where: { id: objectId, ...scope } })
       if (removedIds.length > 0) {
         await tx.graphEdge.deleteMany({ where: { id: { in: removedIds }, ...scope } })
       }

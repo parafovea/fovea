@@ -2,31 +2,38 @@
  * Bidirectional conversion between the WorldState aggregate the `/api/world`
  * contract exchanges and the native layers store.
  *
- * Every world construct lands in an existing layers primitive — no verbatim
- * blob, no whole-object stash:
+ * Every world construct lands in an existing layers primitive — no verbatim blob,
+ * no whole-object stash, no shredded feature map:
  *
  *   - Entities / Locations / Events / Times become GraphNodes (nodeType
- *     `entity` / `location` / `situation` / `time`). Identity is the node id,
- *     the display name is the node label, and external groundings become
- *     `knowledgeRefs`.
- *   - Type assignments become instance-of GraphEdges (object -> type objectRef,
- *     `metadata.personaRef` carrying the persona, `confidence` on the 0-1000
- *     integer scale).
+ *     `entity` / `location` / `situation` / `time`). Identity is the node id, the
+ *     display name is the node label, and external groundings — `wikidataId` and
+ *     each `metadata.externalIds` entry — become `knowledgeRefs`.
+ *   - Every world node carries one presence LayersAnnotation in the scope's world
+ *     scaffold layer. It is the native marker distinguishing a world-authored node
+ *     from a video-object-annotation denotation stub (which has none), and it
+ *     carries the node's typed value: a Time's calendar/vagueness/deictic via a
+ *     `temporalExpression`, a Location's coordinates/bounds via a
+ *     `spatialExpression`, and an Entity/Event description as stand-off gloss text
+ *     with one child annotation per reference segment.
+ *   - Type assignments become LayersAnnotations (`ontologyTypeRefId` = the type,
+ *     an `argumentRef` role `persona` carrying the persona) denoting the object
+ *     node, or — for a collection — carrying the collection in an `argumentRef`
+ *     role `subject`.
  *   - Event interpretations become LayersAnnotations (`ontologyTypeRefId` = the
- *     situation type, `arguments` = the typed participants, `denotesNodeId` = the
- *     event node) hung off a per-scope world scaffold layer.
- *   - A Location's coordinates become a `spatialExpression` value on an
- *     annotation denoting the location node; a Time's calendar value becomes a
- *     `temporalExpression` on an annotation denoting the time node.
- *   - Entity / event / time collections become ClusterSets, membership being the
- *     cluster's `members` objectRefs.
- *   - Relations become GraphEdges, reusing the relation id.
+ *     situation type, `argumentRef`s for the persona and each typed participant,
+ *     `denotesNodeId` = the event node).
+ *   - Entity / event / time collections become ClusterSets bound to the world
+ *     scaffold expression, membership being the cluster's `members` objectRefs.
+ *   - Relations become GraphEdges, reusing the relation id, with the endpoint
+ *     kinds on flat `sourceKind`/`targetKind` properties and array order on the
+ *     native `ordinal` column.
  *
- * Fields with no dedicated native home ride in flat featureMap entries (residual
- * leaf scalars, never a nested structured object): a residual codec flattens the
- * leftover of each object — everything the native projection did not consume —
- * into per-leaf `feature` entries and rebuilds it on read, so the aggregate
- * round-trips losslessly without a sidecar.
+ * Genuinely open, unstructured extension data with no first-class native home
+ * (a Time's `metadata`, an Entity's `metadata.alternateNames`/`properties`, a
+ * collection's `aggregateProperties`, a relation's `metadata`) rides in flat
+ * featureMap entries — one entry per top-level field, keyed by the field name,
+ * valued as its JSON — never a nested shredded structure.
  *
  * @module
  */
@@ -38,16 +45,18 @@ import type {
   LayersAnnotation as PrismaLayersAnnotation,
 } from '@prisma/client'
 
+import type { GlossItem } from '@models/types.js'
 import type { ObjectRef } from '@fovea/layers-schema'
 
 import {
   deriveId,
   worldScaffoldExpressionId,
   worldScaffoldLayerId,
-  worldTemporalAnnotationId,
-  worldSpatialAnnotationId,
+  worldNodeAnnotationId,
   worldInterpretationAnnotationId,
-  worldTypeAssignmentEdgeId,
+  worldTypeAssignmentAnnotationId,
+  worldCollectionDescriptionAnnotationId,
+  worldGlossRefAnnotationId,
 } from './layers-id-map.js'
 
 /**
@@ -107,6 +116,7 @@ export interface MappedWorldEdge {
   targetLocalId: string | null
   edgeType: string
   label: string | null
+  ordinal: number
   confidence: number | null
   properties: unknown
   metadata: unknown
@@ -118,6 +128,7 @@ export interface MappedWorldEdge {
 export interface MappedWorldCluster {
   id: string
   kind: string
+  expressionId: string
   clusters: unknown
   projectId: string | null
   createdByUserId: string | null
@@ -131,12 +142,15 @@ export interface MappedWorldScaffold {
   createdByUserId: string | null
 }
 
-/** A world-denoting LayersAnnotation create payload (temporal / spatial / interpretation). */
+/** A world LayersAnnotation create payload (presence / type / interpretation / gloss). */
 export interface MappedWorldAnnotation {
   id: string
   layerId: string
-  denotesNodeId: string
+  denotesNodeId: string | null
+  parentAnnotationId: string | null
   label: string
+  text: string | null
+  anchor: unknown
   ontologyTypeRefId: string | null
   arguments: unknown
   temporal: unknown
@@ -161,24 +175,50 @@ export interface WorldLayersProjection {
 /** The nodeTypes a world save owns: entities/locations, situations, times. */
 export const WORLD_NODE_TYPES = ['entity', 'location', 'situation', 'time'] as const
 
-/** Feature keys the native projection stamps explicitly (never residual). */
-const KEY_ORDINAL = 'fovea.ordinal'
-const KEY_EDGE_ROLE = 'fovea.edgeRole'
-const KEY_BUCKET = 'fovea.bucket'
-const KEY_TIME_TYPE = 'fovea.time.type'
-const KEY_LOC_TYPE = 'fovea.loc.locationType'
-const KEY_LOC_SYSTEM = 'fovea.loc.coordinateSystem'
-const KEY_SOURCE_TYPE = 'fovea.sourceType'
-const KEY_TARGET_TYPE = 'fovea.targetType'
-const KEY_TYPE_FIELD = 'fovea.typeField'
-const KEY_PERSONA_REF = 'fovea.personaRef'
+/** Presence-annotation labels marking a node's world membership and kind. */
+const LABEL_ENTITY = 'entity'
+const LABEL_LOCATION = 'location'
+const LABEL_SITUATION = 'situation'
+const LABEL_TIME = 'time'
+/** A time that exists only as a collection member, excluded from the top-level times bucket. */
+const LABEL_COLLECTION_TIME = 'collection-time'
+const PRESENCE_LABELS = [LABEL_ENTITY, LABEL_LOCATION, LABEL_SITUATION, LABEL_TIME, LABEL_COLLECTION_TIME]
 
-/** The edgeRole discriminating a relation edge from an instance-of edge. */
-const EDGE_ROLE_RELATION = 'relation'
-const EDGE_ROLE_TYPE_ASSIGNMENT = 'type-assignment'
+const LABEL_TYPE_ASSIGNMENT = 'type-assignment'
+const LABEL_INTERPRETATION = 'interpretation'
+const LABEL_COLLECTION_DESCRIPTION = 'collection-description'
 
-/** The residual-codec path separator; never appears in a JSON object key. */
-const NUL = '\u0001'
+/** The argumentRef roles a world annotation uses. */
+const ROLE_PERSONA = 'persona'
+const ROLE_SUBJECT = 'subject'
+const ROLE_DENOTES = 'denotes'
+
+/**
+ * The flat edge-property marking a graph edge as a world-model relation. It is
+ * the native world-edge discriminator: a claim-relation or ontology-relation edge
+ * (which connect claim / type nodes) carries none, so an edge sharing an edgeType
+ * is never mistaken for a world relation. A relation's endpoint kinds ride
+ * alongside it when known.
+ */
+const KEY_WORLD_ROLE = 'worldRole'
+const WORLD_ROLE_RELATION = 'relation'
+const KEY_SOURCE_KIND = 'sourceKind'
+const KEY_TARGET_KIND = 'targetKind'
+
+/**
+ * Flat cluster-feature keys recording which aggregate bucket a collection belongs
+ * to and which field name it kept its members under. The bucket cannot always be
+ * derived from member node types (a collection may reference not-yet-materialized
+ * members) so it is recorded explicitly; the member-field name lets a collection
+ * that used `members`, `entityIds`, `eventIds`, or `times` round-trip verbatim.
+ */
+const KEY_BUCKET = 'bucket'
+const KEY_MEMBER_FIELD = 'memberField'
+
+/** Flat gloss-reference feature keys. */
+const KEY_REF_TYPE = 'refType'
+const KEY_REF_PERSONA_ID = 'refPersonaId'
+const KEY_REF_CLAIM_ID = 'refClaimId'
 
 // --- small readers -----------------------------------------------------------
 
@@ -196,6 +236,12 @@ function stringField(object: Record<string, unknown>, key: string): string | nul
 /** Builds an ObjectRef pointing at a same-record object by id. */
 function localRef(id: string): ObjectRef {
   return { localId: { value: id } }
+}
+
+/** The localId value of an objectRef, or null. */
+function localRefValue(ref: unknown): string | null {
+  const value = (ref as { localId?: { value?: unknown } } | null)?.localId?.value
+  return typeof value === 'string' ? value : null
 }
 
 /** Rounds a 0-1 float to the layers 0-1000 integer confidence scale. */
@@ -237,75 +283,44 @@ function entriesOf(features: unknown): FeatureEntry[] {
   return out
 }
 
-/** Reads one explicit feature value by key, or null. */
+/** Reads one feature value by key, or null. */
 function readFeature(entries: FeatureEntry[], key: string): string | null {
   for (const entry of entries) if (entry.key === key) return entry.value
   return null
 }
 
-// --- residual codec: flatten leftover leaf scalars ---------------------------
+// --- open extension: leftover open scalars as flat feature entries -----------
 
 /**
- * Flattens a JSON value into per-leaf featureMap entries under a `\0`-prefixed
- * key space, so the leftover of a world object — everything the native
- * projection did not consume — round-trips as flat scalars rather than a nested
- * structured blob. Container shape (array length, object keys) rides in a marker
- * entry so the exact structure, including empty arrays and objects, reconstructs.
+ * Encodes an object's open, unstructured leftover — the fields the native
+ * projection did not consume — as flat featureMap entries: one entry per
+ * top-level field, keyed by the field name, valued as its JSON. This is a flat
+ * key/value map (never a nested shredded structure), the layers-native home for
+ * genuinely open extension data with no dedicated column.
  */
-function flattenResidual(value: unknown): FeatureEntry[] {
+function openExtensionEntries(leftover: Record<string, unknown>): FeatureEntry[] {
   const entries: FeatureEntry[] = []
-  const walk = (path: string, node: unknown): void => {
-    if (Array.isArray(node)) {
-      entries.push({ key: `${path}${NUL}#`, value: `a${node.length}` })
-      node.forEach((item, index) => walk(`${path}${NUL}${index}`, item))
-    } else if (node !== null && typeof node === 'object') {
-      const keys = Object.keys(node as Record<string, unknown>)
-      entries.push({ key: `${path}${NUL}#`, value: `o${JSON.stringify(keys)}` })
-      for (const key of keys) walk(`${path}${NUL}k:${key}`, (node as Record<string, unknown>)[key])
-    } else {
-      entries.push({ key: path, value: JSON.stringify(node) })
-    }
+  for (const [key, value] of Object.entries(leftover)) {
+    if (value === undefined) continue
+    entries.push({ key, value: JSON.stringify(value) })
   }
-  walk(NUL, value)
   return entries
 }
 
-/** Rebuilds a JSON value from its residual featureMap entries. */
-function unflattenResidual(entries: FeatureEntry[]): unknown {
-  const map = new Map<string, string>()
-  for (const entry of entries) if (entry.key.startsWith(NUL)) map.set(entry.key, entry.value)
-  const build = (path: string): unknown => {
-    const marker = map.get(`${path}${NUL}#`)
-    if (marker === undefined) {
-      const leaf = map.get(path)
-      return leaf === undefined ? undefined : (JSON.parse(leaf) as unknown)
+/** Applies open-extension feature entries back onto an object, skipping reserved keys. */
+function applyOpenExtension(
+  object: Record<string, unknown>,
+  entries: FeatureEntry[],
+  reserved: ReadonlySet<string>,
+): void {
+  for (const entry of entries) {
+    if (reserved.has(entry.key)) continue
+    try {
+      object[entry.key] = JSON.parse(entry.value)
+    } catch {
+      object[entry.key] = entry.value
     }
-    if (marker[0] === 'a') {
-      const length = Number(marker.slice(1))
-      const out: unknown[] = []
-      for (let index = 0; index < length; index += 1) out.push(build(`${path}${NUL}${index}`))
-      return out
-    }
-    const keys = JSON.parse(marker.slice(1)) as string[]
-    const out: Record<string, unknown> = {}
-    for (const key of keys) out[key] = build(`${path}${NUL}k:${key}`)
-    return out
   }
-  return build(NUL)
-}
-
-/** True when a featureMap holds any residual (leftover) entry. */
-function hasResidual(entries: FeatureEntry[]): boolean {
-  return entries.some((entry) => entry.key.startsWith(NUL))
-}
-
-/** The reconstructed residual object, or an empty object when none was stored. */
-function residualObject(entries: FeatureEntry[]): Record<string, unknown> {
-  if (!hasResidual(entries)) return {}
-  const rebuilt = unflattenResidual(entries)
-  return rebuilt !== null && typeof rebuilt === 'object' && !Array.isArray(rebuilt)
-    ? (rebuilt as Record<string, unknown>)
-    : {}
 }
 
 // --- knowledge refs ----------------------------------------------------------
@@ -318,7 +333,13 @@ interface KnowledgeRef {
   label?: string
 }
 
-/** Builds an object's knowledgeRefs from its wikidata/wikibase groundings, or null. */
+/** The reserved knowledgeRef sources the native projection owns. */
+const WIKIBASE_LABEL = 'wikibase'
+
+/**
+ * Builds an object's knowledgeRefs from its wikidata/wikibase groundings and its
+ * `metadata.externalIds` map, or null when it has none.
+ */
 function knowledgeRefsFor(object: Record<string, unknown>): KnowledgeRef[] | null {
   const refs: KnowledgeRef[] = []
   const wikidataId = stringField(object, 'wikidataId')
@@ -329,7 +350,15 @@ function knowledgeRefsFor(object: Record<string, unknown>): KnowledgeRef[] | nul
     refs.push(ref)
   }
   const wikibaseId = stringField(object, 'wikibaseId')
-  if (wikibaseId) refs.push({ source: 'custom', identifier: wikibaseId, label: 'wikibase' })
+  if (wikibaseId) refs.push({ source: 'custom', identifier: wikibaseId, label: WIKIBASE_LABEL })
+
+  const metadata = object.metadata
+  const externalIds = (metadata as { externalIds?: unknown } | null)?.externalIds
+  if (externalIds !== null && typeof externalIds === 'object' && !Array.isArray(externalIds)) {
+    for (const [source, identifier] of Object.entries(externalIds as Record<string, unknown>)) {
+      if (typeof identifier === 'string') refs.push({ source, identifier, label: 'externalId' })
+    }
+  }
   return refs.length > 0 ? refs : null
 }
 
@@ -338,9 +367,10 @@ interface RecoveredGroundings {
   wikidataId?: string
   wikidataUrl?: string
   wikibaseId?: string
+  externalIds?: Record<string, string>
 }
 
-/** Recovers the wikidata/wikibase groundings a node's knowledgeRefs carry. */
+/** Recovers the wikidata/wikibase/externalIds groundings a node's knowledgeRefs carry. */
 function recoverGroundings(knowledgeRefs: unknown): RecoveredGroundings {
   const out: RecoveredGroundings = {}
   for (const raw of asArray(knowledgeRefs)) {
@@ -348,26 +378,366 @@ function recoverGroundings(knowledgeRefs: unknown): RecoveredGroundings {
     const identifier = stringField(raw, 'identifier')
     const uri = stringField(raw, 'uri')
     const label = stringField(raw, 'label')
-    if (source === 'wikidata' && identifier) {
+    if (!source || !identifier) continue
+    if (source === 'wikidata' && label !== 'externalId') {
       out.wikidataId = identifier
       if (uri) out.wikidataUrl = uri
-    } else if (source === 'custom' && label === 'wikibase' && identifier) {
+    } else if (source === 'custom' && label === WIKIBASE_LABEL) {
       out.wikibaseId = identifier
+    } else if (label === 'externalId') {
+      out.externalIds = out.externalIds ?? {}
+      out.externalIds[source] = identifier
     }
   }
   return out
 }
 
-/** Deletes the natively-homed grounding keys from a residual clone. */
-function stripGroundings(residual: Record<string, unknown>): void {
-  delete residual.wikidataId
-  delete residual.wikidataUrl
-  delete residual.wikibaseId
+// --- gloss stand-off (Entity/Event/Collection description) -------------------
+
+/** Concatenates a gloss's segment contents into its plain text, or null when empty. */
+function glossToText(gloss: unknown): string | null {
+  if (!Array.isArray(gloss) || gloss.length === 0) return null
+  return gloss
+    .map((seg) => {
+      const content = (seg as { content?: unknown }).content
+      return typeof content === 'string' ? content : ''
+    })
+    .join('')
+}
+
+/**
+ * Builds the child reference annotations for a description gloss: one per
+ * non-text segment, anchored by a textSpan into the parent text. typeRefs carry
+ * the type id in `ontologyTypeRefId`; every other reference points at its target
+ * via an `argumentRef` role `denotes`.
+ */
+function glossRefAnnotations(
+  objectId: string,
+  gloss: unknown,
+  layerId: string,
+  parentId: string,
+  denotesNodeId: string | null,
+  scope: WorldLayersScope,
+): MappedWorldAnnotation[] {
+  if (!Array.isArray(gloss)) return []
+  const annotations: MappedWorldAnnotation[] = []
+  let charCursor = 0
+  let byteCursor = 0
+  gloss.forEach((raw, index) => {
+    const segment = raw as GlossItem
+    const content = typeof segment.content === 'string' ? segment.content : ''
+    const charStart = charCursor
+    const byteStart = byteCursor
+    charCursor += content.length
+    byteCursor += Buffer.byteLength(content, 'utf8')
+    if (segment.type === 'text') return
+
+    const featureEntries: FeatureEntry[] = []
+    if (typeof segment.refType === 'string') featureEntries.push({ key: KEY_REF_TYPE, value: segment.refType })
+    if (segment.refPersonaId != null) featureEntries.push({ key: KEY_REF_PERSONA_ID, value: segment.refPersonaId })
+    if (typeof segment.refClaimId === 'string') featureEntries.push({ key: KEY_REF_CLAIM_ID, value: segment.refClaimId })
+
+    const isTypeRef = segment.type === 'typeRef'
+    annotations.push({
+      id: worldGlossRefAnnotationId(objectId, index),
+      layerId,
+      denotesNodeId,
+      parentAnnotationId: parentId,
+      label: segment.type,
+      text: content,
+      anchor: { textSpan: { byteStart, byteEnd: byteCursor, charStart, charEnd: charCursor } },
+      ontologyTypeRefId: isTypeRef ? content : null,
+      arguments: isTypeRef ? null : [{ role: ROLE_DENOTES, target: localRef(segment.refClaimId ?? content) }],
+      temporal: null,
+      spatial: null,
+      confidence: null,
+      features: featureMap(featureEntries),
+      projectId: scope.projectId,
+      createdByUserId: scope.createdByUserId,
+    })
+  })
+  return annotations
+}
+
+/** Reads the char span of a gloss child's textSpan anchor. */
+function readCharSpan(anchor: unknown): { charStart: number; charEnd: number } {
+  const span = (anchor as { textSpan?: { charStart?: unknown; charEnd?: unknown } } | null)?.textSpan
+  const charStart = typeof span?.charStart === 'number' ? span.charStart : 0
+  const charEnd = typeof span?.charEnd === 'number' ? span.charEnd : charStart
+  return { charStart, charEnd }
+}
+
+/** A reconstructed gloss reference child. */
+interface GlossChild {
+  anchor: unknown
+  label: string | null
+  text: string | null
+  ontologyTypeRefId: string | null
+  arguments: unknown
+  features: unknown
+}
+
+/** Reconstructs a description gloss from its plain text and reference children. */
+function glossFromParts(text: string | null, children: GlossChild[]): GlossItem[] {
+  if (text === null && children.length === 0) return []
+  const base = text ?? ''
+  const ordered = children
+    .map((child) => ({ ...child, ...readCharSpan(child.anchor) }))
+    .sort((a, b) => a.charStart - b.charStart || a.charEnd - b.charEnd)
+
+  const items: GlossItem[] = []
+  let cursor = 0
+  const pushText = (from: number, to: number): void => {
+    if (to > from) items.push({ type: 'text', content: base.slice(from, to) })
+  }
+
+  for (const child of ordered) {
+    if (child.charStart < cursor) continue
+    pushText(cursor, child.charStart)
+    const content = child.text ?? base.slice(child.charStart, child.charEnd)
+    const type = (child.label ?? 'text') as GlossItem['type']
+    const item: GlossItem = { type, content }
+    const entries = entriesOf(child.features)
+    const refType = readFeature(entries, KEY_REF_TYPE)
+    if (refType !== null) item.refType = refType as GlossItem['refType']
+    const refPersonaId = readFeature(entries, KEY_REF_PERSONA_ID)
+    if (refPersonaId !== null) item.refPersonaId = refPersonaId
+    const denotesTarget = localRefValue(asArray(child.arguments).find((a) => a.role === ROLE_DENOTES)?.target)
+    const refClaimId = readFeature(entries, KEY_REF_CLAIM_ID) ?? (type === 'claimRef' ? denotesTarget : null)
+    if (refClaimId !== null) item.refClaimId = refClaimId
+    items.push(item)
+    cursor = Math.max(cursor, child.charEnd)
+  }
+  pushText(cursor, base.length)
+  return items
+}
+
+// --- temporal value objects --------------------------------------------------
+
+/** Maps a FOVEA temporal granularity to a layers `temporalEntity.granularity` slug. */
+const GRANULARITIES = new Set([
+  'millisecond', 'second', 'minute', 'hour', 'day', 'week', 'month', 'year',
+])
+
+/**
+ * Builds the temporalExpression value a Time projects onto its presence
+ * annotation, modeling the deep temporal constructs with their typed layers
+ * value-objects: the calendar value on `temporalEntity`, vagueness on
+ * `temporalModifier.mod` plus `earliest`/`latest`/`granularity`, and a deictic
+ * reference on `anchorRef`.
+ */
+function temporalExpressionFor(time: Record<string, unknown>): {
+  temporal: Record<string, unknown> | null
+  confidence: number | null
+} {
+  const type = stringField(time, 'type')
+  const entity: Record<string, unknown> = {}
+  const instant = stringField(time, 'timestamp')
+  const start = stringField(time, 'startTime')
+  const end = stringField(time, 'endTime')
+  if (instant) entity.instant = instant
+  if (start) entity.intervalStart = start
+  if (end) entity.intervalEnd = end
+
+  const temporal: Record<string, unknown> = { type: type === 'interval' ? 'interval' : 'time' }
+
+  // Vagueness -> temporalModifier.mod + temporalEntity.earliest/latest/granularity.
+  const vagueness = time.vagueness
+  if (vagueness !== null && typeof vagueness === 'object') {
+    const v = vagueness as Record<string, unknown>
+    const modifier: Record<string, unknown> = {}
+    if (typeof v.type === 'string') modifier.mod = v.type
+    if (typeof v.description === 'string') modifier.features = { entries: [{ key: 'description', value: v.description }] }
+    if (Object.keys(modifier).length > 0) temporal.modifier = modifier
+    const bounds = v.bounds
+    if (bounds !== null && typeof bounds === 'object') {
+      const b = bounds as Record<string, unknown>
+      if (typeof b.earliest === 'string') entity.earliest = b.earliest
+      if (typeof b.latest === 'string') entity.latest = b.latest
+      if (typeof b.typical === 'string') {
+        entity.features = { entries: [{ key: 'typical', value: b.typical }] }
+      }
+    }
+    if (typeof v.granularity === 'string' && GRANULARITIES.has(v.granularity)) entity.granularity = v.granularity
+  }
+
+  // Deictic -> temporalExpression.anchorRef (+ its scalars on the expression features).
+  const deictic = time.deictic
+  if (deictic !== null && typeof deictic === 'object') {
+    const d = deictic as Record<string, unknown>
+    if (typeof d.anchorType === 'string') temporal.anchorRef = localRef(d.anchorType)
+    const deicticEntries: FeatureEntry[] = []
+    if (typeof d.anchorTime === 'string') deicticEntries.push({ key: 'deicticAnchorTime', value: d.anchorTime })
+    if (typeof d.expression === 'string') deicticEntries.push({ key: 'deicticExpression', value: d.expression })
+    if (deicticEntries.length > 0) temporal.features = { entries: deicticEntries }
+  }
+
+  if (Object.keys(entity).length > 0) temporal.value = entity
+
+  const certainty = typeof time.certainty === 'number' ? time.certainty : null
+  return { temporal, confidence: certainty === null ? null : toMilli(certainty) }
+}
+
+/** Recovers a Time's calendar, vagueness, deictic, and certainty from its presence annotation. */
+function readTemporal(annotation: WorldAnnotationRow): Record<string, unknown> {
+  const out: Record<string, unknown> = {}
+  const temporal = annotation.temporal as Record<string, unknown> | null
+  const type = typeof temporal?.type === 'string' ? temporal.type : null
+  out.type = type === 'interval' ? 'interval' : 'instant'
+
+  const value = (temporal?.value as Record<string, unknown> | undefined) ?? undefined
+  if (value) {
+    if (type === 'interval') {
+      if (typeof value.intervalStart === 'string') out.startTime = value.intervalStart
+      if (typeof value.intervalEnd === 'string') out.endTime = value.intervalEnd
+    } else if (typeof value.instant === 'string') {
+      out.timestamp = value.instant
+    }
+  }
+
+  // Vagueness.
+  const modifier = temporal?.modifier as Record<string, unknown> | undefined
+  const vagueness: Record<string, unknown> = {}
+  if (typeof modifier?.mod === 'string') vagueness.type = modifier.mod
+  const modDescription = readFeature(entriesOf(modifier?.features), 'description')
+  if (modDescription !== null) vagueness.description = modDescription
+  const bounds: Record<string, unknown> = {}
+  if (value && typeof value.earliest === 'string') bounds.earliest = value.earliest
+  if (value && typeof value.latest === 'string') bounds.latest = value.latest
+  const typical = readFeature(entriesOf(value?.features), 'typical')
+  if (typical !== null) bounds.typical = typical
+  if (Object.keys(bounds).length > 0) vagueness.bounds = bounds
+  if (value && typeof value.granularity === 'string') vagueness.granularity = value.granularity
+  if (Object.keys(vagueness).length > 0) out.vagueness = vagueness
+
+  // Deictic.
+  const anchorType = localRefValue(temporal?.anchorRef)
+  const deicticEntries = entriesOf(temporal?.features)
+  const anchorTime = readFeature(deicticEntries, 'deicticAnchorTime')
+  const expression = readFeature(deicticEntries, 'deicticExpression')
+  if (anchorType !== null || anchorTime !== null || expression !== null) {
+    const deictic: Record<string, unknown> = {}
+    if (anchorType !== null) deictic.anchorType = anchorType
+    if (anchorTime !== null) deictic.anchorTime = anchorTime
+    if (expression !== null) deictic.expression = expression
+    out.deictic = deictic
+  }
+
+  if (typeof annotation.confidence === 'number') out.certainty = fromMilli(annotation.confidence)
+  return out
+}
+
+// --- spatial value objects ---------------------------------------------------
+
+/** Extracts a WKT `POINT(...)` coordinate list, or null. */
+function parseWktPoint(geometry: unknown): number[] | null {
+  if (typeof geometry !== 'string') return null
+  const match = /^POINT\s*\(([^)]*)\)$/i.exec(geometry.trim())
+  if (!match) return null
+  return match[1].trim().split(/\s+/).map(Number).filter((n) => Number.isFinite(n))
+}
+
+/** Extracts a WKT `POLYGON((...))` ring of coordinate pairs, or null. */
+function parseWktPolygon(geometry: unknown): number[][] | null {
+  if (typeof geometry !== 'string') return null
+  const match = /^POLYGON\s*\(\((.*)\)\)$/i.exec(geometry.trim())
+  if (!match) return null
+  return match[1]
+    .split(',')
+    .map((pair) => pair.trim().split(/\s+/).map(Number).filter((n) => Number.isFinite(n)))
+    .filter((pair) => pair.length >= 2)
+}
+
+/** Maps a FOVEA coordinate system to a layers `spatialEntity.crs` slug, bijectively. */
+function crsForSystem(system: string | null): string {
+  if (system === 'cartesian') return 'pixel'
+  if (system === 'relative') return 'percentage'
+  return 'wgs84'
+}
+
+/** Recovers a FOVEA coordinate system from a layers `spatialEntity.crs` slug. */
+function systemForCrs(crs: string | null): string {
+  if (crs === 'pixel') return 'cartesian'
+  if (crs === 'percentage') return 'relative'
+  return 'GPS'
+}
+
+/** Orders a coordinate object into a numeric tuple per the coordinate system. */
+function orderedCoordinates(coordinates: Record<string, unknown>, system: string | null): number[] {
+  const ordered =
+    system === 'cartesian' || system === 'relative'
+      ? [coordinates.x, coordinates.y, coordinates.z]
+      : [coordinates.latitude, coordinates.longitude, coordinates.altitude]
+  return ordered.filter((v): v is number => typeof v === 'number')
+}
+
+/** Reconstructs a coordinate object from a numeric tuple per the coordinate system. */
+function coordinatesFromNumbers(numbers: number[], system: string | null): Record<string, unknown> {
+  const out: Record<string, unknown> = {}
+  const keys = system === 'cartesian' || system === 'relative' ? ['x', 'y', 'z'] : ['latitude', 'longitude', 'altitude']
+  numbers.forEach((n, i) => {
+    if (keys[i]) out[keys[i]] = n
+  })
+  return out
+}
+
+/**
+ * Builds the spatialExpression value a Location projects onto its presence
+ * annotation: a point's coordinates as a WKT POINT, an extent's boundary as a WKT
+ * POLYGON, both carrying the coordinate system on `spatialEntity.crs`.
+ */
+function spatialExpressionFor(location: Record<string, unknown>): Record<string, unknown> | null {
+  const locationType = stringField(location, 'locationType')
+  if (locationType === null) return null
+  const system = stringField(location, 'coordinateSystem')
+  const crs = crsForSystem(system)
+  const type = locationType === 'extent' ? 'region' : 'location'
+  const value: Record<string, unknown> = { crs, geometryFormat: 'wkt' }
+
+  if (locationType === 'extent') {
+    const boundary = asArray(location.boundary)
+    if (boundary.length > 0) {
+      const ring = boundary.map((point) => orderedCoordinates(point, system))
+      value.geometry = `POLYGON((${ring.map((p) => p.join(' ')).join(', ')}))`
+      value.type = 'polygon'
+      value.dimensions = ring[0] && ring[0].length >= 3 ? 3 : 2
+    }
+  } else {
+    const coordinates = location.coordinates
+    if (coordinates !== null && typeof coordinates === 'object') {
+      const numbers = orderedCoordinates(coordinates as Record<string, unknown>, system)
+      if (numbers.length >= 2) {
+        value.geometry = `POINT(${numbers.map(String).join(' ')})`
+        value.type = 'point'
+        value.dimensions = numbers.length >= 3 ? 3 : 2
+      }
+    }
+  }
+  return { type, value }
+}
+
+/** Recovers a Location's locationType, coordinateSystem, and coordinates/boundary. */
+function readSpatial(annotation: WorldAnnotationRow): Record<string, unknown> {
+  const spatial = annotation.spatial as { type?: unknown; value?: Record<string, unknown> } | null
+  const value = spatial?.value
+  const crs = typeof value?.crs === 'string' ? value.crs : null
+  const system = systemForCrs(crs)
+  const out: Record<string, unknown> = { coordinateSystem: system }
+  if (spatial?.type === 'region') {
+    out.locationType = 'extent'
+    const ring = parseWktPolygon(value?.geometry)
+    if (ring) out.boundary = ring.map((pair) => coordinatesFromNumbers(pair, system))
+  } else {
+    out.locationType = 'point'
+    const numbers = parseWktPoint(value?.geometry)
+    if (numbers) out.coordinates = coordinatesFromNumbers(numbers, system)
+  }
+  return out
 }
 
 // --- write: aggregate -> layers ---------------------------------------------
 
-/** A type assignment on an entity or collection. */
+/** A type assignment on an entity, event, or collection. */
 interface TypeAssignmentInput {
   personaId?: string
   entityTypeId?: string
@@ -376,138 +746,60 @@ interface TypeAssignmentInput {
   justification?: string
 }
 
-/** Builds the instance-of edges a type-assignment list projects to. */
-function typeAssignmentEdges(
-  objectId: string,
+/** Builds the type-assignment annotations a type-assignment list projects to. */
+function typeAssignmentAnnotations(
+  subjectId: string,
+  denotesNodeId: string | null,
   assignments: Record<string, unknown>[],
   typeField: 'entityTypeId' | 'eventTypeId',
+  layerId: string,
   scope: WorldLayersScope,
-): MappedWorldEdge[] {
-  const edges: MappedWorldEdge[] = []
-  assignments.forEach((raw, index) => {
+): MappedWorldAnnotation[] {
+  return assignments.map((raw, index) => {
     const assignment = raw as TypeAssignmentInput
     const personaId = typeof assignment.personaId === 'string' ? assignment.personaId : ''
     const typeId = typeof assignment[typeField] === 'string' ? (assignment[typeField] as string) : ''
-    const residual: Record<string, unknown> = { ...raw }
-    delete residual.personaId
-    delete residual[typeField]
-    delete residual.confidence
-    const entries: FeatureEntry[] = [
-      { key: KEY_EDGE_ROLE, value: EDGE_ROLE_TYPE_ASSIGNMENT },
-      { key: KEY_TYPE_FIELD, value: typeField },
-      { key: KEY_ORDINAL, value: String(index) },
-      ...flattenResidual(residual),
-    ]
-    edges.push({
-      id: worldTypeAssignmentEdgeId(objectId, typeId, personaId),
-      source: localRef(objectId),
-      target: localRef(typeId),
-      sourceLocalId: objectId,
-      targetLocalId: typeId,
-      edgeType: 'instance-of',
-      label: 'instance-of',
+    const args: Array<Record<string, unknown>> = [{ role: ROLE_PERSONA, target: localRef(personaId) }]
+    if (denotesNodeId === null) args.push({ role: ROLE_SUBJECT, target: localRef(subjectId) })
+    // The type id, persona, and confidence have native homes; every other field
+    // (justification, or a foreign `typeId` naming) rides in open-extension features.
+    const leftover = leftoverAfter(raw, ['personaId', typeField, 'confidence'])
+    return {
+      id: worldTypeAssignmentAnnotationId(subjectId, typeId, personaId, index),
+      layerId,
+      denotesNodeId,
+      parentAnnotationId: null,
+      label: LABEL_TYPE_ASSIGNMENT,
+      text: null,
+      anchor: null,
+      ontologyTypeRefId: typeId || null,
+      arguments: args,
+      temporal: null,
+      spatial: null,
       confidence: typeof assignment.confidence === 'number' ? toMilli(assignment.confidence) : null,
-      properties: featureMap(entries),
-      metadata: { tool: 'fovea', personaRef: personaId },
+      features: featureMap(openExtensionEntries(leftover)),
       projectId: scope.projectId,
       createdByUserId: scope.createdByUserId,
-    })
-  })
-  return edges
-}
-
-/** Builds the temporalExpression value a Time projects onto its annotation. */
-function temporalExpressionFor(time: Record<string, unknown>): {
-  temporal: Record<string, unknown> | null
-  confidence: number | null
-} {
-  const type = stringField(time, 'type')
-  const value: Record<string, unknown> = {}
-  const instant = stringField(time, 'timestamp')
-  const start = stringField(time, 'startTime')
-  const end = stringField(time, 'endTime')
-  if (instant) value.instant = instant
-  if (start) value.intervalStart = start
-  if (end) value.intervalEnd = end
-
-  const certainty = typeof time.certainty === 'number' ? time.certainty : null
-  const hasValue = Object.keys(value).length > 0
-  if (!hasValue && certainty === null) return { temporal: null, confidence: null }
-
-  const temporal: Record<string, unknown> = {
-    type: type === 'interval' ? 'interval' : 'time',
-  }
-  if (hasValue) temporal.value = value
-  return { temporal, confidence: certainty === null ? null : toMilli(certainty) }
-}
-
-/** Recovers a Time's calendar fields from its temporal-value annotation. */
-function readTemporal(annotation: WorldAnnotationRow, type: string | null): Record<string, unknown> {
-  const out: Record<string, unknown> = {}
-  const value = (annotation.temporal as { value?: Record<string, unknown> } | null)?.value
-  if (value && typeof value === 'object') {
-    if (type === 'interval') {
-      if (typeof value.intervalStart === 'string') out.startTime = value.intervalStart
-      if (typeof value.intervalEnd === 'string') out.endTime = value.intervalEnd
-    } else if (typeof value.instant === 'string') {
-      out.timestamp = value.instant
     }
-  }
-  if (typeof annotation.confidence === 'number') out.certainty = fromMilli(annotation.confidence)
-  return out
+  })
 }
 
-/** Extracts a WKT `POINT(...)` coordinate list, or null. */
-function parseWktPoint(geometry: unknown): number[] | null {
-  if (typeof geometry !== 'string') return null
-  const match = /^POINT\s*\(([^)]*)\)$/i.exec(geometry.trim())
-  if (!match) return null
-  return match[1]
-    .trim()
-    .split(/\s+/)
-    .map((part) => Number(part))
-    .filter((part) => Number.isFinite(part))
+/** The leftover of an object after its natively-homed fields are removed. */
+function leftoverAfter(object: Record<string, unknown>, homed: string[]): Record<string, unknown> {
+  const leftover: Record<string, unknown> = { ...object }
+  for (const key of homed) delete leftover[key]
+  return leftover
 }
 
-/** Builds the spatialExpression value a point Location projects onto its annotation. */
-function spatialExpressionFor(location: Record<string, unknown>): Record<string, unknown> | null {
-  const coordinates = location.coordinates
-  if (coordinates === null || typeof coordinates !== 'object') return null
-  const c = coordinates as Record<string, unknown>
-  const system = stringField(location, 'coordinateSystem')
-  const ordered: Array<unknown> =
-    system === 'cartesian' || system === 'relative' ? [c.x, c.y, c.z] : [c.latitude, c.longitude, c.altitude]
-  const numbers = ordered.filter((v): v is number => typeof v === 'number')
-  if (numbers.length < 2) return null
-  const crs = system === 'GPS' ? 'wgs84' : 'custom'
-  return {
-    type: 'location',
-    value: {
-      geometry: `POINT(${numbers.map((n) => String(n)).join(' ')})`,
-      type: 'point',
-      geometryFormat: 'wkt',
-      crs,
-      dimensions: numbers.length >= 3 ? 3 : 2,
-    },
+/** The leftover metadata of an object with its natively-homed `externalIds` removed. */
+function metadataLeftover(object: Record<string, unknown>): Record<string, unknown> | undefined {
+  const metadata = object.metadata
+  if (metadata === null || metadata === undefined || typeof metadata !== 'object' || Array.isArray(metadata)) {
+    return undefined
   }
-}
-
-/** Recovers a point Location's coordinates from its spatial-value annotation. */
-function readSpatialCoordinates(annotation: WorldAnnotationRow, system: string | null): Record<string, unknown> | null {
-  const geometry = (annotation.spatial as { value?: { geometry?: unknown } } | null)?.value?.geometry
-  const numbers = parseWktPoint(geometry)
-  if (!numbers) return null
-  const out: Record<string, unknown> = {}
-  if (system === 'cartesian' || system === 'relative') {
-    if (numbers.length > 0) out.x = numbers[0]
-    if (numbers.length > 1) out.y = numbers[1]
-    if (numbers.length > 2) out.z = numbers[2]
-  } else {
-    if (numbers.length > 0) out.latitude = numbers[0]
-    if (numbers.length > 1) out.longitude = numbers[1]
-    if (numbers.length > 2) out.altitude = numbers[2]
-  }
-  return out
+  const clone = { ...(metadata as Record<string, unknown>) }
+  delete clone.externalIds
+  return clone
 }
 
 /**
@@ -526,260 +818,257 @@ export function worldStateToLayers(
   const clusters: MappedWorldCluster[] = []
   const annotations: MappedWorldAnnotation[] = []
   const layerId = worldScaffoldLayerId(scope.createdByUserId, scope.projectId)
+  const materializedTimeIds = new Set<string>()
+
+  /** Emits a node's presence annotation carrying its description, temporal, or spatial value. */
+  const pushNode = (
+    node: MappedWorldNode,
+    presenceLabel: string,
+    object: Record<string, unknown>,
+    temporal: unknown,
+    spatial: unknown,
+    confidence: number | null,
+  ): void => {
+    nodes.push(node)
+    const presenceId = worldNodeAnnotationId(node.id)
+    const gloss = object.description
+    annotations.push({
+      id: presenceId,
+      layerId,
+      denotesNodeId: node.id,
+      parentAnnotationId: null,
+      label: presenceLabel,
+      text: glossToText(gloss),
+      anchor: null,
+      ontologyTypeRefId: null,
+      arguments: null,
+      temporal,
+      spatial,
+      confidence,
+      features: null,
+      projectId: scope.projectId,
+      createdByUserId: scope.createdByUserId,
+    })
+    annotations.push(...glossRefAnnotations(node.id, gloss, layerId, presenceId, node.id, scope))
+  }
 
   // Entities and Locations (both live in the entities bucket).
-  asArray(world.entities).forEach((entity, index) => {
+  asArray(world.entities).forEach((entity) => {
     const id = stringField(entity, 'id')
     if (id === null) return
     const isLocation = typeof entity.locationType === 'string'
-    const residual: Record<string, unknown> = { ...entity }
-    delete residual.id
-    const explicit: FeatureEntry[] = [{ key: KEY_ORDINAL, value: String(index) }]
-
-    let label: string | null = null
-    const name = stringField(entity, 'name')
-    if (name !== null) {
-      label = name
-      delete residual.name
-    }
-    stripGroundings(residual)
+    const label = stringField(entity, 'name')
 
     const assignments = asArray(entity.typeAssignments)
-    if (assignments.length > 0) {
-      edges.push(...typeAssignmentEdges(id, assignments, 'entityTypeId', scope))
-      delete residual.typeAssignments
-    }
+    annotations.push(
+      ...typeAssignmentAnnotations(id, id, assignments, 'entityTypeId', layerId, scope),
+    )
 
-    if (isLocation) {
-      const locationType = stringField(entity, 'locationType')
-      const system = stringField(entity, 'coordinateSystem')
-      if (locationType !== null) {
-        explicit.push({ key: KEY_LOC_TYPE, value: locationType })
-        delete residual.locationType
+    const spatial = isLocation ? spatialExpressionFor(entity) : null
+    const homed = [
+      'id', 'name', 'description', 'wikidataId', 'wikidataUrl', 'wikibaseId', 'typeAssignments',
+      'metadata', 'locationType', 'coordinateSystem', 'coordinates', 'boundary',
+    ]
+    const leftover = leftoverAfter(entity, homed)
+    const metaLeftover = metadataLeftover(entity)
+    if (metaLeftover !== undefined) leftover.metadata = metaLeftover
+
+    pushNode(
+      {
+        id,
+        nodeType: isLocation ? 'location' : 'entity',
+        label,
+        properties: featureMap(openExtensionEntries(leftover)),
+        knowledgeRefs: knowledgeRefsFor(entity),
+        metadata: null,
+        projectId: scope.projectId,
+        createdByUserId: scope.createdByUserId,
+      },
+      isLocation ? LABEL_LOCATION : LABEL_ENTITY,
+      entity,
+      null,
+      spatial,
+      null,
+    )
+  })
+
+  // Events (situations).
+  asArray(world.events).forEach((event) => {
+    const id = stringField(event, 'id')
+    if (id === null) return
+    const label = stringField(event, 'name')
+
+    asArray(event.personaInterpretations).forEach((raw, index) => {
+      const personaId = stringField(raw, 'personaId') ?? ''
+      const eventTypeId = stringField(raw, 'eventTypeId') ?? ''
+      const args: Array<Record<string, unknown>> = [{ role: ROLE_PERSONA, target: localRef(personaId) }]
+      for (const p of asArray(raw.participants)) {
+        args.push({ role: stringField(p, 'roleTypeId') ?? '', target: localRef(stringField(p, 'entityId') ?? '') })
       }
-      if (system !== null) {
-        explicit.push({ key: KEY_LOC_SYSTEM, value: system })
-        delete residual.coordinateSystem
+      const features: FeatureEntry[] = []
+      const justification = stringField(raw, 'justification')
+      if (justification !== null) features.push({ key: 'justification', value: justification })
+      annotations.push({
+        id: worldInterpretationAnnotationId(id, personaId, eventTypeId, index),
+        layerId,
+        denotesNodeId: id,
+        parentAnnotationId: null,
+        label: LABEL_INTERPRETATION,
+        text: null,
+        anchor: null,
+        ontologyTypeRefId: eventTypeId || null,
+        arguments: args,
+        temporal: null,
+        spatial: null,
+        confidence: typeof raw.confidence === 'number' ? toMilli(raw.confidence) : null,
+        features: featureMap(features),
+        projectId: scope.projectId,
+        createdByUserId: scope.createdByUserId,
+      })
+    })
+
+    const leftover = leftoverAfter(event, ['id', 'name', 'description', 'personaInterpretations'])
+    pushNode(
+      {
+        id,
+        nodeType: 'situation',
+        label,
+        properties: featureMap(openExtensionEntries(leftover)),
+        knowledgeRefs: knowledgeRefsFor(event),
+        metadata: null,
+        projectId: scope.projectId,
+        createdByUserId: scope.createdByUserId,
+      },
+      LABEL_SITUATION,
+      event,
+      null,
+      null,
+      null,
+    )
+  })
+
+  /** Emits a time node with its presence temporal value; `presenceLabel` marks top-level vs member-only. */
+  const pushTime = (time: Record<string, unknown>, presenceLabel: string): void => {
+    const id = stringField(time, 'id')
+    if (id === null || materializedTimeIds.has(id)) return
+    materializedTimeIds.add(id)
+    const { temporal, confidence } = temporalExpressionFor(time)
+    const leftover = leftoverAfter(time, [
+      'id', 'type', 'timestamp', 'startTime', 'endTime', 'certainty', 'vagueness', 'deictic',
+    ])
+    pushNode(
+      {
+        id,
+        nodeType: 'time',
+        label: null,
+        properties: featureMap(openExtensionEntries(leftover)),
+        knowledgeRefs: knowledgeRefsFor(time),
+        metadata: null,
+        projectId: scope.projectId,
+        createdByUserId: scope.createdByUserId,
+      },
+      presenceLabel,
+      time,
+      temporal,
+      null,
+      confidence,
+    )
+  }
+
+  // Times (top-level).
+  asArray(world.times).forEach((time) => pushTime(time, LABEL_TIME))
+
+  // Collections -> ClusterSets bound to the world scaffold expression.
+  const expressionId = worldScaffoldExpressionId(scope.createdByUserId, scope.projectId)
+  const collectionBucket = (
+    bucket: 'entityCollections' | 'eventCollections' | 'timeCollections',
+    idFields: Array<'entityIds' | 'eventIds' | 'members'>,
+    typeField: 'entityTypeId' | 'eventTypeId',
+  ): void => {
+    // A collection keeps its members under one of several field names depending on
+    // the surface that authored it (the API uses `entityIds`/`eventIds`/`times`,
+    // the interchange uses `members`); the chosen name round-trips so the exact
+    // field is restored.
+    const candidates = bucket === 'timeCollections' ? (['times', 'members'] as const) : idFields
+    asArray(world[bucket]).forEach((collection) => {
+      const id = stringField(collection, 'id')
+      if (id === null) return
+      const canonicalLabel = stringField(collection, 'name')
+      const memberField = candidates.find((f) => Array.isArray(collection[f])) ?? candidates[0]
+
+      let members: ObjectRef[] = []
+      if (memberField === 'times') {
+        // Each member Time object is materialized as its own node so it round-trips
+        // in full; a member that is not also a top-level time is marked collection-only.
+        members = asArray(collection.times)
+          .map((time) => {
+            const memberId = stringField(time, 'id')
+            if (memberId === null) return null
+            if (!materializedTimeIds.has(memberId)) pushTime(time, LABEL_COLLECTION_TIME)
+            return localRef(memberId)
+          })
+          .filter((ref): ref is ObjectRef => ref !== null)
+      } else {
+        const ids = Array.isArray(collection[memberField]) ? (collection[memberField] as unknown[]) : []
+        members = ids.filter((mid): mid is string => typeof mid === 'string').map(localRef)
       }
-      const spatial = spatialExpressionFor(entity)
-      if (spatial) {
-        delete residual.coordinates
+
+      annotations.push(
+        ...typeAssignmentAnnotations(id, null, asArray(collection.typeAssignments), typeField, layerId, scope),
+      )
+
+      // A description with content hangs off a collection-description annotation;
+      // an empty or absent description stays in open-extension so its presence (or
+      // absence) round-trips exactly.
+      const gloss = collection.description
+      const glossText = glossToText(gloss)
+      const glossHasContent = glossText !== null || asArray(gloss).some((s) => s.type !== 'text')
+      if (glossHasContent) {
+        const descId = worldCollectionDescriptionAnnotationId(id)
         annotations.push({
-          id: worldSpatialAnnotationId(id),
+          id: descId,
           layerId,
-          denotesNodeId: id,
-          label: 'location',
+          denotesNodeId: null,
+          parentAnnotationId: null,
+          label: LABEL_COLLECTION_DESCRIPTION,
+          text: glossText,
+          anchor: null,
           ontologyTypeRefId: null,
-          arguments: null,
+          arguments: [{ role: ROLE_SUBJECT, target: localRef(id) }],
           temporal: null,
-          spatial,
+          spatial: null,
           confidence: null,
           features: null,
           projectId: scope.projectId,
           createdByUserId: scope.createdByUserId,
         })
-      }
-    }
-
-    nodes.push({
-      id,
-      nodeType: isLocation ? 'location' : 'entity',
-      label,
-      properties: featureMap([...explicit, ...flattenResidual(residual)]),
-      knowledgeRefs: knowledgeRefsFor(entity),
-      metadata: null,
-      projectId: scope.projectId,
-      createdByUserId: scope.createdByUserId,
-    })
-  })
-
-  // Events (situations).
-  asArray(world.events).forEach((event, index) => {
-    const id = stringField(event, 'id')
-    if (id === null) return
-    const residual: Record<string, unknown> = { ...event }
-    delete residual.id
-    const explicit: FeatureEntry[] = [{ key: KEY_ORDINAL, value: String(index) }]
-
-    let label: string | null = null
-    const name = stringField(event, 'name')
-    if (name !== null) {
-      label = name
-      delete residual.name
-    }
-    stripGroundings(residual)
-
-    let metadata: Record<string, unknown> | null = null
-    const rawMeta = event.metadata
-    if (rawMeta !== null && typeof rawMeta === 'object') {
-      const certainty = (rawMeta as Record<string, unknown>).certainty
-      if (typeof certainty === 'number') {
-        metadata = { tool: 'fovea', confidence: toMilli(certainty) }
-        const metaClone = { ...(residual.metadata as Record<string, unknown>) }
-        delete metaClone.certainty
-        residual.metadata = metaClone
-      }
-    }
-
-    const interpretations = asArray(event.personaInterpretations)
-    for (const raw of interpretations) {
-      const personaId = stringField(raw, 'personaId') ?? ''
-      const eventTypeId = stringField(raw, 'eventTypeId') ?? ''
-      const participants = asArray(raw.participants).map((p) => ({
-        role: stringField(p, 'roleTypeId') ?? '',
-        target: localRef(stringField(p, 'entityId') ?? ''),
-      }))
-      const interpResidual: Record<string, unknown> = { ...raw }
-      delete interpResidual.personaId
-      delete interpResidual.eventTypeId
-      delete interpResidual.participants
-      delete interpResidual.confidence
-      const confidence = typeof raw.confidence === 'number' ? toMilli(raw.confidence) : null
-      annotations.push({
-        id: worldInterpretationAnnotationId(id, personaId, eventTypeId),
-        layerId,
-        denotesNodeId: id,
-        label: 'interpretation',
-        ontologyTypeRefId: eventTypeId || null,
-        arguments: participants.length > 0 ? participants : null,
-        temporal: null,
-        spatial: null,
-        confidence,
-        features: featureMap([
-          { key: KEY_PERSONA_REF, value: personaId },
-          ...flattenResidual(interpResidual),
-        ]),
-        projectId: scope.projectId,
-        createdByUserId: scope.createdByUserId,
-      })
-    }
-    // Only drop a non-empty interpretation list from the residual; an empty
-    // list produces no annotations and must round-trip as [] from the residual.
-    if (interpretations.length > 0) delete residual.personaInterpretations
-
-    nodes.push({
-      id,
-      nodeType: 'situation',
-      label,
-      properties: featureMap([...explicit, ...flattenResidual(residual)]),
-      knowledgeRefs: knowledgeRefsFor(event),
-      metadata,
-      projectId: scope.projectId,
-      createdByUserId: scope.createdByUserId,
-    })
-  })
-
-  // Times.
-  asArray(world.times).forEach((time, index) => {
-    const id = stringField(time, 'id')
-    if (id === null) return
-    const residual: Record<string, unknown> = { ...time }
-    delete residual.id
-    const explicit: FeatureEntry[] = [{ key: KEY_ORDINAL, value: String(index) }]
-    const type = stringField(time, 'type')
-    if (type !== null) {
-      explicit.push({ key: KEY_TIME_TYPE, value: type })
-      delete residual.type
-    }
-
-    const { temporal, confidence } = temporalExpressionFor(time)
-    if (temporal) {
-      delete residual.timestamp
-      delete residual.startTime
-      delete residual.endTime
-      delete residual.certainty
-      annotations.push({
-        id: worldTemporalAnnotationId(id),
-        layerId,
-        denotesNodeId: id,
-        label: 'time',
-        ontologyTypeRefId: null,
-        arguments: null,
-        temporal,
-        spatial: null,
-        confidence,
-        features: null,
-        projectId: scope.projectId,
-        createdByUserId: scope.createdByUserId,
-      })
-    }
-
-    nodes.push({
-      id,
-      nodeType: 'time',
-      label: null,
-      properties: featureMap([...explicit, ...flattenResidual(residual)]),
-      knowledgeRefs: knowledgeRefsFor(time),
-      metadata: null,
-      projectId: scope.projectId,
-      createdByUserId: scope.createdByUserId,
-    })
-  })
-
-  // Collections -> ClusterSets.
-  const collectionBucket = (
-    bucket: 'entityCollections' | 'eventCollections' | 'timeCollections',
-    memberField: 'entityIds' | 'eventIds' | 'times',
-  ): void => {
-    asArray(world[bucket]).forEach((collection, index) => {
-      const id = stringField(collection, 'id')
-      if (id === null) return
-      const residual: Record<string, unknown> = { ...collection }
-      delete residual.id
-      const canonicalLabel = stringField(collection, 'name')
-      if (canonicalLabel !== null) delete residual.name
-      const kind = stringField(collection, 'collectionType') ?? 'clustering'
-      delete residual.collectionType
-
-      let members: ObjectRef[] = []
-      if (memberField === 'times') {
-        members = asArray(collection.times)
-          .map((t) => stringField(t, 'id'))
-          .filter((mid): mid is string => mid !== null)
-          .map(localRef)
-      } else {
-        const ids = Array.isArray(collection[memberField]) ? (collection[memberField] as unknown[]) : []
-        members = ids.filter((mid): mid is string => typeof mid === 'string').map(localRef)
-      }
-      delete residual[memberField]
-
-      const assignments = asArray(collection.typeAssignments)
-      if (assignments.length > 0) {
-        edges.push(
-          ...typeAssignmentEdges(
-            id,
-            assignments,
-            bucket === 'eventCollections' ? 'eventTypeId' : 'entityTypeId',
-            scope,
-          ),
-        )
-        delete residual.typeAssignments
+        annotations.push(...glossRefAnnotations(id, gloss, layerId, descId, null, scope))
       }
 
-      const clusterFeatures: FeatureEntry[] = [
+      const homed = ['id', 'name', memberField, 'typeAssignments']
+      if (glossHasContent) homed.push('description')
+      const leftover = leftoverAfter(collection, homed)
+      const features: FeatureEntry[] = [
         { key: KEY_BUCKET, value: bucket },
-        { key: KEY_ORDINAL, value: String(index) },
-        ...flattenResidual(residual),
+        { key: KEY_MEMBER_FIELD, value: memberField },
+        ...openExtensionEntries(leftover),
       ]
-      const cluster: Record<string, unknown> = {
-        uuid: { value: id },
-        members,
-        features: { entries: clusterFeatures },
-      }
+      const cluster: Record<string, unknown> = { uuid: { value: id }, members, features: { entries: features } }
       if (canonicalLabel !== null) cluster.canonicalLabel = canonicalLabel
 
       clusters.push({
         id,
-        kind,
+        kind: 'clustering',
+        expressionId,
         clusters: [cluster],
         projectId: scope.projectId,
         createdByUserId: scope.createdByUserId,
       })
     })
   }
-  collectionBucket('entityCollections', 'entityIds')
-  collectionBucket('eventCollections', 'eventIds')
-  collectionBucket('timeCollections', 'times')
+  collectionBucket('entityCollections', ['entityIds', 'members'], 'entityTypeId')
+  collectionBucket('eventCollections', ['eventIds', 'members'], 'eventTypeId')
+  collectionBucket('timeCollections', ['members'], 'entityTypeId')
 
   // Relations -> GraphEdges (reusing the relation id).
   asArray(world.relations).forEach((relation, index) => {
@@ -789,22 +1078,15 @@ export function worldStateToLayers(
     const targetId = stringField(relation, 'targetId') ?? ''
     const edgeType =
       stringField(relation, 'relationTypeId') ?? stringField(relation, 'relationType') ?? 'related'
-    const residual: Record<string, unknown> = { ...relation }
-    delete residual.id
-    delete residual.relationTypeId
-    delete residual.sourceId
-    delete residual.targetId
     const sourceType = stringField(relation, 'sourceType')
     const targetType = stringField(relation, 'targetType')
-    delete residual.sourceType
-    delete residual.targetType
-    const entries: FeatureEntry[] = [
-      { key: KEY_EDGE_ROLE, value: EDGE_ROLE_RELATION },
-      { key: KEY_ORDINAL, value: String(index) },
-    ]
-    if (sourceType !== null) entries.push({ key: KEY_SOURCE_TYPE, value: sourceType })
-    if (targetType !== null) entries.push({ key: KEY_TARGET_TYPE, value: targetType })
-    entries.push(...flattenResidual(residual))
+    const entries: FeatureEntry[] = [{ key: KEY_WORLD_ROLE, value: WORLD_ROLE_RELATION }]
+    if (sourceType !== null) entries.push({ key: KEY_SOURCE_KIND, value: sourceType })
+    if (targetType !== null) entries.push({ key: KEY_TARGET_KIND, value: targetType })
+    const leftover = leftoverAfter(relation, [
+      'id', 'relationTypeId', 'relationType', 'sourceId', 'targetId', 'sourceType', 'targetType',
+    ])
+    entries.push(...openExtensionEntries(leftover))
     edges.push({
       id,
       source: localRef(sourceId),
@@ -813,6 +1095,7 @@ export function worldStateToLayers(
       targetLocalId: targetId || null,
       edgeType,
       label: edgeType,
+      ordinal: index,
       confidence: null,
       properties: featureMap(entries),
       metadata: null,
@@ -822,13 +1105,8 @@ export function worldStateToLayers(
   })
 
   const scaffold: MappedWorldScaffold | null =
-    annotations.length > 0
-      ? {
-          expressionId: worldScaffoldExpressionId(scope.createdByUserId, scope.projectId),
-          layerId,
-          projectId: scope.projectId,
-          createdByUserId: scope.createdByUserId,
-        }
+    nodes.length > 0 || clusters.length > 0
+      ? { expressionId, layerId, projectId: scope.projectId, createdByUserId: scope.createdByUserId }
       : null
 
   return { nodes, edges, clusters, scaffold, annotations }
@@ -845,7 +1123,7 @@ export type WorldNodeRow = Pick<
 /** The GraphEdge columns the reconstruction reads. */
 export type WorldEdgeRow = Pick<
   PrismaGraphEdge,
-  'id' | 'edgeType' | 'sourceLocalId' | 'targetLocalId' | 'confidence' | 'properties' | 'metadata'
+  'id' | 'edgeType' | 'sourceLocalId' | 'targetLocalId' | 'ordinal' | 'confidence' | 'properties' | 'metadata'
 >
 
 /** The ClusterSet columns the reconstruction reads. */
@@ -854,7 +1132,18 @@ export type WorldClusterRow = Pick<PrismaClusterSet, 'id' | 'kind' | 'clusters'>
 /** The LayersAnnotation columns the reconstruction reads. */
 export type WorldAnnotationRow = Pick<
   PrismaLayersAnnotation,
-  'denotesNodeId' | 'label' | 'ontologyTypeRefId' | 'arguments' | 'temporal' | 'spatial' | 'confidence' | 'features'
+  | 'id'
+  | 'denotesNodeId'
+  | 'parentAnnotationId'
+  | 'label'
+  | 'text'
+  | 'anchor'
+  | 'ontologyTypeRefId'
+  | 'arguments'
+  | 'temporal'
+  | 'spatial'
+  | 'confidence'
+  | 'features'
 >
 
 /** The native rows a world reconstruction reads from a single scope. */
@@ -872,68 +1161,68 @@ export function isWorldNode(node: { nodeType: string }): boolean {
   return (WORLD_NODE_TYPES as readonly string[]).includes(node.nodeType)
 }
 
-/** True when a graph edge belongs to a world save (it carries the edgeRole tag). */
+/**
+ * True when a graph edge is a world relation: it carries the world-role property
+ * the projection stamps on every relation edge. A claim-relation or
+ * ontology-relation edge carries none, so an edge sharing an edgeType is not
+ * mistaken for a world relation.
+ */
 export function isWorldEdge(edge: { properties: unknown }): boolean {
-  return readFeature(entriesOf(edge.properties), KEY_EDGE_ROLE) !== null
+  return readFeature(entriesOf(edge.properties), KEY_WORLD_ROLE) === WORLD_ROLE_RELATION
 }
 
-/** The three collection buckets a ClusterSet can carry. */
-export type WorldCollectionBucket = 'entityCollections' | 'eventCollections' | 'timeCollections'
-
-/** The collection bucket a ClusterSet belongs to, or null when it is not a world collection. */
-export function worldClusterBucket(cluster: { clusters: unknown }): WorldCollectionBucket | null {
-  const first = asArray(cluster.clusters)[0]
-  if (!first) return null
-  const bucket = readFeature(entriesOf(first.features), KEY_BUCKET)
-  if (bucket === 'entityCollections' || bucket === 'eventCollections' || bucket === 'timeCollections') {
-    return bucket
-  }
-  return null
+/** True when an annotation marks a node's world membership (a presence annotation). */
+export function isWorldPresence(annotation: { label: string | null; parentAnnotationId: string | null }): boolean {
+  return annotation.parentAnnotationId === null && annotation.label !== null && PRESENCE_LABELS.includes(annotation.label)
 }
 
 // --- reconstruction ----------------------------------------------------------
 
-/** Reads a node's ordinal from its explicit feature, defaulting to 0. */
-function ordinalOf(entries: FeatureEntry[]): number {
-  const raw = readFeature(entries, KEY_ORDINAL)
-  const parsed = raw === null ? 0 : Number(raw)
-  return Number.isFinite(parsed) ? parsed : 0
-}
-
-/** Rebuilds a type assignment from its instance-of edge. */
-function readTypeAssignment(edge: WorldEdgeRow): Record<string, unknown> {
-  const entries = entriesOf(edge.properties)
-  const typeField = readFeature(entries, KEY_TYPE_FIELD) ?? 'entityTypeId'
-  const base = residualObject(entries)
-  const personaRef = (edge.metadata as { personaRef?: unknown } | null)?.personaRef
-  if (typeof personaRef === 'string') base.personaId = personaRef
-  if (edge.targetLocalId) base[typeField] = edge.targetLocalId
-  if (typeof edge.confidence === 'number') base.confidence = fromMilli(edge.confidence)
-  return base
+/** Rebuilds a type assignment from its LayersAnnotation. */
+function readTypeAssignment(annotation: WorldAnnotationRow, typeField: 'entityTypeId' | 'eventTypeId'): Record<string, unknown> {
+  const out: Record<string, unknown> = {}
+  const personaId = localRefValue(asArray(annotation.arguments).find((a) => a.role === ROLE_PERSONA)?.target)
+  out.personaId = personaId ?? ''
+  applyOpenExtension(out, entriesOf(annotation.features), new Set())
+  if (annotation.ontologyTypeRefId) out[typeField] = annotation.ontologyTypeRefId
+  if (typeof annotation.confidence === 'number') out.confidence = fromMilli(annotation.confidence)
+  return out
 }
 
 /** Rebuilds an event interpretation from its LayersAnnotation. */
 function readInterpretation(annotation: WorldAnnotationRow): Record<string, unknown> {
-  const features = entriesOf(annotation.features)
-  const base = residualObject(features)
-  const personaRef = readFeature(features, KEY_PERSONA_REF)
-  if (personaRef !== null) base.personaId = personaRef
-  if (annotation.ontologyTypeRefId) base.eventTypeId = annotation.ontologyTypeRefId
-  const participants: Array<Record<string, unknown>> = []
-  if (Array.isArray(annotation.arguments)) {
-    for (const arg of annotation.arguments) {
-      if (!arg || typeof arg !== 'object') continue
-      const role = (arg as { role?: unknown }).role
-      const entityId = (arg as { target?: { localId?: { value?: unknown } } }).target?.localId?.value
-      participants.push({
-        entityId: typeof entityId === 'string' ? entityId : '',
-        roleTypeId: typeof role === 'string' ? role : '',
-      })
-    }
+  const out: Record<string, unknown> = {}
+  const args = asArray(annotation.arguments)
+  const personaId = localRefValue(args.find((a) => a.role === ROLE_PERSONA)?.target)
+  out.personaId = personaId ?? ''
+  if (annotation.ontologyTypeRefId) out.eventTypeId = annotation.ontologyTypeRefId
+  out.participants = args
+    .filter((a) => a.role !== ROLE_PERSONA)
+    .map((a) => ({ entityId: localRefValue(a.target) ?? '', roleTypeId: typeof a.role === 'string' ? a.role : '' }))
+  if (typeof annotation.confidence === 'number') out.confidence = fromMilli(annotation.confidence)
+  const justification = readFeature(entriesOf(annotation.features), 'justification')
+  if (justification !== null) out.justification = justification
+  return out
+}
+
+/** A gloss child as a {@link GlossChild}. */
+function toGlossChild(annotation: WorldAnnotationRow): GlossChild {
+  return {
+    anchor: annotation.anchor,
+    label: annotation.label,
+    text: annotation.text,
+    ontologyTypeRefId: annotation.ontologyTypeRefId,
+    arguments: annotation.arguments,
+    features: annotation.features,
   }
-  base.participants = participants
-  if (typeof annotation.confidence === 'number') base.confidence = fromMilli(annotation.confidence)
-  return base
+}
+
+/** The annotations denoting or describing a single world node. */
+interface NodeAnnotations {
+  presence: WorldAnnotationRow | null
+  typeAssignments: WorldAnnotationRow[]
+  interpretations: WorldAnnotationRow[]
+  glossChildren: WorldAnnotationRow[]
 }
 
 /**
@@ -945,163 +1234,171 @@ function readInterpretation(annotation: WorldAnnotationRow): Record<string, unkn
 export function layersToWorldState(rows: WorldLayersRows): WorldStateAggregate {
   const aggregate = emptyWorldState()
 
-  // Index the annotations by the node they denote.
-  const annotationsByNode = new Map<string, WorldAnnotationRow[]>()
+  // Index the annotations by the node they denote, and by their gloss parent.
+  const byNode = new Map<string, NodeAnnotations>()
+  const glossByParent = new Map<string, WorldAnnotationRow[]>()
+  const collectionAssignments = new Map<string, WorldAnnotationRow[]>()
+  const collectionDescription = new Map<string, WorldAnnotationRow>()
+
+  const nodeBucket = (nodeId: string): NodeAnnotations => {
+    let entry = byNode.get(nodeId)
+    if (!entry) {
+      entry = { presence: null, typeAssignments: [], interpretations: [], glossChildren: [] }
+      byNode.set(nodeId, entry)
+    }
+    return entry
+  }
+
   for (const annotation of rows.annotations) {
-    if (!annotation.denotesNodeId) continue
-    const list = annotationsByNode.get(annotation.denotesNodeId) ?? []
-    list.push(annotation)
-    annotationsByNode.set(annotation.denotesNodeId, list)
-  }
-
-  // Index the type-assignment edges by the object they are incident to.
-  const assignmentsByObject = new Map<string, WorldEdgeRow[]>()
-  for (const edge of rows.edges) {
-    const role = readFeature(entriesOf(edge.properties), KEY_EDGE_ROLE)
-    if (role !== EDGE_ROLE_TYPE_ASSIGNMENT) continue
-    const key = edge.sourceLocalId ?? ''
-    const list = assignmentsByObject.get(key) ?? []
-    list.push(edge)
-    assignmentsByObject.set(key, list)
-  }
-  const assignmentsFor = (objectId: string): Record<string, unknown>[] =>
-    (assignmentsByObject.get(objectId) ?? [])
-      .slice()
-      .sort((a, b) => ordinalOf(entriesOf(a.properties)) - ordinalOf(entriesOf(b.properties)))
-      .map(readTypeAssignment)
-
-  // Reconstruct time nodes first so time collections can dereference them.
-  const timeById = new Map<string, Record<string, unknown>>()
-  const entityStaged: Array<{ ordinal: number; object: Record<string, unknown> }> = []
-  const eventStaged: Array<{ ordinal: number; object: Record<string, unknown> }> = []
-  const timeStaged: Array<{ ordinal: number; object: Record<string, unknown> }> = []
-
-  for (const node of rows.nodes) {
-    const entries = entriesOf(node.properties)
-    const ordinal = ordinalOf(entries)
-    const denoting = annotationsByNode.get(node.id) ?? []
-
-    if (node.nodeType === 'time') {
-      const object = residualObject(entries)
-      object.id = node.id
-      const type = readFeature(entries, KEY_TIME_TYPE)
-      if (type !== null) object.type = type
-      const temporalAnn = denoting.find((a) => a.label === 'time' || a.temporal !== null)
-      if (temporalAnn) Object.assign(object, readTemporal(temporalAnn, type))
-      timeById.set(node.id, object)
-      timeStaged.push({ ordinal, object })
+    if (annotation.parentAnnotationId !== null) {
+      const list = glossByParent.get(annotation.parentAnnotationId) ?? []
+      list.push(annotation)
+      glossByParent.set(annotation.parentAnnotationId, list)
       continue
     }
-
-    if (node.nodeType === 'entity' || node.nodeType === 'location') {
-      const object = residualObject(entries)
-      object.id = node.id
-      if (node.label !== null) object.name = node.label
-      const grounds = recoverGroundings(node.knowledgeRefs)
-      if (grounds.wikidataId) object.wikidataId = grounds.wikidataId
-      if (grounds.wikidataUrl) object.wikidataUrl = grounds.wikidataUrl
-      if (grounds.wikibaseId) object.wikibaseId = grounds.wikibaseId
-      const assignments = assignmentsFor(node.id)
-      if (assignments.length > 0) object.typeAssignments = assignments
-      if (node.nodeType === 'location') {
-        const locationType = readFeature(entries, KEY_LOC_TYPE)
-        if (locationType !== null) object.locationType = locationType
-        const system = readFeature(entries, KEY_LOC_SYSTEM)
-        if (system !== null) object.coordinateSystem = system
-        const spatialAnn = denoting.find((a) => a.label === 'location' || a.spatial !== null)
-        if (spatialAnn) {
-          const coordinates = readSpatialCoordinates(spatialAnn, system)
-          if (coordinates) object.coordinates = coordinates
+    const nodeId = annotation.denotesNodeId
+    if (annotation.label === LABEL_TYPE_ASSIGNMENT) {
+      if (nodeId) nodeBucket(nodeId).typeAssignments.push(annotation)
+      else {
+        const subject = localRefValue(asArray(annotation.arguments).find((a) => a.role === ROLE_SUBJECT)?.target)
+        if (subject) {
+          const list = collectionAssignments.get(subject) ?? []
+          list.push(annotation)
+          collectionAssignments.set(subject, list)
         }
       }
-      entityStaged.push({ ordinal, object })
-      continue
-    }
-
-    if (node.nodeType === 'situation') {
-      const object = residualObject(entries)
-      object.id = node.id
-      if (node.label !== null) object.name = node.label
-      const grounds = recoverGroundings(node.knowledgeRefs)
-      if (grounds.wikidataId) object.wikidataId = grounds.wikidataId
-      if (grounds.wikidataUrl) object.wikidataUrl = grounds.wikidataUrl
-      if (grounds.wikibaseId) object.wikibaseId = grounds.wikibaseId
-      const confidence = (node.metadata as { confidence?: unknown } | null)?.confidence
-      if (typeof confidence === 'number') {
-        const metadata =
-          object.metadata && typeof object.metadata === 'object' && !Array.isArray(object.metadata)
-            ? (object.metadata as Record<string, unknown>)
-            : {}
-        metadata.certainty = fromMilli(confidence)
-        object.metadata = metadata
-      }
-      const interpretations = denoting
-        .filter((a) => a.label === 'interpretation' || a.ontologyTypeRefId !== null)
-        .map(readInterpretation)
-      if (interpretations.length > 0) object.personaInterpretations = interpretations
-      eventStaged.push({ ordinal, object })
-      continue
+    } else if (annotation.label === LABEL_INTERPRETATION) {
+      if (nodeId) nodeBucket(nodeId).interpretations.push(annotation)
+    } else if (annotation.label === LABEL_COLLECTION_DESCRIPTION) {
+      const subject = localRefValue(asArray(annotation.arguments).find((a) => a.role === ROLE_SUBJECT)?.target)
+      if (subject) collectionDescription.set(subject, annotation)
+    } else if (nodeId && PRESENCE_LABELS.includes(annotation.label ?? '')) {
+      nodeBucket(nodeId).presence = annotation
     }
   }
 
-  entityStaged.sort((a, b) => a.ordinal - b.ordinal)
-  eventStaged.sort((a, b) => a.ordinal - b.ordinal)
-  timeStaged.sort((a, b) => a.ordinal - b.ordinal)
-  aggregate.entities = entityStaged.map((s) => s.object)
-  aggregate.events = eventStaged.map((s) => s.object)
-  aggregate.times = timeStaged.map((s) => s.object)
+  // Gloss children are indexed by their parent annotation id; attach them to the
+  // owning node's presence bucket for description reconstruction.
+  const glossChildrenOf = (parentId: string | null): WorldAnnotationRow[] =>
+    parentId === null ? [] : (glossByParent.get(parentId) ?? [])
 
-  // Collections from ClusterSets.
-  const collectionStaged: Record<
-    WorldCollectionBucket,
-    Array<{ ordinal: number; object: Record<string, unknown> }>
-  > = { entityCollections: [], eventCollections: [], timeCollections: [] }
+  const describeFrom = (presence: WorldAnnotationRow | null): GlossItem[] =>
+    glossFromParts(presence?.text ?? null, glossChildrenOf(presence?.id ?? null).map(toGlossChild))
 
+  // Reconstruct every world node; remember time nodes for collection dereference.
+  const timeById = new Map<string, Record<string, unknown>>()
+  const entities: Record<string, unknown>[] = []
+  const events: Record<string, unknown>[] = []
+  const times: Record<string, unknown>[] = []
+
+  for (const node of rows.nodes) {
+    const anns = byNode.get(node.id)
+    if (!anns || !anns.presence) continue // not a world-authored node (e.g. a video stub)
+    const label = anns.presence.label
+
+    if (label === LABEL_TIME || label === LABEL_COLLECTION_TIME) {
+      const object: Record<string, unknown> = { id: node.id }
+      applyOpenExtension(object, entriesOf(node.properties), new Set())
+      Object.assign(object, readTemporal(anns.presence))
+      timeById.set(node.id, object)
+      if (label === LABEL_TIME) times.push(object)
+      continue
+    }
+
+    const object: Record<string, unknown> = { id: node.id }
+    if (node.label !== null) object.name = node.label
+    applyOpenExtension(object, entriesOf(node.properties), new Set())
+    object.description = describeFrom(anns.presence)
+
+    const grounds = recoverGroundings(node.knowledgeRefs)
+    if (grounds.wikidataId) object.wikidataId = grounds.wikidataId
+    if (grounds.wikidataUrl) object.wikidataUrl = grounds.wikidataUrl
+    if (grounds.wikibaseId) object.wikibaseId = grounds.wikibaseId
+    if (grounds.externalIds) {
+      const metadata =
+        object.metadata && typeof object.metadata === 'object' && !Array.isArray(object.metadata)
+          ? (object.metadata as Record<string, unknown>)
+          : {}
+      metadata.externalIds = grounds.externalIds
+      object.metadata = metadata
+    }
+
+    if (label === LABEL_SITUATION) {
+      object.personaInterpretations = anns.interpretations.map(readInterpretation)
+      events.push(object)
+    } else {
+      object.typeAssignments = anns.typeAssignments.map((a) => readTypeAssignment(a, 'entityTypeId'))
+      if (label === LABEL_LOCATION && anns.presence.spatial !== null) {
+        Object.assign(object, readSpatial(anns.presence))
+      }
+      entities.push(object)
+    }
+  }
+
+  aggregate.entities = entities
+  aggregate.events = events
+  aggregate.times = times
+
+  // Collections from ClusterSets. The bucket and member-field name are recorded
+  // on the cluster (a collection may reference not-yet-materialized members), so
+  // no derivation from member node types is needed.
   for (const clusterSet of rows.clusters) {
-    const bucket = worldClusterBucket(clusterSet)
-    if (bucket === null) continue
     const first = asArray(clusterSet.clusters)[0]
     if (!first) continue
-    const features = entriesOf(first.features)
-    const object = residualObject(features)
-    object.id = clusterSet.id
+    const featureEntries = entriesOf(first.features)
+    const bucket = readFeature(featureEntries, KEY_BUCKET)
+    if (bucket !== 'entityCollections' && bucket !== 'eventCollections' && bucket !== 'timeCollections') continue
+    const memberField = readFeature(featureEntries, KEY_MEMBER_FIELD) ?? 'members'
+
+    const object: Record<string, unknown> = { id: clusterSet.id }
+    applyOpenExtension(object, featureEntries, new Set([KEY_BUCKET, KEY_MEMBER_FIELD]))
     const canonicalLabel = first.canonicalLabel
     if (typeof canonicalLabel === 'string') object.name = canonicalLabel
-    object.collectionType = clusterSet.kind
+
+    const desc = collectionDescription.get(clusterSet.id)
+    if (desc) object.description = glossFromParts(desc.text ?? null, glossChildrenOf(desc.id).map(toGlossChild))
+
     const memberIds = asArray(first.members)
-      .map((m) => (m as { localId?: { value?: unknown } }).localId?.value)
-      .filter((id): id is string => typeof id === 'string')
+      .map((m) => localRefValue(m))
+      .filter((mid): mid is string => mid !== null)
 
-    const assignments = assignmentsFor(clusterSet.id)
-    if (assignments.length > 0) object.typeAssignments = assignments
+    if (bucket === 'entityCollections') {
+      object.typeAssignments = (collectionAssignments.get(clusterSet.id) ?? []).map((a) =>
+        readTypeAssignment(a, 'entityTypeId'),
+      )
+    } else if (bucket === 'eventCollections') {
+      object.typeAssignments = (collectionAssignments.get(clusterSet.id) ?? []).map((a) =>
+        readTypeAssignment(a, 'eventTypeId'),
+      )
+    }
 
-    if (bucket === 'entityCollections') object.entityIds = memberIds
-    else if (bucket === 'eventCollections') object.eventIds = memberIds
-    else object.times = memberIds.map((id) => timeById.get(id) ?? { id })
+    // Members reconstruct under the recorded field name: a `times` field carries
+    // full member Time objects, every other field carries member ids.
+    if (memberField === 'times') object.times = memberIds.map((id) => timeById.get(id) ?? { id })
+    else object[memberField] = memberIds
 
-    collectionStaged[bucket].push({ ordinal: ordinalOf(features), object })
+    aggregate[bucket].push(object)
   }
-  for (const bucket of ['entityCollections', 'eventCollections', 'timeCollections'] as const) {
-    aggregate[bucket] = collectionStaged[bucket].sort((a, b) => a.ordinal - b.ordinal).map((s) => s.object)
-  }
 
-  // Relations from the relation-tagged edges.
-  const relationStaged: Array<{ ordinal: number; object: Record<string, unknown> }> = []
-  for (const edge of rows.edges) {
-    const entries = entriesOf(edge.properties)
-    if (readFeature(entries, KEY_EDGE_ROLE) !== EDGE_ROLE_RELATION) continue
-    const object = residualObject(entries)
-    object.id = edge.id
-    object.relationTypeId = edge.edgeType
-    if (edge.sourceLocalId) object.sourceId = edge.sourceLocalId
-    if (edge.targetLocalId) object.targetId = edge.targetLocalId
-    const sourceType = readFeature(entries, KEY_SOURCE_TYPE)
-    if (sourceType !== null) object.sourceType = sourceType
-    const targetType = readFeature(entries, KEY_TARGET_TYPE)
-    if (targetType !== null) object.targetType = targetType
-    relationStaged.push({ ordinal: ordinalOf(entries), object })
-  }
-  aggregate.relations = relationStaged.sort((a, b) => a.ordinal - b.ordinal).map((s) => s.object)
+  // Relations from the endpoint-kind-tagged edges.
+  const relations = rows.edges
+    .filter((edge) => isWorldEdge(edge))
+    .slice()
+    .sort((a, b) => (a.ordinal ?? 0) - (b.ordinal ?? 0))
+    .map((edge) => {
+      const entries = entriesOf(edge.properties)
+      const object: Record<string, unknown> = { id: edge.id }
+      applyOpenExtension(object, entries, new Set([KEY_WORLD_ROLE, KEY_SOURCE_KIND, KEY_TARGET_KIND]))
+      object.relationTypeId = edge.edgeType
+      if (edge.sourceLocalId) object.sourceId = edge.sourceLocalId
+      if (edge.targetLocalId) object.targetId = edge.targetLocalId
+      const sourceKind = readFeature(entries, KEY_SOURCE_KIND)
+      if (sourceKind !== null) object.sourceType = sourceKind
+      const targetKind = readFeature(entries, KEY_TARGET_KIND)
+      if (targetKind !== null) object.targetType = targetKind
+      return object
+    })
+  aggregate.relations = relations
 
   return aggregate
 }

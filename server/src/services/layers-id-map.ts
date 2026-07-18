@@ -179,38 +179,66 @@ export function worldScaffoldLayerId(createdByUserId: string | null, projectId: 
   return deriveId('layer:world', createdByUserId ?? '', projectId ?? '')
 }
 
-/** The temporal-value LayersAnnotation id denoting a Time node, keyed by the time id. */
-export function worldTemporalAnnotationId(timeId: string): string {
-  return deriveId('ann:world-time', timeId)
-}
-
-/** The spatial-value LayersAnnotation id denoting a Location node, keyed by the location id. */
-export function worldSpatialAnnotationId(locationId: string): string {
-  return deriveId('ann:world-location', locationId)
+/**
+ * The presence LayersAnnotation id denoting a world node (entity / location /
+ * situation / time), keyed by the node id. Every world node carries exactly one
+ * presence annotation in the scope's world scaffold layer: it is the native
+ * marker that distinguishes a world-authored node from a video-object-annotation
+ * denotation stub (which has no scaffold annotation), and for a Time it carries
+ * the calendar value, for a Location the spatial value, and for an Entity/Event
+ * the display description text.
+ */
+export function worldNodeAnnotationId(nodeId: string): string {
+  return deriveId('ann:world-node', nodeId)
 }
 
 /**
  * The interpretation LayersAnnotation id denoting an Event node, keyed by the
- * (event, persona, eventType) triple so a per-persona interpretation is a stable
- * singleton and a re-save collapses onto the same row.
+ * (event, persona, eventType, index) tuple. The index disambiguates two
+ * interpretations that share a persona and event type but differ in their
+ * participants or justification, so distinct interpretations never collapse onto
+ * one deterministic id; a re-save preserving list order stays idempotent.
  */
 export function worldInterpretationAnnotationId(
   eventId: string,
   personaId: string,
   eventTypeId: string,
+  index: number,
 ): string {
-  return deriveId('ann:world-interp', eventId, personaId, eventTypeId)
+  return deriveId('ann:world-interp', eventId, personaId, eventTypeId, String(index))
 }
 
 /**
- * The instance-of GraphEdge id for a world type assignment, keyed by the
- * (object, type, persona) triple. Mirrors {@link ontologyRelationEdgeId} so a
- * re-save of the same assignment collapses onto one edge.
+ * The type-assignment LayersAnnotation id, keyed by the (subject, type, persona,
+ * index) tuple. The subject is the entity/event node or the collection the type
+ * is assigned to; the index disambiguates two assignments sharing a persona and
+ * type but differing in confidence or justification, so distinct assignments
+ * never collide onto one id.
  */
-export function worldTypeAssignmentEdgeId(
-  objectId: string,
+export function worldTypeAssignmentAnnotationId(
+  subjectId: string,
   typeId: string,
   personaId: string,
+  index: number,
 ): string {
-  return deriveId('edge:world-instance-of', objectId, typeId, personaId)
+  return deriveId('ann:world-type', subjectId, typeId, personaId, String(index))
+}
+
+/**
+ * The collection-description LayersAnnotation id, keyed by the collection id.
+ * Hosts a collection's stand-off gloss text (its `description`), which — unlike an
+ * entity or event — has no GraphNode to hang a presence annotation off.
+ */
+export function worldCollectionDescriptionAnnotationId(collectionId: string): string {
+  return deriveId('ann:world-collection-desc', collectionId)
+}
+
+/**
+ * The gloss-reference child LayersAnnotation id for one reference segment of a
+ * world object's description, keyed by the owning object id and the segment's
+ * index. The child's textSpan anchor points into the parent description text, so
+ * a rich description round-trips stand-off rather than as a shredded blob.
+ */
+export function worldGlossRefAnnotationId(objectId: string, segIndex: number): string {
+  return deriveId('ann:world-gloss-ref', objectId, String(segIndex))
 }

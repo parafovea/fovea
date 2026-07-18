@@ -18,7 +18,6 @@ import {
   layersToWorldState,
   worldStateToLayers,
   isWorldEdge,
-  worldClusterBucket,
   emptyWorldState,
   personalWorldStateId,
   WORLD_NODE_TYPES,
@@ -150,15 +149,12 @@ export async function readAllWorldObjectIds(prisma: PrismaClient): Promise<{
     else if (node.nodeType === 'situation') eventIds.add(node.id)
     else if (node.nodeType === 'time') timeIds.add(node.id)
   }
-  const clusters = await prisma.clusterSet.findMany({})
-  for (const cluster of clusters) if (worldClusterBucket(cluster) !== null) collectionIds.add(cluster.id)
+  // Collections are the ClusterSets bound to a world scaffold expression.
+  const clusters = await prisma.clusterSet.findMany({ where: { expression: { sourceKind: 'world-model' } } })
+  for (const cluster of clusters) collectionIds.add(cluster.id)
+  // Relations are the endpoint-kind-tagged world edges.
   const edges = (await prisma.graphEdge.findMany({})).filter(isWorldEdge)
-  for (const edge of edges) {
-    const role = (edge.properties as { entries?: Array<{ key?: unknown; value?: unknown }> } | null)?.entries
-    if (Array.isArray(role) && role.some((e) => e.key === 'fovea.edgeRole' && e.value === 'relation')) {
-      relationIds.add(edge.id)
-    }
-  }
+  for (const edge of edges) relationIds.add(edge.id)
 
   return { entityIds, eventIds, timeIds, collectionIds, relationIds }
 }

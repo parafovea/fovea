@@ -721,27 +721,32 @@ describe('Cross-user import ownership', () => {
       ;(mockPrisma.persona.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([])
       ;(mockPrisma.video.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([])
       ;(mockPrisma.videoSummary.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([])
-      ;(mockPrisma.layersAnnotation.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([])
+      // A world node is marked by the world-scaffold presence annotation that
+      // denotes it (its label carries the node kind); a video-object denotation
+      // stub, having none, is not surfaced as a world object.
+      ;(mockPrisma.layersAnnotation.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([
+        { id: 'pres-ent-a1', denotesNodeId: 'ent-a1', label: 'entity', parentAnnotationId: null, layer: { personaId: null } },
+        { id: 'pres-ent-a2', denotesNodeId: 'ent-a2', label: 'entity', parentAnnotationId: null, layer: { personaId: null } },
+        { id: 'pres-evt-a1', denotesNodeId: 'evt-a1', label: 'situation', parentAnnotationId: null, layer: { personaId: null } },
+        { id: 'pres-time-a1', denotesNodeId: 'time-a1', label: 'time', parentAnnotationId: null, layer: { personaId: null } },
+      ])
       ;(mockPrisma.graphEdge.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([])
-      // World objects are native GraphNodes discriminated by nodeType (entity /
-      // location / situation / time), scoped by `createdByUserId`. The reader
-      // recovers ids from the node id directly.
+      // World objects are native GraphNodes (entity / location / situation / time),
+      // scoped by `createdByUserId`. The reader recovers ids from the node id.
       ;(mockPrisma.graphNode.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([
         { id: 'ent-a1', nodeType: 'entity', label: null, properties: null, knowledgeRefs: null, metadata: null, createdByUserId: USER_A, projectId: null },
         { id: 'ent-a2', nodeType: 'entity', label: null, properties: null, knowledgeRefs: null, metadata: null, createdByUserId: USER_A, projectId: null },
         { id: 'evt-a1', nodeType: 'situation', label: null, properties: null, knowledgeRefs: null, metadata: null, createdByUserId: USER_A, projectId: null },
         { id: 'time-a1', nodeType: 'time', label: null, properties: null, knowledgeRefs: null, metadata: null, createdByUserId: USER_A, projectId: null },
       ])
-      // Collections are ClusterSets tagged with their bucket in cluster features.
+      // Collections are ClusterSets bound to the world scaffold expression.
       ;(mockPrisma.clusterSet.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([
         {
           id: 'ec-a1',
           kind: 'group',
           createdByUserId: USER_A,
           projectId: null,
-          clusters: [
-            { uuid: { value: 'ec-a1' }, members: [], features: { entries: [{ key: 'fovea.bucket', value: 'entityCollections' }] } },
-          ],
+          clusters: [{ uuid: { value: 'ec-a1' }, members: [], features: { entries: [] } }],
         },
       ])
 
