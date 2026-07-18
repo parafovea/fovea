@@ -220,6 +220,29 @@ export class ExpressionRepository {
   }
 
   /**
+   * Creates an annotation layer from unchecked input.
+   *
+   * @param data - Prisma unchecked create input
+   * @returns the created annotation-layer id
+   */
+  async createAnnotationLayer(
+    data: Prisma.AnnotationLayerUncheckedCreateInput
+  ): Promise<{ id: string }> {
+    const created = await this.prisma.annotationLayer.create({ data, select: { id: true } })
+    return created
+  }
+
+  /**
+   * Bulk-creates layers annotations. A no-op for an empty batch.
+   *
+   * @param data - the per-annotation create rows
+   */
+  async createAnnotations(data: Prisma.LayersAnnotationCreateManyInput[]): Promise<void> {
+    if (data.length === 0) return
+    await this.prisma.layersAnnotation.createMany({ data })
+  }
+
+  /**
    * Lists document expressions (sourceKind = document) matching a read-scope
    * filter, paginated and newest-first.
    *

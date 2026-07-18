@@ -2,7 +2,6 @@ import { Type } from '@sinclair/typebox'
 import { FastifyPluginAsync, FastifyRequest } from 'fastify'
 import { optionalAuth, requireAdmin, requireAuth } from '@middleware/auth.js'
 import { buildAbilities } from '../middleware/abilities.js'
-import { GraphRepository } from '../repositories/GraphRepository.js'
 import { LayersOntologyRepository } from '../repositories/LayersOntologyRepository.js'
 import { WorldStateService, WorldStateUpdateInput } from '../services/world-state-service.js'
 
@@ -31,7 +30,6 @@ import { WorldStateService, WorldStateUpdateInput } from '../services/world-stat
  */
 const worldRoute: FastifyPluginAsync = async (fastify) => {
   // Request-independent: repositories for the plugin's lifetime.
-  const graphRepo = new GraphRepository(fastify.prisma)
   const ontologyRepo = new LayersOntologyRepository(fastify.prisma)
 
   /**
@@ -40,7 +38,6 @@ const worldRoute: FastifyPluginAsync = async (fastify) => {
    */
   const serviceFor = (request: FastifyRequest): WorldStateService =>
     new WorldStateService(
-      graphRepo,
       ontologyRepo,
       fastify.prisma,
       request.ability ?? null,

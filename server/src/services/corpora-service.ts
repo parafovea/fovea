@@ -22,6 +22,54 @@ function toJson(value: unknown): Prisma.InputJsonValue {
   return JSON.parse(JSON.stringify(value))
 }
 
+/** Narrows a value to a shallow copy of a plain (non-array) object, else null. */
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    return { ...(value as Record<string, unknown>) }
+  }
+  return null
+}
+
+/**
+ * Corpus lexicon fields carried inside the stored blob (they have no dedicated
+ * Prisma column). Recognized at the conversion boundary so the API surfaces them
+ * as the lexicon's own fields; every other key is the open feature map.
+ */
+const CORPUS_FACET_KEYS = [
+  'annotationDesign',
+  'expressionCount',
+  'licensing',
+  'eprintRefs',
+  'reproducibility',
+] as const
+
+/**
+ * annotationMetadata (provenance) keys on a membership. Everything else on a
+ * membership's stored blob is open per-membership extension (features).
+ */
+const MEMBERSHIP_PROVENANCE_KEYS = [
+  'agent',
+  'tool',
+  'timestamp',
+  'personaRef',
+  'dependencies',
+  'digest',
+] as const
+
+/** Partitions a stored blob into the named keys and the remaining open KV. */
+function partitionBlob(
+  blob: Record<string, unknown> | null,
+  keys: readonly string[]
+): { named: Record<string, unknown>; rest: Record<string, unknown> } {
+  const named: Record<string, unknown> = {}
+  const rest: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(blob ?? {})) {
+    if (keys.includes(key)) named[key] = value
+    else rest[key] = value
+  }
+  return { named, rest }
+}
+
 /**
  * Fields accepted when creating or updating a corpus. JSON-column fields carry
  * their compile-time @fovea/layers-schema shape; envelope fields are plain
@@ -36,7 +84,14 @@ export interface CorpusInput {
   domain?: string | null
   ontologyRefs?: string[]
   languages?: string[]
-  metadata?: Record<string, unknown>
+  /** Open per-corpus extension key-values (the lexicon's `features`). */
+  features?: Record<string, unknown>
+  /** Structured corpus facets with no dedicated column (stored in the blob). */
+  annotationDesign?: unknown
+  expressionCount?: number
+  licensing?: unknown
+  eprintRefs?: string[]
+  reproducibility?: unknown
   projectId?: string | null
   layersUri?: string | null
 }
@@ -49,7 +104,12 @@ export interface CorpusUpdateInput {
   domain?: string | null
   ontologyRefs?: string[]
   languages?: string[]
-  metadata?: Record<string, unknown>
+  features?: Record<string, unknown>
+  annotationDesign?: unknown
+  expressionCount?: number
+  licensing?: unknown
+  eprintRefs?: string[]
+  reproducibility?: unknown
   layersUri?: string | null
 }
 
@@ -59,7 +119,10 @@ export interface MembershipInput {
   expressionId: string
   split?: string | null
   ordinal?: number | null
+  /** annotationMetadata-shaped provenance (who assigned, when, tool). */
   metadata?: Record<string, unknown>
+  /** Open per-membership extension key-values (the lexicon's `features`). */
+  features?: Record<string, unknown>
 }
 
 /** Fields accepted when creating a cluster set. */
@@ -111,7 +174,7 @@ export interface AlignmentUpdateInput {
   layersUri?: string | null
 }
 
-/** API-facing corpus shape. */
+/** API-facing corpus shape, mirroring the `pub.layers.corpus` lexicon fields. */
 export interface CorpusResponse {
   id: string
   name: string
@@ -120,7 +183,12 @@ export interface CorpusResponse {
   domain: string | null
   ontologyRefs: unknown
   languages: string[]
-  metadata: unknown
+  annotationDesign: unknown
+  expressionCount: unknown
+  licensing: unknown
+  eprintRefs: unknown
+  reproducibility: unknown
+  features: unknown
   projectId: string | null
   createdByUserId: string | null
   layersUri: string | null
@@ -136,6 +204,7 @@ export interface MembershipResponse {
   split: string | null
   ordinal: number | null
   metadata: unknown
+  features: unknown
   createdAt: string
   updatedAt: string
 }
@@ -207,6 +276,10 @@ export class CorporaService {
   // --- mapping --------------------------------------------------------------
 
   private mapCorpus(c: PrismaCorpus): CorpusResponse {
+    // The stored blob carries recognized structured facets alongside the open
+    // feature map; surface each facet as its own lexicon field and the rest as
+    // `features`, so the API never exposes a schema-less `metadata` bag.
+    const { named, rest } = partitionBlob(asRecord(c.metadata), CORPUS_FACET_KEYS)
     return {
       id: c.id,
       name: c.name,
@@ -215,7 +288,12 @@ export class CorporaService {
       domain: c.domain,
       ontologyRefs: c.ontologyRefs ?? null,
       languages: c.languages,
-      metadata: c.metadata ?? null,
+      annotationDesign: named.annotationDesign ?? null,
+      expressionCount: named.expressionCount ?? null,
+      licensing: named.licensing ?? null,
+      eprintRefs: named.eprintRefs ?? null,
+      reproducibility: named.reproducibility ?? null,
+      features: rest,
       projectId: c.projectId,
       createdByUserId: c.createdByUserId,
       layersUri: c.layersUri,
@@ -225,16 +303,66 @@ export class CorporaService {
   }
 
   private mapMembership(m: PrismaCorpusMembership): MembershipResponse {
+    // The membership lexicon splits its stored blob into annotationMetadata
+    // provenance and an open feature map; surface both rather than one bag.
+    const { named, rest } = partitionBlob(asRecord(m.metadata), MEMBERSHIP_PROVENANCE_KEYS)
     return {
       id: m.id,
       corpusId: m.corpusId,
       expressionId: m.expressionId,
       split: m.split,
       ordinal: m.ordinal,
-      metadata: m.metadata ?? null,
+      metadata: Object.keys(named).length > 0 ? named : null,
+      features: rest,
       createdAt: m.createdAt.toISOString(),
       updatedAt: m.updatedAt.toISOString(),
     }
+  }
+
+  /**
+   * Folds a corpus's open features and structured facets into the single stored
+   * blob (they share the Prisma `metadata` column, which has no lexicon field of
+   * its own). Returns undefined when the caller supplied none, so a partial
+   * update leaves the stored blob untouched.
+   */
+  private corpusBlob(input: CorpusInput | CorpusUpdateInput): Prisma.InputJsonValue | undefined {
+    const blob: Record<string, unknown> = {}
+    let supplied = false
+    const features = asRecord(input.features)
+    if (features) {
+      Object.assign(blob, features)
+      supplied = true
+    }
+    for (const key of CORPUS_FACET_KEYS) {
+      const value = (input as Record<string, unknown>)[key]
+      if (value !== undefined) {
+        blob[key] = value
+        supplied = true
+      }
+    }
+    return supplied ? toJson(blob) : undefined
+  }
+
+  /**
+   * Folds a membership's provenance and open features into its single stored
+   * blob. Returns undefined when the caller supplied neither.
+   */
+  private membershipBlob(input: MembershipInput): Prisma.InputJsonValue | undefined {
+    const blob: Record<string, unknown> = {}
+    let supplied = false
+    const features = asRecord(input.features)
+    if (features) {
+      Object.assign(blob, features)
+      supplied = true
+    }
+    const metadata = asRecord(input.metadata)
+    if (metadata) {
+      for (const key of MEMBERSHIP_PROVENANCE_KEYS) {
+        if (metadata[key] !== undefined) blob[key] = metadata[key]
+      }
+      supplied = true
+    }
+    return supplied ? toJson(blob) : undefined
   }
 
   private mapClusterSet(cs: PrismaClusterSet): ClusterSetResponse {
@@ -342,7 +470,7 @@ export class CorporaService {
         domain: input.domain ?? null,
         ontologyRefs: input.ontologyRefs !== undefined ? toJson(input.ontologyRefs) : undefined,
         languages: input.languages ?? [],
-        metadata: input.metadata !== undefined ? toJson(input.metadata) : undefined,
+        metadata: this.corpusBlob(input),
         projectId,
         createdByUserId: this.userId,
         layersUri: input.layersUri ?? null,
@@ -395,7 +523,7 @@ export class CorporaService {
       domain: input.domain,
       ontologyRefs: input.ontologyRefs !== undefined ? toJson(input.ontologyRefs) : undefined,
       languages: input.languages !== undefined ? { set: input.languages } : undefined,
-      metadata: input.metadata !== undefined ? toJson(input.metadata) : undefined,
+      metadata: this.corpusBlob(input),
       layersUri: input.layersUri,
     })
     return this.mapCorpus(updated)
@@ -452,7 +580,7 @@ export class CorporaService {
         expressionId: input.expressionId,
         split: input.split ?? null,
         ordinal: input.ordinal ?? null,
-        metadata: input.metadata !== undefined ? toJson(input.metadata) : undefined,
+        metadata: this.membershipBlob(input),
       })
       return { membership: this.mapMembership(membership), created: true }
     } catch (error) {
@@ -494,7 +622,7 @@ export class CorporaService {
     const updated = await this.repository.updateMembership(existing.id, {
       split: input.split,
       ordinal: input.ordinal,
-      metadata: input.metadata !== undefined ? toJson(input.metadata) : undefined,
+      metadata: this.membershipBlob(input),
     })
     return this.mapMembership(updated)
   }

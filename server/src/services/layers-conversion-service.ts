@@ -1,23 +1,20 @@
 /**
- * Lossless conversion between Fovea's `Annotation.frames` bounding-box
- * sequences and the layers-schema {@link SpatioTemporalAnchor} shape.
+ * Conversion between Fovea's `Annotation.frames` bounding-box sequences and the
+ * layers-schema {@link SpatioTemporalAnchor} shape, with the native anchor as the
+ * single source of truth.
  *
- * The layers anchor is a lossy projection of a Fovea sequence on its own:
- * bounding boxes are integer pixels, times are integer milliseconds, and
- * interpolation collapses to a single slug. To keep the transform bit-exact
- * — so a backfill can round-trip every legacy annotation without drift — the
- * exact source values are stashed under `fovea.*` keys: per-keyframe fields
- * (frame number, float bbox, confidence, keyframe flag, metadata) live in the
- * {@link Keyframe.features} map, and sequence-level fields (interpolation
- * segments, visibility ranges, track identity, frame counts) live in the
- * layer-level features bag returned alongside the anchor.
- *
- * The inverse reads the `fovea.*` values first and only falls back to the
- * integer millisecond / pixel projection when a source value is absent (e.g.
- * an anchor authored natively in the layers store rather than migrated).
+ * A keyframe's integer `bbox` is the canonical geometry (Fovea's UI-drawn boxes
+ * are pixel boxes; the layers `boundingBox` is integer-pixel by definition), and
+ * a keyframe's `timeMs` is the canonical time. Only true keyframes are stored;
+ * interpolated frames are recomputed downstream, never persisted. The per-box
+ * confidence, visibility flag, per-segment interpolation mode, and arbitrary
+ * per-box metadata ride in {@link Keyframe.features} — the lexicon's designated
+ * open per-keyframe extension — so the anchor carries them without a parallel
+ * sidecar. A box's `frameNumber` and the sequence's frame counts are derived on
+ * read from `timeMs` and the video frame rate.
  *
  * These functions are pure and take no database — they are exercised by the
- * golden round-trip test and reused by the P3 backfill and the layers routes.
+ * golden round-trip test and reused by the backfill and the layers routes.
  *
  * @module
  */
@@ -54,9 +51,8 @@ export type FoveaTrackingSource =
   | 'yolo11seg'
 
 /**
- * A single Fovea bounding box at a specific video frame. Coordinates are
- * pixel-space floats for annotation output; only raw detection output is
- * normalized 0-1 (that normalization is not undone here).
+ * A single Fovea bounding box at a specific video frame. The layers projection
+ * stores integer-pixel geometry, so a box round-trips as integer coordinates.
  */
 export interface FoveaBoundingBox {
   x: number
@@ -88,7 +84,8 @@ export interface FoveaVisibilityRange {
 /**
  * A complete Fovea bounding-box sequence, the shape stored in the legacy
  * `Annotation.frames` JSON column. Single-frame annotations are sequences with
- * one keyframe.
+ * one keyframe. `boxes` holds only keyframes; interpolated frames are generated
+ * on demand and never persisted.
  */
 export interface BoundingBoxSequence {
   boxes: FoveaBoundingBox[]
@@ -106,35 +103,36 @@ export interface BoundingBoxSequence {
 export interface FrameRateOptions {
   /** Video frame rate in frames per second. */
   frameRate: number
-  /** Video width in pixels, recorded in the anchor features when supplied. */
+  /** Video width in pixels (read from the video, never stored on the anchor). */
   videoWidth?: number
-  /** Video height in pixels, recorded in the anchor features when supplied. */
+  /** Video height in pixels (read from the video, never stored on the anchor). */
   videoHeight?: number
 }
 
+// --------------------------------------------------------------------------
+// Native keyframe feature keys
+// --------------------------------------------------------------------------
+
 /**
- * The exact `fovea.*` feature keys used to make the transform bit-exact.
- * Kept in one place so the forward and inverse functions cannot drift.
+ * The keyframe feature keys the anchor uses as the designated open per-keyframe
+ * extension. These are plain native keys (not a `fovea.*` sidecar namespace):
+ * the lexicon documents `keyframe.features` for exactly this — visibility,
+ * occlusion, confidence, pose. Kept in one place so the forward and inverse
+ * cannot drift.
  */
-const FOVEA_KEYS = {
-  frameNumber: 'fovea.frameNumber',
-  x: 'fovea.x',
-  y: 'fovea.y',
-  width: 'fovea.width',
-  height: 'fovea.height',
-  confidence: 'fovea.confidence',
-  isKeyframe: 'fovea.isKeyframe',
-  metadata: 'fovea.metadata',
-  interpolationSegments: 'fovea.interpolationSegments',
-  visibilityRanges: 'fovea.visibilityRanges',
-  trackId: 'fovea.trackId',
-  trackingSource: 'fovea.trackingSource',
-  trackingConfidence: 'fovea.trackingConfidence',
-  totalFrames: 'fovea.totalFrames',
-  keyframeCount: 'fovea.keyframeCount',
-  interpolatedFrameCount: 'fovea.interpolatedFrameCount',
-  videoWidth: 'fovea.videoWidth',
-  videoHeight: 'fovea.videoHeight',
+const KF = {
+  /** Per-box confidence on the layers 0-1000 integer scale. */
+  confidence: 'confidence',
+  /** Per-keyframe visibility flag; absent means visible. */
+  visible: 'visible',
+  /** The interpolation mode of the segment that begins at this keyframe. */
+  interpolation: 'interpolation',
+  /** JSON control points for the segment beginning at this keyframe. */
+  interpolationControlPoints: 'interpolationControlPoints',
+  /** JSON parametric config for the segment beginning at this keyframe. */
+  interpolationParametric: 'interpolationParametric',
+  /** Prefix for arbitrary per-box metadata keys (one feature per metadata key). */
+  metadataPrefix: 'metadata.',
 } as const
 
 // --------------------------------------------------------------------------
@@ -170,8 +168,8 @@ export function msToSec(ms: number): number {
 /**
  * Maps a Fovea interpolation type to the coarser layers interpolation slug.
  * Linear stays linear, hold becomes step, and every eased/curved/parametric
- * mode collapses to cubic; the exact per-segment configuration is preserved
- * separately in the features bag.
+ * mode collapses to cubic; the exact per-segment mode is preserved on each
+ * keyframe's feature map.
  */
 function interpolationTypeToSlug(
   type: FoveaInterpolationType,
@@ -179,6 +177,17 @@ function interpolationTypeToSlug(
   if (type === 'linear') return 'linear'
   if (type === 'hold') return 'step'
   return 'cubic'
+}
+
+/**
+ * The AT-URI of a community interpolation-mode definition node for a Fovea
+ * interpolation type. The nodes are knowledge-graph data (not a lexicon change);
+ * `interpolationUri` is the lexicon's explicit community-expandable hook. The
+ * reconstruction reads the per-keyframe mode feature, so this URI is forward
+ * context, not round-trip data.
+ */
+function interpolationModeUri(type: FoveaInterpolationType): string {
+  return `at://did:web:fovea.video/pub.layers.graph.graphNode/interpolation-${type}`
 }
 
 // --------------------------------------------------------------------------
@@ -193,33 +202,40 @@ function featureIndex(features: FeatureMap | undefined): Map<string, string> {
   return index
 }
 
+/** Whether a frame falls inside a visible range; a frame outside every range is visible. */
+function isFrameVisible(frameNumber: number, ranges: FoveaVisibilityRange[]): boolean {
+  for (const range of ranges) {
+    if (frameNumber >= range.startFrame && frameNumber <= range.endFrame) return range.visible
+  }
+  return true
+}
+
 // --------------------------------------------------------------------------
 // Forward: BoundingBoxSequence -> SpatioTemporalAnchor
 // --------------------------------------------------------------------------
 
 /**
  * Projects a Fovea bounding-box sequence onto a layers
- * {@link SpatioTemporalAnchor}, returning the anchor plus a layer-level
- * features bag that carries the sequence-level `fovea.*` values.
- *
- * Each box becomes a keyframe whose `timeMs` is the frame number mapped
- * through the frame rate and whose `bbox` is the pixel box rounded to
- * integers (width/height floored to a 1px minimum). The exact source frame
- * number, float box, confidence, keyframe flag, and metadata are stashed under
- * `fovea.*` keys in the keyframe's feature map so the inverse can rebuild the
- * box bit-exactly. Interpolation segments, visibility ranges, and track
- * identity are preserved verbatim in the returned features bag; the anchor's
- * `interpolation` slug is derived from the first segment.
+ * {@link SpatioTemporalAnchor}. Each keyframe carries integer geometry, an
+ * integer millisecond time, and a feature map holding the per-box confidence
+ * (0-1000), the visibility flag, the interpolation mode that begins at the
+ * keyframe (with control points / parametric config), and any per-box metadata.
+ * The anchor's `interpolation` slug and `interpolationUri` derive from the first
+ * segment; per-segment modes are recovered from the keyframe features.
  *
  * @param seq - the source sequence (the `Annotation.frames` shape)
- * @param opts - frame rate and optional video dimensions
- * @returns the layers anchor and the sequence-level features bag
+ * @param opts - frame rate for the frame-number to millisecond mapping
+ * @returns the layers anchor
  */
 export function boundingBoxSequenceToSpatioTemporalAnchor(
   seq: BoundingBoxSequence,
   opts: FrameRateOptions,
-): { anchor: SpatioTemporalAnchor; features: Record<string, unknown> } {
+): SpatioTemporalAnchor {
   const { frameRate } = opts
+
+  // The interpolation segment that begins at a given frame, if any.
+  const segmentByStart = new Map<number, FoveaInterpolationSegment>()
+  for (const segment of seq.interpolationSegments) segmentByStart.set(segment.startFrame, segment)
 
   const keyframes: Keyframe[] = seq.boxes.map((box) => {
     const timeMs = Math.round((box.frameNumber / frameRate) * 1000)
@@ -231,60 +247,52 @@ export function boundingBoxSequenceToSpatioTemporalAnchor(
       height: Math.max(1, Math.round(box.height)),
     }
 
-    const entries: Feature[] = [
-      { key: FOVEA_KEYS.frameNumber, value: String(box.frameNumber) },
-      { key: FOVEA_KEYS.x, value: String(box.x) },
-      { key: FOVEA_KEYS.y, value: String(box.y) },
-      { key: FOVEA_KEYS.width, value: String(box.width) },
-      { key: FOVEA_KEYS.height, value: String(box.height) },
-    ]
+    const entries: Feature[] = []
     if (box.confidence !== undefined) {
-      // Exact float for reconstruction, plus the layers-native 0-1000 scale.
-      entries.push({ key: FOVEA_KEYS.confidence, value: String(box.confidence) })
-      entries.push({ key: 'confidence', value: String(to1000(box.confidence)) })
+      entries.push({ key: KF.confidence, value: String(to1000(box.confidence)) })
     }
-    if (box.isKeyframe !== undefined) {
-      entries.push({ key: FOVEA_KEYS.isKeyframe, value: String(box.isKeyframe) })
+    if (!isFrameVisible(box.frameNumber, seq.visibilityRanges)) {
+      entries.push({ key: KF.visible, value: 'false' })
+    }
+    const segment = segmentByStart.get(box.frameNumber)
+    if (segment) {
+      entries.push({ key: KF.interpolation, value: segment.type })
+      if (segment.controlPoints !== undefined) {
+        entries.push({
+          key: KF.interpolationControlPoints,
+          value: JSON.stringify(segment.controlPoints),
+        })
+      }
+      if (segment.parametric !== undefined) {
+        entries.push({ key: KF.interpolationParametric, value: JSON.stringify(segment.parametric) })
+      }
     }
     if (box.metadata !== undefined) {
-      entries.push({ key: FOVEA_KEYS.metadata, value: JSON.stringify(box.metadata) })
+      for (const [key, value] of Object.entries(box.metadata)) {
+        entries.push({ key: `${KF.metadataPrefix}${key}`, value: JSON.stringify(value) })
+      }
     }
 
-    return { bbox, timeMs, features: { entries } }
+    const keyframe: Keyframe = { bbox, timeMs }
+    if (entries.length > 0) keyframe.features = { entries }
+    return keyframe
   })
 
   const firstMs = keyframes.length > 0 ? keyframes[0].timeMs : 0
   const lastMs = keyframes.length > 0 ? keyframes[keyframes.length - 1].timeMs : 0
   const temporalSpan: TemporalSpan = { start: firstMs, ending: lastMs }
 
-  const interpolation: SpatioTemporalAnchorInterpolation =
-    seq.interpolationSegments.length > 0
-      ? interpolationTypeToSlug(seq.interpolationSegments[0].type)
-      : 'linear'
+  const leadType =
+    seq.interpolationSegments.length > 0 ? seq.interpolationSegments[0].type : undefined
 
   const anchor: SpatioTemporalAnchor = {
-    interpolation,
+    interpolation: leadType ? interpolationTypeToSlug(leadType) : 'linear',
     keyframes,
     temporalSpan,
   }
+  if (leadType) anchor.interpolationUri = interpolationModeUri(leadType)
 
-  // Sequence-level values preserved verbatim so the inverse is bit-exact.
-  const features: Record<string, unknown> = {
-    [FOVEA_KEYS.interpolationSegments]: seq.interpolationSegments,
-    [FOVEA_KEYS.visibilityRanges]: seq.visibilityRanges,
-    [FOVEA_KEYS.totalFrames]: seq.totalFrames,
-    [FOVEA_KEYS.keyframeCount]: seq.keyframeCount,
-    [FOVEA_KEYS.interpolatedFrameCount]: seq.interpolatedFrameCount,
-  }
-  if (seq.trackId !== undefined) features[FOVEA_KEYS.trackId] = seq.trackId
-  if (seq.trackingSource !== undefined) features[FOVEA_KEYS.trackingSource] = seq.trackingSource
-  if (seq.trackingConfidence !== undefined) {
-    features[FOVEA_KEYS.trackingConfidence] = seq.trackingConfidence
-  }
-  if (opts.videoWidth !== undefined) features[FOVEA_KEYS.videoWidth] = opts.videoWidth
-  if (opts.videoHeight !== undefined) features[FOVEA_KEYS.videoHeight] = opts.videoHeight
-
-  return { anchor, features }
+  return anchor
 }
 
 // --------------------------------------------------------------------------
@@ -293,75 +301,126 @@ export function boundingBoxSequenceToSpatioTemporalAnchor(
 
 /**
  * Rebuilds a Fovea bounding-box sequence from a layers
- * {@link SpatioTemporalAnchor} and its sequence-level features bag — the exact
- * inverse of {@link boundingBoxSequenceToSpatioTemporalAnchor}.
- *
- * Per-keyframe reconstruction reads the exact `fovea.*` features first (frame
- * number, float box, confidence, keyframe flag, metadata) and only falls back
- * to the anchor's integer `timeMs` / pixel `bbox` when those features are
- * absent (i.e. an anchor authored natively in the layers store). Sequence-level
- * fields are read from the features bag, with computed fallbacks for a
- * natively-authored anchor.
+ * {@link SpatioTemporalAnchor} — the inverse of
+ * {@link boundingBoxSequenceToSpatioTemporalAnchor}. Boxes read the integer
+ * geometry and derive `frameNumber` from `timeMs` and the frame rate; per-box
+ * confidence, metadata, and visibility come from the keyframe features.
+ * Interpolation segments are rebuilt from the per-keyframe mode features, and
+ * visibility ranges from runs of consecutive keyframe visibility flags. The
+ * frame counts are derived from the keyframes.
  *
  * @param anchor - the layers anchor
- * @param features - the sequence-level features bag produced by the forward map
- * @param opts - frame rate for the fallback millisecond -> frame mapping
+ * @param opts - frame rate for the millisecond -> frame mapping
  * @returns the reconstructed sequence
  */
 export function spatioTemporalAnchorToBoundingBoxSequence(
   anchor: SpatioTemporalAnchor,
-  features: Record<string, unknown> | undefined,
   opts: FrameRateOptions,
 ): BoundingBoxSequence {
   const { frameRate } = opts
-  const bag = features ?? {}
   const keyframes = anchor.keyframes ?? []
+
+  const visibleFlags: boolean[] = []
+  const modeByIndex: Array<FoveaInterpolationSegment | null> = []
 
   const boxes: FoveaBoundingBox[] = keyframes.map((kf) => {
     const feat = featureIndex(kf.features)
+    const frameNumber = Math.round((kf.timeMs / 1000) * frameRate)
 
-    const frameNumber = feat.has(FOVEA_KEYS.frameNumber)
-      ? Number(feat.get(FOVEA_KEYS.frameNumber))
-      : Math.round((kf.timeMs / 1000) * frameRate)
-
-    const x = feat.has(FOVEA_KEYS.x) ? Number(feat.get(FOVEA_KEYS.x)) : kf.bbox.x
-    const y = feat.has(FOVEA_KEYS.y) ? Number(feat.get(FOVEA_KEYS.y)) : kf.bbox.y
-    const width = feat.has(FOVEA_KEYS.width) ? Number(feat.get(FOVEA_KEYS.width)) : kf.bbox.width
-    const height = feat.has(FOVEA_KEYS.height)
-      ? Number(feat.get(FOVEA_KEYS.height))
-      : kf.bbox.height
-
-    const box: FoveaBoundingBox = { x, y, width, height, frameNumber }
-
-    if (feat.has(FOVEA_KEYS.confidence)) {
-      box.confidence = Number(feat.get(FOVEA_KEYS.confidence))
-    } else if (feat.has('confidence')) {
-      box.confidence = from1000(Number(feat.get('confidence')))
+    const box: FoveaBoundingBox = {
+      x: kf.bbox.x,
+      y: kf.bbox.y,
+      width: kf.bbox.width,
+      height: kf.bbox.height,
+      frameNumber,
+      isKeyframe: true,
     }
-    if (feat.has(FOVEA_KEYS.isKeyframe)) {
-      box.isKeyframe = feat.get(FOVEA_KEYS.isKeyframe) === 'true'
+
+    if (feat.has(KF.confidence)) {
+      box.confidence = from1000(Number(feat.get(KF.confidence)))
     }
-    if (feat.has(FOVEA_KEYS.metadata)) {
-      box.metadata = JSON.parse(feat.get(FOVEA_KEYS.metadata) as string) as Record<string, unknown>
+
+    const metadata: Record<string, unknown> = {}
+    let hasMetadata = false
+    for (const [key, value] of feat) {
+      if (key.startsWith(KF.metadataPrefix)) {
+        metadata[key.slice(KF.metadataPrefix.length)] = JSON.parse(value) as unknown
+        hasMetadata = true
+      }
+    }
+    if (hasMetadata) box.metadata = metadata
+
+    visibleFlags.push(feat.get(KF.visible) !== 'false')
+
+    if (feat.has(KF.interpolation)) {
+      const segment: FoveaInterpolationSegment = {
+        startFrame: frameNumber,
+        endFrame: frameNumber,
+        type: feat.get(KF.interpolation) as FoveaInterpolationType,
+      }
+      if (feat.has(KF.interpolationControlPoints)) {
+        segment.controlPoints = JSON.parse(
+          feat.get(KF.interpolationControlPoints) as string,
+        ) as Record<string, unknown>
+      }
+      if (feat.has(KF.interpolationParametric)) {
+        segment.parametric = JSON.parse(feat.get(KF.interpolationParametric) as string) as Record<
+          string,
+          unknown
+        >
+      }
+      modeByIndex.push(segment)
+    } else {
+      modeByIndex.push(null)
     }
 
     return box
   })
 
-  const interpolationSegments =
-    (bag[FOVEA_KEYS.interpolationSegments] as FoveaInterpolationSegment[] | undefined) ?? []
-  const visibilityRanges =
-    (bag[FOVEA_KEYS.visibilityRanges] as FoveaVisibilityRange[] | undefined) ?? []
+  // Interpolation segments span consecutive keyframes; a segment's mode is the
+  // one recorded on its starting keyframe (linear when none was recorded).
+  const interpolationSegments: FoveaInterpolationSegment[] = []
+  for (let i = 0; i < boxes.length - 1; i++) {
+    const start = boxes[i].frameNumber
+    const end = boxes[i + 1].frameNumber
+    const recorded = modeByIndex[i]
+    if (recorded) {
+      interpolationSegments.push({ ...recorded, startFrame: start, endFrame: end })
+    } else {
+      interpolationSegments.push({ startFrame: start, endFrame: end, type: 'linear' })
+    }
+  }
 
+  // Visibility ranges are maximal runs of consecutive keyframes sharing a
+  // visibility flag; an all-visible sequence yields one full-span visible range.
+  const visibilityRanges: FoveaVisibilityRange[] = []
+  if (boxes.length > 0) {
+    let runStart = boxes[0].frameNumber
+    let runVisible = visibleFlags[0]
+    for (let i = 1; i < boxes.length; i++) {
+      if (visibleFlags[i] !== runVisible) {
+        visibilityRanges.push({
+          startFrame: runStart,
+          endFrame: boxes[i].frameNumber - 1,
+          visible: runVisible,
+        })
+        runStart = boxes[i].frameNumber
+        runVisible = visibleFlags[i]
+      }
+    }
+    visibilityRanges.push({
+      startFrame: runStart,
+      endFrame: boxes[boxes.length - 1].frameNumber,
+      visible: runVisible,
+    })
+  }
+
+  const keyframeCount = boxes.length
   const totalFrames =
-    (bag[FOVEA_KEYS.totalFrames] as number | undefined) ??
-    (boxes.length > 0 ? boxes[boxes.length - 1].frameNumber - boxes[0].frameNumber + 1 : 0)
-  const keyframeCount = (bag[FOVEA_KEYS.keyframeCount] as number | undefined) ?? boxes.length
-  const interpolatedFrameCount =
-    (bag[FOVEA_KEYS.interpolatedFrameCount] as number | undefined) ??
-    Math.max(0, totalFrames - keyframeCount)
+    boxes.length > 0 ? boxes[boxes.length - 1].frameNumber - boxes[0].frameNumber + 1 : 0
+  const interpolatedFrameCount = Math.max(0, totalFrames - keyframeCount)
 
-  const seq: BoundingBoxSequence = {
+  return {
     boxes,
     interpolationSegments,
     visibilityRanges,
@@ -369,16 +428,4 @@ export function spatioTemporalAnchorToBoundingBoxSequence(
     keyframeCount,
     interpolatedFrameCount,
   }
-
-  if (bag[FOVEA_KEYS.trackId] !== undefined) {
-    seq.trackId = bag[FOVEA_KEYS.trackId] as string | number
-  }
-  if (bag[FOVEA_KEYS.trackingSource] !== undefined) {
-    seq.trackingSource = bag[FOVEA_KEYS.trackingSource] as FoveaTrackingSource
-  }
-  if (bag[FOVEA_KEYS.trackingConfidence] !== undefined) {
-    seq.trackingConfidence = bag[FOVEA_KEYS.trackingConfidence] as number
-  }
-
-  return seq
 }

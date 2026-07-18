@@ -1,4 +1,13 @@
-"""Round-trip law tests for the transcription result <-> layers fragment lens."""
+"""Round-trip law tests for the transcription result <-> layers fragment lens.
+
+The lens is records-authoritative with an empty complement: every field is read
+back from the canonical records. Confidence is quantized to the integer 0..1000
+grid and timestamps to integer milliseconds (both canonical), and the wall-clock
+processing time is dropped as telemetry, so ``backward(*forward(dto)) == dto``
+holds for a quantized, telemetry-free result. The fixtures and strategies below
+therefore draw confidence off the 0..1000 grid, timestamps off the millisecond
+grid, and pin ``processing_time`` to ``0.0``.
+"""
 
 from __future__ import annotations
 
@@ -58,7 +67,7 @@ def _diarized_dto() -> TranscriptionResultDTO:
         ],
         language="en",
         speaker_count=2,
-        processing_time=0.4321,
+        processing_time=0.0,
     )
 
 
@@ -71,7 +80,7 @@ def _plain_dto() -> TranscriptionResultDTO:
         ],
         language="en",
         speaker_count=None,
-        processing_time=0.1,
+        processing_time=0.0,
     )
 
 
@@ -88,6 +97,7 @@ def _records_by_id(view) -> dict[str, str]:
 )
 def test_getput_roundtrip(dto: TranscriptionResultDTO) -> None:
     view, complement = LENS.forward(dto)
+    assert complement is None
     assert LENS.backward(view, complement) == dto
 
 
@@ -105,17 +115,19 @@ def test_view_records_validate_as_lairs_models() -> None:
     by_id = _records_by_id(view)
     expression.Expression.model_validate_json(by_id["expression"])
     segmentation.Segmentation.model_validate_json(by_id["segmentation"])
+    annotation.AnnotationLayer.model_validate_json(by_id["confidence"])
     annotation.AnnotationLayer.model_validate_json(by_id["speakers"])
     annotation.ClusterSet.model_validate_json(by_id["clusters"])
     media.Media.model_validate_json(by_id["media"])
 
 
-def test_expression_and_media_shape() -> None:
+def test_expression_carries_text_and_language() -> None:
     view, _ = LENS.forward(_diarized_dto())
     by_id = _records_by_id(view)
     expr = expression.Expression.model_validate_json(by_id["expression"])
     assert expr.kind == "transcript"
     assert expr.text == "Hello there. General Kenobi."
+    assert expr.languages == ("en",)
     audio = media.Media.model_validate_json(by_id["media"]).audio
     assert audio is not None
     assert audio.speakerCount == 2
@@ -140,7 +152,32 @@ def test_segment_temporal_spans_are_integer_ms() -> None:
         assert token.temporalSpan.ending >= 0
 
 
-def test_speaker_annotations_confidence_in_range_and_clustered() -> None:
+def test_confidence_layer_covers_every_segment() -> None:
+    """A token-tag confidence layer carries every segment's integer confidence."""
+    view, _ = LENS.forward(_diarized_dto())
+    by_id = _records_by_id(view)
+    layer = annotation.AnnotationLayer.model_validate_json(by_id["confidence"])
+    assert layer.kind == "token-tag"
+    assert layer.subkind == "confidence"
+    assert len(layer.annotations) == 3
+    for ann in layer.annotations:
+        assert ann.confidence is not None
+        assert 0 <= ann.confidence <= 1000
+        assert ann.tokenIndex is not None
+    assert layer.annotations[0].confidence == 900
+
+
+def test_plain_dto_confidence_layer_covers_undiarized_segments() -> None:
+    """Every segment carries confidence even when none is diarized."""
+    view, _ = LENS.forward(_plain_dto())
+    by_id = _records_by_id(view)
+    assert "speakers" not in by_id
+    layer = annotation.AnnotationLayer.model_validate_json(by_id["confidence"])
+    assert len(layer.annotations) == 2
+    assert {ann.confidence for ann in layer.annotations} == {500, 600}
+
+
+def test_speaker_annotations_are_token_aligned_and_clustered() -> None:
     view, _ = LENS.forward(_diarized_dto())
     by_id = _records_by_id(view)
     layer = annotation.AnnotationLayer.model_validate_json(by_id["speakers"])
@@ -148,11 +185,8 @@ def test_speaker_annotations_confidence_in_range_and_clustered() -> None:
     assert layer.subkind == "speaker"
     assert len(layer.annotations) == 3
     for ann in layer.annotations:
-        assert ann.confidence is not None
-        assert 0 <= ann.confidence <= 1000
-        assert ann.anchor is not None
-        assert ann.anchor.temporalSpan is not None
-    assert layer.annotations[0].confidence == 900
+        assert ann.tokenIndex is not None
+        assert ann.label in {"A", "B"}
 
     cluster_set = annotation.ClusterSet.model_validate_json(by_id["clusters"])
     assert cluster_set.kind == "clustering"
@@ -184,17 +218,22 @@ def test_lens_uses_supplied_context() -> None:
     audio = media.Media.model_validate_json(by_id["media"]).audio
     assert audio is not None
     assert audio.transcriptRef == "at://pds/pub.layers.expression.expression/clip-42"
-    # The context never leaks into the complement, so the DTO round-trips.
     assert lens.backward(view, complement) == _plain_dto()
 
+
+# Confidence sits on the quantized 0..1000 grid so scaling is exact; timestamps
+# sit on the integer-millisecond grid so time round-trips; processing time is
+# dropped as telemetry, so it is pinned to zero.
+_conf = st.integers(min_value=0, max_value=1000).map(lambda i: i / 1000.0)
+_secs = st.integers(min_value=0, max_value=1_000_000).map(lambda ms: ms / 1000.0)
 
 _segments = st.lists(
     st.builds(
         TranscriptSegmentDTO,
-        start=st.floats(min_value=0.0, max_value=1000.0, allow_nan=False),
-        end=st.floats(min_value=0.0, max_value=1000.0, allow_nan=False),
+        start=_secs,
+        end=_secs,
         text=st.text(max_size=32),
-        confidence=st.floats(min_value=0.0, max_value=1.0, allow_nan=False),
+        confidence=_conf,
         speaker=st.one_of(st.none(), st.sampled_from(["A", "B", "C"])),
     ),
     max_size=5,
@@ -206,7 +245,7 @@ _dtos = st.builds(
     segments=_segments,
     language=st.one_of(st.none(), st.sampled_from(["en", "fr", "de"])),
     speaker_count=st.one_of(st.none(), st.integers(min_value=0, max_value=8)),
-    processing_time=st.floats(min_value=0.0, max_value=1000.0, allow_nan=False),
+    processing_time=st.just(0.0),
 )
 
 

@@ -3,7 +3,11 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest'
 import { buildApp } from '../../src/app.js'
 import { hashPassword } from '../../src/lib/password.js'
 import { seedBaselinePermissions } from '../helpers/rbac-test-setup.js'
-import { layersOntologyForPersonaId } from '../../src/services/layers-id-map.js'
+import {
+  glossExpressionId,
+  glossLayerId,
+  layersOntologyForPersonaId,
+} from '../../src/services/layers-id-map.js'
 import { FastifyInstance } from 'fastify'
 import { PrismaClient } from '@prisma/client'
 
@@ -309,6 +313,86 @@ describe('Ontology API', () => {
         cookies: { session_token: sessionToken }
       })).json() as { world: { entities: Array<{ id: string }> } }
       expect(world.world.entities[0].id).toBe('world-entity')
+    })
+
+    it('materializes the gloss as stand-off layers rows and writes no features sidecar', async () => {
+      const personaId = randomUUID()
+      await app.inject({
+        method: 'PUT',
+        url: '/api/ontology',
+        cookies: { session_token: sessionToken },
+        payload: {
+          personas: [{ id: personaId, name: 'P', role: 'r', informationNeed: 'n' }],
+          personaOntologies: [{
+            personaId,
+            entities: [{
+              id: 'et-person',
+              name: 'Person',
+              gloss: [
+                { type: 'text', content: 'A kind of ' },
+                { type: 'typeRef', content: 'et-agent', refType: 'entity', refPersonaId: personaId },
+              ],
+            }],
+            roles: [], events: [], relationTypes: [],
+          }],
+        },
+      })
+
+      // The TypeDef carries no verbatim ontology stash, only flat identity scalars.
+      const ontologyId = layersOntologyForPersonaId(personaId)
+      const typeDef = await prisma.typeDef.findFirst({ where: { ontologyId, name: 'Person' } })
+      expect(typeDef).not.toBeNull()
+      const features = typeDef!.features as Record<string, unknown> | null
+      expect(features?.foveaOntology).toBeUndefined()
+      expect(features?.typeId).toBe('et-person')
+      expect(typeDef!.gloss).toBe('A kind of et-agent')
+
+      // The gloss is a stand-off expression + span layer + one reference annotation.
+      const glossExpr = await prisma.expression.findUnique({ where: { id: glossExpressionId(typeDef!.id) } })
+      expect(glossExpr).not.toBeNull()
+      expect(glossExpr!.sourceKind).toBe('ontology-gloss')
+      expect(glossExpr!.kind).toBe('phrase')
+      expect(glossExpr!.text).toBe('A kind of et-agent')
+
+      const layer = await prisma.annotationLayer.findUnique({ where: { id: glossLayerId(typeDef!.id) } })
+      expect(layer).not.toBeNull()
+      expect(layer!.kind).toBe('span')
+      expect(layer!.subkind).toBe('gloss')
+      expect(layer!.ontologyId).toBe(ontologyId)
+
+      const annotations = await prisma.layersAnnotation.findMany({ where: { layerId: layer!.id } })
+      expect(annotations).toHaveLength(1)
+      expect(annotations[0].label).toBe('typeRef')
+      expect(annotations[0].ontologyTypeRefId).toBe('et-agent')
+    })
+
+    it('round-trips a gloss spanning every reference-segment kind without a sidecar', async () => {
+      const personaId = randomUUID()
+      const gloss = [
+        { type: 'text', content: 'A ' },
+        { type: 'objectRef', content: 'obj-1', refType: 'entity-object' },
+        { type: 'text', content: ' doing ' },
+        { type: 'claimRef', content: 'claim-1', refClaimId: 'claim-1' },
+        { type: 'text', content: ' per ' },
+        { type: 'annotationRef', content: 'ann-1', refType: 'annotation' },
+      ]
+      await app.inject({
+        method: 'PUT',
+        url: '/api/ontology',
+        cookies: { session_token: sessionToken },
+        payload: {
+          personas: [{ id: personaId, name: 'P', role: 'r', informationNeed: 'n' }],
+          personaOntologies: [{ personaId, entities: [{ id: 'et-x', name: 'X', gloss }], roles: [], events: [], relationTypes: [] }],
+        },
+      })
+
+      const bundle = (await app.inject({
+        method: 'GET',
+        url: '/api/ontology',
+        cookies: { session_token: sessionToken },
+      })).json() as { personaOntologies: Array<{ personaId: string; entities: Array<{ gloss: unknown }> }> }
+      const ontology = bundle.personaOntologies.find(o => o.personaId === personaId)!
+      expect(ontology.entities[0].gloss).toEqual(gloss)
     })
 
     // Cross-tenant persona/ontology-save rejection is covered end-to-end by

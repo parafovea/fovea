@@ -3,37 +3,34 @@
 A :class:`~src.application.dto.tracking.TrackObjectsResponseDTO` carries the
 per-frame, per-object RLE masks a tracker (e.g. SAM2) produces over one video.
 This lens projects that result to a
-:class:`lairs.integrations.codecs.CorpusFragment` of canonical ``lairs`` records:
+:class:`lairs.integrations.codecs.CorpusFragment` of canonical ``lairs`` records,
+with those records authoritative — there is no verbatim sidecar:
 
 - one :class:`lairs.records.expression.Expression` (``kind="video"``) naming the
-  tracked video the annotation layer applies to,
-- one :class:`lairs.records.media.Media` (``kind="video"``) describing the
-  source video's pixel dimensions, and
+  tracked video,
+- one :class:`lairs.records.media.Media` (``kind="video"``) describing the source
+  pixel dimensions and the ``frameRate`` (scaled by 100), and
 - one span :class:`lairs.records.annotation.AnnotationLayer`
-  (``subkind="custom"``), whose ``expression`` resolves to the video expression
-  above, with one :class:`~lairs.records.annotation.Annotation`
-  per tracked ``object_id``. Each annotation anchors by a
-  :class:`~lairs.records.defs.SpatioTemporalAnchor` whose keyframes carry a
-  per-frame pixel bounding box *derived* from the RLE (via
-  :func:`pycocotools.mask.toBbox`) plus the exact RLE, occlusion flag, and
-  scaled confidence as keyframe features; the object's first RLE is also mirrored
-  into ``annotation.spatial`` as a ``coco-rle`` geometry.
+  (``subkind="custom"``, record key = the response id) holding, per tracked
+  ``object_id``, one parent *track* :class:`~lairs.records.annotation.Annotation`
+  (labeled by the object id, spanning the object's frames in time) with one child
+  annotation per frame the object appears in. Each child anchors a single
+  keyframe at its frame and carries that frame's mask as a ``coco-rle``
+  ``annotation.spatial`` geometry (up to 65536 chars — a real mask, unlike the
+  4096-char keyframe feature cap), plus the integer confidence, the occlusion
+  flag, and the frame number as features.
 
-The layers view is *lossy*: seconds become integer milliseconds, confidences
-become integers in ``[0, 1000]``, and each keyframe box is derived from the mask
-rather than stored verbatim. So the round-trip is a :class:`dx.Lens`: the view
-captures a faithful layers projection, and the complement carries the fovea-only
-remainder (the exact RLE dicts — the source of truth — the source-second
-timestamps, the float confidences, the occlusion flags, the object order, and
-the response/frame scalars ``layers`` has no slot for), so the GetPut law holds
-for every tracking result.
+The integer confidence is canonical, and the per-frame/per-response processing
+time is model telemetry, so the lens drops it. Every reconstructed field is read
+back from the canonical records, so the complement is empty and the round-trip
+holds over the quantized, telemetry-free result.
 """
 
 from __future__ import annotations
 
 import json
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, TypedDict
 
 import didactic.api as dx
 from lairs.integrations.codecs import CorpusFragment, FragmentRecord
@@ -45,13 +42,12 @@ from src.infrastructure.adapters.outbound.layers._convert import (
     EXPRESSION_NSID,
     MEDIA_NSID,
     JsonValue,
+    conf_from_int,
     conf_to_int,
     feature_map,
-    j_float,
-    j_list,
-    j_obj,
-    j_str,
     local_uri,
+    ms_to_sec,
+    read_feature_map,
     sec_to_ms,
 )
 
@@ -59,44 +55,49 @@ if TYPE_CHECKING:
     from src.application.dto.tracking import TrackingMaskDTO, TrackObjectsResponseDTO
 
 
-def _j_int(value: JsonValue) -> int:
-    """Narrow a :data:`JsonValue` to an ``int`` (rejecting ``bool``)."""
-    if isinstance(value, bool) or not isinstance(value, int):
-        raise ValueError(f"expected int, got {type(value).__name__}")
-    return value
-
-
-def _j_bool(value: JsonValue) -> bool:
-    """Narrow a :data:`JsonValue` to a ``bool``."""
-    if not isinstance(value, bool):
-        raise ValueError(f"expected bool, got {type(value).__name__}")
-    return value
-
-
 # ``createdAt`` is required on the layers view records but is not part of the
 # tracking DTO, so it is not round-trip data: a fixed epoch keeps the lens a
 # pure DTO<->fragment map (the codec stamps real provenance from its context).
 _EPOCH = datetime(1970, 1, 1, tzinfo=UTC)
 
-# Fragment-local identifier for the tracked video's expression record, and the
-# fallback key when the tracking result carries no video id.
+# Fragment-local identifiers for the records with a fixed key.
 _EXPRESSION_LOCAL_ID = "expression"
+_MEDIA_LOCAL_ID = "media"
+
+# Child-annotation feature keys carrying the per-frame fields with no column.
+_OCCLUDED_KEY = "is_occluded"
+_FRAME_NUMBER_KEY = "frame_number"
+
+# The frame rate is stored as an integer scaled by 100 (2997 == 29.97fps).
+_FRAME_RATE_SCALE = 100
 
 
-def _rle_counts_bytes(rle: dict[str, object]) -> dict[str, object]:
+class _EncodedRle(TypedDict):
+    """The RLE shape ``pycocotools`` consumes: a size and a run-length count string."""
+
+    size: list[int]
+    counts: str | bytes
+
+
+def _rle_counts_bytes(rle: dict[str, object]) -> _EncodedRle:
     """Return a copy of ``rle`` with ``counts`` as ``bytes`` for pycocotools."""
     counts = rle["counts"]
     if isinstance(counts, str):
         counts = counts.encode("ascii")
-    return {"size": rle["size"], "counts": counts}
+    if not isinstance(counts, bytes):
+        raise ValueError("RLE counts must be a str or bytes")
+    size = rle["size"]
+    if not isinstance(size, list):
+        raise ValueError("RLE size must be a list")
+    return {"size": size, "counts": counts}
 
 
 def _derive_bbox(rle: dict[str, object]) -> defs.BoundingBox:
     """Derive a pixel bounding box from a COCO RLE mask.
 
-    Lossy: the exact RLE lives in the keyframe features and the complement. The
-    width and height are clamped to a minimum of one pixel (the layers schema
-    requires it) so an empty or degenerate mask still yields a valid box.
+    Lossy: the exact RLE lives in ``annotation.spatial``. The width and height are
+    clamped to a minimum of one pixel (the layers schema requires it) so an empty
+    or degenerate mask still yields a valid box.
     """
     x, y, w, h = (float(v) for v in coco_mask.toBbox(_rle_counts_bytes(rle)))
     return defs.BoundingBox(
@@ -120,69 +121,93 @@ def _spatial_from_rle(rle: dict[str, object]) -> defs.SpatialExpression:
     )
 
 
+def _rle_from_spatial(spatial: defs.SpatialExpression | None) -> dict[str, object]:
+    """Reconstruct the exact RLE mask from its ``coco-rle`` spatial geometry."""
+    if spatial is None or spatial.value is None or spatial.value.geometry is None:
+        raise ValueError("tracking child annotation carries no mask geometry")
+    rle = json.loads(spatial.value.geometry)
+    if not isinstance(rle, dict):
+        raise ValueError("expected an RLE object geometry")
+    return rle
+
+
+def _as_int(value: JsonValue) -> int:
+    """Narrow a stored numeric feature to an ``int`` (rejecting ``bool``)."""
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValueError(f"expected int, got {type(value).__name__}")
+    return value
+
+
 class TrackingLayersLens(dx.Lens["TrackObjectsResponseDTO", CorpusFragment, JsonValue]):
-    """Lossless lens ``tracking result <-> (layers fragment, fovea complement)``."""
+    """Lens ``tracking result <-> layers fragment`` with an empty complement."""
 
     def forward(self, dto: TrackObjectsResponseDTO) -> tuple[CorpusFragment, JsonValue]:
-        """Project a tracking result to a layers fragment and fovea complement."""
+        """Project a tracking result to a layers fragment (no complement)."""
         # Group masks by object in first-appearance order, keeping each mask's
-        # frame timestamp so keyframes and the temporal span can be built.
+        # frame number and timestamp so keyframes and the temporal span can build.
         order: list[int] = []
-        by_object: dict[int, list[tuple[float, TrackingMaskDTO]]] = {}
+        by_object: dict[int, list[tuple[int, float, TrackingMaskDTO]]] = {}
         for frame in dto.frames:
             for mask in frame.masks:
                 if mask.object_id not in by_object:
                     by_object[mask.object_id] = []
                     order.append(mask.object_id)
-                by_object[mask.object_id].append((frame.timestamp, mask))
+                by_object[mask.object_id].append((frame.frame_number, frame.timestamp, mask))
 
         expr_uri = local_uri("local", EXPRESSION_NSID, dto.video_id or _EXPRESSION_LOCAL_ID)
 
         annotations: list[annotation.Annotation] = []
         for object_id in order:
             entries = by_object[object_id]
-            keyframes: list[defs.Keyframe] = []
-            for timestamp, mask in entries:
-                keyframes.append(
-                    defs.Keyframe(
-                        timeMs=sec_to_ms(timestamp),
-                        bbox=_derive_bbox(mask.mask_rle),
+            parent_uuid = str(object_id)
+            child_uuids: list[str] = []
+            children: list[annotation.Annotation] = []
+            for frame_number, timestamp, mask in entries:
+                child_uuid = f"{object_id}-f{frame_number}"
+                child_uuids.append(child_uuid)
+                time_ms = sec_to_ms(timestamp)
+                children.append(
+                    annotation.Annotation(
+                        uuid=defs.Uuid(value=child_uuid),
+                        parentId=defs.Uuid(value=parent_uuid),
+                        anchor=defs.Anchor(
+                            spatioTemporalAnchor=defs.SpatioTemporalAnchor(
+                                temporalSpan=defs.TemporalSpan(start=time_ms, ending=time_ms),
+                                keyframes=(
+                                    defs.Keyframe(timeMs=time_ms, bbox=_derive_bbox(mask.mask_rle)),
+                                ),
+                                interpolation="step",
+                            )
+                        ),
+                        spatial=_spatial_from_rle(mask.mask_rle),
+                        confidence=conf_to_int(mask.confidence),
                         features=feature_map(
-                            {
-                                "mask_rle": mask.mask_rle,
-                                "is_occluded": mask.is_occluded,
-                                "confidence": conf_to_int(mask.confidence),
-                            }
+                            {_OCCLUDED_KEY: mask.is_occluded, _FRAME_NUMBER_KEY: frame_number}
                         ),
                     )
                 )
-            times = [kf.timeMs for kf in keyframes]
-            first_mask = entries[0][1]
+            times = [sec_to_ms(timestamp) for _fn, timestamp, _mask in entries]
             annotations.append(
                 annotation.Annotation(
-                    uuid=defs.Uuid(value=str(object_id)),
-                    label=str(object_id),
-                    confidence=conf_to_int(first_mask.confidence),
+                    uuid=defs.Uuid(value=parent_uuid),
+                    label=parent_uuid,
                     anchor=defs.Anchor(
-                        spatioTemporalAnchor=defs.SpatioTemporalAnchor(
-                            temporalSpan=defs.TemporalSpan(start=min(times), ending=max(times)),
-                            keyframes=tuple(keyframes),
-                            interpolation="linear",
-                        )
+                        temporalSpan=defs.TemporalSpan(start=min(times), ending=max(times)),
                     ),
-                    spatial=_spatial_from_rle(first_mask.mask_rle),
+                    childIds=tuple(defs.Uuid(value=child) for child in child_uuids),
                 )
             )
+            annotations.extend(children)
 
-        expression_record = expression.Expression(
-            id=dto.video_id,
-            kind="video",
-            createdAt=_EPOCH,
-        )
+        expression_record = expression.Expression(id=dto.video_id, kind="video", createdAt=_EPOCH)
         media_record = media.Media(
             kind="video",
             createdAt=_EPOCH,
-            video=media.VideoInfo(width=dto.video_width, height=dto.video_height),
+            video=media.VideoInfo(
+                width=dto.video_width,
+                height=dto.video_height,
+                frameRate=round(dto.fps * _FRAME_RATE_SCALE),
+            ),
         )
         layer = annotation.AnnotationLayer(
             annotations=tuple(annotations),
@@ -190,88 +215,104 @@ class TrackingLayersLens(dx.Lens["TrackObjectsResponseDTO", CorpusFragment, Json
             expression=expr_uri,
             kind="span",
             subkind="custom",
+            sourceMethod="automatic",
         )
         records = (
-            _tracking_record(EXPRESSION_NSID, _EXPRESSION_LOCAL_ID, expression_record),
-            _tracking_record(MEDIA_NSID, "media", media_record),
-            _tracking_record(ANNOTATION_LAYER_NSID, "tracking", layer),
+            _record(EXPRESSION_NSID, _EXPRESSION_LOCAL_ID, expression_record),
+            _record(MEDIA_NSID, _MEDIA_LOCAL_ID, media_record),
+            _record(ANNOTATION_LAYER_NSID, dto.id, layer),
         )
-        view = CorpusFragment(records=records, source="fovea")
-
-        complement: JsonValue = {
-            "id": dto.id,
-            "video_id": dto.video_id,
-            "video_width": dto.video_width,
-            "video_height": dto.video_height,
-            "total_frames": dto.total_frames,
-            "processing_time": dto.processing_time,
-            "fps": dto.fps,
-            "frames": [
-                {
-                    "frame_number": frame.frame_number,
-                    "timestamp": frame.timestamp,
-                    "processing_time": frame.processing_time,
-                    "masks": [
-                        {
-                            "object_id": mask.object_id,
-                            "mask_rle": mask.mask_rle,
-                            "confidence": mask.confidence,
-                            "is_occluded": mask.is_occluded,
-                        }
-                        for mask in frame.masks
-                    ],
-                }
-                for frame in dto.frames
-            ],
-        }
-        return view, complement
+        return CorpusFragment(records=records, source="fovea"), None
 
     def backward(self, view: CorpusFragment, complement: JsonValue) -> TrackObjectsResponseDTO:
-        """Reconstruct a tracking result from its fovea complement.
+        """Reconstruct a tracking result from its layers fragment alone."""
+        del complement  # every field is recovered from the canonical records
 
-        The exact RLE masks, float confidences, and source-second timestamps are
-        the complement's, never the lossy layers view's derived boxes.
-        """
         from src.application.dto.tracking import (  # noqa: PLC0415
             TrackingFrameDTO,
             TrackingMaskDTO,
             TrackObjectsResponseDTO,
         )
 
-        comp = j_obj(complement)
-        frames: list[TrackingFrameDTO] = []
-        for frame_value in j_list(comp["frames"]):
-            frame = j_obj(frame_value)
-            masks = [
+        expr = next(
+            expression.Expression.model_validate_json(record.value_json)
+            for record in view.records
+            if record.nsid == EXPRESSION_NSID
+        )
+        med = next(
+            media.Media.model_validate_json(record.value_json)
+            for record in view.records
+            if record.nsid == MEDIA_NSID
+        )
+        layer_record = next(
+            record for record in view.records if record.nsid == ANNOTATION_LAYER_NSID
+        )
+        layer = annotation.AnnotationLayer.model_validate_json(layer_record.value_json)
+
+        # Parent track annotations carry the object id in their label; the child
+        # annotations carry the per-frame masks.
+        object_by_uuid = {
+            ann.uuid.value: int(ann.label)
+            for ann in layer.annotations
+            if ann.parentId is None and ann.label is not None
+        }
+
+        order: list[int] = []
+        by_frame: dict[int, tuple[float, list[TrackingMaskDTO]]] = {}
+        for ann in layer.annotations:
+            if ann.parentId is None:
+                continue
+            anchor = ann.anchor
+            if (
+                anchor is None
+                or anchor.spatioTemporalAnchor is None
+                or not anchor.spatioTemporalAnchor.keyframes
+            ):
+                raise ValueError("tracking child annotation carries no keyframe")
+            keyframe = anchor.spatioTemporalAnchor.keyframes[0]
+            features = read_feature_map(ann.features)
+            frame_number = _as_int(features[_FRAME_NUMBER_KEY])
+            timestamp = ms_to_sec(keyframe.timeMs)
+            if frame_number not in by_frame:
+                by_frame[frame_number] = (timestamp, [])
+                order.append(frame_number)
+            by_frame[frame_number][1].append(
                 TrackingMaskDTO(
-                    object_id=_j_int(mask["object_id"]),
-                    mask_rle=j_obj(mask["mask_rle"]),
-                    confidence=j_float(mask["confidence"]),
-                    is_occluded=_j_bool(mask["is_occluded"]),
-                )
-                for mask in (j_obj(m) for m in j_list(frame["masks"]))
-            ]
-            frames.append(
-                TrackingFrameDTO(
-                    frame_number=_j_int(frame["frame_number"]),
-                    timestamp=j_float(frame["timestamp"]),
-                    masks=masks,
-                    processing_time=j_float(frame["processing_time"]),
+                    object_id=object_by_uuid[ann.parentId.value],
+                    mask_rle=_rle_from_spatial(ann.spatial),
+                    confidence=conf_from_int(ann.confidence or 0),
+                    is_occluded=bool(features[_OCCLUDED_KEY]),
                 )
             )
+
+        frames = [
+            TrackingFrameDTO(
+                frame_number=frame_number,
+                timestamp=by_frame[frame_number][0],
+                masks=by_frame[frame_number][1],
+                processing_time=0.0,
+            )
+            for frame_number in order
+        ]
+        total_frames = max(order) + 1 if order else 0
+
+        video = med.video
+        fps = (
+            (video.frameRate / _FRAME_RATE_SCALE) if video and video.frameRate is not None else 0.0
+        )
         return TrackObjectsResponseDTO(
-            id=j_str(comp["id"]),
-            video_id=j_str(comp["video_id"]),
+            id=layer_record.local_id,
+            video_id=expr.id or "",
             frames=frames,
-            video_width=_j_int(comp["video_width"]),
-            video_height=_j_int(comp["video_height"]),
-            total_frames=_j_int(comp["total_frames"]),
-            processing_time=j_float(comp["processing_time"]),
-            fps=j_float(comp["fps"]),
+            video_width=video.width if video and video.width is not None else 0,
+            video_height=video.height if video and video.height is not None else 0,
+            total_frames=total_frames,
+            processing_time=0.0,
+            fps=fps,
         )
 
 
-def _tracking_record(nsid: str, local_id: str, model: dx.Model) -> FragmentRecord:
+def _record(nsid: str, local_id: str, model: dx.Model) -> FragmentRecord:
     return FragmentRecord(local_id=local_id, nsid=nsid, value_json=model.model_dump_json())
 
 

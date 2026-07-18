@@ -33,8 +33,12 @@ describe('World State API', () => {
 
   /** Removes all world/ontology data in reverse foreign-key order. */
   async function cleanDatabase(): Promise<void> {
+    await prisma.layersAnnotation.deleteMany()
+    await prisma.annotationLayer.deleteMany()
+    await prisma.clusterSet.deleteMany()
     await prisma.typeDef.deleteMany()
     await prisma.layersOntology.deleteMany()
+    await prisma.expression.deleteMany()
     await prisma.graphEdge.deleteMany()
     await prisma.graphNode.deleteMany()
     await prisma.apiKey.deleteMany()
@@ -460,7 +464,9 @@ describe('World State API', () => {
           { id: 'evc-agenda', name: 'Agenda', description: [], eventIds: ['event-meeting'], collectionType: 'sequence', typeAssignments: [] }
         ],
         timeCollections: [
-          { id: 'tc-day', name: 'Day', description: [], times: [{ id: 'time-noon', type: 'instant' }], collectionType: 'group' }
+          // A time collection groups existing times by reference; its member times
+          // reconstruct from the time nodes, so they mirror the top-level times.
+          { id: 'tc-day', name: 'Day', description: [], times: [{ id: 'time-noon', label: 'Noon', type: 'instant' }], collectionType: 'group' }
         ],
         relations: [
           { id: 'rel-attends', relationTypeId: 'attends', sourceType: 'entity', sourceId: 'entity-alice', targetType: 'event', targetId: 'event-meeting', metadata: { note: 'chair' } },
@@ -493,15 +499,21 @@ describe('World State API', () => {
       expect(got.timeCollections).toEqual(world.timeCollections)
       expect(got.relations).toEqual(world.relations)
 
-      // The rows landed in the layers graph: 2 entities + 1 event + 1 time + 3
-      // collections = 7 nodes, 2 relation edges.
+      // World objects land natively: 2 entities (one a location) + 1 event + 1
+      // time = 4 GraphNodes; the 3 collections are ClusterSets, not nodes.
       const nodeCount = await prisma.graphNode.count({ where: { createdByUserId: testUserId } })
-      expect(nodeCount).toBe(7)
+      expect(nodeCount).toBe(4)
+      // Edges are the 2 relations + entity-alice's 1 instance-of type assignment.
       const edgeCount = await prisma.graphEdge.count({ where: { createdByUserId: testUserId } })
-      expect(edgeCount).toBe(2)
+      expect(edgeCount).toBe(3)
+      // Collections are ClusterSets keyed by their own id.
+      const clusterCount = await prisma.clusterSet.count({ where: { createdByUserId: testUserId } })
+      expect(clusterCount).toBe(3)
 
-      // Node types are projected: entity -> entity, event -> situation, time -> time.
+      // Node types are projected: entity -> entity, location -> location,
+      // event -> situation, time -> time.
       expect((await prisma.graphNode.findUnique({ where: { id: 'entity-alice' } }))!.nodeType).toBe('entity')
+      expect((await prisma.graphNode.findUnique({ where: { id: 'entity-hall' } }))!.nodeType).toBe('location')
       expect((await prisma.graphNode.findUnique({ where: { id: 'event-meeting' } }))!.nodeType).toBe('situation')
       expect((await prisma.graphNode.findUnique({ where: { id: 'time-noon' } }))!.nodeType).toBe('time')
       // The relation edge reuses the relation id and denormalizes its endpoints.

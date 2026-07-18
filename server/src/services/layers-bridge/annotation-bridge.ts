@@ -89,11 +89,25 @@ export async function writeVideoAnnotation(
     },
   })
 
+  // Get-or-create the denoted world-object node so the denotation FK is always
+  // populated (the read side derives linkType from its nodeType). An existing
+  // world node keeps its fields; a not-yet-materialized object gets a minimal
+  // node of the link kind's nodeType.
   let denotesNodeId: string | null = null
-  if (mapping.annotation.denotesNodeCandidateId) {
-    const exists =
-      (await prisma.graphNode.count({ where: { id: mapping.annotation.denotesNodeCandidateId } })) > 0
-    denotesNodeId = exists ? mapping.annotation.denotesNodeCandidateId : null
+  if (mapping.annotation.denotesNode) {
+    const node = mapping.annotation.denotesNode
+    await prisma.graphNode.upsert({
+      where: { id: node.id },
+      create: {
+        id: node.id,
+        nodeType: node.nodeType,
+        label: node.label,
+        projectId: scope.projectId,
+        createdByUserId: scope.userId,
+      },
+      update: {},
+    })
+    denotesNodeId = node.id
   }
 
   const writeData = {

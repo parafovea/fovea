@@ -33,7 +33,6 @@ from src.application.dto.detection import (
     FrameDetectionsDTO,
 )
 from src.application.dto.ontology import OntologyTypeDTO
-from src.application.dto.reasoning import ThinkingStep, ThinkingTrace
 from src.application.dto.summarization import (
     KeyFrameDTO,
     SummarizeResponseDTO,
@@ -63,6 +62,9 @@ _CTX = make_ctx(video_id="clip-7")
 
 
 def _transcription() -> tuple[str, object]:
+    # Confidence sits on the integer 0..1000 grid, timestamps on the millisecond
+    # grid, and the processing time is dropped as telemetry, so the trace-free,
+    # quantized result round-trips through the records-authoritative lens.
     dto = TranscriptionResultDTO(
         text="Hello there. General Kenobi.",
         segments=[
@@ -71,12 +73,14 @@ def _transcription() -> tuple[str, object]:
         ],
         language="en",
         speaker_count=2,
-        processing_time=0.4321,
+        processing_time=0.0,
     )
     return "transcription", dto
 
 
 def _detection() -> tuple[str, object]:
+    # Confidence sits on the integer 0..1000 grid and the processing time is
+    # dropped as telemetry, so the trace-free, quantized response round-trips.
     dto = DetectObjectsResponseDTO(
         id="det-1",
         video_id="clip-7",
@@ -96,7 +100,7 @@ def _detection() -> tuple[str, object]:
             )
         ],
         total_detections=1,
-        processing_time=0.12,
+        processing_time=0.0,
         video_width=1920,
         video_height=1080,
     )
@@ -104,6 +108,8 @@ def _detection() -> tuple[str, object]:
 
 
 def _tracking() -> tuple[str, object]:
+    # Confidence sits on the integer 0..1000 grid and the processing times are
+    # dropped as telemetry, so the trace-free, quantized result round-trips.
     dto = TrackObjectsResponseDTO(
         id="trk-1",
         video_id="clip-7",
@@ -119,13 +125,13 @@ def _tracking() -> tuple[str, object]:
                         is_occluded=False,
                     )
                 ],
-                processing_time=0.03,
+                processing_time=0.0,
             )
         ],
         video_width=1920,
         video_height=1080,
         total_frames=1,
-        processing_time=0.3,
+        processing_time=0.0,
         fps=30.0,
     )
     return "tracking", dto
@@ -148,6 +154,9 @@ def _summary() -> tuple[str, object]:
 
 
 def _claims() -> tuple[str, object]:
+    # Confidences sit on the integer 0..1000 grid and no reasoning trace is
+    # attached: the claims lens drops telemetry and quantizes confidence, so a
+    # trace-free, quantized result is what round-trips through the codec.
     dto = ClaimsResultDTO(
         text="The sky is blue. Water is wet.",
         claims=[
@@ -161,11 +170,6 @@ def _claims() -> tuple[str, object]:
                     ExtractedClaimDTO(text="blue", confidence=0.8, char_start=12, char_end=16)
                 ],
                 claim_type="observation",
-                reasoning_trace=ThinkingTrace(
-                    steps=[ThinkingStep(content="think", tokens_used=3)],
-                    total_tokens=3,
-                    model_id="r1",
-                ),
             ),
             ExtractedClaimDTO(text="Water is wet.", confidence=0.7),
         ],
@@ -183,6 +187,9 @@ def _claims() -> tuple[str, object]:
 
 
 def _ontology() -> tuple[str, object]:
+    # Confidences are exact on the integer scale and no reasoning trace is
+    # attached: the ontology lens drops telemetry and quantizes confidence, so a
+    # trace-free, quantized suggestion is what round-trips through the codec.
     types = (
         OntologyTypeDTO(
             name="Vehicle",
@@ -190,11 +197,6 @@ def _ontology() -> tuple[str, object]:
             parent=None,
             confidence=0.9,
             examples=["car", "truck"],
-            reasoning_trace=ThinkingTrace(
-                steps=[ThinkingStep(content="reason", tokens_used=None)],
-                total_tokens=None,
-                model_id="r1",
-            ),
         ),
         OntologyTypeDTO(name="Car", description="A car.", parent="Vehicle", confidence=0.8),
     )

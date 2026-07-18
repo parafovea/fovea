@@ -46,6 +46,7 @@ function createMockPrisma() {
     // live here now, so the ownership-chain tests seed these tables.
     graphNode: { findMany: vi.fn().mockResolvedValue([]) },
     graphEdge: { findMany: vi.fn().mockResolvedValue([]) },
+    clusterSet: { findMany: vi.fn().mockResolvedValue([]) },
     layersAnnotation: { findMany: vi.fn().mockResolvedValue([]) },
     layersOntology: { findMany: vi.fn().mockResolvedValue([]) },
     importHistory: { create: vi.fn().mockResolvedValue({}) },
@@ -674,17 +675,17 @@ describe('Cross-user import ownership', () => {
         { id: 'ann-a', layer: { personaId: 'persona-a' } },
         { id: 'ann-b', layer: { personaId: 'persona-b' } },
       ])
-      // Claims are claim GraphNodes stashing the original claim under
-      // `properties.foveaClaim.object`.
+      // Claims are claim GraphNodes carrying identity + their summary membership
+      // as native feature scalars (no verbatim stash).
       ;(mockPrisma.graphNode.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([
-        { nodeType: 'claim', properties: { foveaClaim: { summaryId: 'sum-a', parentClaimId: null, object: { id: 'claim-a', summaryId: 'sum-a' } } } },
-        { nodeType: 'claim', properties: { foveaClaim: { summaryId: 'sum-b', parentClaimId: null, object: { id: 'claim-b', summaryId: 'sum-b' } } } },
+        { id: 'claim-a', nodeType: 'claim', label: 'a', properties: { entries: [{ key: 'fovea.summaryId', value: 'sum-a' }, { key: 'fovea.summaryType', value: 'video' }] }, createdByUserId: null, projectId: null },
+        { id: 'claim-b', nodeType: 'claim', label: 'b', properties: { entries: [{ key: 'fovea.summaryId', value: 'sum-b' }, { key: 'fovea.summaryType', value: 'video' }] }, createdByUserId: null, projectId: null },
       ])
-      // Claim relations are GraphEdges stashing the relation under
-      // `properties.foveaClaimRelation.object`.
+      // Claim relations are GraphEdges between claim nodes, tagged with the
+      // `fovea.edgeRole` feature; their endpoints ride on sourceLocalId/targetLocalId.
       ;(mockPrisma.graphEdge.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([
-        { properties: { foveaClaimRelation: { summaryId: 'sum-a', object: { id: 'cr-a', sourceClaimId: 'claim-a' } } } },
-        { properties: { foveaClaimRelation: { summaryId: 'sum-b', object: { id: 'cr-b', sourceClaimId: 'claim-b' } } } },
+        { id: 'cr-a', edgeType: 'supports', sourceLocalId: 'claim-a', targetLocalId: 'claim-b', confidence: null, createdByUserId: null, properties: { entries: [{ key: 'fovea.edgeRole', value: 'claim-relation' }] } },
+        { id: 'cr-b', edgeType: 'supports', sourceLocalId: 'claim-b', targetLocalId: 'claim-a', confidence: null, createdByUserId: null, properties: { entries: [{ key: 'fovea.edgeRole', value: 'claim-relation' }] } },
       ])
       ;(mockPrisma.layersOntology.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([
         { personaId: 'persona-a' },
@@ -722,15 +723,26 @@ describe('Cross-user import ownership', () => {
       ;(mockPrisma.videoSummary.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([])
       ;(mockPrisma.layersAnnotation.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([])
       ;(mockPrisma.graphEdge.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([])
-      // World objects are GraphNodes stashing the original object under
-      // `properties.foveaWorld.object` with its bucket and array index, scoped by
-      // `createdByUserId`. The bridge reconstructs the aggregate from these.
+      // World objects are native GraphNodes discriminated by nodeType (entity /
+      // location / situation / time), scoped by `createdByUserId`. The reader
+      // recovers ids from the node id directly.
       ;(mockPrisma.graphNode.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([
-        { id: 'ent-a1', nodeType: 'entity', createdByUserId: USER_A, projectId: null, properties: { foveaWorld: { bucket: 'entities', index: 0, object: { id: 'ent-a1' } } } },
-        { id: 'ent-a2', nodeType: 'entity', createdByUserId: USER_A, projectId: null, properties: { foveaWorld: { bucket: 'entities', index: 1, object: { id: 'ent-a2' } } } },
-        { id: 'evt-a1', nodeType: 'situation', createdByUserId: USER_A, projectId: null, properties: { foveaWorld: { bucket: 'events', index: 0, object: { id: 'evt-a1' } } } },
-        { id: 'time-a1', nodeType: 'time', createdByUserId: USER_A, projectId: null, properties: { foveaWorld: { bucket: 'times', index: 0, object: { id: 'time-a1' } } } },
-        { id: 'ec-a1', nodeType: 'collection', createdByUserId: USER_A, projectId: null, properties: { foveaWorld: { bucket: 'entityCollections', index: 0, object: { id: 'ec-a1' } } } },
+        { id: 'ent-a1', nodeType: 'entity', label: null, properties: null, knowledgeRefs: null, metadata: null, createdByUserId: USER_A, projectId: null },
+        { id: 'ent-a2', nodeType: 'entity', label: null, properties: null, knowledgeRefs: null, metadata: null, createdByUserId: USER_A, projectId: null },
+        { id: 'evt-a1', nodeType: 'situation', label: null, properties: null, knowledgeRefs: null, metadata: null, createdByUserId: USER_A, projectId: null },
+        { id: 'time-a1', nodeType: 'time', label: null, properties: null, knowledgeRefs: null, metadata: null, createdByUserId: USER_A, projectId: null },
+      ])
+      // Collections are ClusterSets tagged with their bucket in cluster features.
+      ;(mockPrisma.clusterSet.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([
+        {
+          id: 'ec-a1',
+          kind: 'group',
+          createdByUserId: USER_A,
+          projectId: null,
+          clusters: [
+            { uuid: { value: 'ec-a1' }, members: [], features: { entries: [{ key: 'fovea.bucket', value: 'entityCollections' }] } },
+          ],
+        },
       ])
 
       const handler = new ImportHandler(mockPrisma, USER_A)
@@ -899,6 +911,7 @@ describe('Cross-user import ownership', () => {
         // Layers-store tables the export reader reads through.
         graphNode: { findMany: vi.fn().mockResolvedValue([]) },
         graphEdge: { findMany: vi.fn().mockResolvedValue([]) },
+        clusterSet: { findMany: vi.fn().mockResolvedValue([]) },
         layersAnnotation: { findMany: vi.fn().mockResolvedValue([]) },
         layersOntology: { findUnique: vi.fn().mockResolvedValue(null) },
       } as unknown as PrismaClient

@@ -97,6 +97,7 @@ def test_fixture_records_validate_as_layers_models() -> None:
     assert {r.local_id for r in records} == {
         "expression",
         "segmentation",
+        "confidence",
         "speakers",
         "clusters",
         "media",
@@ -112,7 +113,9 @@ def test_records_fold_into_corpus_graph() -> None:
     corpus = records_to_corpus(_fixture_records(), corpus_name=_CORPUS_NAME)
 
     assert len(list(corpus.expressions)) == 1
-    assert len(list(corpus.annotation_layers())) == 1
+    # A token-tag confidence layer covers every segment; the speaker tier layer
+    # covers the diarized ones.
+    assert len(list(corpus.annotation_layers())) == 2
     assert len(list(corpus.segmentations())) == 1
     assert len(list(corpus.memberships())) == 1
     assert len(list(corpus.media())) == 1

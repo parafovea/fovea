@@ -6,8 +6,12 @@ import { NotFoundError, ForbiddenError } from '../lib/errors.js'
 import { GraphRepository } from '../repositories/GraphRepository.js'
 import { LayersOntologyRepository } from '../repositories/LayersOntologyRepository.js'
 import { WorldStateService, resolvePersonalUserId } from './world-state-service.js'
-import { type WorldStateAggregate } from './world-layers-mapper.js'
-import type { PersonaOntologyAggregate } from './ontology-layers-mapper.js'
+import { isWorldEdge, type WorldStateAggregate } from './world-layers-mapper.js'
+import {
+  edgeToOntologyRelation,
+  type PersonaOntologyAggregate,
+  type StoredOntologyRelation,
+} from './ontology-layers-mapper.js'
 
 /** A persona in the `/api/ontology` response shape. */
 export interface PersonaResponse {
@@ -107,6 +111,7 @@ function toOntologyResponse(
   id: string,
   personaId: string,
   aggregate: PersonaOntologyAggregate,
+  relations: StoredOntologyRelation[],
   createdAt: string,
   updatedAt: string,
 ): PersonaOntologyResponse {
@@ -117,7 +122,7 @@ function toOntologyResponse(
     roles: aggregate.roleTypes,
     events: aggregate.eventTypes,
     relationTypes: aggregate.relationTypes,
-    relations: [],
+    relations,
     createdAt,
     updatedAt,
   }
@@ -140,18 +145,62 @@ export class OntologyLayersService {
   private readonly world: WorldStateService
 
   constructor(
-    graphRepo: GraphRepository,
+    private readonly graphRepo: GraphRepository,
     ontologyRepo: LayersOntologyRepository,
     private readonly prisma: PrismaClient,
     private readonly ability: AppAbility | null,
     private readonly userId: string | undefined,
   ) {
-    this.world = new WorldStateService(graphRepo, ontologyRepo, prisma, ability, userId)
+    this.world = new WorldStateService(ontologyRepo, prisma, ability, userId)
   }
 
   /** Resolves the personal user id (authenticated user or single-user default). */
   private resolveUserId(): Promise<string> {
     return resolvePersonalUserId(this.prisma, this.userId)
+  }
+
+  /**
+   * Reads a persona ontology's relation instances from the layers graph: the
+   * accessible edges in the user's scope whose edge type resolves to one of the
+   * ontology's relation-type ids. Sourcing relations from graph_edges replaces
+   * the former hard-coded empty list; a legacy per-persona ontology carries no
+   * relation instances, so this stays empty until relation edges are written.
+   *
+   * @param userId - the owning user id (the edge scope)
+   * @param aggregate - the reconstructed ontology, for its relation-type ids
+   * @returns the reconstructed ontology relations
+   */
+  private async readOntologyRelations(
+    userId: string,
+    aggregate: PersonaOntologyAggregate,
+  ): Promise<StoredOntologyRelation[]> {
+    const relationTypeIds = new Set<string>()
+    for (const relationType of aggregate.relationTypes) {
+      const id = (relationType as { id?: unknown }).id
+      if (typeof id === 'string') relationTypeIds.add(id)
+    }
+    if (relationTypeIds.size === 0) return []
+
+    const edges = await this.graphRepo.findAccessibleEdges(
+      { createdByUserId: userId, projectId: null },
+      { edgeType: { in: [...relationTypeIds] } },
+    )
+    const relations: StoredOntologyRelation[] = []
+    for (const edge of edges) {
+      // A world relation edge can share an edgeType with an ontology relation
+      // type; it carries the fovea.edgeRole tag, so skip it here.
+      if (isWorldEdge(edge)) continue
+      const relation = edgeToOntologyRelation({
+        edgeType: edge.edgeType,
+        sourceLocalId: edge.sourceLocalId,
+        targetLocalId: edge.targetLocalId,
+        properties: edge.properties,
+        createdAt: edge.createdAt,
+        updatedAt: edge.updatedAt,
+      })
+      if (relation) relations.push(relation)
+    }
+    return relations
   }
 
   /**
@@ -172,8 +221,9 @@ export class OntologyLayersService {
     for (const persona of personas) {
       const bundle = await this.world.readPersonaOntologyBundle(persona)
       if (!bundle) continue
+      const relations = await this.readOntologyRelations(userId, bundle.aggregate)
       personaOntologies.push(
-        toOntologyResponse(bundle.id, persona.id, bundle.aggregate, bundle.createdAt, bundle.updatedAt),
+        toOntologyResponse(bundle.id, persona.id, bundle.aggregate, relations, bundle.createdAt, bundle.updatedAt),
       )
     }
 
@@ -255,8 +305,9 @@ export class OntologyLayersService {
       await this.world.writePersonaOntology(persona, toBuckets(ontology))
       const bundle = await this.world.readPersonaOntologyBundle(persona)
       if (bundle) {
+        const relations = await this.readOntologyRelations(userId, bundle.aggregate)
         savedOntologies.push(
-          toOntologyResponse(bundle.id, persona.id, bundle.aggregate, bundle.createdAt, bundle.updatedAt),
+          toOntologyResponse(bundle.id, persona.id, bundle.aggregate, relations, bundle.createdAt, bundle.updatedAt),
         )
       }
     }

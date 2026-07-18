@@ -7,37 +7,37 @@ chain-of-thought :class:`~src.application.dto.reasoning.ThinkingTrace`. This
 lens projects that list (paired with the emitting :class:`EmitContext`) to a
 :class:`lairs.integrations.codecs.CorpusFragment`:
 
-- one :class:`lairs.records.ontology.Ontology` named ``fovea``,
+- one :class:`lairs.records.ontology.Ontology` named ``fovea`` whose ``createdAt``
+  and ``personaRef`` carry the emit context's provenance,
 - one :class:`lairs.records.ontology.TypeDef` per suggested type, whose ``gloss``
-  carries the description, whose ``parentTypeRef`` resolves the parent name to a
-  local type AT-URI, and whose ``features`` carry the examples and the
-  integer-scaled confidence.
+  is the description (the authoritative home for it), whose ``parentTypeRef``
+  resolves the parent name to a local type AT-URI, and whose ``features`` carry
+  the examples and the integer-scaled confidence.
 
-The layers view scales confidence to an integer ``0..1000`` and drops both the
-reasoning trace and the exact parent-name/example ordering the ``OntologyTypeDTO``
-carries, so the round-trip is a :class:`dx.Lens`: the view is the faithful layers
-projection and the complement carries the fovea-only remainder (the emit context,
-the verbatim type descriptions, the exact confidence floats, the example order,
-the resolved parent names, and each reasoning trace verbatim), so GetPut holds
-for every suggestion set.
+The description, examples, parent, and confidence are read back from those
+canonical records rather than a sidecar — there is no verbatim type blob in the
+complement. The reasoning trace is model-inference telemetry, not annotation
+structure, so the lens drops it rather than stashing it. Confidence is quantized
+once to the integer ``0..1000`` scale at emission, so the GetPut law holds on the
+quantized suggestion (the layers vocabulary is integer-by-design; the sub-0.001
+remainder is noise). The complement carries only the emit-context provenance with
+no native home on an ontology record (``video_id``, ``tool``, ``agent_id``).
 """
 
 from __future__ import annotations
-
-from datetime import datetime
 
 import didactic.api as dx
 from lairs.integrations.codecs import CorpusFragment, FragmentRecord
 from lairs.records import ontology
 
 from src.application.dto.ontology import OntologyTypeDTO
-from src.application.dto.reasoning import ThinkingStep, ThinkingTrace
 from src.application.ports.outbound.layers_codec import EmitContext
 from src.infrastructure.adapters.outbound.layers._convert import (
     ONTOLOGY_NSID,
     TYPEDEF_NSID,
     JsonValue,
     _record,
+    conf_from_int,
     conf_to_int,
     feature_map,
     j_float,
@@ -45,6 +45,7 @@ from src.infrastructure.adapters.outbound.layers._convert import (
     j_obj,
     j_str,
     local_uri,
+    read_feature_map,
 )
 
 # The name every emitted fovea ontology carries, and the key under which its
@@ -58,79 +59,34 @@ _ONTOLOGY_KEY = "fovea"
 _TYPE_KIND = "entity-type"
 
 # The source of this lens: the suggested types in emission order, paired with the
-# emit context that stamps their provenance (its ``created_at`` reaches the view).
+# emit context that stamps their provenance.
 type OntologySource = tuple[tuple[OntologyTypeDTO, ...], EmitContext]
 
 
-def _trace_to_json(trace: ThinkingTrace | None) -> JsonValue:
-    """Serialize a reasoning trace to a plain JSON value for the complement."""
-    if trace is None:
-        return None
-    return {
-        "steps": [
-            {"content": step.content, "tokens_used": step.tokens_used} for step in trace.steps
-        ],
-        "total_tokens": trace.total_tokens,
-        "model_id": trace.model_id,
-    }
+def _authority_of(uri: str) -> str:
+    """Recover the authority segment of an ``at://{authority}/...`` URI."""
+    rest = uri.removeprefix("at://")
+    return rest.split("/", 1)[0] if rest else "local"
 
 
-def _trace_from_json(value: JsonValue) -> ThinkingTrace | None:
-    """Reconstruct a reasoning trace from its complement JSON value."""
-    if value is None:
-        return None
-    obj = j_obj(value)
-    steps_raw = j_list(obj["steps"])
-    steps = []
-    for entry in steps_raw:
-        step_obj = j_obj(entry)
-        tokens = step_obj["tokens_used"]
-        steps.append(
-            ThinkingStep(
-                content=j_str(step_obj["content"]),
-                tokens_used=None if tokens is None else int(j_float(tokens)),
-            )
-        )
-    total = obj["total_tokens"]
-    return ThinkingTrace(
-        steps=steps,
-        total_tokens=None if total is None else int(j_float(total)),
-        model_id=j_str(obj["model_id"]),
-    )
+def _parent_name(parent_ref: str, names: set[str], authority: str) -> str:
+    """Recover a parent type name from a child's ``parentTypeRef`` AT-URI.
 
-
-def _ctx_to_json(ctx: EmitContext) -> JsonValue:
-    """Serialize an emit context to a plain JSON value for the complement."""
-    return {
-        "video_id": ctx.video_id,
-        "created_at": ctx.created_at.isoformat(),
-        "tool": ctx.tool,
-        "agent_id": ctx.agent_id,
-        "persona_ref": ctx.persona_ref,
-        "authority": ctx.authority,
-    }
-
-
-def _ctx_from_json(value: JsonValue) -> EmitContext:
-    """Reconstruct an emit context from its complement JSON value."""
-    obj = j_obj(value)
-    agent_id = obj["agent_id"]
-    persona_ref = obj["persona_ref"]
-    return EmitContext(
-        video_id=j_str(obj["video_id"]),
-        created_at=datetime.fromisoformat(j_str(obj["created_at"])),
-        tool=j_str(obj["tool"]),
-        agent_id=None if agent_id is None else j_str(agent_id),
-        persona_ref=None if persona_ref is None else j_str(persona_ref),
-        authority=j_str(obj["authority"]),
-    )
+    Matches the URI against ``local_uri`` for each known type name so a name
+    containing a slash still resolves; falls back to the final path segment for a
+    parent that names no emitted type.
+    """
+    for name in names:
+        if local_uri(authority, TYPEDEF_NSID, name) == parent_ref:
+            return name
+    return parent_ref.rsplit("/", 1)[-1]
 
 
 class OntologyLayersLens(dx.Lens[OntologySource, CorpusFragment, JsonValue]):
-    """Lossless lens ``(ontology suggestions, ctx) <-> (layers fragment, complement)``."""
+    """Lens ``(ontology suggestions, ctx) <-> (layers fragment, complement)``."""
 
     def forward(self, source: OntologySource) -> tuple[CorpusFragment, JsonValue]:
-        """Project ontology suggestions to a layers fragment and fovea complement."""
+        """Project ontology suggestions to a layers fragment and emit-context remainder."""
         types, ctx = source
         ontology_ref = local_uri(ctx.authority, ONTOLOGY_NSID, _ONTOLOGY_KEY)
 
@@ -146,7 +102,6 @@ class OntologyLayersLens(dx.Lens[OntologySource, CorpusFragment, JsonValue]):
             )
         ]
 
-        type_complements: list[JsonValue] = []
         for index, dto in enumerate(types):
             parent_ref = (
                 local_uri(ctx.authority, TYPEDEF_NSID, dto.parent)
@@ -173,49 +128,67 @@ class OntologyLayersLens(dx.Lens[OntologySource, CorpusFragment, JsonValue]):
                     ),
                 )
             )
-            type_complements.append(
-                {
-                    "description": dto.description,
-                    "confidence": dto.confidence,
-                    "examples": list(dto.examples),
-                    "parent": dto.parent,
-                    "reasoning_trace": _trace_to_json(dto.reasoning_trace),
-                }
-            )
 
         view = CorpusFragment(records=tuple(records), source="fovea")
+        # The only fovea remainder is the emit-context provenance with no native
+        # home on an ontology record; the description/examples/parent/confidence
+        # all live in the canonical records, and the reasoning trace is dropped.
         complement: JsonValue = {
-            "ctx": _ctx_to_json(ctx),
-            "types": type_complements,
+            "video_id": ctx.video_id,
+            "tool": ctx.tool,
+            "agent_id": ctx.agent_id,
         }
         return view, complement
 
     def backward(self, view: CorpusFragment, complement: JsonValue) -> OntologySource:
         """Reconstruct ontology suggestions and the emit context from the fragment."""
         comp = j_obj(complement)
-        ctx = _ctx_from_json(comp["ctx"])
-        type_comps = j_list(comp["types"])
 
+        ontology_record = next(
+            ontology.Ontology.model_validate_json(record.value_json)
+            for record in view.records
+            if record.nsid == ONTOLOGY_NSID
+        )
         typedefs = [
             ontology.TypeDef.model_validate_json(record.value_json)
             for record in view.records
             if record.nsid == TYPEDEF_NSID
         ]
 
+        authority = _authority_of(typedefs[0].ontologyRef) if typedefs else "local"
+        names = {typedef.name for typedef in typedefs}
+
         dtos: list[OntologyTypeDTO] = []
-        for typedef, type_comp in zip(typedefs, type_comps, strict=True):
-            entry = j_obj(type_comp)
-            parent = entry["parent"]
+        for typedef in typedefs:
+            features = read_feature_map(typedef.features)
+            parent = (
+                _parent_name(typedef.parentTypeRef, names, authority)
+                if typedef.parentTypeRef is not None
+                else None
+            )
             dtos.append(
                 OntologyTypeDTO(
                     name=typedef.name,
-                    description=j_str(entry["description"]),
-                    parent=None if parent is None else j_str(parent),
-                    confidence=j_float(entry["confidence"]),
-                    examples=[j_str(ex) for ex in j_list(entry["examples"])],
-                    reasoning_trace=_trace_from_json(entry["reasoning_trace"]),
+                    # A str field whose value is exactly "null" serializes to JSON
+                    # null, so a null gloss uniquely denotes the literal "null"
+                    # description (every other string, "" included, round-trips).
+                    description="null" if typedef.gloss is None else typedef.gloss,
+                    parent=parent,
+                    confidence=conf_from_int(int(j_float(features["confidence"]))),
+                    examples=[j_str(example) for example in j_list(features["examples"])],
+                    reasoning_trace=None,
                 )
             )
+
+        agent_id = comp["agent_id"]
+        ctx = EmitContext(
+            video_id=j_str(comp["video_id"]),
+            created_at=ontology_record.createdAt,
+            tool=j_str(comp["tool"]),
+            agent_id=None if agent_id is None else j_str(agent_id),
+            persona_ref=ontology_record.personaRef,
+            authority=authority,
+        )
         return tuple(dtos), ctx
 
 

@@ -129,10 +129,9 @@ describe('0.5.9 backend hardening', () => {
 
       // The layers store guards each world object with a monotonic lockVersion
       // compare-and-swap; the re-written e1 node advanced past its initial 0.
+      // A world object is its own GraphNode, keyed by the object id.
       const worldNodes = await prisma.graphNode.findMany({ where: { createdByUserId: user.id } })
-      const objectId = (node: (typeof worldNodes)[number]): unknown =>
-        ((node.properties as { foveaWorld?: { object?: { id?: unknown } } } | null)?.foveaWorld?.object?.id)
-      const e1Node = worldNodes.find((node) => objectId(node) === 'e1')
+      const e1Node = worldNodes.find((node) => node.id === 'e1')
       expect(e1Node?.lockVersion).toBeGreaterThan(0)
     })
   })

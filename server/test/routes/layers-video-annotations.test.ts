@@ -17,10 +17,12 @@ import type { BoundingBoxSequence } from '../../src/services/layers-conversion-s
 /**
  * Integration test for the video-annotation endpoint over the unified layers
  * store (`/api/layers/videos/:videoId/annotations`). Exercises the full CRUD
- * cycle against a real Postgres and asserts that the legacy annotation wire
- * shape round-trips bit-exactly through the server-side conversion to and from
- * the layers rows: a multi-keyframe bounding-box sequence, the type/object
- * discriminant, and the ontology-type / world-object denotation links.
+ * cycle against a real Postgres and asserts that a native-canonical annotation
+ * wire shape round-trips through the server-side conversion to and from the
+ * layers rows: a multi-keyframe bounding-box sequence (integer geometry, 0-1000
+ * grid confidence, keyframe-aligned visibility), the type/object discriminant
+ * derived from structure, and the ontology-type / world-object denotation links.
+ * The native anchor is authoritative, so no `fovea.*` sidecar backs the frames.
  */
 describe('Video annotations over the layers store', () => {
   let app: FastifyInstance
@@ -41,17 +43,19 @@ describe('Video annotations over the layers store', () => {
   const password = 'testpass123'
 
   /**
-   * A multi-keyframe sequence with mixed interpolation, a visibility gap, a
-   * string track id, per-box confidence, and box metadata, so the round-trip
-   * exercises every branch of the conversion.
+   * A native-canonical multi-keyframe sequence: integer geometry, per-box
+   * confidence on the 0-1000 grid, keyframe-aligned visibility (a keyframe at
+   * each transition), a per-segment interpolation mode with control points, box
+   * metadata, and tracker identity. The anchor carries all of it natively, so the
+   * sequence round-trips without a sidecar.
    */
   const typeFrames: BoundingBoxSequence = {
     boxes: [
-      { x: 10.5, y: 12.25, width: 50.75, height: 60.1, frameNumber: 0, isKeyframe: true, confidence: 0.9 },
+      { x: 11, y: 12, width: 51, height: 60, frameNumber: 0, isKeyframe: true, confidence: 0.9 },
       { x: 80, y: 40, width: 55, height: 62, frameNumber: 30, isKeyframe: true, confidence: 0.75 },
       {
-        x: 160.333,
-        y: 90.667,
+        x: 160,
+        y: 91,
         width: 60,
         height: 65,
         frameNumber: 90,
@@ -69,10 +73,12 @@ describe('Video annotations over the layers store', () => {
         controlPoints: { x: [{ x: 0.42, y: 0 }, { x: 0.58, y: 1 }] },
       },
     ],
+    // The middle keyframe is occluded, so visibility transitions fall on
+    // keyframes and reconstruct exactly from the per-keyframe flags.
     visibilityRanges: [
-      { startFrame: 0, endFrame: 30, visible: true },
-      { startFrame: 31, endFrame: 59, visible: false },
-      { startFrame: 60, endFrame: 90, visible: true },
+      { startFrame: 0, endFrame: 29, visible: true },
+      { startFrame: 30, endFrame: 89, visible: false },
+      { startFrame: 90, endFrame: 90, visible: true },
     ],
     trackId: 'track-type-1',
     trackingSource: 'sam2',
@@ -85,7 +91,7 @@ describe('Video annotations over the layers store', () => {
   const objectFrames: BoundingBoxSequence = {
     boxes: [
       { x: 5, y: 5, width: 20, height: 20, frameNumber: 0, isKeyframe: true },
-      { x: 25.5, y: 30.25, width: 22, height: 24, frameNumber: 60, isKeyframe: true, confidence: 0.5 },
+      { x: 25, y: 30, width: 22, height: 24, frameNumber: 60, isKeyframe: true, confidence: 0.5 },
     ],
     interpolationSegments: [{ startFrame: 0, endFrame: 60, type: 'linear' }],
     visibilityRanges: [{ startFrame: 0, endFrame: 60, visible: true }],
@@ -100,7 +106,7 @@ describe('Video annotations over the layers store', () => {
     boxes: [
       typeFrames.boxes[0],
       typeFrames.boxes[1],
-      { ...typeFrames.boxes[2], frameNumber: 120, x: 200.5, y: 100 },
+      { ...typeFrames.boxes[2], frameNumber: 120, x: 200, y: 100 },
     ],
     interpolationSegments: [
       { startFrame: 0, endFrame: 30, type: 'linear' },
@@ -112,9 +118,9 @@ describe('Video annotations over the layers store', () => {
       },
     ],
     visibilityRanges: [
-      { startFrame: 0, endFrame: 30, visible: true },
-      { startFrame: 31, endFrame: 59, visible: false },
-      { startFrame: 60, endFrame: 120, visible: true },
+      { startFrame: 0, endFrame: 29, visible: true },
+      { startFrame: 30, endFrame: 119, visible: false },
+      { startFrame: 120, endFrame: 120, visible: true },
     ],
     totalFrames: 121,
     interpolatedFrameCount: 118,
@@ -314,7 +320,7 @@ describe('Video annotations over the layers store', () => {
     expect(count).toBe(2)
   })
 
-  it('GET returns both annotations, round-tripping the wire shape bit-exactly', async () => {
+  it('GET returns both annotations, round-tripping the native-canonical wire shape', async () => {
     const response = await app.inject({
       method: 'GET',
       url: `/api/layers/videos/${videoId}/annotations`,
@@ -336,7 +342,7 @@ describe('Video annotations over the layers store', () => {
       confidence: 0.9,
       source: 'manual',
     })
-    // Bit-exact sequence reconstruction.
+    // Native-canonical sequence reconstruction (no sidecar).
     expect(returnedType.frames).toEqual(typeFrames)
 
     const returnedObject = body.find((a) => a.id === objectAnnotationId)!

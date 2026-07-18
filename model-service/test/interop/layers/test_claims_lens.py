@@ -1,4 +1,13 @@
-"""Round-trip law tests for the claim result <-> layers fragment lens."""
+"""Round-trip law tests for the claim result <-> layers fragment lens.
+
+The lens makes the canonical layers records authoritative — text, confidence,
+claim type, sentence index, character offsets, and the relationship fields are
+read back from the records, not a verbatim complement (the complement is empty).
+Confidence is quantized once to the integer ``0..1000`` scale, and the reasoning
+trace (model-inference telemetry) is dropped, with only the emitting ``model_id``
+lifted to the layer's ``annotationMetadata.agent``. The laws therefore hold over
+quantized, trace-free results.
+"""
 
 from __future__ import annotations
 
@@ -34,7 +43,7 @@ def _nested_dto() -> ClaimsResultDTO:
         claims=[
             ExtractedClaimDTO(
                 text="The sky is blue.",
-                confidence=0.9123,
+                confidence=0.912,
                 sentence_index=0,
                 char_start=0,
                 char_end=16,
@@ -42,16 +51,11 @@ def _nested_dto() -> ClaimsResultDTO:
                 subclaims=[
                     ExtractedClaimDTO(
                         text="sky is blue",
-                        confidence=0.4242,
+                        confidence=0.424,
                         sentence_index=0,
                         char_start=4,
                         char_end=15,
                         claim_type=None,
-                        reasoning_trace=ThinkingTrace(
-                            steps=[ThinkingStep(content="color", tokens_used=3)],
-                            total_tokens=3,
-                            model_id="m-1",
-                        ),
                     )
                 ],
             ),
@@ -114,6 +118,11 @@ def test_putget_stability(dto: ClaimsResultDTO) -> None:
     assert (view2, complement2) == (view, complement)
 
 
+def test_complement_is_empty() -> None:
+    _, complement = LENS.forward(_nested_dto())
+    assert complement is None
+
+
 def test_view_records_validate_as_lairs_models() -> None:
     view, _ = LENS.forward(_nested_dto())
     by_id = _records_by_id(view)
@@ -143,8 +152,8 @@ def test_annotation_tree_shape_and_scale() -> None:
     assert (root.anchor.textSpan.byteStart, root.anchor.textSpan.byteEnd) == (0, 16)
 
     sub = by_uuid["claim-1"]
-    # claim_type=None projects to the default "claim" label.
-    assert sub.label == "claim"
+    # claim_type=None carries NO label, so it round-trips distinctly from "claim".
+    assert sub.label is None
     assert sub.parentId is not None
     assert sub.parentId.value == "claim-0"
     assert sub.childIds == ()
@@ -172,6 +181,38 @@ def test_relationship_edge_set_shape_and_scale() -> None:
     assert supports.confidence == 800
 
 
+def test_reasoning_trace_is_dropped_and_model_id_lifted() -> None:
+    """A claim's reasoning trace drops; its model_id rides on the layer metadata.
+
+    The trace is model-inference telemetry, not annotation structure, so the lens
+    drops it (a round-tripped claim carries ``reasoning_trace=None``) while the
+    emitting model id survives natively on the layer's ``annotationMetadata.agent``.
+    """
+    dto = ClaimsResultDTO(
+        text="A claim.",
+        claims=[
+            ExtractedClaimDTO(
+                text="A claim.",
+                confidence=0.5,
+                reasoning_trace=ThinkingTrace(
+                    steps=[ThinkingStep(content="chain of thought", tokens_used=7)],
+                    total_tokens=7,
+                    model_id="reasoner-1",
+                ),
+            )
+        ],
+    )
+    view, complement = LENS.forward(dto)
+
+    layer = annotation.AnnotationLayer.model_validate_json(_records_by_id(view)["claims"])
+    assert layer.metadata is not None
+    assert layer.metadata.agent is not None
+    assert layer.metadata.agent.id == "reasoner-1"
+
+    restored = LENS.backward(view, complement)
+    assert restored.claims[0].reasoning_trace is None
+
+
 def _index_endpoint_dto() -> ClaimsResultDTO:
     """Two flat claims joined by a relationship that names them by position."""
     return ClaimsResultDTO(
@@ -195,10 +236,13 @@ def test_positional_endpoint_ids_resolve_to_claim_annotation_uuids() -> None:
     """A relationship that names claims by preorder index resolves to real uuids.
 
     An endpoint id that is a decimal index into the preorder claim list is
-    rewritten to that claim's minted ``claim-{index}`` uuid, so the edge points
-    at an annotation the layer actually contains rather than a dangling id.
+    rewritten to that claim's minted ``claim-{index}`` uuid on the edge, so the
+    edge points at an annotation the layer actually contains rather than a
+    dangling id; the original index rides in the edge features and is recovered
+    on the round trip.
     """
-    view, _ = LENS.forward(_index_endpoint_dto())
+    dto = _index_endpoint_dto()
+    view, complement = LENS.forward(dto)
     by_id = _records_by_id(view)
 
     layer = annotation.AnnotationLayer.model_validate_json(by_id["claims"])
@@ -214,15 +258,12 @@ def test_positional_endpoint_ids_resolve_to_claim_annotation_uuids() -> None:
     # Both resolved endpoints name annotations the claims layer contains.
     assert edge.source.localId.value in claim_uuids
     assert edge.target.localId.value in claim_uuids
+    # The original positional ids round-trip through the edge features.
+    assert LENS.backward(view, complement) == dto
 
 
 def test_literal_null_text_survives_the_round_trip() -> None:
-    """A document/claim whose text is the literal string ``"null"`` round-trips.
-
-    Free text flows through the fovea complement, not a view field that would
-    coerce the literal ``"null"`` to ``None``, so ``backward(*forward(dto))``
-    preserves it exactly.
-    """
+    """A document/claim whose text is the literal string ``"null"`` round-trips."""
     dto = ClaimsResultDTO(
         text="null",
         claims=[ExtractedClaimDTO(text="null", confidence=0.5)],
@@ -248,15 +289,19 @@ def test_empty_dto_has_no_annotations() -> None:
     assert layer.annotations == ()
 
 
+# Confidence is drawn from the quantized 0..1000 grid, so scaling is exact.
+_confidence = st.integers(min_value=0, max_value=1000).map(lambda i: i / 1000.0)
+
 _claim_leaf = st.builds(
     ExtractedClaimDTO,
     text=st.text(max_size=16),
-    confidence=st.floats(min_value=0.0, max_value=1.0, allow_nan=False),
+    confidence=_confidence,
     sentence_index=st.one_of(st.none(), st.integers(min_value=0, max_value=10)),
     char_start=st.none(),
     char_end=st.none(),
     subclaims=st.just([]),
     claim_type=st.one_of(st.none(), st.sampled_from(["fact", "opinion"])),
+    reasoning_trace=st.none(),
 )
 
 _claim = st.recursive(
@@ -264,12 +309,13 @@ _claim = st.recursive(
     lambda children: st.builds(
         ExtractedClaimDTO,
         text=st.text(max_size=16),
-        confidence=st.floats(min_value=0.0, max_value=1.0, allow_nan=False),
+        confidence=_confidence,
         sentence_index=st.one_of(st.none(), st.integers(min_value=0, max_value=10)),
         char_start=st.none(),
         char_end=st.none(),
         subclaims=st.lists(children, max_size=2),
         claim_type=st.one_of(st.none(), st.sampled_from(["fact", "opinion"])),
+        reasoning_trace=st.none(),
     ),
     max_leaves=4,
 )
@@ -281,7 +327,7 @@ _relationship = st.builds(
     relation_type=st.sampled_from(
         ["supports", "contradicts", "refines", "generalizes", "duplicates", "other"]
     ),
-    confidence=st.floats(min_value=0.0, max_value=1.0, allow_nan=False),
+    confidence=_confidence,
     notes=st.one_of(st.none(), st.text(max_size=16)),
 )
 

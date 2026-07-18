@@ -71,7 +71,9 @@ export async function getOrCreateVideoExpression(
   const durationMs = video.duration != null ? Math.round(video.duration * 1000) : null
   const frameRateX100 = video.frameRate != null ? Math.round(video.frameRate * 100) : null
 
-  // Media(kind=video): the source material the expression attaches to.
+  // Media(kind=video): the source material the expression attaches to. The
+  // arbitrary source-video metadata is open extension, not annotationMetadata
+  // provenance, so it rides on `features`; the provenance column is left unset.
   const mediaId = mediaVideoId(video.id)
   const videoDescriptor = { width, height, frameRate: frameRateX100, durationMs }
   const mediaData = {
@@ -79,7 +81,7 @@ export async function getOrCreateVideoExpression(
     title: video.filename,
     durationMs,
     video: jsonOrNull(videoDescriptor),
-    metadata: jsonOrNull(video.metadata),
+    features: jsonOrNull(video.metadata),
     videoId: video.id,
     projectId: null,
     createdByUserId: null,

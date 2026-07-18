@@ -80,9 +80,33 @@ export function claimSpanLayerId(summaryId: string): string {
   return deriveId('layer:claim-span', summaryId)
 }
 
-/** The span LayersAnnotation id for one text span of a claim. */
-export function claimSpanAnnotationId(claimId: string, spanIndex: number): string {
-  return deriveId('ann:claim-span', claimId, String(spanIndex))
+/**
+ * The primary LayersAnnotation id that bears a claim: one per claim, denoting the
+ * claim GraphNode and carrying the claim's text, confidence, gloss, claimer, and
+ * discontiguous text-span anchor. Keyed by the claim id so a rewrite of the same
+ * claim reuses the row rather than minting a duplicate. Mirrors
+ * {@link claimSpanLayerId}.
+ */
+export function claimAnnotationId(claimId: string): string {
+  return deriveId('ann:claim', claimId)
+}
+
+/**
+ * The temporal-span LayersAnnotation id for one video-time grounding of a claim,
+ * keyed by the claim id and the span's index. Each grounds the same claim node in
+ * video time alongside its text anchor.
+ */
+export function claimTimeSpanAnnotationId(claimId: string, spanIndex: number): string {
+  return deriveId('ann:claim-time', claimId, String(spanIndex))
+}
+
+/**
+ * The cross-object GraphEdge id linking a claim to a world object (its situation,
+ * time, or location), keyed by the claim id and the reference field. Mirrors
+ * {@link claimRelationEdgeId} so a re-save collapses onto one edge.
+ */
+export function claimRefEdgeId(claimId: string, field: string): string {
+  return deriveId('edge:claim-ref', claimId, field)
 }
 
 /**
@@ -97,4 +121,96 @@ export function claimRelationEdgeId(
   relationTypeId: string,
 ): string {
   return deriveId('edge:claim-relation', sourceClaimId, targetClaimId, relationTypeId)
+}
+
+/**
+ * The Expression id carrying a type's flattened gloss text, keyed by the TypeDef
+ * row id. The gloss's reference structure is stand-off over this expression, so
+ * deriving the id from the row id keeps the projection idempotent with no schema
+ * field: a rewrite of the same type reuses this expression rather than minting a
+ * duplicate. Mirrors {@link claimSpanLayerId}.
+ */
+export function glossExpressionId(typeDefRowId: string): string {
+  return deriveId('expr:ontology-gloss', typeDefRowId)
+}
+
+/** The span AnnotationLayer id grouping a type's gloss reference annotations. */
+export function glossLayerId(typeDefRowId: string): string {
+  return deriveId('layer:ontology-gloss', typeDefRowId)
+}
+
+/**
+ * The span LayersAnnotation id for one reference segment of a type's gloss,
+ * keyed by the TypeDef row id and the segment's index among the gloss segments.
+ */
+export function glossRefAnnotationId(typeDefRowId: string, segIndex: number): string {
+  return deriveId('ann:ontology-gloss', typeDefRowId, String(segIndex))
+}
+
+/**
+ * The ontology-relation edge id for a directed (source, target, relationType)
+ * triple, mirroring {@link claimRelationEdgeId}: deriving the id from the triple
+ * lets a retry or double-submit collapse to one edge rather than minting a
+ * duplicate.
+ */
+export function ontologyRelationEdgeId(
+  sourceId: string,
+  targetId: string,
+  relationTypeId: string,
+): string {
+  return deriveId('edge:ontology-relation', sourceId, targetId, relationTypeId)
+}
+
+// --- world + temporal derivations -------------------------------------------
+
+/**
+ * The per-scope world scaffold Expression id. World-denoting annotations (a
+ * Time's temporal value, a Location's spatial value, an Event's interpretation)
+ * must hang off an AnnotationLayer, which must hang off an Expression; a single
+ * scaffold Expression per (user, project) scope hosts them all. Deriving the id
+ * from the scope keeps the scaffold a singleton the write path reuses.
+ */
+export function worldScaffoldExpressionId(createdByUserId: string | null, projectId: string | null): string {
+  return deriveId('expr:world', createdByUserId ?? '', projectId ?? '')
+}
+
+/** The per-scope world scaffold AnnotationLayer id that groups world annotations. */
+export function worldScaffoldLayerId(createdByUserId: string | null, projectId: string | null): string {
+  return deriveId('layer:world', createdByUserId ?? '', projectId ?? '')
+}
+
+/** The temporal-value LayersAnnotation id denoting a Time node, keyed by the time id. */
+export function worldTemporalAnnotationId(timeId: string): string {
+  return deriveId('ann:world-time', timeId)
+}
+
+/** The spatial-value LayersAnnotation id denoting a Location node, keyed by the location id. */
+export function worldSpatialAnnotationId(locationId: string): string {
+  return deriveId('ann:world-location', locationId)
+}
+
+/**
+ * The interpretation LayersAnnotation id denoting an Event node, keyed by the
+ * (event, persona, eventType) triple so a per-persona interpretation is a stable
+ * singleton and a re-save collapses onto the same row.
+ */
+export function worldInterpretationAnnotationId(
+  eventId: string,
+  personaId: string,
+  eventTypeId: string,
+): string {
+  return deriveId('ann:world-interp', eventId, personaId, eventTypeId)
+}
+
+/**
+ * The instance-of GraphEdge id for a world type assignment, keyed by the
+ * (object, type, persona) triple. Mirrors {@link ontologyRelationEdgeId} so a
+ * re-save of the same assignment collapses onto one edge.
+ */
+export function worldTypeAssignmentEdgeId(
+  objectId: string,
+  typeId: string,
+  personaId: string,
+): string {
+  return deriveId('edge:world-instance-of', objectId, typeId, personaId)
 }

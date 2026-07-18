@@ -14,6 +14,7 @@ import {
   VIDEO_ANNOTATION_SUBKINDS,
   type VideoAnnotationInput,
   type VideoAnnotationLinkType,
+  type MappedDenotesNode,
 } from '../../services/video-annotation-mapper.js'
 import {
   getOrCreateVideoExpression,
@@ -88,15 +89,28 @@ const videoAnnotationsRoutes: FastifyPluginAsync = async (fastify: FastifyInstan
   }
 
   /**
-   * Resolves the denotation foreign key for an object annotation: the candidate
-   * node id when a `GraphNode` with that id exists, else null. The column is a
-   * real foreign key, so a link to a not-yet-migrated world object is stored as
-   * null; the annotation `label` and features preserve the link either way.
+   * Resolves the denotation foreign key for an object annotation, get-or-creating
+   * the denoted world-object `GraphNode` so the link is never nulled. An existing
+   * world node keeps its fields; a not-yet-materialized object gets a minimal node
+   * of the link kind's `nodeType`, from which the read side derives `linkType`.
    */
-  const resolveDenotesNodeId = async (candidateId: string | null): Promise<string | null> => {
-    if (!candidateId) return null
-    const exists = (await prisma.graphNode.count({ where: { id: candidateId } })) > 0
-    return exists ? candidateId : null
+  const resolveDenotesNode = async (
+    node: MappedDenotesNode | null,
+    scope: { projectId: string | null; userId: string | null },
+  ): Promise<{ id: string; nodeType: string; label: string | null } | null> => {
+    if (!node) return null
+    const saved = await prisma.graphNode.upsert({
+      where: { id: node.id },
+      create: {
+        id: node.id,
+        nodeType: node.nodeType,
+        label: node.label,
+        projectId: scope.projectId,
+        createdByUserId: scope.userId,
+      },
+      update: {},
+    })
+    return { id: saved.id, nodeType: saved.nodeType, label: saved.label }
   }
 
   // ---- GET -----------------------------------------------------------------
@@ -275,7 +289,11 @@ const videoAnnotationsRoutes: FastifyPluginAsync = async (fastify: FastifyInstan
       },
     })
 
-    const denotesNodeId = await resolveDenotesNodeId(mapping.annotation.denotesNodeCandidateId)
+    const denotesNode = await resolveDenotesNode(mapping.annotation.denotesNode, {
+      projectId,
+      userId,
+    })
+    const denotesNodeId = denotesNode?.id ?? null
 
     const writeData = {
       anchor: toJsonInput(mapping.annotation.anchor),
@@ -293,7 +311,7 @@ const videoAnnotationsRoutes: FastifyPluginAsync = async (fastify: FastifyInstan
         row,
         { personaId: input.personaId },
         { id: video.id, frameRate: video.frameRate },
-        null,
+        denotesNode ? { nodeType: denotesNode.nodeType, label: denotesNode.label } : null,
       ))
 
     // Idempotent update of an existing annotation by its client id. Authorizes
@@ -457,7 +475,10 @@ const videoAnnotationsRoutes: FastifyPluginAsync = async (fastify: FastifyInstan
       videoWidth: width ?? undefined,
       videoHeight: height ?? undefined,
     })
-    const denotesNodeId = await resolveDenotesNodeId(mapping.annotation.denotesNodeCandidateId)
+    const denotesNode = await resolveDenotesNode(mapping.annotation.denotesNode, {
+      projectId: existing.projectId,
+      userId: existing.createdByUserId,
+    })
 
     const updated = await prisma.layersAnnotation.update({
       where: { id },
@@ -466,7 +487,7 @@ const videoAnnotationsRoutes: FastifyPluginAsync = async (fastify: FastifyInstan
         label: mapping.annotation.label,
         confidence: mapping.annotation.confidence,
         ontologyTypeRefId: mapping.annotation.ontologyTypeRefId,
-        denotesNodeId,
+        denotesNodeId: denotesNode?.id ?? null,
         features: toJsonInput(mapping.annotation.features),
         startMs: mapping.annotation.startMs,
         endMs: mapping.annotation.endMs,
@@ -477,7 +498,7 @@ const videoAnnotationsRoutes: FastifyPluginAsync = async (fastify: FastifyInstan
       updated,
       { personaId: existing.layer.personaId },
       { id: video.id, frameRate: video.frameRate },
-      null,
+      denotesNode ? { nodeType: denotesNode.nodeType, label: denotesNode.label } : null,
     ))
   })
 

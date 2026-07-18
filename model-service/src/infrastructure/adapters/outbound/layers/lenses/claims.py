@@ -11,22 +11,26 @@ between claims. This lens projects that result to a
   (``kind="tree"``, ``subkind="custom"``) that flattens the recursive claim tree
   into ``Annotation`` records linked by ``parentId`` / ``childIds``, each anchored
   by a UTF-8 byte :class:`lairs.records.defs.Span` when the claim carries
-  character offsets, and
+  character offsets, with the claim text on ``text``, the claim type on ``label``
+  (absent for an untyped claim, distinguishing ``None`` from the literal
+  ``"claim"``), the confidence on ``confidence`` (integer ``0..1000`` scale), and
+  the sentence index in ``features``, and
 - one :class:`lairs.records.graph.GraphEdgeSet` of ``GraphEdgeEntry`` edges, one
-  per claim relationship.
+  per claim relationship, whose ``edgeType`` is the nearest layers slug and whose
+  ``features`` carry the exact relation type, endpoint ids, and notes.
 
-The layers view puts only integers on the wire (confidence scales to ``0..1000``)
-and cannot represent a claim's exact source confidence, its ``sentence_index``,
-the ``None``-vs-``"claim"`` distinction in ``claim_type``, a relationship's notes,
-or a claim's reasoning trace. The round-trip is therefore a ``dx.Lens``: the view
-captures the faithful integer projection while the complement carries the fovea
-remainder verbatim, so the GetPut law holds for every result.
+Every claim field is read back from those canonical records rather than a sidecar
+— there is no verbatim claim tree in the complement. The reasoning trace is
+model-inference telemetry, not annotation structure, so the lens drops it and
+lifts only the emitting ``model_id`` to the layer's ``annotationMetadata.agent``.
+Confidence is quantized once to the integer ``0..1000`` scale at emission, so the
+GetPut law holds on the quantized, trace-free result (the layers vocabulary is
+integer-by-design; the sub-0.001 remainder is noise). The complement is empty.
 """
 
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import cast
 
 import didactic.api as dx
 from lairs.author import builders
@@ -38,19 +42,18 @@ from src.application.dto.claims import (
     ClaimsResultDTO,
     ExtractedClaimDTO,
 )
-from src.application.dto.reasoning import ThinkingStep, ThinkingTrace
 from src.infrastructure.adapters.outbound.layers._convert import (
     ANNOTATION_LAYER_NSID,
     EXPRESSION_NSID,
     GRAPH_EDGESET_NSID,
     JsonValue,
+    conf_from_int,
     conf_to_int,
-    j_float,
-    j_list,
-    j_obj,
+    feature_map,
     j_str,
     local_uri,
     object_ref,
+    read_feature_map,
 )
 
 # The claim tree has no creation timestamp of its own; the view stamps a fixed
@@ -62,7 +65,18 @@ _CREATED_AT = datetime(1970, 1, 1, tzinfo=UTC)
 _DOCUMENT_ID = "document"
 _EXPRESSION_KEY = "document"
 
-# fovea relationship type -> nearest layers graph edge slug (else "custom").
+# The tool every emitted annotation layer attributes its work to.
+_TOOL = "fovea"
+
+# Annotation / edge feature keys carrying the fields with no dedicated column.
+_FK_SENTENCE_INDEX = "sentence_index"
+_FK_RELATION_TYPE = "fovea.relationType"
+_FK_SOURCE_REF = "fovea.sourceRef"
+_FK_TARGET_REF = "fovea.targetRef"
+_FK_NOTES = "fovea.notes"
+
+# fovea relationship type -> nearest layers graph edge slug (else "custom"). The
+# exact relation type rides in the edge features, so the slug is lossy-but-native.
 _EDGE_TYPE_BY_RELATION = {
     "supports": "supports",
     "contradicts": "contradicts",
@@ -82,7 +96,8 @@ def _resolve_endpoint(raw_id: str, claim_uuids: list[str]) -> str:
     A relationship names a claim by its position in the preorder claim list;
     ``claim_uuids[index]`` is that claim's minted ``claim-{index}`` uuid, so a
     resolved edge points at a real claim annotation. An endpoint that is not a
-    valid positional index passes through unchanged.
+    valid positional index passes through unchanged. The original endpoint id
+    rides in the edge features, so the resolution is native and reversible.
     """
     try:
         index = int(raw_id)
@@ -98,81 +113,23 @@ def _byte_offset(text: str, char_index: int) -> int:
     return len(text[:char_index].encode("utf-8"))
 
 
-# --- reasoning-trace (de)serialization for the complement -------------------
-
-
-def _dump_trace(trace: ThinkingTrace | None) -> JsonValue:
-    if trace is None:
-        return None
-    return {
-        "steps": [
-            {"content": step.content, "tokens_used": step.tokens_used} for step in trace.steps
-        ],
-        "total_tokens": trace.total_tokens,
-        "model_id": trace.model_id,
-    }
-
-
-def _opt_int(value: JsonValue) -> int | None:
-    return None if value is None else int(j_float(value))
-
-
-def _opt_str(value: JsonValue) -> str | None:
-    return None if value is None else j_str(value)
-
-
-def _load_trace(value: JsonValue) -> ThinkingTrace | None:
-    if value is None:
-        return None
-    obj = j_obj(value)
-    return ThinkingTrace(
-        steps=[
-            ThinkingStep(
-                content=j_str(j_obj(step)["content"]),
-                tokens_used=_opt_int(j_obj(step)["tokens_used"]),
-            )
-            for step in j_list(obj["steps"])
-        ],
-        total_tokens=_opt_int(obj["total_tokens"]),
-        model_id=j_str(obj["model_id"]),
-    )
-
-
-# --- claim tree (de)serialization for the complement ------------------------
-
-
-def _dump_claim(claim: ExtractedClaimDTO) -> JsonValue:
-    return {
-        "text": claim.text,
-        "confidence": claim.confidence,
-        "sentence_index": claim.sentence_index,
-        "char_start": claim.char_start,
-        "char_end": claim.char_end,
-        "claim_type": claim.claim_type,
-        "reasoning_trace": _dump_trace(claim.reasoning_trace),
-        "subclaims": [_dump_claim(sub) for sub in claim.subclaims],
-    }
-
-
-def _load_claim(value: JsonValue) -> ExtractedClaimDTO:
-    obj = j_obj(value)
-    return ExtractedClaimDTO(
-        text=j_str(obj["text"]),
-        confidence=j_float(obj["confidence"]),
-        sentence_index=_opt_int(obj["sentence_index"]),
-        char_start=_opt_int(obj["char_start"]),
-        char_end=_opt_int(obj["char_end"]),
-        subclaims=[_load_claim(sub) for sub in j_list(obj["subclaims"])],
-        claim_type=_opt_str(obj["claim_type"]),
-        reasoning_trace=_load_trace(obj["reasoning_trace"]),
-    )
+def _first_model_id(claims: list[ExtractedClaimDTO]) -> str | None:
+    """Return the first non-empty reasoning-trace ``model_id`` in preorder, or None."""
+    for claim in claims:
+        trace = claim.reasoning_trace
+        if trace is not None and trace.model_id:
+            return trace.model_id
+        found = _first_model_id(claim.subclaims)
+        if found is not None:
+            return found
+    return None
 
 
 class ClaimsLayersLens(dx.Lens[ClaimsResultDTO, CorpusFragment, JsonValue]):
-    """Lossless lens ``ClaimsResultDTO <-> (layers fragment, fovea complement)``."""
+    """Lens ``ClaimsResultDTO <-> layers fragment`` with an empty complement."""
 
     def forward(self, dto: ClaimsResultDTO) -> tuple[CorpusFragment, JsonValue]:
-        """Project a claim result to a layers fragment and fovea complement."""
+        """Project a claim result to a layers fragment (no fovea complement)."""
         expr_uri = local_uri("local", EXPRESSION_NSID, _EXPRESSION_KEY)
 
         records: list[FragmentRecord] = [
@@ -189,6 +146,12 @@ class ClaimsLayersLens(dx.Lens[ClaimsResultDTO, CorpusFragment, JsonValue]):
         ]
 
         annotations, claim_uuids = _build_annotations(dto.text, dto.claims)
+        model_id = _first_model_id(dto.claims)
+        metadata = (
+            defs.AnnotationMetadata(agent=defs.AgentRef(id=model_id), tool=_TOOL)
+            if model_id is not None
+            else None
+        )
         records.append(
             _record(
                 ANNOTATION_LAYER_NSID,
@@ -199,6 +162,8 @@ class ClaimsLayersLens(dx.Lens[ClaimsResultDTO, CorpusFragment, JsonValue]):
                     expression=expr_uri,
                     kind="tree",
                     subkind="custom",
+                    sourceMethod="automatic",
+                    metadata=metadata,
                 ),
             )
         )
@@ -222,6 +187,7 @@ class ClaimsLayersLens(dx.Lens[ClaimsResultDTO, CorpusFragment, JsonValue]):
                                 ),
                                 edgeType=_edge_type(rel.relation_type),
                                 confidence=conf_to_int(rel.confidence),
+                                features=_relation_features(rel),
                             )
                             for index, rel in enumerate(dto.relationships)
                         ),
@@ -230,35 +196,49 @@ class ClaimsLayersLens(dx.Lens[ClaimsResultDTO, CorpusFragment, JsonValue]):
             )
 
         view = CorpusFragment(records=tuple(records), source="fovea")
-        # Widen the minted uuid strings to JsonValue across list invariance.
-        uuid_values = cast("list[JsonValue]", claim_uuids)
-        complement: JsonValue = {
-            "text": dto.text,
-            "claims": [_dump_claim(claim) for claim in dto.claims],
-            "claim_uuids": uuid_values,
-            "relationships": [
-                {
-                    "source_claim_id": rel.source_claim_id,
-                    "target_claim_id": rel.target_claim_id,
-                    "relation_type": rel.relation_type,
-                    "confidence": rel.confidence,
-                    "notes": rel.notes,
-                }
-                for rel in dto.relationships
-            ],
-        }
-        return view, complement
+        return view, None
 
     def backward(self, view: CorpusFragment, complement: JsonValue) -> ClaimsResultDTO:
-        """Reconstruct a claim result from its layers fragment and complement."""
-        comp = j_obj(complement)
-        claims = [_load_claim(claim) for claim in j_list(comp["claims"])]
-        relationships = [_load_relationship(rel) for rel in j_list(comp["relationships"])]
+        """Reconstruct a claim result from its layers fragment alone."""
+        del complement  # every field is recovered from the canonical records
+
+        document = next(
+            expression.Expression.model_validate_json(record.value_json)
+            for record in view.records
+            if record.nsid == EXPRESSION_NSID
+        )
+        layer = next(
+            annotation.AnnotationLayer.model_validate_json(record.value_json)
+            for record in view.records
+            if record.nsid == ANNOTATION_LAYER_NSID
+        )
+        edge_sets = [
+            graph.GraphEdgeSet.model_validate_json(record.value_json)
+            for record in view.records
+            if record.nsid == GRAPH_EDGESET_NSID
+        ]
+
+        claims = _annotations_to_claims(layer.annotations)
+        relationships = [
+            _edge_to_relationship(edge) for edge_set in edge_sets for edge in edge_set.edges
+        ]
         return ClaimsResultDTO(
-            text=j_str(comp["text"]),
+            text=_text_of(document.text),
             claims=claims,
             relationships=relationships,
         )
+
+
+def _relation_features(rel: ClaimRelationshipDTO) -> defs.FeatureMap | None:
+    """Build the feature map carrying a relationship's exact, non-native fields."""
+    features: dict[str, JsonValue] = {
+        _FK_RELATION_TYPE: rel.relation_type,
+        _FK_SOURCE_REF: rel.source_claim_id,
+        _FK_TARGET_REF: rel.target_claim_id,
+    }
+    if rel.notes is not None:
+        features[_FK_NOTES] = rel.notes
+    return feature_map(features)
 
 
 def _build_annotations(
@@ -302,26 +282,84 @@ def _claim_annotation(
             char_start=claim.char_start,
             char_end=claim.char_end,
         )
+    features: dict[str, JsonValue] = {}
+    if claim.sentence_index is not None:
+        features[_FK_SENTENCE_INDEX] = claim.sentence_index
     return annotation.Annotation(
         uuid=defs.Uuid(value=my_uuid),
         anchor=anchor,
         text=claim.text,
-        label=claim.claim_type or "claim",
+        # The claim type is the annotation label as-is: an untyped claim carries
+        # no label, so None round-trips distinctly from the literal "claim".
+        label=claim.claim_type,
         confidence=conf_to_int(claim.confidence),
         parentId=defs.Uuid(value=parent_uuid) if parent_uuid is not None else None,
         childIds=tuple(defs.Uuid(value=child) for child in child_uuids),
+        features=feature_map(features),
     )
 
 
-def _load_relationship(value: JsonValue) -> ClaimRelationshipDTO:
-    obj = j_obj(value)
+def _annotations_to_claims(
+    annotations: tuple[annotation.Annotation, ...],
+) -> list[ExtractedClaimDTO]:
+    """Rebuild the claim tree from its flattened parent/child annotation links."""
+    by_uuid = {ann.uuid.value: ann for ann in annotations}
+
+    def build(ann: annotation.Annotation) -> ExtractedClaimDTO:
+        char_start, char_end = _char_offsets(ann)
+        features = read_feature_map(ann.features)
+        sentence_index = features.get(_FK_SENTENCE_INDEX)
+        return ExtractedClaimDTO(
+            text=_text_of(ann.text),
+            confidence=conf_from_int(ann.confidence or 0),
+            sentence_index=None if sentence_index is None else int(_as_float(sentence_index)),
+            char_start=char_start,
+            char_end=char_end,
+            subclaims=[build(by_uuid[child.value]) for child in (ann.childIds or ())],
+            claim_type=ann.label,
+            reasoning_trace=None,
+        )
+
+    return [build(ann) for ann in annotations if ann.parentId is None]
+
+
+def _text_of(value: str | None) -> str:
+    """Recover a text field the lens always sets.
+
+    A ``str`` field whose value is exactly ``"null"`` serializes to JSON null, so
+    a ``None`` read back uniquely denotes the literal ``"null"`` (the lens always
+    supplies the field, so an absent value never otherwise occurs); every other
+    string, ``""`` included, round-trips as itself.
+    """
+    return "null" if value is None else value
+
+
+def _char_offsets(ann: annotation.Annotation) -> tuple[int | None, int | None]:
+    """Read a claim annotation's character offsets from its text-span anchor."""
+    anchor = ann.anchor
+    if anchor is None or anchor.textSpan is None:
+        return None, None
+    return anchor.textSpan.charStart, anchor.textSpan.charEnd
+
+
+def _edge_to_relationship(edge: graph.GraphEdgeEntry) -> ClaimRelationshipDTO:
+    """Reconstruct a claim relationship from its graph edge and features."""
+    features = read_feature_map(edge.features)
+    notes = features.get(_FK_NOTES)
     return ClaimRelationshipDTO(
-        source_claim_id=j_str(obj["source_claim_id"]),
-        target_claim_id=j_str(obj["target_claim_id"]),
-        relation_type=j_str(obj["relation_type"]),
-        confidence=j_float(obj["confidence"]),
-        notes=_opt_str(obj["notes"]),
+        source_claim_id=j_str(features[_FK_SOURCE_REF]),
+        target_claim_id=j_str(features[_FK_TARGET_REF]),
+        relation_type=j_str(features[_FK_RELATION_TYPE]),
+        confidence=conf_from_int(edge.confidence or 0),
+        notes=None if notes is None else j_str(notes),
     )
+
+
+def _as_float(value: JsonValue) -> float:
+    """Narrow a stored numeric feature to a float, raising otherwise."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError(f"expected number, got {type(value).__name__}")
+    return float(value)
 
 
 def _record(nsid: str, local_id: str, model: dx.Model) -> FragmentRecord:

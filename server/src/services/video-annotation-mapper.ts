@@ -10,12 +10,14 @@
  * prior backfill would have produced (same deterministic layer id, same
  * spatio-temporal anchor, same denotation link).
  *
- * The bounding-box sequence round-trips bit-exactly through the tested
- * conversion service (exact source values stashed under `fovea.*` keys). The
- * legacy scalar fields that the layers columns do not carry losslessly on their
- * own (`type`, `linkType`, `source`, and the exact 0-1 `confidence`) are stashed
- * under a single `fovea.annotation` entry in the annotation features bag so the
- * inverse reconstructs the legacy row exactly.
+ * The native anchor is authoritative: the bounding-box sequence's geometry,
+ * time, confidence, visibility, and interpolation ride in the anchor and its
+ * keyframe features (see `layers-conversion-service`), with no parallel sidecar.
+ * A video annotation's `type` and `linkType` derive from structure — the layer's
+ * persona (type vs object) and the denoted graph node's `nodeType` — and its
+ * `confidence` is the native 0-1000 integer column. The only per-annotation
+ * fields with no dedicated native column (the authoring `source` and the tracker
+ * identity/provenance) ride as flat scalar features, never a structured blob.
  *
  * @module
  */
@@ -28,6 +30,7 @@ import {
   to1000,
   from1000,
   type BoundingBoxSequence,
+  type FoveaTrackingSource,
 } from './layers-conversion-service.js'
 import { annotationLayerId } from './layers-id-map.js'
 
@@ -103,9 +106,9 @@ export interface AnnotationToLayersContext {
   ontologyId: string | null
   /** The video frame rate, for the frame-number to millisecond mapping. */
   frameRate: number
-  /** The video width in pixels, recorded on the anchor when known. */
+  /** The video width in pixels (unused by the anchor; read from the video). */
   videoWidth?: number
-  /** The video height in pixels, recorded on the anchor when known. */
+  /** The video height in pixels (unused by the anchor; read from the video). */
   videoHeight?: number
 }
 
@@ -120,6 +123,13 @@ export interface MappedAnnotationLayer {
   personaId: string | null
 }
 
+/** The world-object `GraphNode` an object annotation denotes. */
+export interface MappedDenotesNode {
+  id: string
+  nodeType: string
+  label: string
+}
+
 /** The `LayersAnnotation` a video annotation maps to. */
 export interface MappedLayersAnnotation {
   id: string
@@ -131,12 +141,12 @@ export interface MappedLayersAnnotation {
   /** Soft reference to the ontology TypeDef for a type annotation, else null. */
   ontologyTypeRefId: string | null
   /**
-   * The graph node id an object annotation denotes (its `label`), or null for a
-   * type annotation. The route nulls this when no such node exists, since the
-   * column is a real foreign key; the `label` column and features preserve the
-   * link regardless.
+   * The graph node an object annotation denotes (its `label`), or null for a
+   * type annotation. The write path get-or-creates this node so `denotesNodeId`
+   * is always populated, and the read side derives `linkType` from its
+   * `nodeType`.
    */
-  denotesNodeCandidateId: string | null
+  denotesNode: MappedDenotesNode | null
   features: Record<string, unknown>
   startMs: number
   endMs: number
@@ -179,22 +189,33 @@ export interface DenotesNode {
   label: string | null
 }
 
-/** The `fovea.annotation` features key holding the legacy scalar fields. */
-const FOVEA_ANNOTATION_KEY = 'fovea.annotation'
+/** The flat scalar annotation feature keys carrying the fields with no native column. */
+const FA = {
+  /** The authoring source string (per-annotation; the layer's sourceMethod is shared). */
+  source: 'fovea.source',
+  /** The tracker's object id (string or number). */
+  trackId: 'fovea.trackId',
+  /** The tracker name that produced the sequence. */
+  trackingSource: 'fovea.trackingSource',
+  /** The tracked-sequence confidence on the 0-1000 integer scale. */
+  trackingConfidence: 'fovea.trackingConfidence',
+} as const
 
 /** The default frame rate when a video row carries none. */
 const DEFAULT_FRAME_RATE = 30
 
-/**
- * The legacy scalar fields stashed in the annotation features bag so the inverse
- * reconstructs the legacy row exactly. `confidence` is the exact 0-1 float (the
- * `LayersAnnotation.confidence` column only holds the rounded 0-1000 integer).
- */
-interface FoveaAnnotationMeta {
-  type: string
-  linkType: VideoAnnotationLinkType | null
-  source: string
-  confidence: number | null
+/** The nodeType an object-annotation link kind maps to (its denoted node's type). */
+function linkTypeToNodeType(linkType: VideoAnnotationLinkType | null): string {
+  switch (linkType) {
+    case 'event':
+      return 'situation'
+    case 'time':
+      return 'time'
+    case 'location':
+      return 'location'
+    default:
+      return 'entity'
+  }
 }
 
 /** Maps a graph node's `nodeType` back to the legacy object-annotation link kind. */
@@ -230,9 +251,10 @@ function emptySequence(): BoundingBoxSequence {
  * `LayersAnnotation`, mirroring the backfill. A set `personaId` yields an
  * ontology-type layer whose annotation denotes an ontology type
  * (`ontologyTypeRefId = label`); a null `personaId` yields a world-object layer
- * whose annotation denotes a graph node (`denotesNodeCandidateId = label`). The
- * bounding-box sequence becomes a spatio-temporal anchor plus a features bag,
- * into which the legacy scalar fields are stashed for a lossless inverse.
+ * whose annotation denotes a graph node (`denotesNode.id = label`, with its
+ * `nodeType` from the link kind). The bounding-box sequence becomes the native
+ * spatio-temporal anchor; the authoring `source` and any tracker identity ride
+ * as flat scalar features.
  *
  * @param annotation - the legacy annotation to project
  * @param ctx - the resolved expression, ontology, and frame-rate context
@@ -255,21 +277,24 @@ export function annotationToLayers(
     personaId,
   }
 
-  const { anchor, features: sequenceFeatures } = boundingBoxSequenceToSpatioTemporalAnchor(
-    annotation.frames,
-    { frameRate: ctx.frameRate, videoWidth: ctx.videoWidth, videoHeight: ctx.videoHeight },
-  )
+  const anchor = boundingBoxSequenceToSpatioTemporalAnchor(annotation.frames, {
+    frameRate: ctx.frameRate,
+    videoWidth: ctx.videoWidth,
+    videoHeight: ctx.videoHeight,
+  })
 
-  const meta: FoveaAnnotationMeta = {
-    type: annotation.type,
-    linkType: personaId ? null : annotation.linkType,
-    source: annotation.source,
-    confidence: annotation.confidence,
+  const features: Record<string, unknown> = { [FA.source]: annotation.source }
+  const seq = annotation.frames
+  if (seq.trackId !== undefined) features[FA.trackId] = seq.trackId
+  if (seq.trackingSource !== undefined) features[FA.trackingSource] = seq.trackingSource
+  if (seq.trackingConfidence !== undefined) {
+    features[FA.trackingConfidence] = to1000(seq.trackingConfidence)
   }
-  const features: Record<string, unknown> = {
-    ...sequenceFeatures,
-    [FOVEA_ANNOTATION_KEY]: meta,
-  }
+
+  const denotesNode: MappedDenotesNode | null =
+    personaId || !annotation.label
+      ? null
+      : { id: annotation.label, nodeType: linkTypeToNodeType(annotation.linkType), label: annotation.label }
 
   const annotationRow: MappedLayersAnnotation = {
     id: annotation.id,
@@ -278,7 +303,7 @@ export function annotationToLayers(
     label: annotation.label,
     confidence: to1000(annotation.confidence ?? undefined) ?? null,
     ontologyTypeRefId: personaId ? annotation.label || null : null,
-    denotesNodeCandidateId: personaId ? null : annotation.label || null,
+    denotesNode,
     features,
     startMs: anchor.temporalSpan.start,
     endMs: anchor.temporalSpan.ending,
@@ -288,12 +313,11 @@ export function annotationToLayers(
 }
 
 /**
- * Reconstructs the legacy annotation from its stored layers rows, the exact
- * inverse of {@link annotationToLayers}. The bounding-box sequence rebuilds
- * bit-exactly from the anchor and features bag; `type`, `linkType`, `source`,
- * and the exact `confidence` are read from the stashed `fovea.annotation` entry,
- * with derivations from the layer persona and denoted node as fallbacks for a
- * row authored by the backfill (which stores no such entry).
+ * Reconstructs the legacy annotation from its stored layers rows, the inverse of
+ * {@link annotationToLayers}. The bounding-box sequence rebuilds from the anchor
+ * alone; `type` derives from the layer persona (type vs object), `linkType` from
+ * the denoted node's `nodeType`, `confidence` from the native 0-1000 column, and
+ * `source` plus the tracker fields from the flat scalar features.
  *
  * @param row - the stored layers annotation
  * @param layer - its grouping layer (supplies the persona, hence type vs object)
@@ -308,26 +332,29 @@ export function layersToAnnotation(
   node: DenotesNode | null,
 ): VideoAnnotationOutput {
   const bag = (row.features ?? {}) as Record<string, unknown>
-  const meta = (bag[FOVEA_ANNOTATION_KEY] ?? {}) as Partial<FoveaAnnotationMeta>
   const frameRate = video.frameRate ?? DEFAULT_FRAME_RATE
 
   const anchorWrapper = row.anchor as { spatioTemporalAnchor?: SpatioTemporalAnchor } | null
   const spatioTemporalAnchor = anchorWrapper?.spatioTemporalAnchor
   const frames = spatioTemporalAnchor
-    ? spatioTemporalAnchorToBoundingBoxSequence(spatioTemporalAnchor, bag, { frameRate })
+    ? spatioTemporalAnchorToBoundingBoxSequence(spatioTemporalAnchor, { frameRate })
     : emptySequence()
 
-  const type = meta.type ?? (layer.personaId ? 'type' : 'object')
-  const linkType = layer.personaId
-    ? null
-    : (meta.linkType ?? nodeTypeToLinkType(node?.nodeType) ?? null)
+  const rawTrackId = bag[FA.trackId]
+  if (typeof rawTrackId === 'string' || typeof rawTrackId === 'number') frames.trackId = rawTrackId
+  const rawTrackingSource = bag[FA.trackingSource]
+  if (typeof rawTrackingSource === 'string') {
+    frames.trackingSource = rawTrackingSource as FoveaTrackingSource
+  }
+  const rawTrackingConfidence = bag[FA.trackingConfidence]
+  if (typeof rawTrackingConfidence === 'number') {
+    frames.trackingConfidence = from1000(rawTrackingConfidence)
+  }
 
-  const confidence =
-    typeof meta.confidence === 'number'
-      ? meta.confidence
-      : row.confidence != null
-        ? from1000(row.confidence) ?? null
-        : null
+  const type = layer.personaId ? 'type' : 'object'
+  const linkType = layer.personaId ? null : nodeTypeToLinkType(node?.nodeType)
+
+  const source = typeof bag[FA.source] === 'string' ? (bag[FA.source] as string) : 'manual'
 
   return {
     id: row.id,
@@ -337,8 +364,8 @@ export function layersToAnnotation(
     label: row.label ?? '',
     linkType,
     frames,
-    confidence,
-    source: meta.source ?? 'manual',
+    confidence: row.confidence != null ? from1000(row.confidence) ?? null : null,
+    source,
     linkedObjectName: layer.personaId ? null : (node?.label ?? null),
     createdBy: row.createdByUserId,
     createdAt: row.createdAt.toISOString(),

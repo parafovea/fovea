@@ -6,7 +6,7 @@ import type { Token } from '@fovea/layers-schema'
 import type { AppAbility } from '../lib/abilities.js'
 import { ForbiddenError, NotFoundError, UnauthorizedError } from '../lib/errors.js'
 import { prisma } from '../lib/prisma.js'
-import { secToMs } from './layers-conversion-service.js'
+import { secToMs, to1000 } from './layers-conversion-service.js'
 import { VideoAccessService } from './video-access-service.js'
 import {
   ExpressionRepository,
@@ -26,6 +26,77 @@ function toJson(value: unknown): Prisma.InputJsonValue {
 /** sha256 hex digest of a string, captured at ingest for drift detection. */
 function sha256(text: string): string {
   return createHash('sha256').update(text, 'utf8').digest('hex')
+}
+
+/** Narrows a value to a shallow copy of a plain (non-array) object, else null. */
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    return { ...(value as Record<string, unknown>) }
+  }
+  return null
+}
+
+/**
+ * One token-aligned annotation layer projected from an ASR transcript's
+ * per-segment attributes: a `kind`/`subkind` and one annotation per segment
+ * carrying that segment's value at its `tokenIndex`.
+ */
+interface SegmentLayerSpec {
+  kind: string
+  subkind: string
+  annotations: Array<{ tokenIndex: number; label?: string; confidence?: number }>
+}
+
+/**
+ * Projects an ASR transcript's per-segment speaker, confidence, and sentiment
+ * into token-tag/tier annotation-layer specs aligned to the segment
+ * tokenization. Every segment that carries a value contributes one annotation at
+ * its segment (token) index; a layer with no values is omitted. This is the
+ * native home for the per-segment attributes the token stream cannot hold.
+ */
+function transcriptSegmentLayers(segments: TranscriptSegment[]): SegmentLayerSpec[] {
+  const layers: SegmentLayerSpec[] = []
+
+  const confidence = segments
+    .map((segment, tokenIndex) => ({ tokenIndex, value: to1000(segment.confidence) }))
+    .filter((entry): entry is { tokenIndex: number; value: number } => entry.value !== undefined)
+  if (confidence.length > 0) {
+    layers.push({
+      kind: 'token-tag',
+      subkind: 'confidence',
+      annotations: confidence.map((entry) => ({
+        tokenIndex: entry.tokenIndex,
+        confidence: entry.value,
+      })),
+    })
+  }
+
+  const speakers = segments
+    .map((segment, tokenIndex) => ({ tokenIndex, value: segment.speaker }))
+    .filter((entry): entry is { tokenIndex: number; value: string } => entry.value !== undefined)
+  if (speakers.length > 0) {
+    layers.push({
+      kind: 'tier',
+      subkind: 'speaker',
+      annotations: speakers.map((entry) => ({ tokenIndex: entry.tokenIndex, label: entry.value })),
+    })
+  }
+
+  const sentiments = segments
+    .map((segment, tokenIndex) => ({ tokenIndex, value: segment.sentiment }))
+    .filter((entry): entry is { tokenIndex: number; value: string } => entry.value !== undefined)
+  if (sentiments.length > 0) {
+    layers.push({
+      kind: 'token-tag',
+      subkind: 'sentiment',
+      annotations: sentiments.map((entry) => ({
+        tokenIndex: entry.tokenIndex,
+        label: entry.value,
+      })),
+    })
+  }
+
+  return layers
 }
 
 /**
@@ -284,6 +355,7 @@ export class TextExpressionService {
         languages,
         buildTokens: true,
         tokens,
+        segments: transcript.segments,
         videoSummaryId: readableSummary.id,
       })
       results.push(asrExpr)
@@ -325,6 +397,7 @@ export class TextExpressionService {
     languages: string[]
     buildTokens: boolean
     tokens?: Token[]
+    segments?: TranscriptSegment[]
     videoSummaryId?: string
   }): Promise<ExpressionWithTokens> {
     const { videoId, userId, sourceKind, kind, text, languages, buildTokens } = args
@@ -366,13 +439,19 @@ export class TextExpressionService {
         createdByUserId: userId,
         projectId: null,
       })
-      await this.repository.createTokenization({
+      const tokenization = await this.repository.createTokenization({
         segmentationId: segmentation.id,
         expressionId: id,
         kind: 'custom',
         isCanonical: true,
         tokens: toJson(args.tokens),
       })
+      // The per-segment speaker, confidence, and sentiment the token stream
+      // cannot hold become token-aligned annotation layers over the segment
+      // tokenization, so no per-segment attribute is dropped.
+      if (args.segments) {
+        await this.materializeSegmentLayers(id, tokenization.id, userId, args.segments)
+      }
     }
 
     const reloaded = await this.repository.findExpressionWithTokens(id)
@@ -380,6 +459,62 @@ export class TextExpressionService {
     // invariant violation rather than a not-found condition.
     if (!reloaded) throw new NotFoundError('Expression', id)
     return reloaded
+  }
+
+  /**
+   * Persists the ASR transcript's per-segment attributes as token-aligned
+   * annotation layers over `tokenizationId`: a token-tag confidence layer, a
+   * speaker tier, and a token-tag sentiment layer, each carrying one annotation
+   * per segment that holds a value. Every layer shares the transcript's
+   * ownership (the materializing user, unscoped project).
+   */
+  private async materializeSegmentLayers(
+    expressionId: string,
+    tokenizationId: string,
+    userId: string,
+    segments: TranscriptSegment[]
+  ): Promise<void> {
+    for (const spec of transcriptSegmentLayers(segments)) {
+      const layer = await this.repository.createAnnotationLayer({
+        expressionId,
+        kind: spec.kind,
+        subkind: spec.subkind,
+        tokenizationId,
+        sourceMethod: 'automatic',
+        createdByUserId: userId,
+        projectId: null,
+      })
+      await this.repository.createAnnotations(
+        spec.annotations.map((annotation) => ({
+          layerId: layer.id,
+          tokenizationId,
+          tokenIndex: annotation.tokenIndex,
+          label: annotation.label ?? null,
+          confidence: annotation.confidence ?? null,
+          createdByUserId: userId,
+          projectId: null,
+        }))
+      )
+    }
+  }
+
+  /**
+   * Assembles a document expression's open feature map from caller features, any
+   * caller metadata (arbitrary caller extension, not annotationMetadata
+   * provenance), and the title (the provenance column has no title field). When
+   * neither a title nor caller metadata needs merging, the caller's features pass
+   * through unchanged (including a non-object value); otherwise all three fold
+   * into one feature object.
+   */
+  private documentFeatures(input: CreateDocumentInput): unknown {
+    const callerMetadata = asRecord(input.metadata)
+    if (callerMetadata === null && input.title === undefined) {
+      return input.features
+    }
+    const merged = asRecord(input.features) ?? {}
+    if (callerMetadata) Object.assign(merged, callerMetadata)
+    if (input.title !== undefined) merged.title = input.title
+    return merged
   }
 
   /**
@@ -426,16 +561,11 @@ export class TextExpressionService {
     const text = input.text
     const digest = sha256(text)
 
-    // Expression carries no title column; a supplied document title is folded
-    // into the metadata JSON (under `title`) alongside any caller metadata.
-    let metadata = input.metadata
-    if (input.title !== undefined) {
-      const base =
-        metadata && typeof metadata === 'object' && !Array.isArray(metadata)
-          ? (metadata as Record<string, unknown>)
-          : {}
-      metadata = { ...base, title: input.title }
-    }
+    // The annotationMetadata provenance column has no title field, and arbitrary
+    // caller metadata is open extension rather than provenance, so the document
+    // title and any caller metadata join the expression's open feature map; the
+    // provenance column is reserved for true annotationMetadata.
+    const features = this.documentFeatures(input)
 
     try {
       await this.repository.createExpression({
@@ -446,8 +576,7 @@ export class TextExpressionService {
         sourceDigest: digest,
         sourceKind: 'document',
         languages: input.languages ?? [],
-        metadata: metadata !== undefined ? toJson(metadata) : undefined,
-        features: input.features !== undefined ? toJson(input.features) : undefined,
+        features: features !== undefined ? toJson(features) : undefined,
         createdByUserId: userId,
         projectId,
       })

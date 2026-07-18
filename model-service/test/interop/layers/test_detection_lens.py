@@ -1,4 +1,13 @@
-"""Round-trip law tests for the detection response <-> layers fragment lens."""
+"""Round-trip law tests for the detection response <-> layers fragment lens.
+
+The lens makes the canonical layers records authoritative: the frame number rides
+on a keyframe feature, the exact normalized box on ``annotation.spatial``, the
+confidence on the integer 0-1000 scale, the track id on a feature, the query on
+``reproducibility.command``, and the response id on the layer record key. There is
+no verbatim complement, the frame-processing time is dropped as telemetry, and an
+empty frame carries no annotation, so the laws hold over quantized responses whose
+frames each carry at least one detection.
+"""
 
 from __future__ import annotations
 
@@ -28,7 +37,11 @@ LENS = DETECTION_LAYERS
 
 
 def _example_dto() -> DetectObjectsResponseDTO:
-    """A deterministic, multi-frame detection response (no now()/random)."""
+    """A deterministic, multi-frame detection response (no now()/random).
+
+    Confidences sit on the integer 0..1000 grid and every frame carries at least
+    one detection, so the trace-free, quantized response round-trips.
+    """
     return DetectObjectsResponseDTO(
         id="detect-0",
         video_id="video-7",
@@ -59,15 +72,14 @@ def _example_dto() -> DetectObjectsResponseDTO:
                     DetectionDTO(
                         label="cat",
                         bounding_box=BoundingBoxDTO(x=0.55, y=0.6, width=0.2, height=0.15),
-                        confidence=0.9123,
+                        confidence=0.912,
                         track_id="track-1",
                     ),
                 ],
             ),
-            FrameDetectionsDTO(frame_number=24, timestamp=4.0, detections=[]),
         ],
         total_detections=3,
-        processing_time=1.2345,
+        processing_time=0.0,
         video_width=640,
         video_height=480,
     )
@@ -79,7 +91,7 @@ def _layer(view: object) -> annotation.AnnotationLayer:
 
 
 class TestGetPut:
-    """The complement carries every lossy source value so backward is exact."""
+    """Every reconstructed field is read back from the canonical records."""
 
     def test_example_roundtrip(self) -> None:
         dto = _example_dto()
@@ -91,6 +103,10 @@ class TestGetPut:
         view, complement = LENS.forward(dto)
         view2, complement2 = LENS.forward(LENS.backward(view, complement))
         assert (view2, complement2) == (view, complement)
+
+    def test_complement_is_empty(self) -> None:
+        _view, complement = LENS.forward(_example_dto())
+        assert complement is None
 
     def test_empty_response_roundtrip(self) -> None:
         dto = DetectObjectsResponseDTO(
@@ -106,14 +122,13 @@ class TestGetPut:
         view, complement = LENS.forward(dto)
         assert LENS.backward(view, complement) == dto
 
-    def test_exact_floats_survive(self) -> None:
+    def test_exact_normalized_box_survives(self) -> None:
         dto = _example_dto()
         view, complement = LENS.forward(dto)
         back = LENS.backward(view, complement)
-        assert back.frames[0].detections[0].confidence == 0.875
         assert back.frames[0].detections[0].bounding_box.width == 0.3
+        assert back.frames[0].detections[0].confidence == 0.875
         assert back.frames[1].timestamp == 2.04
-        assert back.processing_time == 1.2345
 
 
 class TestViewProjection:
@@ -130,57 +145,55 @@ class TestViewProjection:
             elif record.nsid == ANNOTATION_LAYER_NSID:
                 annotation.AnnotationLayer.model_validate_json(record.value_json)
 
-    def test_expression_and_media_shape(self) -> None:
+    def test_media_carries_frame_rate(self) -> None:
         dto = _example_dto()
         view, _complement = LENS.forward(dto)
-        expr_record = next(r for r in view.records if r.nsid == EXPRESSION_NSID)
-        expr = expression.Expression.model_validate_json(expr_record.value_json)
-        assert expr.kind == "video"
-        assert expr.id == "video-7"
-
         media_record = next(r for r in view.records if r.nsid == MEDIA_NSID)
         med = media.Media.model_validate_json(media_record.value_json)
-        assert med.kind == "video"
         assert med.video is not None
         assert (med.video.width, med.video.height) == (640, 480)
+        # fps derived from frame 12 at 2.04s: 12 / 2.04 == 5.88..., scaled by 100.
+        assert med.video.frameRate == round(12 / 2.04 * 100)
 
-    def test_layer_is_span_entity_mention(self) -> None:
+    def test_layer_is_span_entity_mention_and_keyed_by_id(self) -> None:
         dto = _example_dto()
         view, _complement = LENS.forward(dto)
-        layer = _layer(view)
+        record = next(r for r in view.records if r.nsid == ANNOTATION_LAYER_NSID)
+        assert record.local_id == "detect-0"
+        layer = annotation.AnnotationLayer.model_validate_json(record.value_json)
         assert layer.kind == "span"
         assert layer.subkind == "entity-mention"
+        assert layer.reproducibility is not None
+        assert layer.reproducibility.command == "find every cat and dog"
         # one annotation per detection, across all frames (3 total)
         assert len(layer.annotations) == 3
+
+    def test_box_rides_in_spatial_as_percentage(self) -> None:
+        dto = _example_dto()
+        view, _complement = LENS.forward(dto)
+        cat = _layer(view).annotations[0]
+        assert cat.spatial is not None
+        assert cat.spatial.value.crs == "percentage"
 
     def test_scale_rules_hold(self) -> None:
         dto = _example_dto()
         view, _complement = LENS.forward(dto)
-        layer = _layer(view)
-        for ann in layer.annotations:
-            # confidence scaled into [0, 1000]
+        for ann in _layer(view).annotations:
             assert ann.confidence is not None
             assert 0 <= ann.confidence <= 1000
-            anchor = ann.anchor
-            assert anchor is not None
-            sta = anchor.spatioTemporalAnchor
+            sta = ann.anchor.spatioTemporalAnchor
             assert sta is not None
             assert sta.interpolation == "step"
-            # temporal span in integer milliseconds
             assert isinstance(sta.temporalSpan.start, int)
-            assert isinstance(sta.temporalSpan.ending, int)
-            assert sta.temporalSpan.start >= 0
             keyframe = sta.keyframes[0]
             assert isinstance(keyframe.timeMs, int)
-            # bounding box width/height clamped to >= 1 pixel
             assert keyframe.bbox.width >= 1
             assert keyframe.bbox.height >= 1
 
     def test_confidence_and_time_values(self) -> None:
         dto = _example_dto()
         view, _complement = LENS.forward(dto)
-        layer = _layer(view)
-        first = layer.annotations[0]
+        first = _layer(view).annotations[0]
         assert first.label == "cat"
         assert first.confidence == 875  # round(0.875 * 1000)
         keyframe = first.anchor.spatioTemporalAnchor.keyframes[0]
@@ -189,9 +202,7 @@ class TestViewProjection:
     def test_tiny_box_clamps_to_one_pixel(self) -> None:
         dto = _example_dto()
         view, _complement = LENS.forward(dto)
-        layer = _layer(view)
-        # the dog box (0.0004 * 640 = 0.256 -> round 0 -> clamp 1)
-        dog = layer.annotations[1]
+        dog = _layer(view).annotations[1]
         keyframe = dog.anchor.spatioTemporalAnchor.keyframes[0]
         assert keyframe.bbox.width == 1
         assert keyframe.bbox.height == 1
@@ -202,9 +213,8 @@ class TestViewProjection:
         layer = _layer(view)
         cat = layer.annotations[0]
         assert cat.features is not None
-        entries = {e.key: e.value for e in cat.features.entries}
-        assert "track_id" in entries
-        # a detection with no track id carries no features
+        assert "track_id" in {e.key for e in cat.features.entries}
+        # a detection with no track id carries no annotation features
         dog = layer.annotations[1]
         assert dog.features is None
 
@@ -218,8 +228,10 @@ class TestLensLaws:
         import didactic.api as dx
 
         norm = st.floats(min_value=0.0, max_value=1.0, allow_nan=False, allow_infinity=False)
-        conf = st.floats(min_value=0.0, max_value=1.0, allow_nan=False, allow_infinity=False)
-        secs = st.floats(min_value=0.0, max_value=3600.0, allow_nan=False, allow_infinity=False)
+        # Confidence sits on the quantized 0..1000 grid so scaling is exact.
+        conf = st.integers(min_value=0, max_value=1000).map(lambda i: i / 1000.0)
+        # Timestamps sit on the integer-millisecond grid so time round-trips.
+        secs = st.integers(min_value=0, max_value=3_600_000).map(lambda ms: ms / 1000.0)
         boxes = st.builds(BoundingBoxDTO, x=norm, y=norm, width=norm, height=norm)
         detections = st.builds(
             DetectionDTO,
@@ -228,23 +240,33 @@ class TestLensLaws:
             confidence=conf,
             track_id=st.one_of(st.none(), st.text(min_size=1, max_size=6)),
         )
-        frames = st.builds(
-            FrameDetectionsDTO,
-            frame_number=st.integers(min_value=0, max_value=10_000),
-            timestamp=secs,
-            detections=st.lists(detections, max_size=3),
-        )
-        responses = st.builds(
-            DetectObjectsResponseDTO,
-            id=st.text(min_size=1, max_size=8),
-            video_id=st.text(min_size=1, max_size=8),
-            query=st.text(min_size=0, max_size=16),
-            frames=st.lists(frames, max_size=3),
-            total_detections=st.integers(min_value=0, max_value=100),
-            processing_time=st.floats(
-                min_value=0.0, max_value=100.0, allow_nan=False, allow_infinity=False
-            ),
-            video_width=st.integers(min_value=1, max_value=4096),
-            video_height=st.integers(min_value=1, max_value=4096),
-        )
-        dx.testing.check_lens_laws(LENS, responses, max_examples=50)
+
+        @st.composite
+        def responses(draw: st.DrawFn) -> DetectObjectsResponseDTO:
+            # Frame numbers are unique so no two frames merge on reconstruction.
+            frame_numbers = draw(
+                st.lists(st.integers(min_value=0, max_value=10_000), max_size=3, unique=True)
+            )
+            frames: list[FrameDetectionsDTO] = []
+            total = 0
+            for frame_number in frame_numbers:
+                # Each frame carries at least one detection (an empty frame drops).
+                dets = draw(st.lists(detections, min_size=1, max_size=3))
+                total += len(dets)
+                frames.append(
+                    FrameDetectionsDTO(
+                        frame_number=frame_number, timestamp=draw(secs), detections=dets
+                    )
+                )
+            return DetectObjectsResponseDTO(
+                id=draw(st.text(min_size=1, max_size=8)),
+                video_id=draw(st.text(min_size=1, max_size=8)),
+                query=draw(st.text(min_size=0, max_size=16)),
+                frames=frames,
+                total_detections=total,
+                processing_time=0.0,
+                video_width=draw(st.integers(min_value=1, max_value=4096)),
+                video_height=draw(st.integers(min_value=1, max_value=4096)),
+            )
+
+        dx.testing.check_lens_laws(LENS, responses(), max_examples=50)

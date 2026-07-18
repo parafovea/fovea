@@ -14,13 +14,19 @@ import { GraphRepository } from '../repositories/GraphRepository.js'
 import { AnnotationLayerRepository } from '../repositories/AnnotationLayerRepository.js'
 import { readOntologyAggregate } from './layers-bridge/ontology-bridge.js'
 import { getOrCreateVideoExpression } from './video-expression-service.js'
-import { claimRelationEdgeId, claimSpanLayerId, expressionTranscriptId } from './layers-id-map.js'
 import {
-  claimSpanAnnotations,
-  claimToNode,
+  claimAnnotationId,
+  claimRelationEdgeId,
+  claimSpanLayerId,
+  expressionTranscriptId,
+} from './layers-id-map.js'
+import {
+  claimFromLayers,
+  claimToLayers,
   collectSubtreeIds,
   edgeToRelation,
   isClaimNode,
+  isClaimRefEdge,
   isClaimRelationEdge,
   nestClaims,
   nodeToClaim,
@@ -217,18 +223,20 @@ export interface VideoPersonaClaimResponse {
 }
 
 /**
- * Owns claim business rules and authorization over the layers store. Claims are
- * kept as GraphNode(nodeType=claim) rows whose `properties.foveaClaim.object`
- * stashes the complete claim, their text spans as span LayersAnnotations, and
- * ClaimRelations as GraphEdges whose `properties.foveaClaimRelation.object`
- * stashes the complete relation. The `/api/summaries/:summaryId/claims` contract
+ * Owns claim business rules and authorization over the layers store. A claim is a
+ * GraphNode(nodeType=claim) carrying identity, denoted by one primary
+ * LayersAnnotation that bears the claim's text, confidence, gloss / claimer, and
+ * parent link; its video-time groundings are temporal sibling annotations and its
+ * world references are cross-object GraphEdges. A ClaimRelation is a GraphEdge
+ * between the two claim nodes. The `/api/summaries/:summaryId/claims` contract
  * (request/response shapes, auth, and CASL decisions) is unchanged: claims are
- * still authorized as `Claim` subjects (each reconstructed claim carries the
+ * authorized as `Claim` subjects (each reconstructed claim carries the
  * `createdBy`/`projectId` the ability conditions read), and summaries as
  * `VideoSummary` subjects.
  *
- * A per-summary claim-span AnnotationLayer anchors each claim's text-span
- * annotations; it is ensured before the first claim of a summary is written.
+ * A per-summary claim-span AnnotationLayer groups each claim's bearer
+ * annotations; it is ensured before the first claim of a summary is written, and
+ * scopes a summary's claims natively (its id is a pure function of the summary id).
  *
  * @example
  * ```typescript
@@ -267,20 +275,30 @@ export class ClaimService {
 
   // --- Layers reads ----------------------------------------------------------
 
-  /** Reads the layers claim nodes for a summary. */
+  /**
+   * Reads a summary's claims from the layers store. Claims are scoped natively by
+   * their bearer annotations living in the summary's claim-span layer (its id a
+   * pure function of the summary id): each primary annotation denotes its claim
+   * node and reconstructs the full claim.
+   */
   private async findSummaryClaimNodes(summaryId: string): Promise<StoredClaim[]> {
-    const nodes = await this.graphRepo.findAccessibleNodes(
-      {},
-      {
-        nodeType: 'claim',
-        properties: { path: ['foveaClaim', 'summaryId'], equals: summaryId },
-      },
+    const layerId = claimSpanLayerId(summaryId)
+    const annotations = await this.prisma.layersAnnotation.findMany({ where: { layerId } })
+    const primaries = annotations.filter(
+      (ann) => ann.denotesNodeId !== null && ann.id === claimAnnotationId(ann.denotesNodeId),
     )
+    if (primaries.length === 0) return []
+
+    const nodeIds = [...new Set(primaries.map((ann) => ann.denotesNodeId as string))]
+    const nodes = await this.graphRepo.findAccessibleNodes({}, { id: { in: nodeIds }, nodeType: 'claim' })
+    const nodeById = new Map(nodes.map((node) => [node.id, node]))
+
     const claims: StoredClaim[] = []
-    for (const node of nodes) {
-      if (!isClaimNode(node)) continue
-      const claim = nodeToClaim(node)
-      if (claim && claim.summaryId === summaryId) claims.push(claim)
+    for (const primary of primaries) {
+      const node = nodeById.get(primary.denotesNodeId as string)
+      if (!node) continue
+      const claim = claimFromLayers(node, primary)
+      if (claim.summaryId === summaryId) claims.push(claim)
     }
     return claims
   }
@@ -290,14 +308,14 @@ export class ClaimService {
     return { claims: await this.findSummaryClaimNodes(summaryId) }
   }
 
-  /** Finds a claim by id in the layers store. */
+  /** Finds a claim by id in the layers store, reconstructing it from its rows. */
   private async findClaimById(claimId: string): Promise<StoredClaim | null> {
     const node = await this.graphRepo.findNodeById(claimId)
-    if (node && isClaimNode(node)) {
-      const claim = nodeToClaim(node)
-      if (claim) return claim
-    }
-    return null
+    if (!node || !isClaimNode(node)) return null
+    const primary = await this.prisma.layersAnnotation.findUnique({
+      where: { id: claimAnnotationId(claimId) },
+    })
+    return primary ? claimFromLayers(node, primary) : nodeToClaim(node)
   }
 
   /** Finds a relation by id in the layers store. */
@@ -367,60 +385,81 @@ export class ClaimService {
     return layerId
   }
 
-  /** Creates a claim node and its span annotations under the given layer. */
-  private async persistClaimNode(layerId: string, claim: StoredClaim): Promise<void> {
-    const node = claimToNode(claim)
-    await this.graphRepo.createNode({
-      id: node.id,
-      nodeType: node.nodeType,
-      label: node.label,
-      properties: toJson(node.properties),
-      projectId: node.projectId,
-      createdByUserId: node.createdByUserId,
-    })
-    for (const ann of claimSpanAnnotations(claim)) {
+  /** Persists a claim's annotations (primary + temporal siblings) under a layer. */
+  private async createClaimAnnotations(
+    layerId: string,
+    projection: ReturnType<typeof claimToLayers>,
+  ): Promise<void> {
+    for (const ann of projection.annotations) {
       await this.annotationLayerRepo.createAnnotation({
         id: ann.id,
         layerId,
-        anchor: requiredJson(ann.anchor),
+        anchor: ann.anchor === null ? undefined : requiredJson(ann.anchor),
         label: ann.label,
+        text: ann.text,
+        value: ann.value,
+        confidence: ann.confidence,
+        arguments: toJson(ann.arguments),
+        ontologyTypeRefId: ann.ontologyTypeRefId,
+        parentAnnotationId: ann.parentAnnotationId,
+        temporal: toJson(ann.temporal),
+        startMs: ann.startMs,
+        endMs: ann.endMs,
         denotesNodeId: ann.denotesNodeId,
         features: toJson(ann.features),
         projectId: ann.projectId,
         createdByUserId: ann.createdByUserId,
+      })
+    }
+    for (const edge of projection.refEdges) {
+      await this.graphRepo.createEdge({
+        id: edge.id,
+        source: toJson(edge.source) as Prisma.InputJsonValue,
+        target: toJson(edge.target) as Prisma.InputJsonValue,
+        sourceLocalId: edge.sourceLocalId,
+        targetLocalId: edge.targetLocalId,
+        edgeType: edge.edgeType,
+        label: edge.label,
+        confidence: edge.confidence,
+        properties: toJson(edge.properties),
+        projectId: edge.projectId,
+        createdByUserId: edge.createdByUserId,
       })
     }
   }
 
-  /** Updates a claim node in place and regenerates its span annotations. */
+  /** Creates a claim node, its bearer annotations, and its reference edges. */
+  private async persistClaimNode(layerId: string, claim: StoredClaim): Promise<void> {
+    const projection = claimToLayers(claim)
+    await this.graphRepo.createNode({
+      id: projection.node.id,
+      nodeType: projection.node.nodeType,
+      label: projection.node.label,
+      properties: toJson(projection.node.properties),
+      projectId: projection.node.projectId,
+      createdByUserId: projection.node.createdByUserId,
+    })
+    await this.createClaimAnnotations(layerId, projection)
+  }
+
+  /** Updates a claim node in place and regenerates its bearer annotations and edges. */
   private async updateClaimNode(layerId: string, claim: StoredClaim): Promise<void> {
-    const node = claimToNode(claim)
-    await this.graphRepo.updateNode(node.id, {
-      label: node.label,
-      properties: toJson(node.properties),
+    const projection = claimToLayers(claim)
+    await this.graphRepo.updateNode(projection.node.id, {
+      label: projection.node.label,
+      properties: toJson(projection.node.properties),
     })
     await this.prisma.layersAnnotation.deleteMany({ where: { denotesNodeId: claim.id } })
-    for (const ann of claimSpanAnnotations(claim)) {
-      await this.annotationLayerRepo.createAnnotation({
-        id: ann.id,
-        layerId,
-        anchor: requiredJson(ann.anchor),
-        label: ann.label,
-        denotesNodeId: ann.denotesNodeId,
-        features: toJson(ann.features),
-        projectId: ann.projectId,
-        createdByUserId: ann.createdByUserId,
-      })
+    const stale = await this.graphRepo.findAccessibleEdges({}, { sourceLocalId: claim.id })
+    for (const edge of stale) {
+      if (isClaimRefEdge(edge)) await this.graphRepo.deleteEdge(edge.id)
     }
+    await this.createClaimAnnotations(layerId, projection)
   }
 
   /** Creates a claim-relation edge from a stored relation. */
-  private async persistRelationEdge(
-    relation: StoredRelation,
-    summaryId: string,
-    projectId: string | null,
-  ): Promise<void> {
-    const edge = relationToEdge(relation, summaryId, projectId)
+  private async persistRelationEdge(relation: StoredRelation, projectId: string | null): Promise<void> {
+    const edge = relationToEdge(relation, projectId)
     await this.graphRepo.createEdge({
       id: edge.id,
       source: toJson(edge.source) as Prisma.InputJsonValue,
@@ -708,16 +747,17 @@ export class ClaimService {
     const { claims } = await this.readClaims(summaryId)
     const subtreeIds = [...collectSubtreeIds(claims, claimId)]
 
-    // Span annotations first (deleting the node would only null their FK).
+    // Bearer + temporal annotations first (deleting the node would only null
+    // their FK).
     await this.prisma.layersAnnotation.deleteMany({ where: { denotesNodeId: { in: subtreeIds } } })
 
-    // Relation edges incident to any deleted claim.
+    // Relation and cross-object reference edges incident to any deleted claim.
     const incident = await this.graphRepo.findAccessibleEdges(
       {},
       { OR: [{ sourceLocalId: { in: subtreeIds } }, { targetLocalId: { in: subtreeIds } }] },
     )
     for (const edge of incident) {
-      if (isClaimRelationEdge(edge)) await this.graphRepo.deleteEdge(edge.id)
+      if (isClaimRelationEdge(edge) || isClaimRefEdge(edge)) await this.graphRepo.deleteEdge(edge.id)
     }
 
     for (const id of subtreeIds) {
@@ -972,7 +1012,7 @@ export class ClaimService {
       updatedAt: now,
     }
     try {
-      await this.persistRelationEdge(relation, summaryId, sourceClaim.projectId ?? null)
+      await this.persistRelationEdge(relation, sourceClaim.projectId ?? null)
     } catch (err) {
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
         const raced = await this.findRelationById(relationId)

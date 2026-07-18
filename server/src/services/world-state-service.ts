@@ -5,26 +5,30 @@ import type { AppAbility } from '../lib/abilities.js'
 import { NotFoundError, UnauthorizedError, InternalError, ForbiddenError, ConflictError } from '../lib/errors.js'
 import { config } from '../config.js'
 import { convertObjectRefsToText, countObjectRefsInGlosses, type TypeWithGloss } from '../lib/reference-cleanup.js'
-import { GraphRepository } from '../repositories/GraphRepository.js'
 import { LayersOntologyRepository } from '../repositories/LayersOntologyRepository.js'
 import { isSingleUserMode } from './user-service.js'
-import { layersOntologyForPersonaId } from './layers-id-map.js'
+import { layersOntologyForPersonaId, worldScaffoldLayerId } from './layers-id-map.js'
 import {
   worldStateToLayers,
   layersToWorldState,
-  isWorldRow,
-  readWorldStash,
+  worldClusterBucket,
   emptyWorldState,
   personalWorldStateId,
-  WORLD_MARKER,
   type WorldStateAggregate,
 } from './world-layers-mapper.js'
+import {
+  readWorldRows,
+  pruneWorldRows,
+  createWorldProjection,
+  upsertWorldProjection,
+} from './layers-bridge/world-store.js'
 import {
   ontologyToLayers,
   layersToOntology,
   emptyOntology,
   type PersonaOntologyAggregate,
 } from './ontology-layers-mapper.js'
+import { readGlossMap, writeGlossStandoff } from './layers-bridge/ontology-bridge.js'
 
 /**
  * Coerces a value to Prisma.InputJsonValue for a JSON column, omitting the field
@@ -189,13 +193,12 @@ export async function resolvePersonalUserId(
  *
  * @example
  * ```typescript
- * const service = new WorldStateService(graphRepo, ontologyRepo, prisma, request.ability ?? null, request.user?.id)
+ * const service = new WorldStateService(ontologyRepo, prisma, request.ability ?? null, request.user?.id)
  * const worldState = await service.getOrCreatePersonal()
  * ```
  */
 export class WorldStateService {
   constructor(
-    private readonly graphRepo: GraphRepository,
     private readonly ontologyRepo: LayersOntologyRepository,
     private readonly prisma: PrismaClient,
     private readonly ability: AppAbility | null,
@@ -232,16 +235,10 @@ export class WorldStateService {
    * @returns the reconstructed aggregate and whether any backing rows existed
    */
   async readPersonalWorld(userId: string): Promise<PersonalWorldRead> {
-    const nodeScope: Prisma.GraphNodeWhereInput = { createdByUserId: userId, projectId: null }
-    const edgeScope: Prisma.GraphEdgeWhereInput = { createdByUserId: userId, projectId: null }
-    const nodes = (await this.graphRepo.findAccessibleNodes(nodeScope, {})).filter(isWorldRow)
-    const edges = (await this.graphRepo.findAccessibleEdges(edgeScope, {})).filter(isWorldRow)
-
-    if (nodes.length > 0 || edges.length > 0) {
-      return { aggregate: layersToWorldState(nodes, edges), exists: true }
-    }
-
-    return { aggregate: emptyWorldState(), exists: false }
+    const { rows, exists } = await readWorldRows(this.prisma, { createdByUserId: userId, projectId: null })
+    return exists
+      ? { aggregate: layersToWorldState(rows), exists: true }
+      : { aggregate: emptyWorldState(), exists: false }
   }
 
   /**
@@ -253,47 +250,20 @@ export class WorldStateService {
    * @throws {ForbiddenError} when create access to the scope is denied
    */
   async writePersonalWorld(userId: string, aggregate: WorldStateAggregate): Promise<void> {
-    const nodeScope: Prisma.GraphNodeWhereInput = { createdByUserId: userId, projectId: null }
-    const edgeScope: Prisma.GraphEdgeWhereInput = { createdByUserId: userId, projectId: null }
-    const existingNodes = (await this.graphRepo.findAccessibleNodes(nodeScope, {})).filter(isWorldRow)
-    for (const node of existingNodes) await this.graphRepo.deleteNode(node.id)
-    const existingEdges = (await this.graphRepo.findAccessibleEdges(edgeScope, {})).filter(isWorldRow)
-    for (const edge of existingEdges) await this.graphRepo.deleteEdge(edge.id)
+    const scope = { createdByUserId: userId, projectId: null }
+    const projection = worldStateToLayers(aggregate, scope)
 
-    const { nodes, edges } = worldStateToLayers(aggregate, { projectId: null, createdByUserId: userId })
-
-    if ((nodes.length > 0 || edges.length > 0) && this.ability) {
+    const hasRows =
+      projection.nodes.length > 0 || projection.edges.length > 0 || projection.clusters.length > 0
+    if (hasRows && this.ability) {
       const candidate = subject('GraphNode', { projectId: null, createdByUserId: userId })
       if (!this.ability.can('create', candidate)) {
         throw new ForbiddenError('Cannot create world objects in this scope')
       }
     }
 
-    for (const node of nodes) {
-      await this.graphRepo.createNode({
-        id: node.id,
-        nodeType: node.nodeType,
-        label: node.label,
-        properties: toJson(node.properties),
-        knowledgeRefs: toJson(node.knowledgeRefs),
-        projectId: node.projectId,
-        createdByUserId: node.createdByUserId,
-      })
-    }
-    for (const edge of edges) {
-      await this.graphRepo.createEdge({
-        id: edge.id,
-        source: toJson(edge.source) as Prisma.InputJsonValue,
-        target: toJson(edge.target) as Prisma.InputJsonValue,
-        sourceLocalId: edge.sourceLocalId,
-        targetLocalId: edge.targetLocalId,
-        edgeType: edge.edgeType,
-        label: edge.label,
-        properties: toJson(edge.properties),
-        projectId: edge.projectId,
-        createdByUserId: edge.createdByUserId,
-      })
-    }
+    await pruneWorldRows(this.prisma, scope)
+    await createWorldProjection(this.prisma, projection)
   }
 
   /**
@@ -328,8 +298,9 @@ export class WorldStateService {
     projectId: string | null,
     aggregate: WorldStateAggregate,
   ): Promise<void> {
-    const { nodes, edges } = worldStateToLayers(aggregate, { projectId, createdByUserId: userId })
-    if (nodes.length === 0 && edges.length === 0) return
+    const scope = { createdByUserId: userId, projectId }
+    const projection = worldStateToLayers(aggregate, scope)
+    if (projection.nodes.length === 0 && projection.edges.length === 0 && projection.clusters.length === 0) return
 
     if (this.ability) {
       const candidate = subject('GraphNode', { projectId, createdByUserId: userId })
@@ -338,106 +309,7 @@ export class WorldStateService {
       }
     }
 
-    const nodeScope: Prisma.GraphNodeWhereInput = { createdByUserId: userId, projectId }
-    const edgeScope: Prisma.GraphEdgeWhereInput = { createdByUserId: userId, projectId }
-
-    for (let attempt = 0; attempt < 5; attempt++) {
-      const existingNodes = new Map(
-        (await this.graphRepo.findAccessibleNodes(nodeScope, {})).filter(isWorldRow).map((n) => [n.id, n]),
-      )
-      const existingEdges = new Map(
-        (await this.graphRepo.findAccessibleEdges(edgeScope, {})).filter(isWorldRow).map((e) => [e.id, e]),
-      )
-      let conflict = false
-
-      for (const node of nodes) {
-        const existing = existingNodes.get(node.id)
-        if (existing) {
-          const result = await this.prisma.graphNode.updateMany({
-            where: { id: node.id, lockVersion: existing.lockVersion },
-            data: {
-              nodeType: node.nodeType,
-              label: node.label,
-              properties: toJson(node.properties),
-              knowledgeRefs: toJson(node.knowledgeRefs),
-              lockVersion: { increment: 1 },
-            },
-          })
-          if (result.count !== 1) {
-            conflict = true
-            break
-          }
-        } else {
-          try {
-            await this.graphRepo.createNode({
-              id: node.id,
-              nodeType: node.nodeType,
-              label: node.label,
-              properties: toJson(node.properties),
-              knowledgeRefs: toJson(node.knowledgeRefs),
-              projectId: node.projectId,
-              createdByUserId: node.createdByUserId,
-            })
-          } catch (error) {
-            if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
-              conflict = true
-              break
-            }
-            throw error
-          }
-        }
-      }
-
-      if (!conflict) {
-        for (const edge of edges) {
-          const existing = existingEdges.get(edge.id)
-          if (existing) {
-            const result = await this.prisma.graphEdge.updateMany({
-              where: { id: edge.id, lockVersion: existing.lockVersion },
-              data: {
-                source: toJson(edge.source) as Prisma.InputJsonValue,
-                target: toJson(edge.target) as Prisma.InputJsonValue,
-                sourceLocalId: edge.sourceLocalId,
-                targetLocalId: edge.targetLocalId,
-                edgeType: edge.edgeType,
-                label: edge.label,
-                properties: toJson(edge.properties),
-                lockVersion: { increment: 1 },
-              },
-            })
-            if (result.count !== 1) {
-              conflict = true
-              break
-            }
-          } else {
-            try {
-              await this.graphRepo.createEdge({
-                id: edge.id,
-                source: toJson(edge.source) as Prisma.InputJsonValue,
-                target: toJson(edge.target) as Prisma.InputJsonValue,
-                sourceLocalId: edge.sourceLocalId,
-                targetLocalId: edge.targetLocalId,
-                edgeType: edge.edgeType,
-                label: edge.label,
-                properties: toJson(edge.properties),
-                projectId: edge.projectId,
-                createdByUserId: edge.createdByUserId,
-              })
-            } catch (error) {
-              if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
-                conflict = true
-                break
-              }
-              throw error
-            }
-          }
-        }
-      }
-
-      if (!conflict) return
-    }
-
-    throw new ConflictError('World state update conflicted after retries')
+    await upsertWorldProjection(this.prisma, scope, projection, 5)
   }
 
   /**
@@ -515,11 +387,16 @@ export class WorldStateService {
       }
     }
 
-    const scope = { id: objectId, createdByUserId: userId, projectId: null }
+    const owner = { createdByUserId: userId, projectId: null }
     if (field === 'relations') {
-      await this.prisma.graphEdge.deleteMany({ where: scope })
+      await this.prisma.graphEdge.deleteMany({ where: { id: objectId, ...owner } })
     } else {
-      await this.prisma.graphNode.deleteMany({ where: scope })
+      // A collection is a ClusterSet; its type assignments are instance-of edges
+      // keyed by the collection id.
+      await this.prisma.clusterSet.deleteMany({ where: { id: objectId, ...owner } })
+      await this.prisma.graphEdge.deleteMany({
+        where: { edgeType: 'instance-of', sourceLocalId: objectId, ...owner },
+      })
     }
   }
 
@@ -565,10 +442,11 @@ export class WorldStateService {
     const ontologyRow = await repo.findOntologyById(ontologyId)
     if (ontologyRow) {
       const typeDefs = await repo.findAccessibleTypeDefs({}, { ontologyId })
+      const glossMap = await readGlossMap(tx ?? this.prisma, typeDefs)
       return {
         id: ontologyRow.id,
         personaId: persona.id,
-        aggregate: layersToOntology(typeDefs),
+        aggregate: layersToOntology(typeDefs, glossMap),
         createdAt: ontologyRow.createdAt.toISOString(),
         updatedAt: ontologyRow.updatedAt.toISOString(),
       }
@@ -615,9 +493,12 @@ export class WorldStateService {
 
       for (let attempt = 0; attempt < 5; attempt++) {
         const existing = await repo.findOntologyById(ontologyId)
-        const current = existing
-          ? layersToOntology(await repo.findAccessibleTypeDefs({}, { ontologyId }))
-          : emptyOntology()
+        let current = emptyOntology()
+        if (existing) {
+          const currentTypeDefs = await repo.findAccessibleTypeDefs({}, { ontologyId })
+          const currentGloss = await readGlossMap(client, currentTypeDefs)
+          current = layersToOntology(currentTypeDefs, currentGloss)
+        }
         const merged: PersonaOntologyAggregate = {
           entityTypes: mergeBucket(current.entityTypes, buckets.entityTypes),
           eventTypes: mergeBucket(current.eventTypes, buckets.eventTypes),
@@ -674,12 +555,16 @@ export class WorldStateService {
             gloss: typeDef.gloss,
             parentTypeId: null,
             allowedRoles: toJson(typeDef.allowedRoles),
+            allowedValues: toJson(typeDef.allowedValues),
             knowledgeRefs: toJson(typeDef.knowledgeRefs),
             features: toJson(typeDef.features),
             projectId: typeDef.projectId,
             createdByUserId: typeDef.createdByUserId,
           })
           createdIds.add(typeDef.id)
+          // The TypeDef row id in this path is the original type id, so the gloss
+          // stand-off rows key off it directly.
+          await writeGlossStandoff(client, typeDef.id, typeDef.glossItems, ontologyId, persona.id, scope)
         }
         for (const typeDef of typeDefs) {
           if (typeDef.parentTypeId && createdIds.has(typeDef.parentTypeId)) {
@@ -825,20 +710,6 @@ export class WorldStateService {
       : members.includes(id)
   }
 
-  /** A collection with the given member id removed from its member field. */
-  private static stripCollectionMember(
-    collection: Record<string, unknown>,
-    id: string,
-    member: CollectionMemberField,
-  ): Record<string, unknown> {
-    const members = collection[member.field]
-    if (!Array.isArray(members)) return collection
-    const filtered = member.objectMembers
-      ? members.filter((entry) => (entry as { id?: unknown } | null)?.id !== id)
-      : members.filter((entry) => entry !== id)
-    return { ...collection, [member.field]: filtered }
-  }
-
   /** Counts collections whose member field contains the id. */
   private static countMemberships(
     collections: unknown[],
@@ -853,44 +724,41 @@ export class WorldStateService {
   }
 
   /**
-   * Strips a deleted object's id from every collection node in a bucket that still
-   * lists it, each rewrite guarded by the node's `lockVersion`. Reads the scope's
-   * world nodes fresh (inside the caller's transaction) so a membership edit
-   * committed concurrently is stripped from the current member list rather than
-   * reverted, and only the collections that actually lose the member are rewritten.
-   * A compare-and-swap miss throws {@link ConflictError} so the enclosing delete
-   * transaction rolls back for the client to retry against a fresh read.
+   * Strips a deleted object's id from every collection ClusterSet in a bucket that
+   * still lists it as a member. Reads the scope's world clusters fresh (inside the
+   * caller's transaction) so a concurrent membership edit is stripped from the
+   * current member list, and only the clusters that actually lose the member are
+   * rewritten.
    *
    * @returns the number of collections the id was removed from
    */
   private async stripCollectionMemberships(
     tx: Prisma.TransactionClient,
     collectionBucket: keyof WorldStateAggregate,
-    member: CollectionMemberField,
     memberId: string,
     userId: string,
   ): Promise<number> {
     const scope = { createdByUserId: userId, projectId: null }
-    const worldNodes = (await tx.graphNode.findMany({ where: scope })).filter(isWorldRow)
+    const clusterSets = (await tx.clusterSet.findMany({ where: scope })).filter(
+      (c) => worldClusterBucket(c) === collectionBucket,
+    )
     let memberships = 0
-    for (const node of worldNodes) {
-      const stash = readWorldStash(node.properties)
-      if (!stash || stash.bucket !== collectionBucket) continue
-      const object = stash.object
-      if (object === null || typeof object !== 'object') continue
-      if (!WorldStateService.collectionHasMember(object as Record<string, unknown>, memberId, member)) continue
+    for (const clusterSet of clusterSets) {
+      const clusters = Array.isArray(clusterSet.clusters) ? [...clusterSet.clusters] : []
+      const first = clusters[0]
+      if (first === null || typeof first !== 'object' || Array.isArray(first)) continue
+      const firstRecord = first as Record<string, unknown>
+      const members = Array.isArray(firstRecord.members) ? firstRecord.members : []
+      const kept = members.filter(
+        (m) => (m as { localId?: { value?: unknown } } | null)?.localId?.value !== memberId,
+      )
+      if (kept.length === members.length) continue
 
-      // Rewrite the collection node's stash in place — same bucket and array index,
-      // member stripped from the object — so the strip preserves array order.
-      const stripped = WorldStateService.stripCollectionMember(object as Record<string, unknown>, memberId, member)
-      const properties = { [WORLD_MARKER]: { bucket: stash.bucket, index: stash.index, object: stripped } }
-      const result = await tx.graphNode.updateMany({
-        where: { id: node.id, lockVersion: node.lockVersion, ...scope },
-        data: { properties: toJson(properties), lockVersion: { increment: 1 } },
+      clusters[0] = { ...firstRecord, members: kept }
+      await tx.clusterSet.update({
+        where: { id: clusterSet.id },
+        data: { clusters: toJson(clusters) as Prisma.InputJsonValue },
       })
-      if (result.count !== 1) {
-        throw new ConflictError('World state update conflicted')
-      }
       memberships += 1
     }
     return memberships
@@ -917,8 +785,12 @@ export class WorldStateService {
 
     // Object annotations denote the world object's GraphNode (the node reuses the
     // object's own id), so the object-annotation count is the number of layers
-    // annotations pointing at that node.
-    const annotationCount = await this.prisma.layersAnnotation.count({ where: { denotesNodeId: objectId } })
+    // annotations pointing at that node. The world's own value annotations (the
+    // temporal/spatial/interpretation rows in the scope's scaffold layer) are
+    // excluded so the count reflects external annotations linking to the object.
+    const annotationCount = await this.prisma.layersAnnotation.count({
+      where: { denotesNodeId: objectId, NOT: { layerId: worldScaffoldLayerId(userId, null) } },
+    })
 
     return {
       glossReferences: await this.countGlossReferences(userId, objectId, refType),
@@ -968,19 +840,24 @@ export class WorldStateService {
       kind,
       objectId,
     )
-    const member = WorldStateService.memberFieldFor(kind)
     const scope = { createdByUserId: userId, projectId: null }
-    // Delete the object node, its incident relation edges, strip its collection
-    // memberships (each rewrite recomputed from a fresh read and version-guarded so
-    // a concurrent membership edit survives), and convert the ontology gloss
+    // Delete the object node and its native derivations (the scaffold annotations
+    // it denotes, its instance-of type-assignment edges), its incident relation
+    // edges, strip its collection memberships, and convert the ontology gloss
     // references, all in ONE transaction so a partial failure rolls back rather than
     // orphaning glosses on a half-deleted world object.
     const { glossReferences, memberships } = await this.prisma.$transaction(async (tx) => {
       await tx.graphNode.deleteMany({ where: { id: objectId, ...scope } })
+      await tx.layersAnnotation.deleteMany({
+        where: { denotesNodeId: objectId, layerId: worldScaffoldLayerId(userId, null) },
+      })
+      await tx.graphEdge.deleteMany({
+        where: { edgeType: 'instance-of', sourceLocalId: objectId, ...scope },
+      })
       if (removedIds.length > 0) {
         await tx.graphEdge.deleteMany({ where: { id: { in: removedIds }, ...scope } })
       }
-      const memberships = await this.stripCollectionMemberships(tx, collectionBucket, member, objectId, userId)
+      const memberships = await this.stripCollectionMemberships(tx, collectionBucket, objectId, userId)
       const glossReferences = await this.cleanupGlossReferences(userId, objectId, refType, objectName, tx)
       return { glossReferences, memberships }
     })

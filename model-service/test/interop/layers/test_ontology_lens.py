@@ -1,11 +1,13 @@
 """GetPut round-trip tests for the ontology layers lens.
 
 The lens projects a list of fovea ontology suggestions (paired with an
-:class:`EmitContext`) to canonical ``pub.layers.ontology`` records and back.
-These tests assert the GetPut law by hand on a deterministic fixture, check that
-the emitted records validate as ``lairs`` models with the confidence held to the
-integer ``0..1000`` scale, and property-test GetPut over a small hypothesis
-strategy.
+:class:`EmitContext`) to canonical ``pub.layers.ontology`` records and back. The
+description, examples, parent, and confidence live in the canonical records — no
+verbatim type blob rides in the complement — the confidence is quantized once to
+the integer ``0..1000`` scale, and the reasoning trace (model-inference
+telemetry) is dropped rather than round-tripped. These tests assert the GetPut
+law over quantized, trace-free suggestions, check the drop of the trace, and
+property-test GetPut over a small hypothesis strategy.
 """
 
 from __future__ import annotations
@@ -33,13 +35,17 @@ from test.interop.layers.conftest import make_ctx
 
 
 def _fixture_types() -> tuple[OntologyTypeDTO, ...]:
-    """A deterministic set of suggestions covering parents, examples, traces."""
+    """A deterministic set of suggestions covering parents and examples.
+
+    Confidences are exact multiples of 0.001 so they survive the integer scale,
+    and no reasoning trace is attached (the lens drops telemetry).
+    """
     return (
         OntologyTypeDTO(
             name="Animal",
             description="A living organism.",
             parent=None,
-            confidence=0.9125,
+            confidence=0.912,
             examples=["dog", "cat", "sparrow"],
         ),
         OntologyTypeDTO(
@@ -48,14 +54,6 @@ def _fixture_types() -> tuple[OntologyTypeDTO, ...]:
             parent="Animal",
             confidence=0.42,
             examples=["poodle", "beagle"],
-            reasoning_trace=ThinkingTrace(
-                steps=[
-                    ThinkingStep(content="It has four legs.", tokens_used=7),
-                    ThinkingStep(content="It barks.", tokens_used=None),
-                ],
-                total_tokens=13,
-                model_id="reasoner-x",
-            ),
         ),
     )
 
@@ -72,6 +70,28 @@ def test_get_put_empty() -> None:
     source: tuple[tuple[OntologyTypeDTO, ...], object] = ((), make_ctx())
     view, complement = ONTOLOGY_LAYERS.forward(source)
     assert ONTOLOGY_LAYERS.backward(view, complement) == source
+
+
+def test_reasoning_trace_is_dropped() -> None:
+    """A suggestion's reasoning trace is telemetry, so it does not round-trip."""
+    with_trace = OntologyTypeDTO(
+        name="Dog",
+        description="A canine.",
+        parent=None,
+        confidence=0.5,
+        examples=[],
+        reasoning_trace=ThinkingTrace(
+            steps=[ThinkingStep(content="It barks.", tokens_used=7)],
+            total_tokens=7,
+            model_id="reasoner-x",
+        ),
+    )
+    view, complement = ONTOLOGY_LAYERS.forward(((with_trace,), make_ctx()))
+    restored, _ctx = ONTOLOGY_LAYERS.backward(view, complement)
+    assert restored[0].reasoning_trace is None
+    assert restored[0] == OntologyTypeDTO(
+        name="Dog", description="A canine.", parent=None, confidence=0.5, examples=[]
+    )
 
 
 def test_view_records_validate_and_confidence_scaled() -> None:
@@ -97,6 +117,19 @@ def test_view_records_validate_and_confidence_scaled() -> None:
         assert 0 <= confidence <= 1000
 
 
+def test_description_lives_in_the_gloss() -> None:
+    """A type's description is the authoritative ``TypeDef.gloss``, not a sidecar."""
+    source = (_fixture_types(), make_ctx())
+    view, _complement = ONTOLOGY_LAYERS.forward(source)
+    animal = next(
+        ontology.TypeDef.model_validate_json(r.value_json)
+        for r in view.records
+        if r.nsid == TYPEDEF_NSID
+        and ontology.TypeDef.model_validate_json(r.value_json).name == "Animal"
+    )
+    assert animal.gloss == "A living organism."
+
+
 def test_parent_resolves_to_typedef_uri() -> None:
     """A child's ``parentTypeRef`` resolves the parent name to a type AT-URI."""
     source = (_fixture_types(), make_ctx())
@@ -114,9 +147,9 @@ def test_parent_resolves_to_typedef_uri() -> None:
 def test_literal_null_description_survives_the_round_trip() -> None:
     """A type whose description is the literal string ``"null"`` round-trips.
 
-    The description flows through the fovea complement, not the ``TypeDef.gloss``
-    view field that would coerce the literal ``"null"`` to ``None``, so GetPut
-    preserves it exactly.
+    A ``TypeDef.gloss`` whose value is exactly ``"null"`` serializes to JSON null,
+    so a null gloss uniquely denotes that description on the way back — every
+    other string (``""`` included) survives as itself.
     """
     source = (
         (
@@ -138,33 +171,24 @@ def test_literal_null_description_survives_the_round_trip() -> None:
 
 # --- property-based GetPut ---------------------------------------------------
 
+# Names and parents exclude '/' so a parent AT-URI resolves back unambiguously.
+_name = st.text(
+    alphabet=st.characters(min_codepoint=32, max_codepoint=126).filter(lambda c: c != "/"),
+    max_size=24,
+)
 _text = st.text(alphabet=st.characters(min_codepoint=32, max_codepoint=126), max_size=24)
 
-_traces = st.one_of(
-    st.none(),
-    st.builds(
-        ThinkingTrace,
-        steps=st.lists(
-            st.builds(
-                ThinkingStep,
-                content=_text,
-                tokens_used=st.one_of(st.none(), st.integers(0, 10_000)),
-            ),
-            max_size=3,
-        ),
-        total_tokens=st.one_of(st.none(), st.integers(0, 100_000)),
-        model_id=_text,
-    ),
-)
+# Confidence is drawn from the quantized 0..1000 grid, so scaling is exact.
+_confidence = st.integers(min_value=0, max_value=1000).map(lambda i: i / 1000.0)
 
 _dtos = st.builds(
     OntologyTypeDTO,
-    name=_text,
+    name=_name,
     description=_text,
-    parent=st.one_of(st.none(), _text),
-    confidence=st.floats(min_value=0.0, max_value=1.0),
+    parent=st.one_of(st.none(), _name),
+    confidence=_confidence,
     examples=st.lists(_text, max_size=4),
-    reasoning_trace=_traces,
+    reasoning_trace=st.none(),
 )
 
 _sources = st.tuples(

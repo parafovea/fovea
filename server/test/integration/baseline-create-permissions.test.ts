@@ -24,6 +24,8 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest'
 import { FastifyInstance } from 'fastify'
 import { PrismaClient } from '@prisma/client'
 
+import { nodeToClaim } from '../../src/services/claim-layers-mapper.js'
+
 import { buildApp } from '../../src/app.js'
 import { hashPassword } from '../../src/lib/password.js'
 
@@ -221,9 +223,13 @@ describe('Baseline create permissions for owned resources', () => {
     // carries the created claim.
     const node = await prisma.graphNode.findUnique({ where: { id: body.claims[0].id } })
     expect(node).not.toBeNull()
-    const stash = (node!.properties as { foveaClaim: { object: { createdBy: string; summaryId: string } } }).foveaClaim.object
-    expect(stash.createdBy).toBe(u.userId)
-    expect(stash.summaryId).toBe(summary.id)
+    // The claim node carries its owner on the scope column and its summary
+    // membership as a native feature scalar — no verbatim claim stash.
+    expect(node!.createdByUserId).toBe(u.userId)
+    expect(JSON.stringify(node!.properties ?? {})).not.toContain('foveaClaim')
+    const reconstructed = nodeToClaim(node!)
+    expect(reconstructed?.summaryId).toBe(summary.id)
+    expect(reconstructed?.createdBy).toBe(u.userId)
   })
 
   it('cross-user creates are still denied: A cannot create a summary as B', async () => {
