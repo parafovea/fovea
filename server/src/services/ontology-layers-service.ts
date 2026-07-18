@@ -194,7 +194,6 @@ export class OntologyLayersService {
         edgeType: edge.edgeType,
         sourceLocalId: edge.sourceLocalId,
         targetLocalId: edge.targetLocalId,
-        properties: edge.properties,
         createdAt: edge.createdAt,
         updatedAt: edge.updatedAt,
       })

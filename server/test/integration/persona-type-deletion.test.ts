@@ -106,8 +106,10 @@ describe('Persona ontology type deletion', () => {
     expect(entityTypeIds).toContain('et2')
     expect(entityTypeIds).not.toContain('et1')
 
-    // The matching annotation was deleted.
-    const remaining = await countPersonaAnnotations(prisma, persona.id, { type: 'entity', label: 'et1' })
+    // The matching annotation was deleted. Persona (ontology-type) annotations
+    // reconstruct with the structural type 'type'; the type id is carried on the
+    // label, which uniquely identifies the deleted type's annotations.
+    const remaining = await countPersonaAnnotations(prisma, persona.id, { label: 'et1' })
     expect(remaining).toBe(0)
 
     // The world assignment for the type was stripped.
@@ -177,7 +179,10 @@ describe('Persona ontology type deletion', () => {
     expect(entityTypeIds).toContain('et1')
     expect(entityTypeIds).toContain('et2')
 
-    expect(await countPersonaAnnotations(prisma, persona.id, { type: 'entity', label: 'et1' })).toBe(1)
+    // The annotation delete rolled back with the rest, so it is still present
+    // (matched by its label, the type id — persona annotations reconstruct with
+    // the structural type 'type', not the semantic 'entity').
+    expect(await countPersonaAnnotations(prisma, persona.id, { label: 'et1' })).toBe(1)
 
     const { aggregate: world } = await readWorldAggregate(prisma, { userId: user.id, projectId: null })
     const entities = world.entities as Array<{ typeAssignments: Array<{ entityTypeId: string }> }>

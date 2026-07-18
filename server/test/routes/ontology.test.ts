@@ -395,6 +395,80 @@ describe('Ontology API', () => {
       expect(ontology.entities[0].gloss).toEqual(gloss)
     })
 
+    it('round-trips an event role whose role type is named "source" or "target"', async () => {
+      // The domain/range roleSlots are namespaced (' fovea:source'/' fovea:target'),
+      // so a genuine role type named exactly 'source' or 'target' is not mistaken
+      // for a relation sentinel and dropped on reconstruction.
+      const personaId = randomUUID()
+      const ontology = {
+        personaId,
+        entities: [],
+        roles: [
+          { id: 'rt-source', name: 'source', gloss: [], allowedFillerTypes: [] },
+          { id: 'rt-target', name: 'target', gloss: [], allowedFillerTypes: [] },
+        ],
+        events: [
+          {
+            id: 'evt-transfer',
+            name: 'Transfer',
+            gloss: [],
+            roles: [
+              { roleTypeId: 'rt-source', optional: false },
+              { roleTypeId: 'rt-target', optional: true },
+            ],
+          },
+        ],
+        relationTypes: [],
+      }
+      await app.inject({
+        method: 'PUT',
+        url: '/api/ontology',
+        cookies: { session_token: sessionToken },
+        payload: {
+          personas: [{ id: personaId, name: 'P', role: 'r', informationNeed: 'n' }],
+          personaOntologies: [ontology],
+        },
+      })
+
+      const bundle = (await app.inject({
+        method: 'GET',
+        url: '/api/ontology',
+        cookies: { session_token: sessionToken },
+      })).json() as { personaOntologies: Array<{ personaId: string; events: Array<{ roles: unknown[] }> }> }
+      const recon = bundle.personaOntologies.find(o => o.personaId === personaId)!
+      expect(recon.events[0].roles).toEqual([
+        { roleTypeId: 'rt-source', optional: false },
+        { roleTypeId: 'rt-target', optional: true },
+      ])
+    })
+
+    it('round-trips a gloss with an empty-content reference segment', async () => {
+      // A zero-width reference segment (an empty-content objectRef) is written as
+      // a zero-width span annotation and preserved on read, not silently dropped.
+      const personaId = randomUUID()
+      const gloss = [
+        { type: 'text', content: 'see ' },
+        { type: 'objectRef', content: '', refType: 'entity-object' },
+      ]
+      await app.inject({
+        method: 'PUT',
+        url: '/api/ontology',
+        cookies: { session_token: sessionToken },
+        payload: {
+          personas: [{ id: personaId, name: 'P', role: 'r', informationNeed: 'n' }],
+          personaOntologies: [{ personaId, entities: [{ id: 'et-e', name: 'E', gloss }], roles: [], events: [], relationTypes: [] }],
+        },
+      })
+
+      const bundle = (await app.inject({
+        method: 'GET',
+        url: '/api/ontology',
+        cookies: { session_token: sessionToken },
+      })).json() as { personaOntologies: Array<{ personaId: string; entities: Array<{ gloss: unknown }> }> }
+      const recon = bundle.personaOntologies.find(o => o.personaId === personaId)!
+      expect(recon.entities[0].gloss).toEqual(gloss)
+    })
+
     // Cross-tenant persona/ontology-save rejection is covered end-to-end by
     // test/integration/multi-user-isolation.test.ts, which reseeds the
     // ownership-aware RBAC baseline the default seedBaselinePermissions here

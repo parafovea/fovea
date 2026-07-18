@@ -629,7 +629,9 @@ export class PersonaService {
 
     const annotationCount = await this.repository.countAnnotations({
       personaId,
-      type: 'entity',
+      // Persona (ontology-type) annotations reconstruct with the structural
+      // type 'type'; the type id is carried on label.
+      type: 'type',
       label: typeId
     })
 
@@ -676,7 +678,7 @@ export class PersonaService {
     let worldAssignments = 0
     let annotations = 0
     await prisma.$transaction(async (tx) => {
-      annotations = (await this.repository.deleteAnnotations({ personaId, type: 'entity', label: typeId }, tx)).count
+      annotations = (await this.repository.deleteAnnotations({ personaId, type: 'type', label: typeId }, tx)).count
 
       await this.repository.updateOntologyOptimistic(personaId, (current) => {
         const currentEntityTypes = asTypesWithGloss(current.entityTypes)
@@ -742,7 +744,9 @@ export class PersonaService {
 
     const annotationCount = await this.repository.countAnnotations({
       personaId,
-      type: 'role',
+      // Persona (ontology-type) annotations reconstruct with the structural
+      // type 'type'; the type id is carried on label.
+      type: 'type',
       label: typeId
     })
 
@@ -782,7 +786,7 @@ export class PersonaService {
     let eventRoleReferences = 0
     let annotations = 0
     await prisma.$transaction(async (tx) => {
-      annotations = (await this.repository.deleteAnnotations({ personaId, type: 'role', label: typeId }, tx)).count
+      annotations = (await this.repository.deleteAnnotations({ personaId, type: 'type', label: typeId }, tx)).count
 
       await this.repository.updateOntologyOptimistic(personaId, (current) => {
         const currentEntityTypes = asTypesWithGloss(current.entityTypes)
@@ -884,7 +888,9 @@ export class PersonaService {
 
     const annotationCount = await this.repository.countAnnotations({
       personaId,
-      type: 'event',
+      // Persona (ontology-type) annotations reconstruct with the structural
+      // type 'type'; the type id is carried on label.
+      type: 'type',
       label: typeId
     })
 
@@ -931,7 +937,7 @@ export class PersonaService {
     let worldInterpretations = 0
     let annotations = 0
     await prisma.$transaction(async (tx) => {
-      annotations = (await this.repository.deleteAnnotations({ personaId, type: 'event', label: typeId }, tx)).count
+      annotations = (await this.repository.deleteAnnotations({ personaId, type: 'type', label: typeId }, tx)).count
 
       await this.repository.updateOntologyOptimistic(personaId, (current) => {
         const currentEntityTypes = asTypesWithGloss(current.entityTypes)

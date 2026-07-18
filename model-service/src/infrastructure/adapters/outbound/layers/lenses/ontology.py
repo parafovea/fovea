@@ -4,8 +4,9 @@ An ontology-augmentation run produces a list of
 :class:`~src.application.dto.ontology.OntologyTypeDTO` — suggested types, each
 with a confidence, a set of examples, an optional parent name, and an optional
 chain-of-thought :class:`~src.application.dto.reasoning.ThinkingTrace`. This
-lens projects that list (paired with the emitting :class:`EmitContext`) to a
-:class:`lairs.integrations.codecs.CorpusFragment`:
+lens projects that list to a :class:`lairs.integrations.codecs.CorpusFragment`,
+stamping it with the :class:`EmitContext` bound at construction (as the five
+sibling lenses do — the context is not part of the source):
 
 - one :class:`lairs.records.ontology.Ontology` named ``fovea`` whose ``createdAt``
   and ``personaRef`` carry the emit context's provenance,
@@ -15,16 +16,20 @@ lens projects that list (paired with the emitting :class:`EmitContext`) to a
   the examples and the integer-scaled confidence.
 
 The description, examples, parent, and confidence are read back from those
-canonical records rather than a sidecar — there is no verbatim type blob in the
-complement. The reasoning trace is model-inference telemetry, not annotation
-structure, so the lens drops it rather than stashing it. Confidence is quantized
-once to the integer ``0..1000`` scale at emission, so the GetPut law holds on the
-quantized suggestion (the layers vocabulary is integer-by-design; the sub-0.001
-remainder is noise). The complement carries only the emit-context provenance with
-no native home on an ontology record (``video_id``, ``tool``, ``agent_id``).
+canonical records rather than a sidecar — there is no verbatim type blob and no
+complement. Like the five sibling lenses, the emit context is bound at
+construction (not carried in the source) and the complement is empty (``None``):
+the reasoning trace is model-inference telemetry, so the lens drops it, and the
+emit-context provenance with no native home on an ontology record (``video_id``,
+``tool``, ``agent_id``) is likewise dropped rather than sidecared, so it does not
+round-trip. Confidence is quantized once to the integer ``0..1000`` scale at
+emission, so the GetPut law holds on the quantized suggestion (the layers
+vocabulary is integer-by-design; the sub-0.001 remainder is noise).
 """
 
 from __future__ import annotations
+
+from datetime import UTC, datetime
 
 import didactic.api as dx
 from lairs.integrations.codecs import CorpusFragment, FragmentRecord
@@ -42,7 +47,6 @@ from src.infrastructure.adapters.outbound.layers._convert import (
     feature_map,
     j_float,
     j_list,
-    j_obj,
     j_str,
     local_uri,
     read_feature_map,
@@ -58,9 +62,18 @@ _ONTOLOGY_KEY = "fovea"
 # (``OntologyTypeDTO`` has no ``typeKind`` field to reconstruct).
 _TYPE_KIND = "entity-type"
 
-# The source of this lens: the suggested types in emission order, paired with the
-# emit context that stamps their provenance.
-type OntologySource = tuple[tuple[OntologyTypeDTO, ...], EmitContext]
+# The source of this lens: the suggested types in emission order. The emit
+# context is bound at construction (like the sibling lenses), not carried in the
+# source, so it never enters a complement.
+type OntologySource = tuple[OntologyTypeDTO, ...]
+
+# A fixed context so the singleton is deterministic; the codec constructs the
+# lens with the real EmitContext per call. None of these fields round-trip.
+_DEFAULT_CTX = EmitContext(
+    video_id="",
+    created_at=datetime(1970, 1, 1, tzinfo=UTC),
+    tool="fovea",
+)
 
 
 def _authority_of(uri: str) -> str:
@@ -83,11 +96,16 @@ def _parent_name(parent_ref: str, names: set[str], authority: str) -> str:
 
 
 class OntologyLayersLens(dx.Lens[OntologySource, CorpusFragment, JsonValue]):
-    """Lens ``(ontology suggestions, ctx) <-> (layers fragment, complement)``."""
+    """Lens ``ontology suggestions <-> layers fragment`` with an empty complement."""
+
+    def __init__(self, ctx: EmitContext | None = None) -> None:
+        """Bind the provenance context stamped onto the emitted records."""
+        self._ctx = ctx if ctx is not None else _DEFAULT_CTX
 
     def forward(self, source: OntologySource) -> tuple[CorpusFragment, JsonValue]:
-        """Project ontology suggestions to a layers fragment and emit-context remainder."""
-        types, ctx = source
+        """Project ontology suggestions to a layers fragment (no complement)."""
+        types = source
+        ctx = self._ctx
         ontology_ref = local_uri(ctx.authority, ONTOLOGY_NSID, _ONTOLOGY_KEY)
 
         records: list[FragmentRecord] = [
@@ -130,25 +148,15 @@ class OntologyLayersLens(dx.Lens[OntologySource, CorpusFragment, JsonValue]):
             )
 
         view = CorpusFragment(records=tuple(records), source="fovea")
-        # The only fovea remainder is the emit-context provenance with no native
-        # home on an ontology record; the description/examples/parent/confidence
-        # all live in the canonical records, and the reasoning trace is dropped.
-        complement: JsonValue = {
-            "video_id": ctx.video_id,
-            "tool": ctx.tool,
-            "agent_id": ctx.agent_id,
-        }
-        return view, complement
+        # The description/examples/parent/confidence all live in the canonical
+        # records; the reasoning trace and the emit-context provenance with no
+        # native ontology home are dropped, so the complement is empty.
+        return view, None
 
     def backward(self, view: CorpusFragment, complement: JsonValue) -> OntologySource:
-        """Reconstruct ontology suggestions and the emit context from the fragment."""
-        comp = j_obj(complement)
+        """Reconstruct the ontology suggestions from the fragment alone."""
+        del complement  # every field is recovered from the canonical records
 
-        ontology_record = next(
-            ontology.Ontology.model_validate_json(record.value_json)
-            for record in view.records
-            if record.nsid == ONTOLOGY_NSID
-        )
         typedefs = [
             ontology.TypeDef.model_validate_json(record.value_json)
             for record in view.records
@@ -169,9 +177,11 @@ class OntologyLayersLens(dx.Lens[OntologySource, CorpusFragment, JsonValue]):
             dtos.append(
                 OntologyTypeDTO(
                     name=typedef.name,
-                    # A str field whose value is exactly "null" serializes to JSON
-                    # null, so a null gloss uniquely denotes the literal "null"
-                    # description (every other string, "" included, round-trips).
+                    # A ``TypeDef.gloss`` whose value is exactly "null" serializes
+                    # to JSON null, so a null gloss read back uniquely denotes the
+                    # literal "null" description (every other string, "" included,
+                    # round-trips as itself); the DTO description is a required str,
+                    # so a genuine None never reaches this path.
                     description="null" if typedef.gloss is None else typedef.gloss,
                     parent=parent,
                     confidence=conf_from_int(int(j_float(features["confidence"]))),
@@ -180,16 +190,7 @@ class OntologyLayersLens(dx.Lens[OntologySource, CorpusFragment, JsonValue]):
                 )
             )
 
-        agent_id = comp["agent_id"]
-        ctx = EmitContext(
-            video_id=j_str(comp["video_id"]),
-            created_at=ontology_record.createdAt,
-            tool=j_str(comp["tool"]),
-            agent_id=None if agent_id is None else j_str(agent_id),
-            persona_ref=ontology_record.personaRef,
-            authority=authority,
-        )
-        return tuple(dtos), ctx
+        return tuple(dtos)
 
 
 ONTOLOGY_LAYERS = OntologyLayersLens()

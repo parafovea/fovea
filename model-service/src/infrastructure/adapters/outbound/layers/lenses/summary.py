@@ -85,7 +85,16 @@ _FK_FRAME_NUMBER = "frame_number"
 
 
 def _text_or_null(value: str | None) -> str:
-    """Recover a required text field the lens always sets (see the transcript lens)."""
+    """Recover a required text field the lens always sets (see the transcript lens).
+
+    A lairs scalar ``str | None`` column collapses the literal string ``"null"``
+    to JSON null and reads it back as ``None`` (verified against the lairs record
+    models). This helper is applied only where absence is impossible — a required
+    DTO field, or an optional one whose own record/sub-field presence already
+    disambiguates ``None`` from ``"null"`` — so a read-back ``None`` uniquely
+    denotes an original ``"null"`` and every other string (``""`` included)
+    round-trips as itself.
+    """
     return "null" if value is None else value
 
 
@@ -139,6 +148,15 @@ def _transcript_json_from_payload(payload: TranscriptPayload) -> dict[str, objec
 
     Returns ``None`` when the payload carried no segmentation (the DTO's
     ``transcript_json`` was ``None``), distinct from an empty segment list.
+
+    The canonical fovea shape is ``{"segments": [...], "speakers": [...],
+    "language": "..."}``. Every field is reconstructed from the transcript
+    sub-fragment's own native records — segments from the tokenization plus its
+    token-tag layers, top-level ``speakers`` from the diarization ``ClusterSet``
+    (the distinct segment speakers, sorted), and ``language`` from the transcript
+    ``Expression.languages``. Non-canonical top-level keys and per-segment keys
+    beyond ``start``/``end``/``text``/``speaker``/``confidence``/``sentiment`` are
+    outside the fovea contract and are not carried (there is no opaque bucket).
     """
     if not payload.has_segmentation:
         return None
@@ -154,7 +172,13 @@ def _transcript_json_from_payload(payload: TranscriptPayload) -> dict[str, objec
         if segment.sentiment is not None:
             entry["sentiment"] = segment.sentiment
         segments.append(entry)
-    return {"segments": segments}
+    result: dict[str, object] = {"segments": segments}
+    speakers = sorted({s.speaker for s in payload.segments if s.speaker is not None})
+    if speakers:
+        result["speakers"] = speakers
+    if payload.language is not None:
+        result["language"] = payload.language
+    return result
 
 
 class SummaryLayersLens(dx.Lens[SummarizeResponseDTO, CorpusFragment, JsonValue]):
@@ -216,7 +240,15 @@ class SummaryLayersLens(dx.Lens[SummarizeResponseDTO, CorpusFragment, JsonValue]
                     expression=summary_uri,
                     kind="document-tag",
                     metadata=defs.AnnotationMetadata(
-                        agent=defs.AgentRef(id=dto.visual_model_used),
+                        # The agent rides only when a visual model id is present,
+                        # so its presence (not its collapsible id string) is the
+                        # marker that distinguishes an absent model from the
+                        # literal id "null".
+                        agent=(
+                            defs.AgentRef(id=dto.visual_model_used)
+                            if dto.visual_model_used is not None
+                            else None
+                        ),
                         confidence=conf_to_int(dto.confidence),
                         dependencies=(defs.ObjectRef(recordRef=video_uri),),
                         personaRef=dto.persona_id,
@@ -274,7 +306,9 @@ class SummaryLayersLens(dx.Lens[SummarizeResponseDTO, CorpusFragment, JsonValue]
             metadata.confidence if metadata is not None and metadata.confidence is not None else 0
         )
         visual_model_used = (
-            metadata.agent.id if metadata is not None and metadata.agent is not None else None
+            _text_or_null(metadata.agent.id)
+            if metadata is not None and metadata.agent is not None
+            else None
         )
         video_id = _video_id_from_metadata(metadata)
 

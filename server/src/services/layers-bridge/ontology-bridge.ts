@@ -112,11 +112,15 @@ export async function writeGlossStandoff(
     },
   })
   for (const annotation of standoff.annotations) {
+    // Omit the anchor field entirely when the annotation carries none, so the
+    // column stores SQL NULL (matching world-store.ts) rather than a JSON `{}`
+    // or JSON `null` that a `WHERE anchor IS NULL` predicate would miss.
+    const anchor = toJson(annotation.anchor)
     await client.layersAnnotation.create({
       data: {
         id: annotation.id,
         layerId: annotation.layerId,
-        anchor: toJson(annotation.anchor) ?? {},
+        ...(anchor !== undefined ? { anchor } : {}),
         label: annotation.label,
         text: annotation.text,
         ontologyTypeRefId: annotation.ontologyTypeRefId,

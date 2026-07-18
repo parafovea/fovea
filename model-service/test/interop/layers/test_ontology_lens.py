@@ -30,6 +30,7 @@ from src.infrastructure.adapters.outbound.layers._convert import (
 )
 from src.infrastructure.adapters.outbound.layers.lenses.ontology import (
     ONTOLOGY_LAYERS,
+    OntologyLayersLens,
 )
 from test.interop.layers.conftest import make_ctx
 
@@ -59,15 +60,16 @@ def _fixture_types() -> tuple[OntologyTypeDTO, ...]:
 
 
 def test_get_put_roundtrip() -> None:
-    """``backward(*forward(a)) == a`` on the deterministic fixture."""
-    source = (_fixture_types(), make_ctx(persona_ref="at://local/persona/p"))
+    """``backward(forward(a)) == a`` on the deterministic fixture."""
+    source = _fixture_types()
     view, complement = ONTOLOGY_LAYERS.forward(source)
+    assert complement is None
     assert ONTOLOGY_LAYERS.backward(view, complement) == source
 
 
 def test_get_put_empty() -> None:
     """An empty suggestion set round-trips to an empty tuple."""
-    source: tuple[tuple[OntologyTypeDTO, ...], object] = ((), make_ctx())
+    source: tuple[OntologyTypeDTO, ...] = ()
     view, complement = ONTOLOGY_LAYERS.forward(source)
     assert ONTOLOGY_LAYERS.backward(view, complement) == source
 
@@ -86,17 +88,37 @@ def test_reasoning_trace_is_dropped() -> None:
             model_id="reasoner-x",
         ),
     )
-    view, complement = ONTOLOGY_LAYERS.forward(((with_trace,), make_ctx()))
-    restored, _ctx = ONTOLOGY_LAYERS.backward(view, complement)
+    view, complement = ONTOLOGY_LAYERS.forward((with_trace,))
+    restored = ONTOLOGY_LAYERS.backward(view, complement)
     assert restored[0].reasoning_trace is None
     assert restored[0] == OntologyTypeDTO(
         name="Dog", description="A canine.", parent=None, confidence=0.5, examples=[]
     )
 
 
+def test_complement_is_empty() -> None:
+    """The lens returns no complement — the emit context is dropped, not sidecared."""
+    view, complement = ONTOLOGY_LAYERS.forward(_fixture_types())
+    assert complement is None
+
+
+def test_lens_uses_supplied_context() -> None:
+    """A bound EmitContext stamps the records' authority; it does not round-trip."""
+    lens = OntologyLayersLens(make_ctx(authority="pds", persona_ref="at://pds/persona/p"))
+    view, complement = lens.forward(_fixture_types())
+    assert complement is None
+    typedef = next(
+        ontology.TypeDef.model_validate_json(r.value_json)
+        for r in view.records
+        if r.nsid == TYPEDEF_NSID
+    )
+    assert typedef.ontologyRef.startswith("at://pds/")
+    assert lens.backward(view, complement) == _fixture_types()
+
+
 def test_view_records_validate_and_confidence_scaled() -> None:
     """Emitted records validate as lairs models; confidence stays 0..1000."""
-    source = (_fixture_types(), make_ctx())
+    source = _fixture_types()
     view, _complement = ONTOLOGY_LAYERS.forward(source)
 
     ontology_records = [r for r in view.records if r.nsid == ONTOLOGY_NSID]
@@ -119,7 +141,7 @@ def test_view_records_validate_and_confidence_scaled() -> None:
 
 def test_description_lives_in_the_gloss() -> None:
     """A type's description is the authoritative ``TypeDef.gloss``, not a sidecar."""
-    source = (_fixture_types(), make_ctx())
+    source = _fixture_types()
     view, _complement = ONTOLOGY_LAYERS.forward(source)
     animal = next(
         ontology.TypeDef.model_validate_json(r.value_json)
@@ -132,7 +154,7 @@ def test_description_lives_in_the_gloss() -> None:
 
 def test_parent_resolves_to_typedef_uri() -> None:
     """A child's ``parentTypeRef`` resolves the parent name to a type AT-URI."""
-    source = (_fixture_types(), make_ctx())
+    source = _fixture_types()
     view, _complement = ONTOLOGY_LAYERS.forward(source)
     dog = next(
         ontology.TypeDef.model_validate_json(r.value_json)
@@ -149,23 +171,21 @@ def test_literal_null_description_survives_the_round_trip() -> None:
 
     A ``TypeDef.gloss`` whose value is exactly ``"null"`` serializes to JSON null,
     so a null gloss uniquely denotes that description on the way back — every
-    other string (``""`` included) survives as itself.
+    other string (``""`` included) survives as itself. The DTO description is a
+    required str, so a genuine None never collides with the literal ``"null"``.
     """
     source = (
-        (
-            OntologyTypeDTO(
-                name="Thing",
-                description="null",
-                parent=None,
-                confidence=0.5,
-                examples=[],
-            ),
+        OntologyTypeDTO(
+            name="Thing",
+            description="null",
+            parent=None,
+            confidence=0.5,
+            examples=[],
         ),
-        make_ctx(),
     )
     view, complement = ONTOLOGY_LAYERS.forward(source)
-    restored, _ctx = ONTOLOGY_LAYERS.backward(view, complement)
-    assert restored == source[0]
+    restored = ONTOLOGY_LAYERS.backward(view, complement)
+    assert restored == source
     assert restored[0].description == "null"
 
 
@@ -191,16 +211,7 @@ _dtos = st.builds(
     reasoning_trace=st.none(),
 )
 
-_sources = st.tuples(
-    st.lists(_dtos, max_size=4).map(tuple),
-    st.builds(
-        make_ctx,
-        video_id=_text,
-        tool=_text,
-        agent_id=st.one_of(st.none(), _text),
-        persona_ref=st.one_of(st.none(), _text),
-    ),
-)
+_sources = st.lists(_dtos, max_size=4).map(tuple)
 
 
 def test_lens_laws() -> None:

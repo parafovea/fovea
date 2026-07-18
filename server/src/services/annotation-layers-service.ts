@@ -541,7 +541,10 @@ export class AnnotationLayerService {
         id: input.id,
         layerId: input.layerId,
         tokenizationId: input.tokenizationId ?? null,
-        anchor: toJson(input.anchor) ?? Prisma.JsonNull,
+        // An omitted anchor stores SQL NULL (Prisma.DbNull), not JSON `null`
+        // (Prisma.JsonNull), so `WHERE anchor IS NULL` matches these rows and the
+        // anchor-nullable column reads back as absent — matching world-store.ts.
+        anchor: toJson(input.anchor) ?? Prisma.DbNull,
         tokenIndex: input.tokenIndex ?? null,
         label: input.label ?? null,
         value: input.value ?? null,

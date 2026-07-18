@@ -127,9 +127,13 @@ class TranscriptRefs:
 def _text_or_null(value: str | None) -> str:
     """Recover a required text field the lens always sets.
 
-    A ``str`` field whose value is exactly ``"null"`` serializes to JSON null, so
-    a ``None`` read back uniquely denotes the literal ``"null"``; every other
-    string, ``""`` included, round-trips as itself.
+    A lairs scalar ``str | None`` column collapses the literal string ``"null"``
+    to JSON null and reads it back as ``None`` (verified against the lairs record
+    models). This helper is applied only where absence is impossible — a required
+    DTO field, or an optional one whose own record/sub-field presence already
+    disambiguates ``None`` from ``"null"`` — so a read-back ``None`` uniquely
+    denotes an original ``"null"`` and every other string, ``""`` included,
+    round-trips as itself.
     """
     return "null" if value is None else value
 
@@ -360,8 +364,11 @@ def read_transcript_records(
 
     expr = expression.Expression.model_validate_json(expr_record.value_json)
     language = expr.languages[0] if expr.languages else None
+    # The metadata rides only when a model id is present, so its presence is the
+    # marker that separates an absent model from the literal id "null" (which the
+    # lairs scalar column collapses to JSON null on the way in).
     model_id = (
-        expr.metadata.agent.id
+        _text_or_null(expr.metadata.agent.id)
         if expr.metadata is not None and expr.metadata.agent is not None
         else None
     )

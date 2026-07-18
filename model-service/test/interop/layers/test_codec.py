@@ -56,10 +56,6 @@ from src.infrastructure.adapters.outbound.layers.codec import (
     _lens_input,
 )
 
-from .conftest import make_ctx
-
-_CTX = make_ctx(video_id="clip-7")
-
 
 def _transcription() -> tuple[str, object]:
     # Confidence sits on the integer 0..1000 grid, timestamps on the millisecond
@@ -200,7 +196,7 @@ def _ontology() -> tuple[str, object]:
         ),
         OntologyTypeDTO(name="Car", description="A car.", parent="Vehicle", confidence=0.8),
     )
-    return "ontology", {"types": list(types), "ctx": _CTX}
+    return "ontology", list(types)
 
 
 _CASES = [
@@ -217,13 +213,7 @@ _IDS = ["transcription", "detection", "tracking", "summary", "claims", "ontology
 def _records_for(kind: str, source_for_dump: object) -> tuple[FragmentRecord, ...]:
     """Build a lens fragment (view records + stashed complement) for ``kind``."""
     lens = _lens_for(kind)
-    if kind == "ontology":
-        assert isinstance(source_for_dump, dict)
-        lens_in = _lens_input(
-            kind, {"types": source_for_dump["types"], "ctx": source_for_dump["ctx"]}
-        )
-    else:
-        lens_in = source_for_dump
+    lens_in = _lens_input(kind, source_for_dump)
     view, complement = lens.forward(lens_in)
     complement_record = FragmentRecord(
         local_id="complement",

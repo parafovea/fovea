@@ -30,9 +30,9 @@ from src.infrastructure.adapters.outbound.layers.corpus_io import (
 )
 from src.infrastructure.adapters.outbound.layers.lenses import (
     DETECTION_LAYERS,
-    ONTOLOGY_LAYERS,
     TRACKING_LAYERS,
     ClaimsLayersLens,
+    OntologyLayersLens,
     SummaryLayersLens,
     TranscriptLayersLens,
 )
@@ -109,7 +109,7 @@ class LairsCodecAdapter(ILayersCodec):
         self, dtos: Sequence[OntologyTypeDTO], ctx: EmitContext
     ) -> NormalizedFragmentDTO:
         """Project suggested ontology types to a normalized layers fragment."""
-        view, _complement = ONTOLOGY_LAYERS.forward((tuple(dtos), ctx))
+        view, _complement = OntologyLayersLens(ctx).forward(tuple(dtos))
         return _to_fragment_dto(view)
 
     def decode(self, src: str | bytes, fmt: str) -> NormalizedFragmentDTO:

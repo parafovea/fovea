@@ -78,7 +78,9 @@ def _make_dto() -> SummarizeResponseDTO:
                     "confidence": 0.8,
                     "sentiment": "positive",
                 },
-            ]
+            ],
+            "speakers": ["A"],
+            "language": "en",
         },
         audio_language="en",
         speaker_count=1,
@@ -196,11 +198,67 @@ def test_literal_null_free_text_survives_the_round_trip() -> None:
     assert restored.visual_analysis == "null"
 
 
+@pytest.mark.parametrize("model", ["null", "qwen2-vl", ""])
+def test_model_ids_round_trip_including_literal_null(model: str) -> None:
+    """A visual/audio model id of the literal ``"null"`` round-trips.
+
+    The model id rides a nullable ``agent.id`` whose literal ``"null"`` collapses
+    to SQL NULL, but the ``agent``'s own presence is emitted only when a model id
+    is present, so that presence — not the collapsible string — separates an
+    absent model from the id ``"null"``.
+    """
+    dto = SummarizeResponseDTO(
+        id="s-m",
+        video_id="v-m",
+        persona_id="p-m",
+        summary="Short.",
+        audio_transcript="hi",
+        transcript_json={"segments": []},
+        audio_model_used=model,
+        visual_model_used=model,
+    )
+    view, comp = SUMMARY_LAYERS.forward(dto)
+    restored = SUMMARY_LAYERS.backward(view, comp)
+    assert restored.audio_model_used == model
+    assert restored.visual_model_used == model
+
+
+def test_transcript_json_carries_speakers_and_language() -> None:
+    """Top-level ``speakers`` and ``language`` round-trip natively (no bucket)."""
+    dto = SummarizeResponseDTO(
+        id="s-sp",
+        video_id="v-sp",
+        persona_id="p-sp",
+        summary="Short.",
+        transcript_json={
+            "segments": [
+                {"start": 0.0, "end": 1.0, "text": "a", "speaker": "B", "confidence": 0.5},
+                {"start": 1.0, "end": 2.0, "text": "b", "speaker": "A", "confidence": 0.5},
+            ],
+            "speakers": ["A", "B"],
+            "language": "fr",
+        },
+        audio_language="fr",
+        speaker_count=2,
+    )
+    view, comp = SUMMARY_LAYERS.forward(dto)
+    restored = SUMMARY_LAYERS.backward(view, comp)
+    assert restored == dto
+    assert restored.transcript_json is not None
+    assert restored.transcript_json["speakers"] == ["A", "B"]
+    assert restored.transcript_json["language"] == "fr"
+
+
 _SMALL_TEXT = st.text(max_size=40)
 _SMALL_ID = st.text(min_size=1, max_size=20)
-# Optional provenance scalars ride nullable native columns whose literal "null"
-# collides with SQL NULL; excluding it keeps them free of the degenerate case.
-_OPT_MODEL = st.none() | _SMALL_TEXT.filter(lambda s: s != "null")
+# A model id rides a nullable native column whose ``agent`` presence marks an
+# absent model, so the literal "null" round-trips; no exclusion is needed.
+_OPT_MODEL = st.none() | _SMALL_TEXT
+# The optional free-text transcript rides the transcript ``Expression.text``,
+# which is always present when audio is, so it carries no presence marker: the
+# literal "null" collapses to SQL NULL indistinguishably from absence and is the
+# one value this optional field cannot round-trip, so it is excluded here.
+_OPT_TRANSCRIPT = st.none() | _SMALL_TEXT.filter(lambda s: s != "null")
 # The video id is recovered from an AT-URI's last path segment, so it must not
 # embed the separator.
 _ID_TEXT = st.text(st.characters(blacklist_characters="/"), max_size=20)
@@ -233,17 +291,32 @@ def _segment_dict(draw: st.DrawFn) -> dict[str, object]:
     return entry
 
 
+def _canonical_transcript_json(
+    segments: list[dict[str, object]], language: str | None
+) -> dict[str, object]:
+    """Build a canonical fovea transcript dict whose top-level speakers/language
+    are derived exactly as the lens reconstructs them, so it round-trips."""
+    result: dict[str, object] = {"segments": segments}
+    speakers = sorted({s["speaker"] for s in segments if s.get("speaker") is not None})
+    if speakers:
+        result["speakers"] = speakers
+    if language is not None:
+        result["language"] = language
+    return result
+
+
 @st.composite
 def _dto_strategy(draw: st.DrawFn) -> SummarizeResponseDTO:
     if draw(st.booleans()):
-        has_json = draw(st.booleans())
-        transcript_json: dict[str, object] | None = (
-            {"segments": draw(st.lists(_segment_dict(), max_size=4))} if has_json else None
-        )
-        audio_transcript = draw(_OPT_MODEL)
+        audio_transcript = draw(_OPT_TRANSCRIPT)
         audio_language = draw(st.none() | st.sampled_from(["en", "fr", "de"]))
         speaker_count = draw(st.none() | st.integers(min_value=0, max_value=8))
         audio_model_used = draw(_OPT_MODEL)
+        transcript_json: dict[str, object] | None = (
+            _canonical_transcript_json(draw(st.lists(_segment_dict(), max_size=4)), audio_language)
+            if draw(st.booleans())
+            else None
+        )
     else:
         transcript_json = None
         audio_transcript = None

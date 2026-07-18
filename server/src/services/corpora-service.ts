@@ -322,11 +322,19 @@ export class CorporaService {
   /**
    * Folds a corpus's open features and structured facets into the single stored
    * blob (they share the Prisma `metadata` column, which has no lexicon field of
-   * its own). Returns undefined when the caller supplied none, so a partial
+   * its own), merged over the existing stored blob so a partial update overwrites
+   * only the facets/features the caller restated and every unrestated sibling
+   * survives. Returns undefined when the caller supplied none, so a partial
    * update leaves the stored blob untouched.
+   *
+   * @param input - the create/update input to fold in
+   * @param existing - the current stored blob to merge over (null on create)
    */
-  private corpusBlob(input: CorpusInput | CorpusUpdateInput): Prisma.InputJsonValue | undefined {
-    const blob: Record<string, unknown> = {}
+  private corpusBlob(
+    input: CorpusInput | CorpusUpdateInput,
+    existing: Record<string, unknown> | null = null
+  ): Prisma.InputJsonValue | undefined {
+    const blob: Record<string, unknown> = { ...(existing ?? {}) }
     let supplied = false
     const features = asRecord(input.features)
     if (features) {
@@ -345,10 +353,18 @@ export class CorporaService {
 
   /**
    * Folds a membership's provenance and open features into its single stored
-   * blob. Returns undefined when the caller supplied neither.
+   * blob, merged over the existing stored blob so a partial update overwrites
+   * only the provenance keys/features the caller restated and every unrestated
+   * sibling survives. Returns undefined when the caller supplied neither.
+   *
+   * @param input - the create/update input to fold in
+   * @param existing - the current stored blob to merge over (null on create)
    */
-  private membershipBlob(input: MembershipInput): Prisma.InputJsonValue | undefined {
-    const blob: Record<string, unknown> = {}
+  private membershipBlob(
+    input: MembershipInput,
+    existing: Record<string, unknown> | null = null
+  ): Prisma.InputJsonValue | undefined {
+    const blob: Record<string, unknown> = { ...(existing ?? {}) }
     let supplied = false
     const features = asRecord(input.features)
     if (features) {
@@ -523,7 +539,7 @@ export class CorporaService {
       domain: input.domain,
       ontologyRefs: input.ontologyRefs !== undefined ? toJson(input.ontologyRefs) : undefined,
       languages: input.languages !== undefined ? { set: input.languages } : undefined,
-      metadata: this.corpusBlob(input),
+      metadata: this.corpusBlob(input, asRecord(existing.metadata)),
       layersUri: input.layersUri,
     })
     return this.mapCorpus(updated)
@@ -622,7 +638,7 @@ export class CorporaService {
     const updated = await this.repository.updateMembership(existing.id, {
       split: input.split,
       ordinal: input.ordinal,
-      metadata: this.membershipBlob(input),
+      metadata: this.membershipBlob(input, asRecord(existing.metadata)),
     })
     return this.mapMembership(updated)
   }

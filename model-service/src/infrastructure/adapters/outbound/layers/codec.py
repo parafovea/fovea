@@ -226,18 +226,18 @@ def _lens_for(kind: str) -> _KindLens:
 def _lens_input(kind: str, source: object) -> object:
     """Turn a loaded envelope source into the lens's forward input.
 
-    Every kind but ontology feeds its DTO directly; ontology's lens takes a
-    ``(types, ctx)`` pair, which the envelope carries as a small dict.
+    Every kind but ontology feeds its DTO directly; ontology's lens takes the
+    suggested types in emission order, which the envelope carries as a list (the
+    emit context is bound on the lens singleton, not carried in the source).
     """
     if kind == _KIND_ONTOLOGY:
-        assert isinstance(source, dict)
-        return tuple(source["types"]), source["ctx"]
+        assert isinstance(source, (list, tuple))
+        return tuple(source)
     return source
 
 
 def _lens_source(kind: str, lens_output: object) -> object:
     """Turn a lens's backward output into the dumpable envelope source."""
     if kind == _KIND_ONTOLOGY:
-        types, ctx = cast("tuple[Iterable[object], object]", lens_output)
-        return {"types": list(types), "ctx": ctx}
+        return list(cast("Iterable[object]", lens_output))
     return lens_output
