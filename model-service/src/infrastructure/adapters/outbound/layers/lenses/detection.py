@@ -2,29 +2,28 @@
 
 A :class:`~src.application.dto.detection.DetectObjectsResponseDTO` carries
 per-frame, per-detection normalized bounding boxes with float confidences over a
-video. This lens projects it to a
-:class:`lairs.integrations.codecs.CorpusFragment` of canonical ``lairs`` records,
-with those records authoritative — there is no verbatim sidecar:
+video. The lens projects it to a
+:class:`lairs.integrations.codecs.CorpusFragment` of ``lairs`` records:
 
 - one :class:`lairs.records.expression.Expression` (``kind="video"``) naming the
   video the detections describe,
 - one :class:`lairs.records.media.Media` (``kind="video"``) carrying the source
-  frame dimensions and a best-effort ``frameRate`` (scaled by 100) in a
-  :class:`lairs.records.media.VideoInfo`, and
+  frame dimensions and the ``frameRate`` (scaled by 100) in a
+  :class:`lairs.records.media.VideoInfo`,
 - one span :class:`lairs.records.annotation.AnnotationLayer`
   (``subkind="entity-mention"``) whose ``reproducibility.command`` records the
   query and whose fragment-local record key is the response id. Each annotation
-  carries, per detection, a ``spatioTemporalAnchor`` with a single ``step``
-  keyframe (the frame time in milliseconds, a pixel bounding box, and the frame
-  number as a keyframe feature), the exact normalized box in
-  ``annotation.spatial`` (``crs="percentage"``), the detection label, an integer
-  confidence, and the track id as a feature.
+  carries, per detection, a ``spatioTemporalAnchor`` with a single keyframe at the
+  detection's frame time (a pixel bounding box), the exact normalized box in
+  ``annotation.spatial`` (``crs="percentage"``), the detection label, and an
+  integer confidence, and
+- one :class:`lairs.records.annotation.ClusterSet` grouping the detection
+  annotations that share a track id: one cluster per track id (the track id is the
+  cluster's ``uuid``, and its members are the annotations tracked as that object).
 
-The integer confidence is canonical (the layers vocabulary is integer-by-design;
-the sub-0.001 remainder is noise), and the frame-processing time is model
-telemetry, so the lens drops it. Every reconstructed field is read back from the
-canonical records, so the complement is empty and the round-trip holds over the
-quantized, telemetry-free result.
+Confidence scales to the layers integer range. The frame number follows from the
+keyframe's ``timeMs`` and the media ``frameRate``, and the frame-processing time
+is model telemetry the lens omits.
 """
 
 from __future__ import annotations
@@ -44,37 +43,36 @@ from src.application.dto.detection import (
 )
 from src.infrastructure.adapters.outbound.layers._convert import (
     ANNOTATION_LAYER_NSID,
+    CLUSTERSET_NSID,
     EXPRESSION_NSID,
     MEDIA_NSID,
     JsonValue,
     _record,
     conf_from_int,
     conf_to_int,
-    feature_map,
     local_uri,
     ms_to_sec,
     norm_bbox_to_px,
-    read_feature_map,
     sec_to_ms,
 )
 
 # The lens is a pure structural mapping; provenance timestamps (createdAt) are
 # stamped by the codec from an EmitContext, not by the lens. A fixed placeholder
-# keeps the view a deterministic function of the DTO. It is never read back (the
-# DTO carries no creation time), so it does not affect the round-trip.
+# keeps the view a deterministic function of the DTO.
 _EPOCH = datetime(1970, 1, 1, tzinfo=UTC)
 
 # Fragment-local identifiers for the records with a fixed key.
 _EXPRESSION_LOCAL_ID = "expression"
 _MEDIA_LOCAL_ID = "media"
+_TRACK_CLUSTER_ID = "tracks"
 
 # The interpolation mode for a single-keyframe detection: a box holds until the
 # next keyframe rather than being interpolated toward one.
 _INTERPOLATION = "step"
 
-# Feature keys carrying the per-detection fields with no dedicated column.
-_TRACK_ID_KEY = "track_id"
-_FRAME_NUMBER_KEY = "frame_number"
+# The kind slug for the track ClusterSet: per-frame detections of one tracked
+# object are grouped like coreferent mentions of the same object.
+_CLUSTER_KIND = "clustering"
 
 # The exact normalized box rides as a JSON geometry (fractions of the frame),
 # beyond what the integer pixel keyframe bbox can hold.
@@ -109,6 +107,13 @@ def _derive_frame_rate(frames: list[FrameDetectionsDTO]) -> int | None:
     return round(best.frame_number / best.timestamp * _FRAME_RATE_SCALE)
 
 
+def _frame_number(time_ms: int, frame_rate: int | None) -> int:
+    """Recover a frame number from a keyframe time and the media frame rate."""
+    if frame_rate is None:
+        return 0
+    return round(ms_to_sec(time_ms) * (frame_rate / _FRAME_RATE_SCALE))
+
+
 def _spatial_from_norm_box(box: BoundingBoxDTO) -> defs.SpatialExpression:
     """Carry the exact normalized box as a percentage-CRS geometry."""
     return defs.SpatialExpression(
@@ -136,13 +141,6 @@ def _norm_box_from_spatial(spatial: defs.SpatialExpression) -> BoundingBoxDTO:
     )
 
 
-def _as_int(value: JsonValue) -> int:
-    """Narrow a stored numeric feature to an ``int`` (rejecting ``bool``)."""
-    if isinstance(value, bool) or not isinstance(value, int):
-        raise ValueError(f"expected int, got {type(value).__name__}")
-    return value
-
-
 def _detection_annotation(
     detection: DetectionDTO,
     frame: FrameDetectionsDTO,
@@ -164,18 +162,9 @@ def _detection_annotation(
     anchor = defs.Anchor(
         spatioTemporalAnchor=defs.SpatioTemporalAnchor(
             temporalSpan=defs.TemporalSpan(start=time_ms, ending=time_ms),
-            keyframes=(
-                defs.Keyframe(
-                    timeMs=time_ms,
-                    bbox=pixel_box,
-                    features=feature_map({_FRAME_NUMBER_KEY: frame.frame_number}),
-                ),
-            ),
+            keyframes=(defs.Keyframe(timeMs=time_ms, bbox=pixel_box),),
             interpolation=_INTERPOLATION,
         )
-    )
-    features = (
-        feature_map({_TRACK_ID_KEY: detection.track_id}) if detection.track_id is not None else None
     )
     return annotation.Annotation(
         uuid=_detection_uuid(video_id, frame.frame_number, index),
@@ -183,11 +172,14 @@ def _detection_annotation(
         label=detection.label,
         confidence=conf_to_int(detection.confidence),
         spatial=_spatial_from_norm_box(detection.bounding_box),
-        features=features,
     )
 
 
-def _detection_from_annotation(ann: annotation.Annotation) -> tuple[int, float, DetectionDTO]:
+def _detection_from_annotation(
+    ann: annotation.Annotation,
+    frame_rate: int | None,
+    track_id: str | None,
+) -> tuple[int, float, DetectionDTO]:
     """Read one detection (with its frame number and timestamp) from an annotation."""
     anchor = ann.anchor
     if (
@@ -199,16 +191,13 @@ def _detection_from_annotation(ann: annotation.Annotation) -> tuple[int, float, 
     if ann.spatial is None:
         raise ValueError("detection annotation carries no spatial geometry")
     keyframe = anchor.spatioTemporalAnchor.keyframes[0]
-    frame_features = read_feature_map(keyframe.features)
-    frame_number = _as_int(frame_features[_FRAME_NUMBER_KEY])
     timestamp = ms_to_sec(keyframe.timeMs)
-    ann_features = read_feature_map(ann.features)
-    track = ann_features.get(_TRACK_ID_KEY)
+    frame_number = _frame_number(keyframe.timeMs, frame_rate)
     detection = DetectionDTO(
         label=ann.label or "",
         bounding_box=_norm_box_from_spatial(ann.spatial),
         confidence=conf_from_int(ann.confidence or 0),
-        track_id=track if isinstance(track, str) else None,
+        track_id=track_id,
     )
     return frame_number, timestamp, detection
 
@@ -223,11 +212,42 @@ def _query_of(command: str | None) -> str:
     return "null" if command is None else command
 
 
+def _track_clusters(
+    tracked: list[tuple[str, str]],
+) -> tuple[annotation.Cluster, ...]:
+    """Group ``(annotation_uuid, track_id)`` pairs into one cluster per track id."""
+    members_by_track: dict[str, list[defs.ObjectRef]] = {}
+    order: list[str] = []
+    for ann_uuid, track_id in tracked:
+        if track_id not in members_by_track:
+            members_by_track[track_id] = []
+            order.append(track_id)
+        members_by_track[track_id].append(defs.ObjectRef(localId=defs.Uuid(value=ann_uuid)))
+    return tuple(
+        annotation.Cluster(uuid=defs.Uuid(value=track_id), members=tuple(members_by_track[track_id]))
+        for track_id in order
+    )
+
+
+def _track_by_annotation(view: CorpusFragment) -> dict[str, str]:
+    """Map each tracked annotation's uuid to its track id, from the track ClusterSet."""
+    record = next((r for r in view.records if r.nsid == CLUSTERSET_NSID), None)
+    if record is None:
+        return {}
+    cluster_set = annotation.ClusterSet.model_validate_json(record.value_json)
+    mapping: dict[str, str] = {}
+    for cluster in cluster_set.clusters:
+        for member in cluster.members:
+            if member.localId is not None:
+                mapping[member.localId.value] = cluster.uuid.value
+    return mapping
+
+
 class DetectionLayersLens(dx.Lens[DetectObjectsResponseDTO, CorpusFragment, JsonValue]):
-    """Lens ``DetectObjectsResponseDTO <-> layers fragment`` with an empty complement."""
+    """Lens between a detection response and a layers fragment."""
 
     def forward(self, dto: DetectObjectsResponseDTO) -> tuple[CorpusFragment, JsonValue]:
-        """Project a detection response to a layers fragment (no complement)."""
+        """Project a detection response to a layers fragment."""
         expression_uri = local_uri("local", EXPRESSION_NSID, dto.video_id or _EXPRESSION_LOCAL_ID)
         frame_rate = _derive_frame_rate(dto.frames)
         records: list[FragmentRecord] = [
@@ -251,18 +271,22 @@ class DetectionLayersLens(dx.Lens[DetectObjectsResponseDTO, CorpusFragment, Json
             ),
         ]
 
-        annotations = tuple(
-            _detection_annotation(
-                detection,
-                frame,
-                dto.video_id,
-                index,
-                dto.video_width,
-                dto.video_height,
-            )
-            for frame in dto.frames
-            for index, detection in enumerate(frame.detections)
-        )
+        annotations: list[annotation.Annotation] = []
+        tracked: list[tuple[str, str]] = []
+        for frame in dto.frames:
+            for index, detection in enumerate(frame.detections):
+                ann = _detection_annotation(
+                    detection,
+                    frame,
+                    dto.video_id,
+                    index,
+                    dto.video_width,
+                    dto.video_height,
+                )
+                annotations.append(ann)
+                if detection.track_id is not None:
+                    tracked.append((ann.uuid.value, detection.track_id))
+
         # The response id is the annotation layer's fragment-local record key.
         records.append(
             _record(
@@ -275,16 +299,31 @@ class DetectionLayersLens(dx.Lens[DetectObjectsResponseDTO, CorpusFragment, Json
                     sourceMethod="automatic",
                     createdAt=_EPOCH,
                     reproducibility=defs.ReproducibilityInfo(command=dto.query),
-                    annotations=annotations,
+                    annotations=tuple(annotations),
                 ),
             )
         )
 
+        clusters = _track_clusters(tracked)
+        if clusters:
+            records.append(
+                _record(
+                    CLUSTERSET_NSID,
+                    _TRACK_CLUSTER_ID,
+                    annotation.ClusterSet(
+                        clusters=clusters,
+                        createdAt=_EPOCH,
+                        kind=_CLUSTER_KIND,
+                        expression=expression_uri,
+                    ),
+                )
+            )
+
         return CorpusFragment(records=tuple(records), source="fovea"), None
 
     def backward(self, view: CorpusFragment, complement: JsonValue) -> DetectObjectsResponseDTO:
-        """Reconstruct a detection response from its layers fragment alone."""
-        del complement  # every field is recovered from the canonical records
+        """Reconstruct a detection response from its layers fragment."""
+        del complement  # the fragment carries every field
 
         expr = next(
             expression.Expression.model_validate_json(record.value_json)
@@ -301,13 +340,19 @@ class DetectionLayersLens(dx.Lens[DetectObjectsResponseDTO, CorpusFragment, Json
         )
         layer = annotation.AnnotationLayer.model_validate_json(layer_record.value_json)
 
+        video = med.video
+        frame_rate = video.frameRate if video is not None else None
+        track_by_annotation = _track_by_annotation(view)
+
         # Regroup the per-detection annotations back into frames, in the frame's
         # first-appearance order (empty frames carry no detections and drop out).
         order: list[int] = []
         by_frame: dict[int, tuple[float, list[DetectionDTO]]] = {}
         total = 0
         for ann in layer.annotations:
-            frame_number, timestamp, detection = _detection_from_annotation(ann)
+            frame_number, timestamp, detection = _detection_from_annotation(
+                ann, frame_rate, track_by_annotation.get(ann.uuid.value)
+            )
             if frame_number not in by_frame:
                 by_frame[frame_number] = (timestamp, [])
                 order.append(frame_number)
@@ -323,7 +368,6 @@ class DetectionLayersLens(dx.Lens[DetectObjectsResponseDTO, CorpusFragment, Json
             for frame_number in order
         ]
 
-        video = med.video
         return DetectObjectsResponseDTO(
             id=layer_record.local_id,
             video_id=expr.id or "",

@@ -3,15 +3,14 @@
  * layers-schema {@link SpatioTemporalAnchor} shape, with the native anchor as the
  * single source of truth.
  *
- * A keyframe's integer `bbox` is the canonical geometry (Fovea's UI-drawn boxes
- * are pixel boxes; the layers `boundingBox` is integer-pixel by definition), and
- * a keyframe's `timeMs` is the canonical time. Only true keyframes are stored;
- * interpolated frames are recomputed downstream, never persisted. The per-box
- * confidence, visibility flag, per-segment interpolation mode, and arbitrary
- * per-box metadata ride in {@link Keyframe.features} — the lexicon's designated
- * open per-keyframe extension — so the anchor carries them without a parallel
- * sidecar. A box's `frameNumber` and the sequence's frame counts are derived on
- * read from `timeMs` and the video frame rate.
+ * A keyframe's integer `bbox` is the geometry (Fovea's UI-drawn boxes are pixel
+ * boxes; the layers `boundingBox` is integer-pixel by definition), and a
+ * keyframe's `timeMs` is the time. The stored keyframes are the true keyframes;
+ * interpolated frames are recomputed on read. The per-box confidence, visibility
+ * flag, per-segment interpolation mode, and arbitrary per-box metadata ride in
+ * {@link Keyframe.features} — the lexicon's designated open per-keyframe
+ * extension. A box's `frameNumber` and the sequence's frame counts derive on read
+ * from `timeMs` and the video frame rate.
  *
  * These functions are pure and take no database — they are exercised by the
  * golden round-trip test and reused by the backfill and the layers routes.
@@ -115,10 +114,9 @@ export interface FrameRateOptions {
 
 /**
  * The keyframe feature keys the anchor uses as the designated open per-keyframe
- * extension. These are plain native keys (not a `fovea.*` sidecar namespace):
- * the lexicon documents `keyframe.features` for exactly this — visibility,
- * occlusion, confidence, pose. Kept in one place so the forward and inverse
- * cannot drift.
+ * extension. The lexicon documents `keyframe.features` for exactly this —
+ * visibility, occlusion, confidence, pose — and each key here is plain. Kept in
+ * one place so the forward and inverse cannot drift.
  */
 const KF = {
   /** Per-box confidence on the layers 0-1000 integer scale. */
@@ -181,10 +179,9 @@ function interpolationTypeToSlug(
 
 /**
  * The AT-URI of a community interpolation-mode definition node for a Fovea
- * interpolation type. The nodes are knowledge-graph data (not a lexicon change);
- * `interpolationUri` is the lexicon's explicit community-expandable hook. The
- * reconstruction reads the per-keyframe mode feature, so this URI is forward
- * context, not round-trip data.
+ * interpolation type. The nodes are knowledge-graph data, and `interpolationUri`
+ * is the lexicon's community-expandable hook for them. The reconstruction reads
+ * the per-keyframe mode feature; this URI records the anchor's lead mode.
  */
 function interpolationModeUri(type: FoveaInterpolationType): string {
   return `at://did:web:fovea.video/pub.layers.graph.graphNode/interpolation-${type}`

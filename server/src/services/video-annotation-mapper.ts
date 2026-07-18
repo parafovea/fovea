@@ -3,21 +3,19 @@
  * that store it (an `AnnotationLayer` grouping plus one `LayersAnnotation`).
  *
  * This is the persistence boundary for video annotations: the video timeline UI
- * keeps operating on the in-memory `Annotation` / `BoundingBoxSequence`
- * view-model, and this module projects that shape onto the unified layers store
- * and back. It mirrors `prisma/backfill/backfill-annotations.ts` so an
- * annotation authored through the layers endpoint lands in the exact rows a
- * prior backfill would have produced (same deterministic layer id, same
- * spatio-temporal anchor, same denotation link).
+ * operates on the in-memory `Annotation` / `BoundingBoxSequence` view-model, and
+ * this module projects that shape onto the unified layers store and back. It
+ * mirrors `prisma/backfill/backfill-annotations.ts` so an annotation authored
+ * through the layers endpoint lands in the same rows a prior backfill produces
+ * (same deterministic layer id, same spatio-temporal anchor, same denotation link).
  *
- * The native anchor is authoritative: the bounding-box sequence's geometry,
- * time, confidence, visibility, and interpolation ride in the anchor and its
- * keyframe features (see `layers-conversion-service`), with no parallel sidecar.
- * A video annotation's `type` and `linkType` derive from structure — the layer's
- * persona (type vs object) and the denoted graph node's `nodeType` — and its
- * `confidence` is the native 0-1000 integer column. The only per-annotation
- * fields with no dedicated native column (the authoring `source` and the tracker
- * identity/provenance) ride as flat scalar features, never a structured blob.
+ * The bounding-box sequence's geometry, time, confidence, visibility, and
+ * interpolation ride in the anchor and its keyframe features (see
+ * `layers-conversion-service`). A video annotation's `type` derives from the layer
+ * persona (type vs object) and its `linkType` from the denoted graph node's
+ * `nodeType`; its `confidence` is the native 0-1000 integer column. The
+ * per-annotation authoring `source` and tracker provenance — a track id, a tracker
+ * name, and the tracked-sequence confidence — ride as flat scalar features.
  *
  * @module
  */
@@ -141,10 +139,10 @@ export interface MappedLayersAnnotation {
   /** Soft reference to the ontology TypeDef for a type annotation, else null. */
   ontologyTypeRefId: string | null
   /**
-   * The graph node an object annotation denotes (its `label`), or null for a
-   * type annotation. The write path get-or-creates this node so `denotesNodeId`
-   * is always populated, and the read side derives `linkType` from its
-   * `nodeType`.
+   * The graph node an object annotation with a `linkType` denotes (its `label`),
+   * or null for a type annotation or an object annotation carrying no link. The
+   * write path get-or-creates the node when it is present, and the read side
+   * derives `linkType` from its `nodeType`.
    */
   denotesNode: MappedDenotesNode | null
   features: Record<string, unknown>
@@ -189,16 +187,20 @@ export interface DenotesNode {
   label: string | null
 }
 
-/** The flat scalar annotation feature keys carrying the fields with no native column. */
+/**
+ * The flat annotation feature keys carrying a video annotation's per-annotation
+ * tracker provenance. Each value is a plain scalar and each key is plain (no
+ * namespace prefix), kept in one place so the forward and inverse cannot drift.
+ */
 const FA = {
-  /** The authoring source string (per-annotation; the layer's sourceMethod is shared). */
-  source: 'fovea.source',
+  /** The authoring source string (per-annotation; the layer's sourceMethod is the coarser layer method). */
+  source: 'source',
   /** The tracker's object id (string or number). */
-  trackId: 'fovea.trackId',
+  trackId: 'trackId',
   /** The tracker name that produced the sequence. */
-  trackingSource: 'fovea.trackingSource',
+  trackingSource: 'trackingSource',
   /** The tracked-sequence confidence on the 0-1000 integer scale. */
-  trackingConfidence: 'fovea.trackingConfidence',
+  trackingConfidence: 'trackingConfidence',
 } as const
 
 /** The default frame rate when a video row carries none. */
@@ -250,10 +252,11 @@ function emptySequence(): BoundingBoxSequence {
  * Projects a legacy annotation onto its grouping `AnnotationLayer` and
  * `LayersAnnotation`, mirroring the backfill. A set `personaId` yields an
  * ontology-type layer whose annotation denotes an ontology type
- * (`ontologyTypeRefId = label`); a null `personaId` yields a world-object layer
- * whose annotation denotes a graph node (`denotesNode.id = label`, with its
- * `nodeType` from the link kind). The bounding-box sequence becomes the native
- * spatio-temporal anchor; the authoring `source` and any tracker identity ride
+ * (`ontologyTypeRefId = label`); a null `personaId` yields a world-object layer.
+ * An object annotation that carries a `linkType` denotes a graph node
+ * (`denotesNode.id = label`, with its `nodeType` from the link kind); one with no
+ * link denotes no node. The bounding-box sequence becomes the native
+ * spatio-temporal anchor; the authoring `source` and any tracker provenance ride
  * as flat scalar features.
  *
  * @param annotation - the legacy annotation to project
@@ -272,7 +275,7 @@ export function annotationToLayers(
     expressionId: ctx.expressionId,
     kind: 'span',
     subkind: personaId ? 'ontology-type' : 'world-object',
-    sourceMethod: annotation.source === 'manual' ? 'manual-native' : 'model-projected',
+    sourceMethod: annotation.source === 'manual' ? 'manual-native' : 'automatic',
     ontologyId: personaId ? ctx.ontologyId : null,
     personaId,
   }
@@ -291,8 +294,11 @@ export function annotationToLayers(
     features[FA.trackingConfidence] = to1000(seq.trackingConfidence)
   }
 
+  // Only an object annotation with an intentional link kind denotes a graph node;
+  // an unlinked object annotation (no linkType) mints none, so a free-text label
+  // never materializes a stray world node (matching the world save's node semantics).
   const denotesNode: MappedDenotesNode | null =
-    personaId || !annotation.label
+    personaId || !annotation.label || !annotation.linkType
       ? null
       : { id: annotation.label, nodeType: linkTypeToNodeType(annotation.linkType), label: annotation.label }
 

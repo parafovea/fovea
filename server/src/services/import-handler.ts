@@ -40,6 +40,7 @@ import { readAllAnnotationRefs } from './layers-bridge/annotation-bridge.js'
 import { readAllClaimRefs, readAllClaimRelationRefs } from './layers-bridge/claim-bridge.js'
 import { readAllOntologyPersonaIds } from './layers-bridge/ontology-bridge.js'
 import { readAllWorldObjectIds, readWorldAggregate, writeWorldAggregate } from './layers-bridge/world-bridge.js'
+import { readWorldRows } from './layers-bridge/world-store.js'
 import { personalWorldStateId, projectWorldStateId } from './world-layers-mapper.js'
 
 /**
@@ -178,7 +179,7 @@ export class ImportHandler {
       readAllClaimRelationRefs(this.prisma),
       readAllOntologyPersonaIds(this.prisma),
       readAllWorldObjectIds(this.prisma),
-      readWorldAggregate(this.prisma, { userId: this.userId, projectId: this.projectId }),
+      readWorldRows(this.prisma, { createdByUserId: this.userId, projectId: this.projectId }),
     ])
 
     // Build ownership sets
@@ -200,23 +201,19 @@ export class ImportHandler {
         .map(a => a.id)
     )
 
-    // Extract owned world object IDs from the caller's reconstructed world
+    // Trace the caller's owned world-object ids from their native world rows: a
+    // world node's id keyed by its nodeType (entity/location -> entity, situation
+    // -> event, time -> time), and each collection ClusterSet's id.
     const ownedEntityIds = new Set<string>()
     const ownedEventIds = new Set<string>()
     const ownedTimeIds = new Set<string>()
     const ownedCollectionIds = new Set<string>()
-    const addOwnedId = (bucket: Set<string>, object: unknown): void => {
-      if (object && typeof object === 'object' && 'id' in object) {
-        const id = (object as { id: unknown }).id
-        if (typeof id === 'string') bucket.add(id)
-      }
+    for (const node of ownWorld.rows.nodes) {
+      if (node.nodeType === 'entity' || node.nodeType === 'location') ownedEntityIds.add(node.id)
+      else if (node.nodeType === 'situation') ownedEventIds.add(node.id)
+      else if (node.nodeType === 'time') ownedTimeIds.add(node.id)
     }
-    for (const object of ownWorld.aggregate.entities) addOwnedId(ownedEntityIds, object)
-    for (const object of ownWorld.aggregate.events) addOwnedId(ownedEventIds, object)
-    for (const object of ownWorld.aggregate.times) addOwnedId(ownedTimeIds, object)
-    for (const object of ownWorld.aggregate.entityCollections) addOwnedId(ownedCollectionIds, object)
-    for (const object of ownWorld.aggregate.eventCollections) addOwnedId(ownedCollectionIds, object)
-    for (const object of ownWorld.aggregate.timeCollections) addOwnedId(ownedCollectionIds, object)
+    for (const cluster of ownWorld.rows.clusters) ownedCollectionIds.add(cluster.id)
 
     const existingData: ExistingDataWithRelations = {
       personaIds: new Set(personas.map(p => p.id)),

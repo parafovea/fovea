@@ -1,23 +1,25 @@
 import { PrismaClient } from '@prisma/client'
 
+import type { GlossItem } from '@models/types.js'
+
 import { readOntologyAggregate } from '../services/layers-bridge/ontology-bridge.js'
-import { readPersonaAnnotationTypesAndLabels } from '../services/layers-bridge/annotation-bridge.js'
+import { glossToText } from '../services/ontology-layers-mapper.js'
+import { WORLD_NODE_TYPES } from '../services/world-layers-mapper.js'
 
 /**
- * Ontology type structure from ontology JSON.
+ * A persona ontology type reconstructed from the layers store: its display name
+ * and its gloss as rich-text segments.
  */
 interface OntologyType {
-  id: string
   name: string
-  description?: string
+  gloss?: GlossItem[]
 }
 
 /**
- * Instance structure for world state objects.
+ * A world instance the detection query lists under its category.
  */
 interface Instance {
   label: string
-  type: string
   description?: string
 }
 
@@ -68,10 +70,11 @@ const DEFAULT_QUERY_OPTIONS: DetectionQueryOptions = {
 }
 
 /**
- * Formats ontology types into a readable list with optional glosses.
+ * Formats ontology types into a readable list, optionally appending each type's
+ * flattened gloss text in parentheses.
  *
  * @param types - Array of ontology types
- * @param includeGlosses - Whether to include descriptions as glosses
+ * @param includeGlosses - Whether to append the flattened gloss of each type
  * @returns Formatted string (e.g., "pitcher, batter" or "pitcher (throws ball), batter (at bat)")
  */
 function formatTypeList(types: OntologyType[], includeGlosses: boolean): string {
@@ -80,10 +83,8 @@ function formatTypeList(types: OntologyType[], includeGlosses: boolean): string 
   return types
     .map(type => {
       const name = type.name.toLowerCase()
-      if (includeGlosses && type.description) {
-        return `${name} (${type.description})`
-      }
-      return name
+      const gloss = includeGlosses && Array.isArray(type.gloss) ? glossToText(type.gloss) : null
+      return gloss ? `${name} (${gloss})` : name
     })
     .join(', ')
 }
@@ -109,59 +110,62 @@ function formatInstanceList(instances: Instance[], includeGlosses: boolean): str
     .join(', ')
 }
 
-/**
- * Fetches world state instances from annotations for a persona.
- *
- * @param personaId - UUID of the persona
- * @param prisma - PrismaClient instance for database access
- * @returns Object containing arrays of entity, event, location, and time instances
- */
-async function fetchWorldStateInstances(
-  personaId: string,
-  prisma: PrismaClient
-): Promise<{
+/** The four world-instance buckets the detection query draws its labels from. */
+interface WorldInstances {
   entities: Instance[]
   events: Instance[]
   locations: Instance[]
   times: Instance[]
-}> {
-  // Fetch all annotations for this persona across all videos (layers store,
-  // with a legacy read-through for annotations not yet materialized).
-  const annotations = await readPersonaAnnotationTypesAndLabels(prisma, personaId)
+}
 
-  // Group annotations by type category
-  const entities: Instance[] = []
-  const events: Instance[] = []
-  const locations: Instance[] = []
-  const times: Instance[] = []
+/** The world node type each instance bucket collects, keyed by node type. */
+const NODE_TYPE_BUCKET: Record<string, keyof WorldInstances> = {
+  entity: 'entities',
+  situation: 'events',
+  location: 'locations',
+  time: 'times',
+}
 
-  // Track unique instances by label to avoid duplicates
-  const seenEntities = new Set<string>()
-  const seenEvents = new Set<string>()
-  const seenLocations = new Set<string>()
-  const seenTimes = new Set<string>()
+/**
+ * Reads a scope's world-instance labels from the graph nodes, grouped by node
+ * type into the entity, event, location, and time buckets. Entity and situation
+ * nodes label entities and events, location and time nodes their own buckets;
+ * duplicate labels within a bucket collapse to one entry.
+ *
+ * @param scope - the owning user and project the world nodes are scoped to
+ * @param prisma - PrismaClient instance for database access
+ * @returns the entity, event, location, and time instance buckets
+ */
+async function fetchWorldStateInstances(
+  scope: { userId: string; projectId: string | null },
+  prisma: PrismaClient
+): Promise<WorldInstances> {
+  const nodes = await prisma.graphNode.findMany({
+    where: {
+      createdByUserId: scope.userId,
+      projectId: scope.projectId,
+      nodeType: { in: [...WORLD_NODE_TYPES] },
+    },
+    select: { nodeType: true, label: true },
+    orderBy: { createdAt: 'asc' },
+  })
 
-  for (const annotation of annotations) {
-    const type = annotation.type.toLowerCase()
-    const label = annotation.label
-
-    // Categorize based on annotation type
-    if (type === 'entity' && !seenEntities.has(label)) {
-      entities.push({ label, type: annotation.type })
-      seenEntities.add(label)
-    } else if (type === 'event' && !seenEvents.has(label)) {
-      events.push({ label, type: annotation.type })
-      seenEvents.add(label)
-    } else if (type === 'location' && !seenLocations.has(label)) {
-      locations.push({ label, type: annotation.type })
-      seenLocations.add(label)
-    } else if (type === 'time' && !seenTimes.has(label)) {
-      times.push({ label, type: annotation.type })
-      seenTimes.add(label)
-    }
+  const instances: WorldInstances = { entities: [], events: [], locations: [], times: [] }
+  const seen: Record<keyof WorldInstances, Set<string>> = {
+    entities: new Set(),
+    events: new Set(),
+    locations: new Set(),
+    times: new Set(),
   }
 
-  return { entities, events, locations, times }
+  for (const node of nodes) {
+    const bucket = NODE_TYPE_BUCKET[node.nodeType]
+    if (!bucket || !node.label || seen[bucket].has(node.label)) continue
+    seen[bucket].add(node.label)
+    instances[bucket].push({ label: node.label })
+  }
+
+  return instances
 }
 
 /**
@@ -230,8 +234,7 @@ export async function buildDetectionQueryFromPersona(
 ): Promise<string> {
   const opts = { ...DEFAULT_QUERY_OPTIONS, ...options }
 
-  // Fetch persona; its ontology is reconstructed from the layers store (legacy
-  // read-through when no layers rows exist yet).
+  // Fetch persona; its ontology is reconstructed from the layers store.
   const persona = await prisma.persona.findUnique({ where: { id: personaId } })
 
   if (!persona) {
@@ -258,12 +261,7 @@ export async function buildDetectionQueryFromPersona(
   const relationTypes = ontology.relationTypes as unknown as OntologyType[]
 
   // Fetch world state instances if any instance options are enabled
-  let worldState = { entities: [], events: [], locations: [], times: [] } as {
-    entities: Instance[]
-    events: Instance[]
-    locations: Instance[]
-    times: Instance[]
-  }
+  let worldState: WorldInstances = { entities: [], events: [], locations: [], times: [] }
 
   if (
     opts.includeEntityInstances ||
@@ -271,7 +269,10 @@ export async function buildDetectionQueryFromPersona(
     opts.includeLocationInstances ||
     opts.includeTimeInstances
   ) {
-    worldState = await fetchWorldStateInstances(personaId, prisma)
+    worldState = await fetchWorldStateInstances(
+      { userId: persona.userId, projectId: persona.projectId },
+      prisma
+    )
   }
 
   // Add entity types if requested
