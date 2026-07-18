@@ -24,7 +24,7 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest'
 import { FastifyInstance } from 'fastify'
 import { PrismaClient } from '@prisma/client'
 
-import { nodeToClaim } from '../../src/services/claim-layers-mapper.js'
+import { readClaimById } from '../../src/services/layers-bridge/claim-bridge.js'
 
 import { buildApp } from '../../src/app.js'
 import { hashPassword } from '../../src/lib/password.js'
@@ -219,15 +219,15 @@ describe('Baseline create permissions for owned resources', () => {
     expect(claimRes.statusCode, `body=${claimRes.body.slice(0, 300)}`).toBe(201)
     const body = claimRes.json() as { claims: Array<{ id: string }> }
     expect(body.claims).toHaveLength(1)
-    // The claim lives in the layers store as a claim graph node whose stash
-    // carries the created claim.
+    // The claim lives in the layers store as a claim graph node carrying only
+    // identity — no verbatim claim stash in its properties.
     const node = await prisma.graphNode.findUnique({ where: { id: body.claims[0].id } })
     expect(node).not.toBeNull()
-    // The claim node carries its owner on the scope column and its summary
-    // membership as a native feature scalar — no verbatim claim stash.
     expect(node!.createdByUserId).toBe(u.userId)
     expect(JSON.stringify(node!.properties ?? {})).not.toContain('foveaClaim')
-    const reconstructed = nodeToClaim(node!)
+    // The claim reconstructs natively from its node + primary annotation: its
+    // summary membership rides on the primary annotation's `summary` argumentRef.
+    const reconstructed = await readClaimById(prisma, body.claims[0].id)
     expect(reconstructed?.summaryId).toBe(summary.id)
     expect(reconstructed?.createdBy).toBe(u.userId)
   })

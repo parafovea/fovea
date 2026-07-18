@@ -4,27 +4,32 @@
  * store (GraphNode + LayersAnnotation + GraphEdge).
  *
  * Every claim construct lands in an existing layers primitive — no verbatim blob,
- * no whole-object stash:
+ * no whole-object stash, no shredded feature map:
  *
  *   - A claim is one GraphNode (`nodeType=claim`) carrying only identity: its text
- *     as the node label and its summary membership as flat feature scalars.
+ *     as the node label.
  *   - Its bearer is ONE primary LayersAnnotation (`subkind=claim`) denoting that
  *     node: the claim text on `text`, confidence on `confidence` (0-1000 integer
  *     scale), the gloss / claimRelation / claimerGloss as role-tagged
- *     `argumentRef`s in `arguments` (the flattened primary gloss also on `value`),
- *     the claimer type on `ontologyTypeRefId` + a `claimer` argumentRef, the parent
- *     claim link on `parentAnnotationId`, and the (first) text span on `anchor`.
- *   - Its video-time groundings become temporal-anchored sibling annotations, and
- *     its situation/time/location references become cross-object GraphEdges.
+ *     `argumentRef`s in `arguments`, the claimer type on `ontologyTypeRefId` + a
+ *     `claimer` argumentRef, the summary membership as a `summary` argumentRef, and
+ *     the parent claim link on the native `parentAnnotationId` self-relation (the
+ *     parent's bearer annotation id).
+ *   - Its discontiguous text spans become `textSpan`-anchored child annotations
+ *     (one per span), and its video-time groundings become `temporalSpan`-anchored
+ *     child annotations — both children of the primary via `parentAnnotationId`.
+ *   - Its situation / time / location references become cross-object GraphEdges
+ *     (`describes` / `occurs-at` / `located-at`), read back on reconstruction.
  *   - A ClaimRelation is one GraphEdge between the two claim nodes, `edgeType` the
- *     relation type and `confidence` on the integer scale.
+ *     relation type and `confidence` on the integer scale; its source/target spans
+ *     become `textSpan`-anchored annotations pointing at the relation.
  *
- * Fields with no dedicated native column ride in flat featureMap entries (residual
- * leaf scalars, never a nested blob): a residual codec flattens the leftover of
- * each claim / relation — everything the native projection did not consume — into
- * per-leaf `feature` entries and rebuilds it on read, so the tree round-trips
- * losslessly without a sidecar. Subclaims are separate nodes linked by the parent
- * annotation; `nestClaims` reassembles the tree.
+ * Reconstruction is native: the read path queries the primary annotation, its
+ * span/temporal child annotations (via `parentAnnotationId`), the cross-object ref
+ * GraphEdges, and the relation-span annotations — never a residual it also wrote.
+ * Only genuinely flat, opaque scalar extension values with no dedicated column
+ * (modality tags, the extraction provenance, the semantic timestamps) ride in flat
+ * `feature` entries, one entry per field keyed by the field name.
  *
  * @module
  */
@@ -38,7 +43,13 @@ import type {
 import type { GlossItem } from '@models/types.js'
 import type { ObjectRef } from '@fovea/layers-schema'
 
-import { claimAnnotationId, claimTimeSpanAnnotationId, claimRefEdgeId } from './layers-id-map.js'
+import {
+  claimAnnotationId,
+  claimTimeSpanAnnotationId,
+  claimTextSpanAnnotationId,
+  claimRefEdgeId,
+  relationSpanAnnotationId,
+} from './layers-id-map.js'
 
 /** The nodeType every claim GraphNode carries. */
 export const CLAIM_NODE_TYPE = 'claim'
@@ -114,7 +125,7 @@ export interface MappedClaimNode {
   createdByUserId: string | null
 }
 
-/** A LayersAnnotation create payload a claim materializes to (primary or temporal). */
+/** A LayersAnnotation create payload a claim materializes to (primary, child, or relation span). */
 export interface MappedClaimAnnotation {
   id: string
   anchor: unknown
@@ -128,7 +139,7 @@ export interface MappedClaimAnnotation {
   temporal: unknown
   startMs: number | null
   endMs: number | null
-  denotesNodeId: string
+  denotesNodeId: string | null
   features: unknown
   projectId: string | null
   createdByUserId: string | null
@@ -152,52 +163,85 @@ export interface MappedClaimEdge {
 /** The native rows one claim projects to. */
 export interface ClaimLayersProjection {
   node: MappedClaimNode
-  /** The primary claim annotation followed by its temporal-grounding siblings. */
+  /** The primary claim annotation followed by its text-span and temporal children. */
   annotations: MappedClaimAnnotation[]
   /** The cross-object reference edges (situation / time / location). */
   refEdges: MappedClaimEdge[]
 }
 
+/** The native rows one claim relation projects to. */
+export interface RelationLayersProjection {
+  edge: MappedClaimEdge
+  /** The source/target span annotations pointing at the relation. */
+  spanAnnotations: MappedClaimAnnotation[]
+}
+
 // --- constants ---------------------------------------------------------------
 
-/** Node feature keys that carry a claim's summary membership. */
-const KEY_SUMMARY_ID = 'fovea.summaryId'
-const KEY_SUMMARY_TYPE = 'fovea.summaryType'
-
-/** Edge feature keys discriminating claim edges and naming their role. */
-const KEY_EDGE_ROLE = 'fovea.edgeRole'
-const KEY_REF_FIELD = 'fovea.refField'
+/** Edge property key discriminating a claim edge's role (flat scalar, mirrors worldRole). */
+const KEY_EDGE_ROLE = 'edgeRole'
 const EDGE_ROLE_CLAIM_RELATION = 'claim-relation'
 const EDGE_ROLE_CLAIM_REF = 'claim-ref'
 
-/** Annotation feature keys the native projection stamps explicitly (never residual). */
-const KEY_MODALITY_AUDIO = 'modality.audio'
-const KEY_MODALITY_VIDEO = 'modality.video'
-const KEY_MODALITY_METADATA = 'modality.metadata'
-
-/** The label a primary claim annotation carries, and its temporal siblings. */
+/** The label a primary claim annotation carries, and its children / relation spans. */
 const LABEL_CLAIM = 'claim'
 const LABEL_CLAIM_TIME = 'claim-time'
+const LABEL_CLAIM_TEXT_SPAN = 'claim-text-span'
+const LABEL_RELATION_SPAN = 'relation-span'
 
 /** The argument-role prefixes each gloss-bearing field encodes under. */
 const ROLE_GLOSS = 'gloss'
 const ROLE_CLAIM_RELATION = 'claim-relation'
 const ROLE_CLAIMER_GLOSS = 'claimer-gloss'
+/** Exact argument roles carrying a claim's references. */
 const ROLE_CLAIMER = 'claimer'
+const ROLE_SUMMARY = 'summary'
+const ROLE_TIME_ANNOTATION = 'time-annotation'
+const ROLE_RELATION = 'relation-of'
+
+/** Flat child-annotation feature keys (order + provenance scalars, no reference). */
+const KEY_SPAN_INDEX = 'spanIndex'
+const KEY_SENTENCE_INDEX = 'sentenceIndex'
+const KEY_TIME_SOURCE = 'source'
+const KEY_RELATION_SIDE = 'side'
+const RELATION_SIDE_SOURCE = 'source'
+const RELATION_SIDE_TARGET = 'target'
+
+/** Flat relation-edge property keys (genuinely flat scalars only). */
+const KEY_NOTES = 'notes'
+const KEY_CREATED_AT = 'createdAt'
+const KEY_UPDATED_AT = 'updatedAt'
+
+/** The genuinely-flat, opaque scalar claim fields with no dedicated native column. */
+const FLAT_CLAIM_FIELDS = [
+  'summaryType',
+  'modelUsed',
+  'extractionStrategy',
+  'audio',
+  'video',
+  'metadata',
+  'comment',
+  'createdAt',
+  'updatedAt',
+] as const
 
 /** The reference fields a cross-object claim edge can carry. */
 const REF_FIELDS = ['claimEventId', 'claimTimeId', 'claimLocationId'] as const
 type RefField = (typeof REF_FIELDS)[number]
 
-/** The graph edgeType each reference field projects to. */
+/** The graph edgeType each reference field projects to (bijective). */
 const REF_EDGE_TYPE: Record<RefField, string> = {
   claimEventId: 'describes',
   claimTimeId: 'occurs-at',
   claimLocationId: 'located-at',
 }
 
-/** The residual-codec path separator; never appears in a JSON object key. */
-const NUL = ''
+/** The claim field each reference edgeType reconstructs (inverse of {@link REF_EDGE_TYPE}). */
+const FIELD_BY_REF_EDGE_TYPE: Record<string, RefField> = {
+  describes: 'claimEventId',
+  'occurs-at': 'claimTimeId',
+  'located-at': 'claimLocationId',
+}
 
 // --- small readers -----------------------------------------------------------
 
@@ -209,6 +253,12 @@ function asArray(value: unknown): Record<string, unknown>[] {
 /** Builds an ObjectRef value-object pointing at a same-record object by id. */
 function localRef(id: string): ObjectRef {
   return { localId: { value: id } }
+}
+
+/** The localId value of an objectRef, or null. */
+function localRefValue(ref: unknown): string | null {
+  const value = (ref as { localId?: { value?: unknown } } | null)?.localId?.value
+  return typeof value === 'string' ? value : null
 }
 
 /** Rounds a 0-1 float to the layers 0-1000 integer confidence scale. */
@@ -261,69 +311,39 @@ function readFeature(entries: FeatureEntry[], key: string): string | null {
   return null
 }
 
-// --- residual codec: flatten leftover leaf scalars ---------------------------
+// --- open extension: leftover flat scalars as flat feature entries -----------
 
 /**
- * Flattens a JSON value into per-leaf featureMap entries under a `\0`-prefixed
- * key space, so the leftover of a claim / relation — everything the native
- * projection did not consume — round-trips as flat scalars rather than a nested
- * structured blob. Container shape (array length, object keys) rides in a marker
- * entry so the exact structure, including empty arrays and objects, reconstructs.
+ * Encodes an object's flat, opaque leftover — the genuinely open scalar fields
+ * with no dedicated native column — as flat featureMap entries: one entry per
+ * field, keyed by the field name, valued as its JSON. This is a flat key/value
+ * map (never a nested shredded structure), the layers-native home for genuinely
+ * open extension data. A null value round-trips as the JSON literal `null`; an
+ * `undefined` value is skipped.
  */
-function flattenResidual(value: unknown): FeatureEntry[] {
+function openExtensionEntries(leftover: Record<string, unknown>): FeatureEntry[] {
   const entries: FeatureEntry[] = []
-  const walk = (path: string, node: unknown): void => {
-    if (Array.isArray(node)) {
-      entries.push({ key: `${path}${NUL}#`, value: `a${node.length}` })
-      node.forEach((item, index) => walk(`${path}${NUL}${index}`, item))
-    } else if (node !== null && typeof node === 'object') {
-      const keys = Object.keys(node as Record<string, unknown>)
-      entries.push({ key: `${path}${NUL}#`, value: `o${JSON.stringify(keys)}` })
-      for (const key of keys) walk(`${path}${NUL}k:${key}`, (node as Record<string, unknown>)[key])
-    } else {
-      entries.push({ key: path, value: JSON.stringify(node) })
-    }
+  for (const [key, value] of Object.entries(leftover)) {
+    if (value === undefined) continue
+    entries.push({ key, value: JSON.stringify(value) })
   }
-  walk(NUL, value)
   return entries
 }
 
-/** Rebuilds a JSON value from its residual featureMap entries. */
-function unflattenResidual(entries: FeatureEntry[]): unknown {
-  const map = new Map<string, string>()
-  for (const entry of entries) if (entry.key.startsWith(NUL)) map.set(entry.key, entry.value)
-  const build = (path: string): unknown => {
-    const marker = map.get(`${path}${NUL}#`)
-    if (marker === undefined) {
-      const leaf = map.get(path)
-      return leaf === undefined ? undefined : (JSON.parse(leaf) as unknown)
+/** Applies open-extension feature entries back onto an object, skipping reserved keys. */
+function applyOpenExtension(
+  object: Record<string, unknown>,
+  entries: FeatureEntry[],
+  reserved: ReadonlySet<string>,
+): void {
+  for (const entry of entries) {
+    if (reserved.has(entry.key)) continue
+    try {
+      object[entry.key] = JSON.parse(entry.value)
+    } catch {
+      object[entry.key] = entry.value
     }
-    if (marker[0] === 'a') {
-      const length = Number(marker.slice(1))
-      const out: unknown[] = []
-      for (let index = 0; index < length; index += 1) out.push(build(`${path}${NUL}${index}`))
-      return out
-    }
-    const keys = JSON.parse(marker.slice(1)) as string[]
-    const out: Record<string, unknown> = {}
-    for (const key of keys) out[key] = build(`${path}${NUL}k:${key}`)
-    return out
   }
-  return build(NUL)
-}
-
-/** True when a featureMap holds any residual (leftover) entry. */
-function hasResidual(entries: FeatureEntry[]): boolean {
-  return entries.some((entry) => entry.key.startsWith(NUL))
-}
-
-/** The reconstructed residual object, or an empty object when none was stored. */
-function residualObject(entries: FeatureEntry[]): Record<string, unknown> {
-  if (!hasResidual(entries)) return {}
-  const rebuilt = unflattenResidual(entries)
-  return rebuilt !== null && typeof rebuilt === 'object' && !Array.isArray(rebuilt)
-    ? (rebuilt as Record<string, unknown>)
-    : {}
 }
 
 // --- gloss: GlossItem[] <-> role-tagged argumentRefs ------------------------
@@ -394,59 +414,71 @@ function argumentsToGloss(argumentsValue: unknown, rolePrefix: string): GlossIte
   })
 }
 
-/** The claimer-type argumentRef (role `claimer`), or an empty list when absent. */
-function claimerArgument(claimerType: string | null): Record<string, unknown>[] {
-  if (claimerType === null) return []
-  return [{ role: ROLE_CLAIMER, target: localRef(claimerType) }]
+/** The argumentRef pointing at a same-record object by id under an exact role. */
+function objectArgument(role: string, id: string): Record<string, unknown> {
+  return { role, target: localRef(id) }
 }
 
-/** Reads the claimer type from the `claimer` argumentRef, or null. */
-function readClaimerArgument(argumentsValue: unknown): string | null {
+/** Reads the target id of the first argumentRef carrying an exact role, or null. */
+function readObjectArgument(argumentsValue: unknown, role: string): string | null {
   for (const arg of asArray(argumentsValue)) {
-    if (arg.role !== ROLE_CLAIMER) continue
-    const value = (arg as { target?: { localId?: { value?: unknown } } }).target?.localId?.value
-    return typeof value === 'string' ? value : null
+    if (arg.role !== role) continue
+    return localRefValue(arg.target)
   }
   return null
 }
 
-// --- modality ----------------------------------------------------------------
-
-/** Builds the modality feature entries for a claim's audio/video/metadata tags. */
-function modalityEntries(claim: StoredClaim): FeatureEntry[] {
-  const entries: FeatureEntry[] = []
-  const push = (key: string, value: unknown): void => {
-    if (Array.isArray(value) && value.length > 0) {
-      entries.push({ key, value: value.map((v) => String(v)).join(',') })
-    }
-  }
-  push(KEY_MODALITY_AUDIO, claim.audio)
-  push(KEY_MODALITY_VIDEO, claim.video)
-  push(KEY_MODALITY_METADATA, claim.metadata)
-  return entries
-}
-
 // --- write: claim -> layers --------------------------------------------------
 
-/** The textSpan anchor for a claim's first text span, or null. */
-function firstSpanAnchor(textSpans: unknown): unknown {
-  const spans = asArray(textSpans)
-  if (spans.length === 0) return null
-  const span = spans[0]
-  const charStart = typeof span.charStart === 'number' ? span.charStart : 0
-  const charEnd = typeof span.charEnd === 'number' ? span.charEnd : 0
-  return { textSpan: { byteStart: charStart, byteEnd: charEnd, charStart, charEnd } }
+/** Builds the discontiguous text-span child annotations a claim's textSpans project to. */
+function textSpanAnnotations(claim: StoredClaim, scope: ClaimLayersScope): MappedClaimAnnotation[] {
+  const primaryId = claimAnnotationId(claim.id)
+  return asArray(claim.textSpans).map((span, index) => {
+    const charStart = typeof span.charStart === 'number' ? span.charStart : 0
+    const charEnd = typeof span.charEnd === 'number' ? span.charEnd : charStart
+    const entries: FeatureEntry[] = [{ key: KEY_SPAN_INDEX, value: String(index) }]
+    if (typeof span.sentenceIndex === 'number') {
+      entries.push({ key: KEY_SENTENCE_INDEX, value: String(span.sentenceIndex) })
+    }
+    return {
+      id: claimTextSpanAnnotationId(claim.id, index),
+      // byteStart/byteEnd are omitted: the mapper has no source text, so only the
+      // character extent is known. A char-only textSpan is preferable to fabricated
+      // byte offsets (which would misplace any non-ASCII span for a byte consumer).
+      anchor: { textSpan: { charStart, charEnd } },
+      label: LABEL_CLAIM_TEXT_SPAN,
+      text: null,
+      value: null,
+      confidence: null,
+      arguments: null,
+      ontologyTypeRefId: null,
+      parentAnnotationId: primaryId,
+      temporal: null,
+      startMs: null,
+      endMs: null,
+      denotesNodeId: claim.id,
+      features: featureMap(entries),
+      projectId: scope.projectId,
+      createdByUserId: scope.createdByUserId,
+    }
+  })
 }
 
-/** Builds the temporal-grounding sibling annotations a claim's timeSpans project to. */
+/** Builds the temporal-grounding child annotations a claim's timeSpans project to. */
 function temporalAnnotations(claim: StoredClaim, scope: ClaimLayersScope): MappedClaimAnnotation[] {
+  const primaryId = claimAnnotationId(claim.id)
   return asArray(claim.timeSpans).map((span, index) => {
     const start = typeof span.start === 'number' ? span.start : 0
     const end = typeof span.end === 'number' ? span.end : 0
     const startMs = Math.round(start * 1000)
     const endMs = Math.round(end * 1000)
-    const entries: FeatureEntry[] = [{ key: 'fovea.spanIndex', value: String(index) }]
-    if (typeof span.source === 'string') entries.push({ key: 'fovea.timeSource', value: span.source })
+    const entries: FeatureEntry[] = [{ key: KEY_SPAN_INDEX, value: String(index) }]
+    if (typeof span.source === 'string') entries.push({ key: KEY_TIME_SOURCE, value: span.source })
+    // A time span's source annotation ids are references, so they ride as argumentRefs.
+    const annotationIds = Array.isArray(span.annotationIds)
+      ? span.annotationIds.filter((id): id is string => typeof id === 'string')
+      : []
+    const args = annotationIds.map((id) => objectArgument(ROLE_TIME_ANNOTATION, id))
     return {
       id: claimTimeSpanAnnotationId(claim.id, index),
       anchor: { temporalSpan: { start: startMs, ending: endMs } },
@@ -454,9 +486,9 @@ function temporalAnnotations(claim: StoredClaim, scope: ClaimLayersScope): Mappe
       text: null,
       value: null,
       confidence: null,
-      arguments: null,
+      arguments: args.length > 0 ? args : null,
       ontologyTypeRefId: null,
-      parentAnnotationId: null,
+      parentAnnotationId: primaryId,
       temporal: null,
       startMs,
       endMs,
@@ -483,10 +515,7 @@ function claimRefEdges(claim: StoredClaim, scope: ClaimLayersScope): MappedClaim
       edgeType: REF_EDGE_TYPE[field],
       label: REF_EDGE_TYPE[field],
       confidence: null,
-      properties: featureMap([
-        { key: KEY_EDGE_ROLE, value: EDGE_ROLE_CLAIM_REF },
-        { key: KEY_REF_FIELD, value: field },
-      ]),
+      properties: featureMap([{ key: KEY_EDGE_ROLE, value: EDGE_ROLE_CLAIM_REF }]),
       projectId: scope.projectId,
       createdByUserId: scope.createdByUserId,
     })
@@ -496,10 +525,10 @@ function claimRefEdges(claim: StoredClaim, scope: ClaimLayersScope): MappedClaim
 
 /**
  * Projects one claim onto its native rows: an identity GraphNode, the primary
- * bearer annotation (plus temporal-grounding siblings), and the cross-object
- * reference edges. The primary annotation is authoritative for text, confidence,
- * gloss/claimer, and the parent link; everything with no lossless native column
- * rides in the annotation's residual featureMap.
+ * bearer annotation, its text-span and temporal-grounding child annotations, and
+ * the cross-object reference edges. The primary annotation is authoritative for
+ * text, confidence, gloss/claimer, summary membership, and the parent link (the
+ * native `parentAnnotationId` self-relation).
  *
  * @param claim - the claim to project (its subclaims are their own nodes)
  * @returns the node, annotations, and reference edges to persist
@@ -507,59 +536,55 @@ function claimRefEdges(claim: StoredClaim, scope: ClaimLayersScope): MappedClaim
 export function claimToLayers(claim: StoredClaim): ClaimLayersProjection {
   const scope = claimScope(claim)
 
-  // The residual: the claim leftover minus every field with a native home.
-  const residual = { ...claim } as Record<string, unknown>
-  delete residual.subclaims
-  delete residual.sourceClaimRelations
-  delete residual.targetClaimRelations
-  delete residual.id
-  delete residual.text
-  delete residual.summaryId
-  delete residual.summaryType
-  delete residual.createdBy
-  delete residual.projectId
-
   const gloss = glossOf(claim.gloss)
   const claimRelation = glossOf(claim.claimRelation)
   const claimerGloss = glossOf(claim.claimerGloss)
-  if (gloss.length > 0) delete residual.gloss
-  if (claimRelation.length > 0) delete residual.claimRelation
-  if (claimerGloss.length > 0) delete residual.claimerGloss
-
   const claimerType = typeof claim.claimerType === 'string' ? claim.claimerType : null
-  if (claimerType !== null) delete residual.claimerType
-
-  if (typeof claim.confidence === 'number') delete residual.confidence
 
   const argumentsList: Record<string, unknown>[] = [
     ...glossToArguments(ROLE_GLOSS, gloss),
     ...glossToArguments(ROLE_CLAIM_RELATION, claimRelation),
     ...glossToArguments(ROLE_CLAIMER_GLOSS, claimerGloss),
-    ...claimerArgument(claimerType),
+    // The summary membership and (optional) claimer type are references, so each
+    // rides as an argumentRef rather than a flat feature key.
+    objectArgument(ROLE_SUMMARY, claim.summaryId),
   ]
+  if (claimerType !== null) argumentsList.push(objectArgument(ROLE_CLAIMER, claimerType))
 
-  const featureEntries: FeatureEntry[] = [...modalityEntries(claim), ...flattenResidual(residual)]
+  // Genuinely flat, opaque scalars with no native column ride in flat features.
+  const flatLeftover: Record<string, unknown> = {
+    summaryType: claim.summaryType,
+    modelUsed: claim.modelUsed ?? null,
+    extractionStrategy: claim.extractionStrategy ?? null,
+    audio: claim.audio ?? null,
+    video: claim.video ?? null,
+    metadata: claim.metadata ?? null,
+    comment: claim.comment ?? null,
+    createdAt: claim.createdAt,
+    updatedAt: claim.updatedAt,
+  }
 
   const primary: MappedClaimAnnotation = {
     id: claimAnnotationId(claim.id),
-    anchor: firstSpanAnchor(claim.textSpans),
+    anchor: null,
     label: LABEL_CLAIM,
     text: claim.text,
     value: glossToText(gloss),
     confidence: typeof claim.confidence === 'number' ? toMilli(claim.confidence) : null,
     arguments: argumentsList.length > 0 ? argumentsList : null,
     ontologyTypeRefId: claimerType,
-    // The parent link rides in the residual `parentClaimId` scalar (reconstructed
-    // by `nestClaims`), NOT the `parentAnnotationId` self-relation FK: a parent's
-    // bearer annotation may not be persisted yet (import / backfill order) and its
-    // deletion would `SetNull` a live child link, so the hard FK is left unset —
-    // mirroring the ontology gloss avoiding the `denotesNodeId` FK.
-    parentAnnotationId: null,
+    // The parent link is the native self-relation: the parent claim's bearer
+    // annotation id. `nestClaims` walks the reconstructed `parentClaimId`, which
+    // the read path recovers from this FK.
+    parentAnnotationId:
+      typeof claim.parentClaimId === 'string' && claim.parentClaimId.length > 0
+        ? claimAnnotationId(claim.parentClaimId)
+        : null,
     temporal: null,
     startMs: null,
     endMs: null,
     denotesNodeId: claim.id,
-    features: featureMap(featureEntries),
+    features: featureMap(openExtensionEntries(flatLeftover)),
     projectId: scope.projectId,
     createdByUserId: scope.createdByUserId,
   }
@@ -568,43 +593,72 @@ export function claimToLayers(claim: StoredClaim): ClaimLayersProjection {
     id: claim.id,
     nodeType: CLAIM_NODE_TYPE,
     label: claim.text,
-    properties: featureMap([
-      { key: KEY_SUMMARY_ID, value: claim.summaryId },
-      { key: KEY_SUMMARY_TYPE, value: claim.summaryType },
-    ]),
+    properties: null,
     projectId: scope.projectId,
     createdByUserId: scope.createdByUserId,
   }
 
   return {
     node,
-    annotations: [primary, ...temporalAnnotations(claim, scope)],
+    annotations: [primary, ...textSpanAnnotations(claim, scope), ...temporalAnnotations(claim, scope)],
     refEdges: claimRefEdges(claim, scope),
   }
 }
 
+/** Builds the endpoint-span annotations a relation's source/target spans project to. */
+function relationSpanAnnotations(
+  relation: StoredRelation,
+  side: string,
+  spans: unknown,
+  projectId: string | null,
+): MappedClaimAnnotation[] {
+  return asArray(spans).map((span, index) => {
+    const charStart = typeof span.charStart === 'number' ? span.charStart : 0
+    const charEnd = typeof span.charEnd === 'number' ? span.charEnd : charStart
+    return {
+      id: relationSpanAnnotationId(relation.id, side, index),
+      anchor: { textSpan: { charStart, charEnd } },
+      label: LABEL_RELATION_SPAN,
+      text: null,
+      value: null,
+      confidence: null,
+      arguments: [objectArgument(ROLE_RELATION, relation.id)],
+      ontologyTypeRefId: null,
+      parentAnnotationId: null,
+      temporal: null,
+      startMs: null,
+      endMs: null,
+      denotesNodeId: null,
+      features: featureMap([
+        { key: KEY_RELATION_SIDE, value: side },
+        { key: KEY_SPAN_INDEX, value: String(index) },
+      ]),
+      projectId,
+      createdByUserId: relation.createdBy ?? null,
+    }
+  })
+}
+
 /**
- * Projects one claim relation onto its GraphEdge between the two claim nodes. The
- * relation type is the edgeType, its confidence rides on the integer scale, and
- * its span endpoints / notes ride in the edge's residual featureMap (flat leaf
- * scalars, never a blob). The edge carries the `claim-relation` role tag so a
- * read discriminates it from a world or type-assignment edge.
+ * Projects one claim relation onto its native rows: a GraphEdge between the two
+ * claim nodes carrying the relation type as `edgeType`, its confidence on the
+ * integer scale, and its notes / semantic timestamps as flat scalar properties;
+ * plus one `textSpan`-anchored annotation per source/target endpoint span, each
+ * pointing at the relation via an argumentRef.
  *
  * @param relation - the relation to project
- * @param projectId - the source claim's project scope (relations carry no scope
- *   field of their own; the edge inherits its endpoint claim's project)
- * @returns the GraphEdge create payload
+ * @param projectId - the source claim's project scope
+ * @returns the edge and endpoint-span annotations to persist
  */
-export function relationToEdge(relation: StoredRelation, projectId: string | null): MappedClaimEdge {
-  const residual = { ...relation } as Record<string, unknown>
-  delete residual.id
-  delete residual.sourceClaimId
-  delete residual.targetClaimId
-  delete residual.relationTypeId
-  delete residual.createdBy
-  if (typeof relation.confidence === 'number') delete residual.confidence
+export function relationToLayers(relation: StoredRelation, projectId: string | null): RelationLayersProjection {
+  const properties: FeatureEntry[] = [
+    { key: KEY_EDGE_ROLE, value: EDGE_ROLE_CLAIM_RELATION },
+    { key: KEY_CREATED_AT, value: relation.createdAt },
+    { key: KEY_UPDATED_AT, value: relation.updatedAt },
+  ]
+  if (typeof relation.notes === 'string') properties.push({ key: KEY_NOTES, value: relation.notes })
 
-  return {
+  const edge: MappedClaimEdge = {
     id: relation.id,
     source: localRef(relation.sourceClaimId),
     target: localRef(relation.targetClaimId),
@@ -613,12 +667,17 @@ export function relationToEdge(relation: StoredRelation, projectId: string | nul
     edgeType: relation.relationTypeId,
     label: relation.relationTypeId,
     confidence: typeof relation.confidence === 'number' ? toMilli(relation.confidence) : null,
-    properties: featureMap([
-      { key: KEY_EDGE_ROLE, value: EDGE_ROLE_CLAIM_RELATION },
-      ...flattenResidual(residual),
-    ]),
+    properties: featureMap(properties),
     projectId,
     createdByUserId: relation.createdBy ?? null,
+  }
+
+  return {
+    edge,
+    spanAnnotations: [
+      ...relationSpanAnnotations(relation, RELATION_SIDE_SOURCE, relation.sourceSpans, projectId),
+      ...relationSpanAnnotations(relation, RELATION_SIDE_TARGET, relation.targetSpans, projectId),
+    ],
   }
 }
 
@@ -657,6 +716,16 @@ export type ClaimEdgeRow = Pick<
   'id' | 'edgeType' | 'sourceLocalId' | 'targetLocalId' | 'confidence' | 'properties' | 'createdByUserId'
 >
 
+/** The native rows a claim reconstruction reads beyond its node and primary annotation. */
+export interface ClaimReconstructionContext {
+  /** The claim's child annotations (text-span + temporal), keyed by parentAnnotationId. */
+  children: ClaimAnnotationRow[]
+  /** The claim's outgoing cross-object reference edges. */
+  refEdges: ClaimEdgeRow[]
+  /** The parent claim id, recovered from the primary's parentAnnotationId self-relation. */
+  parentClaimId: string | null
+}
+
 /** True when a graph node row is a claim node. */
 export function isClaimNode(row: { nodeType: string }): boolean {
   return row.nodeType === CLAIM_NODE_TYPE
@@ -672,27 +741,31 @@ export function isClaimRefEdge(row: { properties: unknown }): boolean {
   return readFeature(entriesOf(row.properties), KEY_EDGE_ROLE) === EDGE_ROLE_CLAIM_REF
 }
 
+/** True when an annotation is a claim's primary bearer (denotes its claim node directly). */
+export function isPrimaryClaimAnnotation(row: { id: string; denotesNodeId: string | null }): boolean {
+  return row.denotesNodeId !== null && row.id === claimAnnotationId(row.denotesNodeId)
+}
+
 /** The primary claim annotation id for a claim node's id. */
 export function primaryAnnotationId(claimId: string): string {
   return claimAnnotationId(claimId)
 }
 
 /**
- * Reconstructs a shallow claim from a claim GraphNode alone: its id, summary
- * membership, text, and scope. The rich fields (gloss, spans, confidence, …) are
- * absent — this is the shape the import authorizer and scope-only callers need,
- * not the full contract shape (see {@link claimFromLayers}).
+ * Reconstructs a shallow claim from a claim GraphNode alone: its id, text, and
+ * scope. The rich fields (gloss, spans, confidence, summary membership, …) are
+ * absent — this is the shape scope-only callers need, not the full contract shape
+ * (see {@link claimFromLayers}).
  *
  * @param node - the claim GraphNode row
  * @returns the shallow claim, or null when the row is not a claim node
  */
 export function nodeToClaim(node: ClaimNodeRow): StoredClaim | null {
   if (!isClaimNode(node)) return null
-  const entries = entriesOf(node.properties)
   return {
     id: node.id,
-    summaryId: readFeature(entries, KEY_SUMMARY_ID) ?? '',
-    summaryType: readFeature(entries, KEY_SUMMARY_TYPE) ?? '',
+    summaryId: '',
+    summaryType: 'video',
     text: node.label ?? '',
     gloss: [],
     createdBy: node.createdByUserId ?? null,
@@ -702,63 +775,239 @@ export function nodeToClaim(node: ClaimNodeRow): StoredClaim | null {
   }
 }
 
+/** Reconstructs a claim's discontiguous text spans from its text-span child annotations. */
+function readTextSpans(children: ClaimAnnotationRow[]): Record<string, unknown>[] | null {
+  const spanChildren = children.filter((c) => c.label === LABEL_CLAIM_TEXT_SPAN)
+  if (spanChildren.length === 0) return null
+  return spanChildren
+    .map((child) => {
+      const entries = entriesOf(child.features)
+      const span = (child.anchor as { textSpan?: { charStart?: unknown; charEnd?: unknown } } | null)?.textSpan
+      const charStart = typeof span?.charStart === 'number' ? span.charStart : 0
+      const charEnd = typeof span?.charEnd === 'number' ? span.charEnd : charStart
+      const out: Record<string, unknown> = { charStart, charEnd }
+      const sentenceIndex = readFeature(entries, KEY_SENTENCE_INDEX)
+      if (sentenceIndex !== null) out.sentenceIndex = Number(sentenceIndex)
+      return { index: Number(readFeature(entries, KEY_SPAN_INDEX) ?? '0'), out }
+    })
+    .sort((a, b) => a.index - b.index)
+    .map((entry) => entry.out)
+}
+
+/** Reconstructs a claim's video-time groundings from its temporal child annotations. */
+function readTimeSpans(children: ClaimAnnotationRow[]): Record<string, unknown>[] | null {
+  const timeChildren = children.filter((c) => c.label === LABEL_CLAIM_TIME)
+  if (timeChildren.length === 0) return null
+  return timeChildren
+    .map((child) => {
+      const entries = entriesOf(child.features)
+      const out: Record<string, unknown> = {
+        start: (child.startMs ?? 0) / 1000,
+        end: (child.endMs ?? 0) / 1000,
+      }
+      const source = readFeature(entries, KEY_TIME_SOURCE)
+      if (source !== null) out.source = source
+      const annotationIds: string[] = []
+      for (const arg of asArray(child.arguments)) {
+        if (arg.role === ROLE_TIME_ANNOTATION) {
+          const id = localRefValue(arg.target)
+          if (id !== null) annotationIds.push(id)
+        }
+      }
+      if (annotationIds.length > 0) out.annotationIds = annotationIds
+      return { index: Number(readFeature(entries, KEY_SPAN_INDEX) ?? '0'), out }
+    })
+    .sort((a, b) => a.index - b.index)
+    .map((entry) => entry.out)
+}
+
 /**
- * Reconstructs the full claim from its GraphNode and its primary bearer
- * annotation. The residual featureMap rebuilds every field with no lossless
- * native column (textSpans, timeSpans, event/time/location refs, modality,
- * parentClaimId, extraction provenance, timestamps); the native columns supply
- * text, confidence, gloss, claimRelation, claimer, and claimerGloss.
+ * Reconstructs the full claim from its native rows: the GraphNode, its primary
+ * bearer annotation, its text-span / temporal child annotations, its cross-object
+ * reference edges, and the parent claim id recovered from the primary's
+ * `parentAnnotationId` self-relation. No residual is read.
  *
  * @param node - the claim GraphNode row
  * @param primary - the claim's primary bearer annotation
+ * @param context - the child annotations, ref edges, and resolved parent claim id
  * @returns the reconstructed claim
  */
-export function claimFromLayers(node: ClaimNodeRow, primary: ClaimAnnotationRow): StoredClaim {
-  const nodeEntries = entriesOf(node.properties)
-  const annEntries = entriesOf(primary.features)
-  const object = residualObject(annEntries) as Partial<StoredClaim> & Record<string, unknown>
+export function claimFromLayers(
+  node: ClaimNodeRow,
+  primary: ClaimAnnotationRow,
+  context: ClaimReconstructionContext,
+): StoredClaim {
+  // Defaults matching the buildClaim shape (null vs empty distinctions preserved).
+  const object: Record<string, unknown> = {
+    id: node.id,
+    gloss: [],
+    parentClaimId: context.parentClaimId,
+    textSpans: null,
+    timeSpans: null,
+    claimerType: null,
+    claimerGloss: null,
+    claimRelation: null,
+    claimEventId: null,
+    claimTimeId: null,
+    claimLocationId: null,
+    confidence: null,
+  }
 
-  object.id = node.id
-  object.summaryId = readFeature(nodeEntries, KEY_SUMMARY_ID) ?? ''
-  object.summaryType = readFeature(nodeEntries, KEY_SUMMARY_TYPE) ?? ''
+  // Flat, opaque scalar extension fields (modality, provenance, timestamps).
+  applyOpenExtension(object, entriesOf(primary.features), new Set())
+  for (const field of FLAT_CLAIM_FIELDS) if (!(field in object)) object[field] = null
+
+  object.summaryId = readObjectArgument(primary.arguments, ROLE_SUMMARY) ?? ''
   object.text = primary.text ?? node.label ?? ''
   object.createdBy = primary.createdByUserId ?? node.createdByUserId ?? null
   object.projectId = primary.projectId ?? node.projectId ?? null
 
   if (typeof primary.confidence === 'number') object.confidence = fromMilli(primary.confidence)
 
-  const gloss = argumentsToGloss(primary.arguments, ROLE_GLOSS)
-  if (gloss.length > 0) object.gloss = gloss
+  object.gloss = argumentsToGloss(primary.arguments, ROLE_GLOSS)
   const claimRelation = argumentsToGloss(primary.arguments, ROLE_CLAIM_RELATION)
   if (claimRelation.length > 0) object.claimRelation = claimRelation
   const claimerGloss = argumentsToGloss(primary.arguments, ROLE_CLAIMER_GLOSS)
   if (claimerGloss.length > 0) object.claimerGloss = claimerGloss
 
-  const claimerType = primary.ontologyTypeRefId ?? readClaimerArgument(primary.arguments)
+  const claimerType = primary.ontologyTypeRefId ?? readObjectArgument(primary.arguments, ROLE_CLAIMER)
   if (claimerType !== null) object.claimerType = claimerType
 
-  return object as StoredClaim
+  const textSpans = readTextSpans(context.children)
+  if (textSpans !== null) object.textSpans = textSpans
+  const timeSpans = readTimeSpans(context.children)
+  if (timeSpans !== null) object.timeSpans = timeSpans
+
+  for (const edge of context.refEdges) {
+    if (!isClaimRefEdge(edge)) continue
+    const field = FIELD_BY_REF_EDGE_TYPE[edge.edgeType]
+    if (field && typeof edge.targetLocalId === 'string' && edge.targetLocalId.length > 0) {
+      object[field] = edge.targetLocalId
+    }
+  }
+
+  return object as unknown as StoredClaim
 }
 
 /**
- * Reconstructs a claim relation from its GraphEdge. The relation type is the
- * edgeType, confidence recovers from the integer scale, and the span
- * endpoints / notes rebuild from the edge's residual featureMap.
+ * Reconstructs every claim in one summary's claim-span layer from its native
+ * rows: the claim GraphNodes, the layer's annotations (primaries + text-span /
+ * temporal children), and the claims' outgoing cross-object reference edges. Each
+ * claim's parent link is recovered from its primary's `parentAnnotationId`
+ * self-relation.
+ *
+ * @param nodes - the claim GraphNode rows
+ * @param annotations - every annotation in the summary's claim-span layer
+ * @param refEdges - the claims' outgoing edges (ref edges are consumed, others skipped)
+ * @returns the reconstructed flat claims
+ */
+export function reconstructClaims(
+  nodes: ClaimNodeRow[],
+  annotations: ClaimAnnotationRow[],
+  refEdges: ClaimEdgeRow[],
+): StoredClaim[] {
+  const nodeById = new Map(nodes.map((node) => [node.id, node]))
+  const primaries = annotations.filter(isPrimaryClaimAnnotation)
+
+  // Map each primary annotation id to the claim it denotes, so a child claim's
+  // parentAnnotationId resolves back to the parent claim id natively.
+  const claimIdByAnnId = new Map(primaries.map((p) => [p.id, p.denotesNodeId as string]))
+
+  const childrenByParent = new Map<string, ClaimAnnotationRow[]>()
+  for (const ann of annotations) {
+    if (isPrimaryClaimAnnotation(ann) || ann.parentAnnotationId === null) continue
+    const list = childrenByParent.get(ann.parentAnnotationId) ?? []
+    list.push(ann)
+    childrenByParent.set(ann.parentAnnotationId, list)
+  }
+
+  const edgesBySource = new Map<string, ClaimEdgeRow[]>()
+  for (const edge of refEdges) {
+    if (!isClaimRefEdge(edge) || edge.sourceLocalId === null) continue
+    const list = edgesBySource.get(edge.sourceLocalId) ?? []
+    list.push(edge)
+    edgesBySource.set(edge.sourceLocalId, list)
+  }
+
+  const claims: StoredClaim[] = []
+  for (const primary of primaries) {
+    const claimId = primary.denotesNodeId as string
+    const node = nodeById.get(claimId)
+    if (!node) continue
+    const parentClaimId =
+      primary.parentAnnotationId !== null ? claimIdByAnnId.get(primary.parentAnnotationId) ?? null : null
+    claims.push(
+      claimFromLayers(node, primary, {
+        children: childrenByParent.get(primary.id) ?? [],
+        refEdges: edgesBySource.get(claimId) ?? [],
+        parentClaimId,
+      }),
+    )
+  }
+  return claims
+}
+
+/** True when an annotation is a claim relation's endpoint-span annotation. */
+export function isRelationSpanAnnotation(row: { label: string | null }): boolean {
+  return row.label === LABEL_RELATION_SPAN
+}
+
+/** The summary a claim belongs to, from its primary annotation's `summary` argumentRef. */
+export function claimSummaryId(row: { arguments: unknown }): string | null {
+  return readObjectArgument(row.arguments, ROLE_SUMMARY)
+}
+
+/** The relation id an endpoint-span annotation points at (its `relation-of` argumentRef), or null. */
+export function relationSpanRelationId(row: { arguments: unknown }): string | null {
+  return readObjectArgument(row.arguments, ROLE_RELATION)
+}
+
+/** Reconstructs a relation's endpoint spans from its side-tagged span annotations. */
+function readRelationSpans(
+  spans: ClaimAnnotationRow[],
+  side: string,
+): Record<string, unknown>[] | null {
+  const sideSpans = spans.filter((s) => readFeature(entriesOf(s.features), KEY_RELATION_SIDE) === side)
+  if (sideSpans.length === 0) return null
+  return sideSpans
+    .map((child) => {
+      const entries = entriesOf(child.features)
+      const anchor = (child.anchor as { textSpan?: { charStart?: unknown; charEnd?: unknown } } | null)?.textSpan
+      const charStart = typeof anchor?.charStart === 'number' ? anchor.charStart : 0
+      const charEnd = typeof anchor?.charEnd === 'number' ? anchor.charEnd : charStart
+      return { index: Number(readFeature(entries, KEY_SPAN_INDEX) ?? '0'), out: { charStart, charEnd } }
+    })
+    .sort((a, b) => a.index - b.index)
+    .map((entry) => entry.out)
+}
+
+/**
+ * Reconstructs a claim relation from its GraphEdge and its endpoint-span
+ * annotations. The relation type is the edgeType, confidence recovers from the
+ * integer scale, and the notes / timestamps recover from the edge's flat scalar
+ * properties; source/target spans recover from the side-tagged span annotations.
  *
  * @param edge - the relation GraphEdge row
+ * @param spans - the relation's endpoint-span annotations (empty when not loaded)
  * @returns the reconstructed relation, or null when it is not a claim relation
  */
-export function edgeToRelation(edge: ClaimEdgeRow): StoredRelation | null {
+export function edgeToRelation(edge: ClaimEdgeRow, spans: ClaimAnnotationRow[] = []): StoredRelation | null {
   if (!isClaimRelationEdge(edge)) return null
   const entries = entriesOf(edge.properties)
-  const object = residualObject(entries) as Partial<StoredRelation> & Record<string, unknown>
-  object.id = edge.id
-  object.sourceClaimId = edge.sourceLocalId ?? ''
-  object.targetClaimId = edge.targetLocalId ?? ''
-  object.relationTypeId = edge.edgeType
-  object.createdBy = edge.createdByUserId ?? null
-  if (typeof edge.confidence === 'number') object.confidence = fromMilli(edge.confidence)
-  return object as StoredRelation
+  const relation: StoredRelation = {
+    id: edge.id,
+    sourceClaimId: edge.sourceLocalId ?? '',
+    targetClaimId: edge.targetLocalId ?? '',
+    relationTypeId: edge.edgeType,
+    sourceSpans: readRelationSpans(spans, RELATION_SIDE_SOURCE),
+    targetSpans: readRelationSpans(spans, RELATION_SIDE_TARGET),
+    confidence: typeof edge.confidence === 'number' ? fromMilli(edge.confidence) : null,
+    notes: readFeature(entries, KEY_NOTES),
+    createdBy: edge.createdByUserId ?? null,
+    createdAt: readFeature(entries, KEY_CREATED_AT) ?? '',
+    updatedAt: readFeature(entries, KEY_UPDATED_AT) ?? '',
+  }
+  return relation
 }
 
 // --- tree assembly -----------------------------------------------------------
@@ -766,7 +1015,9 @@ export function edgeToRelation(edge: ClaimEdgeRow): StoredRelation | null {
 /**
  * Nests a flat claim list into the hierarchical tree the read paths return,
  * ordering siblings by creation time then id for a stable result. Claims whose
- * `parentClaimId` names a claim outside the list are treated as roots.
+ * `parentClaimId` names a claim outside the list are treated as roots. The
+ * `parentClaimId` is recovered natively from each claim's `parentAnnotationId`
+ * self-relation on reconstruction.
  *
  * @param flat - the flat claim list
  * @returns the root claims, each carrying its nested subclaims
@@ -801,7 +1052,8 @@ export function nestClaims(flat: StoredClaim[]): StoredClaimNode[] {
 }
 
 /**
- * Collects a claim's id and every descendant subclaim id from a flat list.
+ * Collects a claim's id and every descendant subclaim id from a flat list, walking
+ * the natively-reconstructed `parentClaimId` links.
  *
  * @param flat - the flat claim list
  * @param rootId - the id of the claim whose subtree to collect

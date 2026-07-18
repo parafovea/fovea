@@ -1709,21 +1709,39 @@ describe('Claims API', () => {
       expect(relFromTarget.json().asTarget).toHaveLength(1)
       expect(relFromTarget.json().asTarget[0].id).toBe(createdRelation.id)
 
-      // The data lives in the layers store: three claim nodes, one relation
-      // edge, and one text-span annotation per span (2 + 1 + 1).
+      // The data lives natively in the layers store: three claim nodes, the
+      // parent's three cross-object reference edges (describes / occurs-at /
+      // located-at) plus the one relation edge, and the endpoint spans as native
+      // annotations rather than a residual featureMap.
       const claimNodes = await prisma.graphNode.findMany({ where: { nodeType: 'claim' } })
       expect(claimNodes.map(n => n.id).sort()).toEqual([parentId, sub1Id, sub2Id].sort())
 
-      const relationEdges = await prisma.graphEdge.count()
-      expect(relationEdges).toBe(1)
+      // The claim's world references are describes/occurs-at/located-at edges.
+      const refEdges = await prisma.graphEdge.findMany({
+        where: { edgeType: { in: ['describes', 'occurs-at', 'located-at'] }, sourceLocalId: parentId },
+      })
+      expect(refEdges.map(e => e.edgeType).sort()).toEqual(['describes', 'located-at', 'occurs-at'])
+      expect(refEdges.find(e => e.edgeType === 'describes')?.targetLocalId).toBe(eventId)
+      expect(refEdges.find(e => e.edgeType === 'occurs-at')?.targetLocalId).toBe(timeId)
+      expect(refEdges.find(e => e.edgeType === 'located-at')?.targetLocalId).toBe(locationId)
+
+      // Four edges total: three claim references + one relation.
+      expect(await prisma.graphEdge.count()).toBe(4)
       const edge = await prisma.graphEdge.findUnique({ where: { id: createdRelation.id } })
       expect(edge?.sourceLocalId).toBe(sub1Id)
       expect(edge?.targetLocalId).toBe(sub2Id)
 
-      const spanAnnotations = await prisma.layersAnnotation.findMany()
-      expect(spanAnnotations).toHaveLength(4)
-      const denoted = new Set(spanAnnotations.map(a => a.denotesNodeId))
+      // Every claim node is denoted by its primary + its text-span/temporal
+      // children (no residual blob anywhere), and the relation's endpoint spans
+      // live as their own `relation-span` annotations pointing at the relation.
+      const denoted = new Set(
+        (await prisma.layersAnnotation.findMany({ where: { denotesNodeId: { not: null } } })).map(
+          a => a.denotesNodeId,
+        ),
+      )
       expect(denoted).toEqual(new Set([parentId, sub1Id, sub2Id]))
+      const relationSpans = await prisma.layersAnnotation.findMany({ where: { label: 'relation-span' } })
+      expect(relationSpans).toHaveLength(2)
     })
   })
 })

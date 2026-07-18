@@ -16,11 +16,14 @@ between claims. This lens projects that result to a
   ``"claim"``), the confidence on ``confidence`` (integer ``0..1000`` scale), and
   the sentence index in ``features``, and
 - one :class:`lairs.records.graph.GraphEdgeSet` of ``GraphEdgeEntry`` edges, one
-  per claim relationship, whose ``edgeType`` is the nearest layers slug and whose
-  ``features`` carry the exact relation type, endpoint ids, and notes.
+  per claim relationship, whose ``edgeType`` is the relation type verbatim, whose
+  ``source`` / ``target`` object refs are the relationship's endpoint ids, and
+  whose ``features`` carry only the free-text notes.
 
 Every claim field is read back from those canonical records rather than a sidecar
-— there is no verbatim claim tree in the complement. The reasoning trace is
+— the relationship endpoints and type come from the edge's native ``source`` /
+``target`` / ``edgeType``, not a feature copy, and there is no verbatim claim tree
+in the complement. The reasoning trace is
 model-inference telemetry, not annotation structure, so the lens drops it and
 lifts only the emitting ``model_id`` to the layer's ``annotationMetadata.agent``.
 Confidence is quantized once to the integer ``0..1000`` scale at emission, so the
@@ -68,44 +71,9 @@ _EXPRESSION_KEY = "document"
 # The tool every emitted annotation layer attributes its work to.
 _TOOL = "fovea"
 
-# Annotation / edge feature keys carrying the fields with no dedicated column.
+# Annotation / edge feature keys carrying the flat fields with no dedicated column.
 _FK_SENTENCE_INDEX = "sentence_index"
-_FK_RELATION_TYPE = "fovea.relationType"
-_FK_SOURCE_REF = "fovea.sourceRef"
-_FK_TARGET_REF = "fovea.targetRef"
-_FK_NOTES = "fovea.notes"
-
-# fovea relationship type -> nearest layers graph edge slug (else "custom"). The
-# exact relation type rides in the edge features, so the slug is lossy-but-native.
-_EDGE_TYPE_BY_RELATION = {
-    "supports": "supports",
-    "contradicts": "contradicts",
-    "refines": "specializes",
-    "generalizes": "related-to",
-    "duplicates": "same-as",
-}
-
-
-def _edge_type(relation_type: str) -> str:
-    return _EDGE_TYPE_BY_RELATION.get(relation_type, "custom")
-
-
-def _resolve_endpoint(raw_id: str, claim_uuids: list[str]) -> str:
-    """Resolve a relationship endpoint to the minted claim uuid it references.
-
-    A relationship names a claim by its position in the preorder claim list;
-    ``claim_uuids[index]`` is that claim's minted ``claim-{index}`` uuid, so a
-    resolved edge points at a real claim annotation. An endpoint that is not a
-    valid positional index passes through unchanged. The original endpoint id
-    rides in the edge features, so the resolution is native and reversible.
-    """
-    try:
-        index = int(raw_id)
-    except ValueError:
-        return raw_id
-    if 0 <= index < len(claim_uuids):
-        return claim_uuids[index]
-    return raw_id
+_FK_NOTES = "notes"
 
 
 def _byte_offset(text: str, char_index: int) -> int:
@@ -145,7 +113,7 @@ class ClaimsLayersLens(dx.Lens[ClaimsResultDTO, CorpusFragment, JsonValue]):
             )
         ]
 
-        annotations, claim_uuids = _build_annotations(dto.text, dto.claims)
+        annotations = _build_annotations(dto.text, dto.claims)
         model_id = _first_model_id(dto.claims)
         metadata = (
             defs.AnnotationMetadata(agent=defs.AgentRef(id=model_id), tool=_TOOL)
@@ -179,13 +147,9 @@ class ClaimsLayersLens(dx.Lens[ClaimsResultDTO, CorpusFragment, JsonValue]):
                         edges=tuple(
                             graph.GraphEdgeEntry(
                                 uuid=defs.Uuid(value=f"edge-{index}"),
-                                source=object_ref(
-                                    _resolve_endpoint(rel.source_claim_id, claim_uuids)
-                                ),
-                                target=object_ref(
-                                    _resolve_endpoint(rel.target_claim_id, claim_uuids)
-                                ),
-                                edgeType=_edge_type(rel.relation_type),
+                                source=object_ref(rel.source_claim_id),
+                                target=object_ref(rel.target_claim_id),
+                                edgeType=rel.relation_type,
                                 confidence=conf_to_int(rel.confidence),
                                 features=_relation_features(rel),
                             )
@@ -230,24 +194,23 @@ class ClaimsLayersLens(dx.Lens[ClaimsResultDTO, CorpusFragment, JsonValue]):
 
 
 def _relation_features(rel: ClaimRelationshipDTO) -> defs.FeatureMap | None:
-    """Build the feature map carrying a relationship's exact, non-native fields."""
-    features: dict[str, JsonValue] = {
-        _FK_RELATION_TYPE: rel.relation_type,
-        _FK_SOURCE_REF: rel.source_claim_id,
-        _FK_TARGET_REF: rel.target_claim_id,
-    }
-    if rel.notes is not None:
-        features[_FK_NOTES] = rel.notes
-    return feature_map(features)
+    """Build the feature map carrying a relationship's free-text notes, if any.
+
+    The endpoints and type are native on the edge (``source`` / ``target`` /
+    ``edgeType``); only the notes have no dedicated column, so they alone ride in
+    the features.
+    """
+    if rel.notes is None:
+        return None
+    return feature_map({_FK_NOTES: rel.notes})
 
 
-def _build_annotations(
-    text: str, claims: list[ExtractedClaimDTO]
-) -> tuple[list[annotation.Annotation], list[str]]:
+def _build_annotations(text: str, claims: list[ExtractedClaimDTO]) -> list[annotation.Annotation]:
     """Flatten the claim tree into ``Annotation`` records in preorder.
 
-    Returns the annotations (ordered by minted claim index) and the preorder
-    list of minted claim UUIDs (the claim->uuid map).
+    Returns the annotations ordered by minted claim index; the minted
+    ``claim-{index}`` UUIDs link parent and child annotations via
+    ``parentId`` / ``childIds``.
     """
     ordered: list[tuple[int, annotation.Annotation]] = []
     uuids: list[str] = []
@@ -264,7 +227,7 @@ def _build_annotations(
         visit(claim, None)
 
     ordered.sort(key=lambda item: item[0])
-    return [anno for _index, anno in ordered], uuids
+    return [anno for _index, anno in ordered]
 
 
 def _claim_annotation(
@@ -342,14 +305,26 @@ def _char_offsets(ann: annotation.Annotation) -> tuple[int | None, int | None]:
     return anchor.textSpan.charStart, anchor.textSpan.charEnd
 
 
+def _endpoint_id(ref: defs.ObjectRef | None) -> str:
+    """Read a relationship endpoint id from an edge's native object ref."""
+    if ref is None or ref.localId is None:
+        return ""
+    return ref.localId.value
+
+
 def _edge_to_relationship(edge: graph.GraphEdgeEntry) -> ClaimRelationshipDTO:
-    """Reconstruct a claim relationship from its graph edge and features."""
+    """Reconstruct a claim relationship from its graph edge's native fields.
+
+    Endpoints come from the edge's ``source`` / ``target`` object refs and the
+    type from ``edgeType`` (both authoritative); only the free-text notes are read
+    from the features.
+    """
     features = read_feature_map(edge.features)
     notes = features.get(_FK_NOTES)
     return ClaimRelationshipDTO(
-        source_claim_id=j_str(features[_FK_SOURCE_REF]),
-        target_claim_id=j_str(features[_FK_TARGET_REF]),
-        relation_type=j_str(features[_FK_RELATION_TYPE]),
+        source_claim_id=_endpoint_id(edge.source),
+        target_claim_id=_endpoint_id(edge.target),
+        relation_type=edge.edgeType,
         confidence=conf_from_int(edge.confidence or 0),
         notes=None if notes is None else j_str(notes),
     )

@@ -94,10 +94,31 @@ export function claimAnnotationId(claimId: string): string {
 /**
  * The temporal-span LayersAnnotation id for one video-time grounding of a claim,
  * keyed by the claim id and the span's index. Each grounds the same claim node in
- * video time alongside its text anchor.
+ * video time as a child of the claim's primary annotation.
  */
 export function claimTimeSpanAnnotationId(claimId: string, spanIndex: number): string {
   return deriveId('ann:claim-time', claimId, String(spanIndex))
+}
+
+/**
+ * The text-span child LayersAnnotation id for one of a claim's discontiguous text
+ * spans, keyed by the claim id and the span's index. Each carries the span's
+ * character extent on a `textSpan` anchor as a child of the claim's primary
+ * annotation, so the full (possibly discontiguous) span list round-trips natively.
+ */
+export function claimTextSpanAnnotationId(claimId: string, spanIndex: number): string {
+  return deriveId('ann:claim-text-span', claimId, String(spanIndex))
+}
+
+/**
+ * The span-endpoint LayersAnnotation id for one source/target span of a claim
+ * relation, keyed by the relation id, the side (`source`/`target`), and the span
+ * index. Each carries a `textSpan` anchor and points at the relation via an
+ * `argumentRef`, so a relation's endpoint spans round-trip as native annotations
+ * rather than a flattened edge featureMap.
+ */
+export function relationSpanAnnotationId(relationId: string, side: string, spanIndex: number): string {
+  return deriveId('ann:relation-span', relationId, side, String(spanIndex))
 }
 
 /**

@@ -671,21 +671,33 @@ describe('Cross-user import ownership', () => {
       ])
       // Annotations live in the layers store: each LayersAnnotation joins its
       // grouping layer, which carries the personaId the ownership chain follows.
-      ;(mockPrisma.layersAnnotation.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([
-        { id: 'ann-a', layer: { personaId: 'persona-a' } },
-        { id: 'ann-b', layer: { personaId: 'persona-b' } },
-      ])
-      // Claims are claim GraphNodes carrying identity + their summary membership
-      // as native feature scalars (no verbatim stash).
+      // The claim-ref reader also queries the claim primaries (by id) to recover
+      // each claim's summary membership from its native `summary` argumentRef.
+      ;(mockPrisma.layersAnnotation.findMany as ReturnType<typeof vi.fn>).mockImplementation(
+        (args: { where?: { id?: { in?: string[] } } }) => {
+          if (args?.where?.id?.in) {
+            return Promise.resolve([
+              { denotesNodeId: 'claim-a', arguments: [{ role: 'summary', target: { localId: { value: 'sum-a' } } }] },
+              { denotesNodeId: 'claim-b', arguments: [{ role: 'summary', target: { localId: { value: 'sum-b' } } }] },
+            ])
+          }
+          return Promise.resolve([
+            { id: 'ann-a', layer: { personaId: 'persona-a' } },
+            { id: 'ann-b', layer: { personaId: 'persona-b' } },
+          ])
+        },
+      )
+      // Claims are claim GraphNodes carrying identity only; summary membership is
+      // the primary annotation's native `summary` argumentRef (no feature stash).
       ;(mockPrisma.graphNode.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([
-        { id: 'claim-a', nodeType: 'claim', label: 'a', properties: { entries: [{ key: 'fovea.summaryId', value: 'sum-a' }, { key: 'fovea.summaryType', value: 'video' }] }, createdByUserId: null, projectId: null },
-        { id: 'claim-b', nodeType: 'claim', label: 'b', properties: { entries: [{ key: 'fovea.summaryId', value: 'sum-b' }, { key: 'fovea.summaryType', value: 'video' }] }, createdByUserId: null, projectId: null },
+        { id: 'claim-a', nodeType: 'claim', label: 'a', properties: null, createdByUserId: null, projectId: null },
+        { id: 'claim-b', nodeType: 'claim', label: 'b', properties: null, createdByUserId: null, projectId: null },
       ])
-      // Claim relations are GraphEdges between claim nodes, tagged with the
-      // `fovea.edgeRole` feature; their endpoints ride on sourceLocalId/targetLocalId.
+      // Claim relations are GraphEdges between claim nodes, tagged with the flat
+      // `edgeRole` property; their endpoints ride on sourceLocalId/targetLocalId.
       ;(mockPrisma.graphEdge.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([
-        { id: 'cr-a', edgeType: 'supports', sourceLocalId: 'claim-a', targetLocalId: 'claim-b', confidence: null, createdByUserId: null, properties: { entries: [{ key: 'fovea.edgeRole', value: 'claim-relation' }] } },
-        { id: 'cr-b', edgeType: 'supports', sourceLocalId: 'claim-b', targetLocalId: 'claim-a', confidence: null, createdByUserId: null, properties: { entries: [{ key: 'fovea.edgeRole', value: 'claim-relation' }] } },
+        { id: 'cr-a', edgeType: 'supports', sourceLocalId: 'claim-a', targetLocalId: 'claim-b', confidence: null, createdByUserId: null, properties: { entries: [{ key: 'edgeRole', value: 'claim-relation' }] } },
+        { id: 'cr-b', edgeType: 'supports', sourceLocalId: 'claim-b', targetLocalId: 'claim-a', confidence: null, createdByUserId: null, properties: { entries: [{ key: 'edgeRole', value: 'claim-relation' }] } },
       ])
       ;(mockPrisma.layersOntology.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([
         { personaId: 'persona-a' },

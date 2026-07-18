@@ -173,8 +173,8 @@ def test_relationship_edge_set_shape_and_scale() -> None:
     assert supports.source.localId is not None
     assert supports.source.localId.value == "c-0"
     assert supports.target.localId.value == "c-1"
-    # "refines" has no exact known slug; it maps to "specializes".
-    assert refines.edgeType == "specializes"
+    # The relation type is the edgeType verbatim — no lossy slug.
+    assert refines.edgeType == "refines"
     for edge in edge_set.edges:
         assert edge.confidence is not None
         assert 0 <= edge.confidence <= 1000
@@ -232,33 +232,25 @@ def _index_endpoint_dto() -> ClaimsResultDTO:
     )
 
 
-def test_positional_endpoint_ids_resolve_to_claim_annotation_uuids() -> None:
-    """A relationship that names claims by preorder index resolves to real uuids.
+def test_endpoint_ids_are_native_and_round_trip_verbatim() -> None:
+    """A relationship's endpoint ids ride natively on the edge's source/target.
 
-    An endpoint id that is a decimal index into the preorder claim list is
-    rewritten to that claim's minted ``claim-{index}`` uuid on the edge, so the
-    edge points at an annotation the layer actually contains rather than a
-    dangling id; the original index rides in the edge features and is recovered
-    on the round trip.
+    The endpoint ids and relation type are the edge's own ``source`` / ``target``
+    / ``edgeType`` fields, not a feature copy, so they reconstruct from the native
+    edge alone and round-trip verbatim.
     """
     dto = _index_endpoint_dto()
     view, complement = LENS.forward(dto)
     by_id = _records_by_id(view)
 
-    layer = annotation.AnnotationLayer.model_validate_json(by_id["claims"])
-    claim_uuids = {ann.uuid.value for ann in layer.annotations}
-    assert claim_uuids == {"claim-0", "claim-1"}
-
     edge_set = graph.GraphEdgeSet.model_validate_json(by_id["relationships"])
     (edge,) = edge_set.edges
     assert edge.source.localId is not None
     assert edge.target.localId is not None
-    assert edge.source.localId.value == "claim-0"
-    assert edge.target.localId.value == "claim-1"
-    # Both resolved endpoints name annotations the claims layer contains.
-    assert edge.source.localId.value in claim_uuids
-    assert edge.target.localId.value in claim_uuids
-    # The original positional ids round-trip through the edge features.
+    assert edge.source.localId.value == "0"
+    assert edge.target.localId.value == "1"
+    assert edge.edgeType == "supports"
+    # The endpoints and type are recovered from the native edge, not a sidecar.
     assert LENS.backward(view, complement) == dto
 
 
