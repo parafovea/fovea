@@ -549,7 +549,11 @@ export class AnnotationExporter {
               )
             }
           }
-          if (segment.endFrame >= nextSegment.startFrame) {
+          // Consecutive segments share the keyframe between them: a segment
+          // spanning one keyframe pair ends on the frame the next begins on.
+          // Only a strict overlap (a segment ending past the next's start)
+          // is an error; a shared boundary frame is adjacency, not overlap.
+          if (segment.endFrame > nextSegment.startFrame) {
             errors.push(
               `Overlapping interpolation segments: [${segment.startFrame}, ${segment.endFrame}] and [${nextSegment.startFrame}, ${nextSegment.endFrame}]`
             )

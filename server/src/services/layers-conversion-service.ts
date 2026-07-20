@@ -237,11 +237,14 @@ export function boundingBoxSequenceToSpatioTemporalAnchor(
   const keyframes: Keyframe[] = seq.boxes.map((box) => {
     const timeMs = Math.round((box.frameNumber / frameRate) * 1000)
 
+    // A positive box rounds up to a one-pixel floor so a sub-pixel dimension
+    // survives as a valid box; a non-positive dimension keeps its rounded value
+    // so a degenerate box stays geometrically invalid for downstream validation.
     const bbox: BoundingBox = {
       x: Math.round(box.x),
       y: Math.round(box.y),
-      width: Math.max(1, Math.round(box.width)),
-      height: Math.max(1, Math.round(box.height)),
+      width: box.width > 0 ? Math.max(1, Math.round(box.width)) : Math.round(box.width),
+      height: box.height > 0 ? Math.max(1, Math.round(box.height)) : Math.round(box.height),
     }
 
     const entries: Feature[] = []

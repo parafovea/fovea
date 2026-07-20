@@ -22,7 +22,7 @@ import {
   type MappedTrack,
 } from '../video-annotation-mapper.js'
 import { getOrCreateVideoExpression, parseResolution } from '../video-expression-service.js'
-import { layersOntologyForPersonaId, trackClusterSetId } from '../layers-id-map.js'
+import { layersOntologyForPersonaId, trackClusterSetId, worldInstanceNodeId } from '../layers-id-map.js'
 import type { PrismaLike } from './util.js'
 
 /** The forced scope columns a materialized annotation carries. */
@@ -93,17 +93,23 @@ export async function writeVideoAnnotation(
     },
   })
 
-  // Get-or-create the denoted world-object node so the denotation FK is always
-  // populated (the read side derives linkType from its nodeType). An existing
-  // world node keeps its fields; a not-yet-materialized object gets a minimal
-  // node of the link kind's nodeType.
+  // Get-or-create the denoted world node so the denotation FK is always
+  // populated (the read side derives linkType from its nodeType). A persona-scoped
+  // world-instance annotation materializes a node keyed by the caller's scope and
+  // the instance kind + name, so the same name under one owner collapses onto one
+  // node while a different owner stays distinct; an object annotation references
+  // an already-identified world node by its id (the label). An existing node keeps
+  // its fields.
   let denotesNodeId: string | null = null
   if (mapping.annotation.denotesNode) {
     const node = mapping.annotation.denotesNode
+    const nodeId = input.personaId
+      ? worldInstanceNodeId(scope.userId, scope.projectId, node.nodeType, node.label ?? node.id)
+      : node.id
     await prisma.graphNode.upsert({
-      where: { id: node.id },
+      where: { id: nodeId },
       create: {
-        id: node.id,
+        id: nodeId,
         nodeType: node.nodeType,
         label: node.label,
         projectId: scope.projectId,
@@ -111,7 +117,7 @@ export async function writeVideoAnnotation(
       },
       update: {},
     })
-    denotesNodeId = node.id
+    denotesNodeId = nodeId
   }
 
   const writeData = {
@@ -249,8 +255,14 @@ export interface PersonaAnnotationFilter {
 
 /**
  * Counts a persona's annotations in the layers store, optionally filtered by the
- * reconstructed `type` (derived from the layer persona and denoted node) and
- * `label`, for persona/type deletion previews.
+ * reconstructed `type` and `label`, for persona/type deletion previews.
+ *
+ * A `label` is the operative identifier for a type's annotations: an annotation
+ * carrying a type id on its `label` belongs to that type whether it was authored
+ * as a structural type assignment (an `ontologyTypeRefId` soft reference) or as a
+ * world-instance labeled with the type id (a `denotesNodeId` link). So a `label`
+ * matches on the stored column directly; the reconstructed `type` narrows the
+ * count only when no `label` pins it.
  *
  * @param prisma - the Prisma client (or a transaction client)
  * @param personaId - the persona whose annotations to count
@@ -262,18 +274,23 @@ export async function countPersonaAnnotations(
   personaId: string,
   filter: PersonaAnnotationFilter = {},
 ): Promise<number> {
-  if (filter.type === undefined && filter.label === undefined) {
-    return prisma.layersAnnotation.count({ where: { layer: { personaId } } })
-  }
   const where: Prisma.LayersAnnotationWhereInput = { layer: { personaId } }
   if (filter.label !== undefined) where.label = filter.label
+  if (filter.type === undefined || filter.label !== undefined) {
+    return prisma.layersAnnotation.count({ where })
+  }
   const rows = await readLayersAnnotations(prisma, where)
-  return filter.type !== undefined ? rows.filter((r) => r.type === filter.type).length : rows.length
+  return rows.filter((r) => r.type === filter.type).length
 }
 
 /**
  * Deletes a persona's annotations from the layers store, optionally filtered by
  * the reconstructed `type` and `label`, for persona/type deletion.
+ *
+ * As in {@link countPersonaAnnotations}, a `label` is the operative identifier for
+ * a type's annotations, matching the stored column directly so both a structural
+ * type assignment and a world-instance labeled with the type id are removed; the
+ * reconstructed `type` narrows the delete only when no `label` pins it.
  *
  * @param prisma - the Prisma client (or a transaction client)
  * @param personaId - the persona whose annotations to delete
@@ -285,16 +302,14 @@ export async function deletePersonaAnnotations(
   personaId: string,
   filter: PersonaAnnotationFilter = {},
 ): Promise<number> {
-  if (filter.type === undefined && filter.label === undefined) {
-    const result = await prisma.layersAnnotation.deleteMany({ where: { layer: { personaId } } })
-    return result.count
-  }
   const where: Prisma.LayersAnnotationWhereInput = { layer: { personaId } }
   if (filter.label !== undefined) where.label = filter.label
+  if (filter.type === undefined || filter.label !== undefined) {
+    const result = await prisma.layersAnnotation.deleteMany({ where })
+    return result.count
+  }
   const rows = await readLayersAnnotations(prisma, where)
-  const ids = rows
-    .filter((r) => filter.type === undefined || r.type === filter.type)
-    .map((r) => r.id)
+  const ids = rows.filter((r) => r.type === filter.type).map((r) => r.id)
   if (ids.length === 0) return 0
   const result = await prisma.layersAnnotation.deleteMany({ where: { id: { in: ids } } })
   return result.count

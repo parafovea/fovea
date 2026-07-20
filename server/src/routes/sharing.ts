@@ -217,7 +217,9 @@ async function forkSummary(
     createdBy: ownerUserId,
   }
   const now = new Date().toISOString()
-  for (const claim of sourceClaims) {
+  // A child claim's primary annotation references its parent's via
+  // parentAnnotationId, so every parent must be written before its children.
+  for (const claim of orderClaimsParentsFirst(sourceClaims)) {
     const remapped = remapClaimIds(claim, claimIdMap) as StoredClaim
     const forkedClaim: StoredClaim = {
       ...remapped,
@@ -233,6 +235,28 @@ async function forkSummary(
   }
 
   return { id: forked.id, claimIdMap }
+}
+
+/**
+ * Orders claims so each follows its parent. A child claim's primary annotation
+ * references its parent's annotation via parentAnnotationId, so a fork must write
+ * the parent first to satisfy that foreign key.
+ */
+function orderClaimsParentsFirst<T extends { id: string; parentClaimId?: string | null }>(
+  claims: readonly T[],
+): T[] {
+  const byId = new Map(claims.map((claim) => [claim.id, claim]))
+  const emitted = new Set<string>()
+  const ordered: T[] = []
+  const emit = (claim: T): void => {
+    if (emitted.has(claim.id)) return
+    const parent = claim.parentClaimId ? byId.get(claim.parentClaimId) : undefined
+    if (parent) emit(parent)
+    emitted.add(claim.id)
+    ordered.push(claim)
+  }
+  for (const claim of claims) emit(claim)
+  return ordered
 }
 
 /**

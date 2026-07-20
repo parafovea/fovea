@@ -212,6 +212,25 @@ export function worldScaffoldLayerId(createdByUserId: string | null, projectId: 
 }
 
 /**
+ * The world GraphNode id a persona-scoped world-instance video annotation
+ * denotes, keyed by the owning scope, the instance kind, and the instance name.
+ * Scoping the id keeps a video-materialized instance private to its owner: two
+ * same-name instances of one kind in a single scope collapse onto one node (so
+ * the detection query lists the name once), while the same name under a different
+ * user or project resolves to a distinct node. An object annotation, by contrast,
+ * references an already-identified world node by id and so uses the label
+ * verbatim (see {@link worldNodeAnnotationId} for world-authored nodes).
+ */
+export function worldInstanceNodeId(
+  createdByUserId: string | null,
+  projectId: string | null,
+  nodeType: string,
+  label: string,
+): string {
+  return deriveId('node:world-instance', createdByUserId ?? '', projectId ?? '', nodeType, label)
+}
+
+/**
  * The presence LayersAnnotation id denoting a world node (entity / location /
  * situation / time), keyed by the node id. Every world node carries exactly one
  * presence annotation in the scope's world scaffold layer: it is the native
