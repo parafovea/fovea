@@ -1,0 +1,110 @@
+{
+  "lexicon": 1,
+  "id": "pub.layers.corpus.corpus",
+  "defs": {
+    "main": {
+      "type": "record",
+      "description": "A corpus: a curated collection of expressions.",
+      "key": "tid",
+      "record": {
+        "type": "object",
+        "required": [
+          "name",
+          "createdAt"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Corpus name.",
+            "maxLength": 512
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 50000
+          },
+          "version": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "domainUri": {
+            "type": "string",
+            "format": "at-uri",
+            "description": "AT-URI of the domain definition node. Community-expandable via knowledge graph."
+          },
+          "domain": {
+            "type": "string",
+            "description": "Domain slug (fallback when domainUri unavailable).",
+            "knownValues": [
+              "news",
+              "biomedical",
+              "legal",
+              "social-media",
+              "dialogue",
+              "literary",
+              "scientific",
+              "web",
+              "spoken",
+              "custom"
+            ],
+            "maxLength": 256
+          },
+          "licensing": {
+            "type": "ref",
+            "ref": "pub.layers.defs#licensing",
+            "description": "Licensing terms governing this corpus (supports dual/multi/component licensing)."
+          },
+          "ontologyRefs": {
+            "type": "array",
+            "description": "Ontologies used in this corpus.",
+            "maxLength": 32,
+            "items": {
+              "type": "string",
+              "format": "at-uri"
+            }
+          },
+          "eprintRefs": {
+            "type": "array",
+            "description": "Eprint records (papers/preprints) describing or associated with this corpus.",
+            "maxLength": 64,
+            "items": {
+              "type": "string",
+              "format": "at-uri"
+            }
+          },
+          "reproducibility": {
+            "type": "ref",
+            "ref": "pub.layers.defs#reproducibilityInfo",
+            "description": "How this corpus was produced (code, commit, command, environment, seed)."
+          },
+          "expressionCount": {
+            "type": "integer",
+            "description": "Number of expressions in the corpus.",
+            "minimum": 0
+          },
+          "annotationDesign": {
+            "type": "ref",
+            "ref": "pub.layers.corpus.defs#annotationDesign",
+            "description": "Annotation project design: annotator assignment, adjudication, and quality criteria."
+          },
+          "features": {
+            "type": "ref",
+            "ref": "pub.layers.defs#featureMap"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "datetime"
+          },
+          "languages": {
+            "type": "array",
+            "description": "BCP-47 language tags this record covers. Empty when language is unspecified or unknown.",
+            "maxLength": 128,
+            "items": {
+              "type": "string",
+              "maxLength": 32
+            }
+          }
+        }
+      }
+    }
+  }
+}
