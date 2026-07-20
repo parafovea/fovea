@@ -1,11 +1,13 @@
 """GetPut and scale-rule tests for the tracking layers lens.
 
 The lens makes the canonical layers records authoritative: each per-frame mask is
-a child annotation carrying the exact ``coco-rle`` in ``annotation.spatial``,
-parented under the object's track annotation; the object id is the parent label,
-the frame rate is ``media.videoInfo.frameRate`` (scaled by 100), and the frame
-number / occlusion / confidence ride on child features. There is no verbatim
-complement, and the per-frame/per-response processing time is dropped as
+a single annotation carrying the exact ``coco-rle`` in ``annotation.spatial``, the
+confidence on the integer 0-1000 scale, and the frame's occlusion as the keyframe's
+visibility; the per-frame annotations of one tracked object are grouped by a
+``ClusterSet`` cluster (the object id is the cluster ``uuid``). The frame number
+follows from the keyframe ``timeMs`` and the media frame rate (``media.videoInfo``,
+scaled by 100), and the total frame count rides on a media feature. There is no
+verbatim complement, and the per-frame/per-response processing time is dropped as
 telemetry, so the laws hold over quantized, telemetry-free results.
 """
 
@@ -33,7 +35,10 @@ from src.infrastructure.adapters.outbound.layers.lenses.tracking import (
     TrackingLayersLens,
 )
 
+_EXPRESSION_NSID = "pub.layers.expression.expression"
+_MEDIA_NSID = "pub.layers.media.media"
 _LAYER_NSID = "pub.layers.annotation.annotationLayer"
+_CLUSTERSET_NSID = "pub.layers.annotation.clusterSet"
 
 
 def _rle(height: int, width: int, box: tuple[int, int, int, int]) -> dict:
@@ -119,26 +124,29 @@ def test_view_records_validate_as_lairs_models() -> None:
     view, _complement = TRACKING_LAYERS.forward(dto)
     nsids = {record.nsid for record in view.records}
     assert nsids == {
-        "pub.layers.expression.expression",
-        "pub.layers.media.media",
-        "pub.layers.annotation.annotationLayer",
+        _EXPRESSION_NSID,
+        _MEDIA_NSID,
+        _LAYER_NSID,
+        _CLUSTERSET_NSID,
     }
     for record in view.records:
-        if record.nsid == "pub.layers.expression.expression":
+        if record.nsid == _EXPRESSION_NSID:
             expr = expression.Expression.model_validate_json(record.value_json)
             assert expr.kind == "video"
             assert expr.id == dto.video_id
-        elif record.nsid == "pub.layers.media.media":
+        elif record.nsid == _MEDIA_NSID:
             m = media.Media.model_validate_json(record.value_json)
             assert m.video is not None
             assert (m.video.width, m.video.height) == (30, 20)
             assert m.video.frameRate == 3000  # round(30.0 * 100)
-        else:
+        elif record.nsid == _LAYER_NSID:
             layer = annotation.AnnotationLayer.model_validate_json(record.value_json)
             assert layer.kind == "span"
             assert layer.subkind == "custom"
-            # One parent track annotation per object, in first-appearance order.
-            assert [a.label for a in layer.annotations if a.parentId is None] == ["1", "2"]
+            # Each mask is one flat annotation (no parent/child nesting); three
+            # masks total: object 1 in two frames, object 2 in one.
+            assert all(a.parentId is None for a in layer.annotations)
+            assert len(layer.annotations) == 3
 
 
 def test_layer_record_is_keyed_by_response_id() -> None:
@@ -147,39 +155,79 @@ def test_layer_record_is_keyed_by_response_id() -> None:
     layer_record = next(r for r in view.records if r.nsid == _LAYER_NSID)
     assert layer_record.local_id == "track-abc"
     layer = annotation.AnnotationLayer.model_validate_json(layer_record.value_json)
-    assert layer.expression == f"at://local/pub.layers.expression.expression/{dto.video_id}"
+    assert layer.expression == f"at://local/{_EXPRESSION_NSID}/{dto.video_id}"
 
 
-def test_each_frame_mask_is_a_child_carrying_coco_rle() -> None:
+def test_each_frame_mask_is_an_annotation_carrying_coco_rle() -> None:
     dto = _dto()
     view, _complement = TRACKING_LAYERS.forward(dto)
     layer = _layer(view)
-    children = [a for a in layer.annotations if a.parentId is not None]
     # Three per-frame masks: object 1 in two frames, object 2 in one.
-    assert len(children) == 3
-    for child in children:
-        assert child.spatial is not None
-        assert child.spatial.value.geometryFormat == "coco-rle"
-        assert child.confidence is not None
-        assert 0 <= child.confidence <= 1000
+    assert len(layer.annotations) == 3
+    for ann in layer.annotations:
+        assert ann.spatial is not None
+        assert ann.spatial.value.geometryFormat == "coco-rle"
+        assert ann.confidence is not None
+        assert 0 <= ann.confidence <= 1000
+
+
+def test_objects_group_by_cluster_membership() -> None:
+    dto = _dto()
+    view, _complement = TRACKING_LAYERS.forward(dto)
+    cluster_record = next(r for r in view.records if r.nsid == _CLUSTERSET_NSID)
+    cluster_set = annotation.ClusterSet.model_validate_json(cluster_record.value_json)
+    # One cluster per tracked object (uuid = object id), first-appearance order.
+    assert [c.uuid.value for c in cluster_set.clusters] == ["1", "2"]
+    # Object 1's cluster holds its two per-frame masks; object 2's holds its one.
+    assert len(cluster_set.clusters[0].members) == 2
+    assert len(cluster_set.clusters[1].members) == 1
+
+
+def test_occlusion_rides_on_keyframe_visibility() -> None:
+    dto = _dto()
+    view, _complement = TRACKING_LAYERS.forward(dto)
+    layer = _layer(view)
+    # Object 2 (uuid "2-f0") is occluded, so its keyframe carries visible=false; the
+    # unoccluded object-1 masks carry no visibility feature.
+    occluded = next(a for a in layer.annotations if a.uuid.value == "2-f0")
+    keyframe = occluded.anchor.spatioTemporalAnchor.keyframes[0]
+    assert keyframe.features is not None
+    assert {e.key: e.value for e in keyframe.features.entries} == {"visible": "false"}
+    visible = next(a for a in layer.annotations if a.uuid.value == "1-f0")
+    assert visible.anchor.spatioTemporalAnchor.keyframes[0].features is None
+
+
+def test_total_frames_rides_on_a_media_feature() -> None:
+    dto = _dto()
+    view, _complement = TRACKING_LAYERS.forward(dto)
+    media_record = next(r for r in view.records if r.nsid == _MEDIA_NSID)
+    m = media.Media.model_validate_json(media_record.value_json)
+    # The DTO's total frame count (6) rides on a media feature, not derived as the
+    # max frame number + 1 (which for frames 0 and 5 would be 6 only by chance). The
+    # feature map json-encodes each value, so the stored entry value is the text "6".
+    assert m.features is not None
+    assert {e.key: e.value for e in m.features.entries} == {"total_frames": "6"}
 
 
 def test_scale_rules_hold() -> None:
     dto = _dto()
     view, _complement = TRACKING_LAYERS.forward(dto)
     layer = _layer(view)
-    for child in (a for a in layer.annotations if a.parentId is not None):
-        sta = child.anchor.spatioTemporalAnchor
+    for ann in layer.annotations:
+        sta = ann.anchor.spatioTemporalAnchor
         assert sta is not None
         assert isinstance(sta.temporalSpan.start, int)
         for keyframe in sta.keyframes:
             assert isinstance(keyframe.timeMs, int)
             assert keyframe.bbox.width >= 1
             assert keyframe.bbox.height >= 1
-    # Object 1's parent track spans frames at 0 ms and 167 ms.
-    obj1 = next(a for a in layer.annotations if a.parentId is None and a.label == "1")
-    assert obj1.anchor.temporalSpan.start == 0
-    assert obj1.anchor.temporalSpan.ending == 167
+    # Object 1's two per-frame masks anchor at 0 ms and 167 ms.
+    obj1_times = sorted(
+        a.anchor.spatioTemporalAnchor.keyframes[0].timeMs
+        for a in layer.annotations
+        if a.uuid.value.startswith("1-f")
+    )
+    assert obj1_times == [0, 167]
 
 
 def test_singleton_is_lens_instance() -> None:
@@ -201,9 +249,17 @@ def _tracking_dtos(draw: st.DrawFn) -> TrackObjectsResponseDTO:
             unique=True,
         )
     )
-    n_frames = draw(st.integers(min_value=1, max_value=3))
+    # The frame number is derived on read from the keyframe time and the stored
+    # frame rate, so a result round-trips only when its frames are consistent with
+    # that rate. Frames sit at whole seconds of an integer-fps video, so
+    # frame_number == fps * second is exact and the seconds are distinct (no two
+    # frames merge on reconstruction).
+    fps = draw(st.integers(min_value=1, max_value=120))
+    seconds = draw(
+        st.lists(st.integers(min_value=0, max_value=600), min_size=1, max_size=3, unique=True)
+    )
     frames: list[TrackingFrameDTO] = []
-    for frame_index in range(n_frames):
+    for second in seconds:
         masks: list[TrackingMaskDTO] = []
         for object_id in object_ids:
             bw = draw(st.integers(min_value=1, max_value=max(1, width - 1)))
@@ -221,9 +277,8 @@ def _tracking_dtos(draw: st.DrawFn) -> TrackObjectsResponseDTO:
             )
         frames.append(
             TrackingFrameDTO(
-                frame_number=frame_index,
-                # Timestamp on the integer-millisecond grid.
-                timestamp=draw(st.integers(min_value=0, max_value=100_000)) / 1000.0,
+                frame_number=fps * second,
+                timestamp=float(second),
                 masks=masks,
                 processing_time=0.0,
             )
@@ -234,10 +289,10 @@ def _tracking_dtos(draw: st.DrawFn) -> TrackObjectsResponseDTO:
         frames=frames,
         video_width=width,
         video_height=height,
-        total_frames=n_frames,
+        total_frames=len(frames),
         processing_time=0.0,
-        # Frame rate on the x100 grid so it round-trips through the integer field.
-        fps=draw(st.integers(min_value=100, max_value=12_000)) / 100.0,
+        # An integer fps round-trips through the x100 frame-rate field.
+        fps=float(fps),
     )
 
 

@@ -122,8 +122,8 @@ describe('Videos API - Detection', () => {
         data: {
           personaId: persona.id,
           entityTypes: [
-            { id: '1', name: 'Person', description: 'Human' },
-            { id: '2', name: 'Car', description: 'Vehicle' },
+            { id: '1', name: 'Person', gloss: [{ type: 'text', content: 'Human' }] },
+            { id: '2', name: 'Car', gloss: [{ type: 'text', content: 'Vehicle' }] },
           ],
           eventTypes: [],
           roleTypes: [],
@@ -195,10 +195,10 @@ describe('Videos API - Detection', () => {
         data: {
           personaId: persona.id,
           entityTypes: [
-            { id: '1', name: 'Pitcher', description: 'Throws the ball' },
+            { id: '1', name: 'Pitcher', gloss: [{ type: 'text', content: 'Throws the ball' }] },
           ],
           eventTypes: [
-            { id: '1', name: 'Pitch', description: 'Throwing action' },
+            { id: '1', name: 'Pitch', gloss: [{ type: 'text', content: 'Throwing action' }] },
           ],
           roleTypes: [],
           relationTypes: [],
@@ -406,7 +406,7 @@ describe('Videos API - Detection', () => {
       await seedOntology(prisma, {
         data: {
           personaId: persona.id,
-          entityTypes: [{ id: '1', name: 'Person', description: 'Human' }],
+          entityTypes: [{ id: '1', name: 'Person', gloss: [{ type: 'text', content: 'Human' }] }],
           eventTypes: [],
           roleTypes: [],
           relationTypes: [],
@@ -469,7 +469,7 @@ describe('Videos API - Detection', () => {
       await seedOntology(prisma, {
         data: {
           personaId: persona.id,
-          entityTypes: [{ id: '1', name: 'Person', description: 'Human' }],
+          entityTypes: [{ id: '1', name: 'Person', gloss: [{ type: 'text', content: 'Human' }] }],
           eventTypes: [],
           roleTypes: [],
           relationTypes: [],

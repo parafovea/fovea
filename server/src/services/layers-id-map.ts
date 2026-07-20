@@ -70,6 +70,17 @@ export function layersOntologyForPersonaId(personaId: string): string {
   return deriveId('ontology:persona', personaId)
 }
 
+/**
+ * The track `ClusterSet` id for a video: one set per video groups the video's
+ * annotations into tracks, each track a cluster whose members are the annotations
+ * that follow one tracked object. A tracked annotation's `trackId` is the cluster
+ * it belongs to, so the tracker identity round-trips as native cluster membership
+ * rather than a per-annotation feature.
+ */
+export function trackClusterSetId(videoId: string): string {
+  return deriveId('clusterset:track', videoId)
+}
+
 /** The Expression(kind=transcript) id for a VideoSummary's transcript. */
 export function expressionTranscriptId(summaryId: string): string {
   return deriveId('expr:transcript', summaryId)

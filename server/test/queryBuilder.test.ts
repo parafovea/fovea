@@ -51,10 +51,19 @@ async function createPersona(
   return persona
 }
 
+/** The world-instance kinds an instance annotation's `type` names. */
+const WORLD_INSTANCE_LINK_TYPES = new Set(['entity', 'event', 'time', 'location'])
+
 /**
  * Seeds video annotations in the layers store. Accepts the same
  * `{ data: [...] }` shape the legacy createMany used; only the semantic
  * `type`/`label` and the (video, persona) scope round-trip through the store.
+ *
+ * An annotation whose `type` names a world instance (entity/event/time/location)
+ * carries that kind as its `linkType`, so the annotation materializes a native
+ * world GraphNode of the corresponding nodeType (entity | situation | time |
+ * location) scoped to the owner, which the detection-query builder lists as an
+ * entity/event/location/time instance.
  */
 async function seedAnnotationRows(
   prisma: PrismaClient,
@@ -62,6 +71,9 @@ async function seedAnnotationRows(
   args: { data: Array<{ videoId: string; personaId: string; type: string; label: string; [k: string]: unknown }> },
 ): Promise<void> {
   for (const row of args.data) {
+    const linkType = WORLD_INSTANCE_LINK_TYPES.has(row.type)
+      ? (row.type as 'entity' | 'event' | 'time' | 'location')
+      : null
     await writeVideoAnnotation(
       prisma,
       {
@@ -70,7 +82,7 @@ async function seedAnnotationRows(
         personaId: row.personaId,
         type: row.type,
         label: row.label,
-        linkType: null,
+        linkType,
         frames: EMPTY_FRAMES,
         confidence: null,
         source: 'manual',
@@ -138,9 +150,9 @@ describe('Query Builder', () => {
           ontology: {
             create: {
               entityTypes: [
-                { id: '1', name: 'Pitcher', description: 'Player who throws the ball' },
-                { id: '2', name: 'Batter', description: 'Player at bat' },
-                { id: '3', name: 'Baseball', description: 'The ball' },
+                { id: '1', name: 'Pitcher', gloss: [{ type: 'text', content: 'Player who throws the ball' }] },
+                { id: '2', name: 'Batter', gloss: [{ type: 'text', content: 'Player at bat' }] },
+                { id: '3', name: 'Baseball', gloss: [{ type: 'text', content: 'The ball' }] },
               ],
               eventTypes: [],
               roleTypes: [],
@@ -167,8 +179,8 @@ describe('Query Builder', () => {
           ontology: {
             create: {
               entityTypes: [
-                { id: '1', name: 'Pitcher', description: 'Player who throws the ball' },
-                { id: '2', name: 'Batter', description: 'Player at bat' },
+                { id: '1', name: 'Pitcher', gloss: [{ type: 'text', content: 'Player who throws the ball' }] },
+                { id: '2', name: 'Batter', gloss: [{ type: 'text', content: 'Player at bat' }] },
               ],
               eventTypes: [],
               roleTypes: [],
@@ -197,16 +209,16 @@ describe('Query Builder', () => {
           ontology: {
             create: {
               entityTypes: [
-                { id: '1', name: 'Pitcher', description: 'Throws the ball' },
+                { id: '1', name: 'Pitcher', gloss: [{ type: 'text', content: 'Throws the ball' }] },
               ],
               eventTypes: [
-                { id: '1', name: 'Pitch', description: 'Throwing action' },
+                { id: '1', name: 'Pitch', gloss: [{ type: 'text', content: 'Throwing action' }] },
               ],
               roleTypes: [
-                { id: '1', name: 'Pitcher', description: 'Throwing role' },
+                { id: '1', name: 'Pitcher', gloss: [{ type: 'text', content: 'Throwing role' }] },
               ],
               relationTypes: [
-                { id: '1', name: 'Throws', description: 'Throwing relation' },
+                { id: '1', name: 'Throws', gloss: [{ type: 'text', content: 'Throwing relation' }] },
               ],
             },
           },
@@ -236,16 +248,16 @@ describe('Query Builder', () => {
           ontology: {
             create: {
               entityTypes: [
-                { id: '1', name: 'Pitcher', description: 'Throws the ball' },
+                { id: '1', name: 'Pitcher', gloss: [{ type: 'text', content: 'Throws the ball' }] },
               ],
               eventTypes: [
-                { id: '1', name: 'Pitch', description: 'Throwing action' },
+                { id: '1', name: 'Pitch', gloss: [{ type: 'text', content: 'Throwing action' }] },
               ],
               roleTypes: [
-                { id: '1', name: 'Pitcher', description: 'Throwing role' },
+                { id: '1', name: 'Pitcher', gloss: [{ type: 'text', content: 'Throwing role' }] },
               ],
               relationTypes: [
-                { id: '1', name: 'Throws', description: 'Throwing relation' },
+                { id: '1', name: 'Throws', gloss: [{ type: 'text', content: 'Throwing relation' }] },
               ],
             },
           },
@@ -287,7 +299,7 @@ describe('Query Builder', () => {
           ontology: {
             create: {
               entityTypes: [
-                { id: '1', name: 'Pitcher', description: 'Throws the ball' },
+                { id: '1', name: 'Pitcher', gloss: [{ type: 'text', content: 'Throws the ball' }] },
               ],
               eventTypes: [],
               roleTypes: [],
@@ -532,8 +544,8 @@ describe('Query Builder', () => {
           ontology: {
             create: {
               entityTypes: [
-                { id: '1', name: 'Lion', description: 'Large cat' },
-                { id: '2', name: 'Zebra', description: 'Striped horse' },
+                { id: '1', name: 'Lion', gloss: [{ type: 'text', content: 'Large cat' }] },
+                { id: '2', name: 'Zebra', gloss: [{ type: 'text', content: 'Striped horse' }] },
               ],
               eventTypes: [],
               roleTypes: [],
@@ -570,7 +582,7 @@ describe('Query Builder', () => {
       )
     })
 
-    it('does not exclude entity types without descriptions', async () => {
+    it('does not exclude entity types without glosses', async () => {
       const persona = await createPersona(prisma, {
         data: {
           name: 'Test Persona',
@@ -581,7 +593,7 @@ describe('Query Builder', () => {
             create: {
               entityTypes: [
                 { id: '1', name: 'Person' },
-                { id: '2', name: 'Car', description: 'Vehicle' },
+                { id: '2', name: 'Car', gloss: [{ type: 'text', content: 'Vehicle' }] },
               ],
               eventTypes: [],
               roleTypes: [],

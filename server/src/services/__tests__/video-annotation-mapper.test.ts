@@ -2,6 +2,9 @@ import { describe, it, expect } from 'vitest'
 import {
   annotationToLayers,
   layersToAnnotation,
+  applyTrackMembership,
+  removeTrackMembership,
+  tracksByAnnotation,
   type VideoAnnotationInput,
   type MappedLayersAnnotation,
   type StoredLayersAnnotation,
@@ -10,10 +13,11 @@ import {
 
 /**
  * Round-trips the full legacy annotation through the layers rows and back with
- * the native anchor authoritative: `type` derives from the layer persona,
- * `linkType` from the denoted node's `nodeType`, `confidence` from the native
- * 0-1000 column, and only `source` plus the tracker fields ride as flat scalar
- * features. No `fovea.annotation` blob and no per-keyframe float sidecar remain.
+ * every field in a native home: the sequence rebuilds from the anchor alone,
+ * `source` is the layer `sourceMethod`, `confidence` the native 0-1000 column,
+ * `type`/`linkType` derive from the layer persona and denoted node, and the
+ * tracker identity (`trackId`/`trackingSource`/`trackingConfidence`) is the
+ * video's track ClusterSet membership. No annotation feature backs any of it.
  */
 
 const FRAME_RATE = 30
@@ -24,7 +28,6 @@ function toStored(m: MappedLayersAnnotation): StoredLayersAnnotation {
     id: m.id,
     label: m.label,
     anchor: m.anchor,
-    features: m.features,
     confidence: m.confidence,
     ontologyTypeRefId: m.ontologyTypeRefId,
     denotesNodeId: m.denotesNode?.id ?? null,
@@ -35,7 +38,7 @@ function toStored(m: MappedLayersAnnotation): StoredLayersAnnotation {
 }
 
 describe('video-annotation-mapper round-trips', () => {
-  it('round-trips a tracker object annotation, deriving link/source natively', () => {
+  it('round-trips a tracker object annotation, deriving link/source/track natively', () => {
     const input: VideoAnnotationInput = {
       id: 'ann-obj-1',
       videoId: 'video-1',
@@ -67,32 +70,40 @@ describe('video-annotation-mapper round-trips', () => {
       frameRate: FRAME_RATE,
     })
 
-    // The object layer is world-object, model-projected (non-manual source).
+    // The object layer is world-object; the authoring source is its native
+    // source method (verbatim, so an arbitrary source round-trips).
     expect(mapping.layer.subkind).toBe('world-object')
-    expect(mapping.layer.sourceMethod).toBe('model-projected')
+    expect(mapping.layer.sourceMethod).toBe('sam2')
     // The denoted node is always minted (never nulled) with the link's nodeType.
     expect(mapping.annotation.denotesNode).toEqual({
       id: 'entity-42',
       nodeType: 'entity',
       label: 'entity-42',
     })
-    // No structured meta blob; only flat scalar features remain.
-    expect(mapping.annotation.features['fovea.annotation']).toBeUndefined()
-    expect(mapping.annotation.features).toEqual({
-      'fovea.source': 'sam2',
-      'fovea.trackId': 'track-7',
-      'fovea.trackingSource': 'sam2',
-      'fovea.trackingConfidence': 880,
-    })
     // Confidence is the native 0-1000 integer column.
     expect(mapping.annotation.confidence).toBe(800)
+    // The tracker identity is a track (folded into the video's track ClusterSet),
+    // not a per-annotation feature: track id, tracker name, and 0-1000 confidence.
+    expect(mapping.track).toEqual({
+      trackId: 'track-7',
+      trackingSource: 'sam2',
+      trackingConfidence: 880,
+    })
+
+    // The track round-trips through the ClusterSet membership the write path folds.
+    const clusters = applyTrackMembership(null, mapping.annotation.id, mapping.track)
+    expect(clusters).toHaveLength(1)
+    expect(clusters[0].uuid.value).toBe('track-7')
+    expect(clusters[0].canonicalLabel).toBe('sam2')
+    const track = tracksByAnnotation(clusters).get(mapping.annotation.id) ?? null
 
     const node: DenotesNode = { nodeType: 'entity', label: 'Entity 42' }
     const out = layersToAnnotation(
       toStored(mapping.annotation),
-      { personaId: mapping.layer.personaId },
+      { personaId: mapping.layer.personaId, sourceMethod: mapping.layer.sourceMethod },
       { id: input.videoId, frameRate: FRAME_RATE },
       node,
+      track,
     )
 
     expect(out.type).toBe('object')
@@ -132,13 +143,15 @@ describe('video-annotation-mapper round-trips', () => {
     })
 
     expect(mapping.layer.subkind).toBe('ontology-type')
-    expect(mapping.layer.sourceMethod).toBe('manual-native')
+    expect(mapping.layer.sourceMethod).toBe('manual')
     expect(mapping.annotation.ontologyTypeRefId).toBe('entity-type-abc')
     expect(mapping.annotation.denotesNode).toBeNull()
+    // A type annotation carries no tracker identity.
+    expect(mapping.track).toBeNull()
 
     const out = layersToAnnotation(
       toStored(mapping.annotation),
-      { personaId: mapping.layer.personaId },
+      { personaId: mapping.layer.personaId, sourceMethod: mapping.layer.sourceMethod },
       { id: input.videoId, frameRate: FRAME_RATE },
       null,
     )
@@ -151,5 +164,72 @@ describe('video-annotation-mapper round-trips', () => {
     expect(out.source).toBe('manual')
     expect(out.linkedObjectName).toBeNull()
     expect(out.frames).toEqual(input.frames)
+  })
+
+  it('materializes a world node for a persona-scoped world-instance annotation', () => {
+    const input: VideoAnnotationInput = {
+      id: 'ann-inst-1',
+      videoId: 'video-1',
+      personaId: 'persona-1',
+      type: 'location',
+      label: 'loc-yankee-stadium',
+      linkType: null,
+      confidence: null,
+      source: 'manual',
+      frames: {
+        boxes: [{ x: 0, y: 0, width: 10, height: 10, frameNumber: 0, isKeyframe: true }],
+        interpolationSegments: [],
+        visibilityRanges: [{ startFrame: 0, endFrame: 0, visible: true }],
+        totalFrames: 1,
+        keyframeCount: 1,
+        interpolatedFrameCount: 0,
+      },
+    }
+
+    const mapping = annotationToLayers(input, {
+      expressionId: 'expr-1',
+      ontologyId: 'ontology-1',
+      frameRate: FRAME_RATE,
+    })
+
+    // A world-instance annotation denotes a native world GraphNode (its nodeType
+    // from the instance kind) and asserts no ontology type.
+    expect(mapping.annotation.denotesNode).toEqual({
+      id: 'loc-yankee-stadium',
+      nodeType: 'location',
+      label: 'loc-yankee-stadium',
+    })
+    expect(mapping.annotation.ontologyTypeRefId).toBeNull()
+
+    const node: DenotesNode = { nodeType: 'location', label: 'Yankee Stadium' }
+    const out = layersToAnnotation(
+      toStored(mapping.annotation),
+      { personaId: mapping.layer.personaId, sourceMethod: mapping.layer.sourceMethod },
+      { id: input.videoId, frameRate: FRAME_RATE },
+      node,
+    )
+
+    // The instance kind reconstructs from the denoted node's nodeType.
+    expect(out.type).toBe('location')
+    expect(out.personaId).toBe('persona-1')
+    expect(out.linkedObjectName).toBe('Yankee Stadium')
+  })
+
+  it('moves an annotation between tracks and detaches it on removal', () => {
+    const first = applyTrackMembership(null, 'ann-a', { trackId: 'track-1' })
+    const withSecond = applyTrackMembership(first, 'ann-b', { trackId: 'track-1' })
+    expect(withSecond).toHaveLength(1)
+    expect(withSecond[0].members.map((m) => m.localId.value)).toEqual(['ann-a', 'ann-b'])
+
+    // Re-tracking ann-a moves it to a new cluster, leaving ann-b behind.
+    const moved = applyTrackMembership(withSecond, 'ann-a', { trackId: 'track-2' })
+    const byAnnotation = tracksByAnnotation(moved)
+    expect(byAnnotation.get('ann-a')?.trackId).toBe('track-2')
+    expect(byAnnotation.get('ann-b')?.trackId).toBe('track-1')
+
+    // Detaching ann-a drops its (now empty) cluster.
+    const detached = removeTrackMembership(moved, 'ann-a')
+    expect(tracksByAnnotation(detached).has('ann-a')).toBe(false)
+    expect(detached.map((c) => c.uuid.value)).toEqual(['track-1'])
   })
 })

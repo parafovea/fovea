@@ -14,12 +14,15 @@ import { PrismaClient, Prisma } from '@prisma/client'
 import {
   annotationToLayers,
   layersToAnnotation,
+  applyTrackMembership,
+  tracksByAnnotation,
   VIDEO_ANNOTATION_SUBKINDS,
   type VideoAnnotationInput,
   type VideoAnnotationOutput,
+  type MappedTrack,
 } from '../video-annotation-mapper.js'
 import { getOrCreateVideoExpression, parseResolution } from '../video-expression-service.js'
-import { layersOntologyForPersonaId } from '../layers-id-map.js'
+import { layersOntologyForPersonaId, trackClusterSetId } from '../layers-id-map.js'
 import type { PrismaLike } from './util.js'
 
 /** The forced scope columns a materialized annotation carries. */
@@ -84,6 +87,7 @@ export async function writeVideoAnnotation(
       expressionId: mapping.layer.expressionId,
       kind: mapping.layer.kind,
       subkind: mapping.layer.subkind,
+      sourceMethod: mapping.layer.sourceMethod,
       ontologyId: mapping.layer.ontologyId,
       personaId: mapping.layer.personaId,
     },
@@ -116,7 +120,6 @@ export async function writeVideoAnnotation(
     confidence: mapping.annotation.confidence,
     ontologyTypeRefId: mapping.annotation.ontologyTypeRefId,
     denotesNodeId,
-    features: toJsonInput(mapping.annotation.features),
     startMs: mapping.annotation.startMs,
     endMs: mapping.annotation.endMs,
   }
@@ -132,6 +135,27 @@ export async function writeVideoAnnotation(
     },
     update: writeData,
   })
+
+  // Fold the annotation's tracker identity into the video's track ClusterSet: its
+  // trackId is the cluster it joins, its trackingSource the cluster's label, and
+  // its trackingConfidence a cluster feature.
+  const setId = trackClusterSetId(input.videoId)
+  const existingSet = await prisma.clusterSet.findUnique({ where: { id: setId } })
+  if (existingSet || mapping.track !== null) {
+    const clusters = applyTrackMembership(existingSet?.clusters ?? null, input.id, mapping.track)
+    await prisma.clusterSet.upsert({
+      where: { id: setId },
+      create: {
+        id: setId,
+        kind: 'clustering',
+        expressionId,
+        clusters: toJsonInput(clusters),
+        projectId: scope.projectId,
+        createdByUserId: scope.userId,
+      },
+      update: { clusters: toJsonInput(clusters) },
+    })
+  }
 }
 
 /**
@@ -163,33 +187,36 @@ export async function readLayersAnnotations(
     include: { layer: { include: { expression: { include: { video: true } } } }, denotesNode: true },
     orderBy: { createdAt: 'asc' },
   })
+
+  // Resolve each annotation's tracker identity from its video's track ClusterSet.
+  // Annotation ids are unique, so one merged map keys every row's track.
+  const videoIds = new Set<string>()
+  for (const row of rows) {
+    const videoId = row.layer.expression.video?.id ?? row.layer.expression.videoId
+    if (videoId) videoIds.add(videoId)
+  }
+  const tracks = new Map<string, MappedTrack>()
+  if (videoIds.size > 0) {
+    const trackSets = await prisma.clusterSet.findMany({
+      where: { id: { in: [...videoIds].map(trackClusterSetId) } },
+    })
+    for (const trackSet of trackSets) {
+      for (const [annotationId, track] of tracksByAnnotation(trackSet.clusters)) {
+        tracks.set(annotationId, track)
+      }
+    }
+  }
+
   return rows.map((row) => {
     const video = row.layer.expression.video
     return layersToAnnotation(
       row,
-      { personaId: row.layer.personaId },
+      { personaId: row.layer.personaId, sourceMethod: row.layer.sourceMethod },
       { id: video?.id ?? row.layer.expression.videoId ?? '', frameRate: video?.frameRate ?? null },
       row.denotesNode ? { nodeType: row.denotesNode.nodeType, label: row.denotesNode.label } : null,
+      tracks.get(row.id) ?? null,
     )
   })
-}
-
-/**
- * Reads a persona's annotations from the layers store as `{ type, label }`
- * pairs, for the detection-query builder's world-instance extraction. Layers
- * rows carry their semantic `type` in the stashed annotation meta, so it
- * round-trips.
- *
- * @param prisma - the Prisma client
- * @param personaId - the persona whose annotations to read
- * @returns the annotation `type` / `label` pairs
- */
-export async function readPersonaAnnotationTypesAndLabels(
-  prisma: PrismaClient,
-  personaId: string,
-): Promise<Array<{ type: string; label: string }>> {
-  const layersRows = await readLayersAnnotations(prisma, { layer: { personaId } })
-  return layersRows.map((row) => ({ type: row.type, label: row.label }))
 }
 
 /**
@@ -222,8 +249,8 @@ export interface PersonaAnnotationFilter {
 
 /**
  * Counts a persona's annotations in the layers store, optionally filtered by the
- * semantic `type` (stashed in the layers annotation meta) and `label`, for
- * persona/type deletion previews.
+ * reconstructed `type` (derived from the layer persona and denoted node) and
+ * `label`, for persona/type deletion previews.
  *
  * @param prisma - the Prisma client (or a transaction client)
  * @param personaId - the persona whose annotations to count
@@ -246,7 +273,7 @@ export async function countPersonaAnnotations(
 
 /**
  * Deletes a persona's annotations from the layers store, optionally filtered by
- * the semantic `type` and `label`, for persona/type deletion.
+ * the reconstructed `type` and `label`, for persona/type deletion.
  *
  * @param prisma - the Prisma client (or a transaction client)
  * @param personaId - the persona whose annotations to delete

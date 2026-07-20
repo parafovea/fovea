@@ -1,12 +1,13 @@
 """Round-trip law tests for the detection response <-> layers fragment lens.
 
-The lens makes the canonical layers records authoritative: the frame number rides
-on a keyframe feature, the exact normalized box on ``annotation.spatial``, the
-confidence on the integer 0-1000 scale, the track id on a feature, the query on
-``reproducibility.command``, and the response id on the layer record key. There is
-no verbatim complement, the frame-processing time is dropped as telemetry, and an
-empty frame carries no annotation, so the laws hold over quantized responses whose
-frames each carry at least one detection.
+The lens makes the canonical layers records authoritative: the frame number
+follows from the keyframe ``timeMs`` and the media frame rate, the exact normalized
+box rides on ``annotation.spatial``, the confidence on the integer 0-1000 scale, the
+track id on a ``ClusterSet`` cluster (one cluster per track, the detections its
+members), the query on ``reproducibility.command``, and the response id on the layer
+record key. There is no verbatim complement, the frame-processing time is dropped as
+telemetry, and an empty frame carries no annotation, so the laws hold over quantized
+responses whose frames each carry at least one detection.
 """
 
 from __future__ import annotations
@@ -26,6 +27,7 @@ from src.application.dto.detection import (
 )
 from src.infrastructure.adapters.outbound.layers._convert import (
     ANNOTATION_LAYER_NSID,
+    CLUSTERSET_NSID,
     EXPRESSION_NSID,
     MEDIA_NSID,
 )
@@ -40,7 +42,9 @@ def _example_dto() -> DetectObjectsResponseDTO:
     """A deterministic, multi-frame detection response (no now()/random).
 
     Confidences sit on the integer 0..1000 grid and every frame carries at least
-    one detection, so the trace-free, quantized response round-trips.
+    one detection. Frame numbers are consistent with the timestamps at a single
+    frame rate (6 fps: frame 3 at 0.5 s, frame 12 at 2.0 s), so the frame number —
+    now derived from the keyframe time and the media frame rate — round-trips.
     """
     return DetectObjectsResponseDTO(
         id="detect-0",
@@ -48,7 +52,7 @@ def _example_dto() -> DetectObjectsResponseDTO:
         query="find every cat and dog",
         frames=[
             FrameDetectionsDTO(
-                frame_number=0,
+                frame_number=3,
                 timestamp=0.5,
                 detections=[
                     DetectionDTO(
@@ -67,7 +71,7 @@ def _example_dto() -> DetectObjectsResponseDTO:
             ),
             FrameDetectionsDTO(
                 frame_number=12,
-                timestamp=2.04,
+                timestamp=2.0,
                 detections=[
                     DetectionDTO(
                         label="cat",
@@ -128,7 +132,7 @@ class TestGetPut:
         back = LENS.backward(view, complement)
         assert back.frames[0].detections[0].bounding_box.width == 0.3
         assert back.frames[0].detections[0].confidence == 0.875
-        assert back.frames[1].timestamp == 2.04
+        assert back.frames[1].timestamp == 2.0
 
 
 class TestViewProjection:
@@ -152,8 +156,8 @@ class TestViewProjection:
         med = media.Media.model_validate_json(media_record.value_json)
         assert med.video is not None
         assert (med.video.width, med.video.height) == (640, 480)
-        # fps derived from frame 12 at 2.04s: 12 / 2.04 == 5.88..., scaled by 100.
-        assert med.video.frameRate == round(12 / 2.04 * 100)
+        # fps derived from the largest-frame-number frame (12 at 2.0s): 6 fps, x100.
+        assert med.video.frameRate == round(12 / 2.0 * 100)
 
     def test_layer_is_span_entity_mention_and_keyed_by_id(self) -> None:
         dto = _example_dto()
@@ -207,16 +211,21 @@ class TestViewProjection:
         assert keyframe.bbox.width == 1
         assert keyframe.bbox.height == 1
 
-    def test_track_id_rides_as_feature(self) -> None:
+    def test_track_id_rides_as_cluster_membership(self) -> None:
         dto = _example_dto()
         view, _complement = LENS.forward(dto)
         layer = _layer(view)
-        cat = layer.annotations[0]
-        assert cat.features is not None
-        assert "track_id" in {e.key for e in cat.features.entries}
-        # a detection with no track id carries no annotation features
-        dog = layer.annotations[1]
-        assert dog.features is None
+        # The track id lives on a ClusterSet cluster (uuid = track id), not on any
+        # annotation feature; no detection carries annotation features.
+        for ann in layer.annotations:
+            assert ann.features is None
+
+        cluster_record = next(r for r in view.records if r.nsid == CLUSTERSET_NSID)
+        cluster_set = annotation.ClusterSet.model_validate_json(cluster_record.value_json)
+        # Both track-1 cats cluster together; the untracked dog joins no cluster.
+        assert [c.uuid.value for c in cluster_set.clusters] == ["track-1"]
+        members = {m.localId.value for m in cluster_set.clusters[0].members}
+        assert members == {layer.annotations[0].uuid.value, layer.annotations[2].uuid.value}
 
 
 class TestLensLaws:
@@ -230,8 +239,6 @@ class TestLensLaws:
         norm = st.floats(min_value=0.0, max_value=1.0, allow_nan=False, allow_infinity=False)
         # Confidence sits on the quantized 0..1000 grid so scaling is exact.
         conf = st.integers(min_value=0, max_value=1000).map(lambda i: i / 1000.0)
-        # Timestamps sit on the integer-millisecond grid so time round-trips.
-        secs = st.integers(min_value=0, max_value=3_600_000).map(lambda ms: ms / 1000.0)
         boxes = st.builds(BoundingBoxDTO, x=norm, y=norm, width=norm, height=norm)
         detections = st.builds(
             DetectionDTO,
@@ -243,19 +250,25 @@ class TestLensLaws:
 
         @st.composite
         def responses(draw: st.DrawFn) -> DetectObjectsResponseDTO:
-            # Frame numbers are unique so no two frames merge on reconstruction.
-            frame_numbers = draw(
-                st.lists(st.integers(min_value=0, max_value=10_000), max_size=3, unique=True)
+            # The frame number is derived on read from the keyframe time and the
+            # frame rate (itself derived from the largest-frame-number frame), so a
+            # response round-trips only when its frames are consistent with one
+            # frame rate. Frames sit at whole seconds of an integer-fps video, so
+            # frame_number == fps * second is exact and the seconds are distinct
+            # (no two frames merge on reconstruction).
+            fps = draw(st.integers(min_value=1, max_value=120))
+            seconds = draw(
+                st.lists(st.integers(min_value=1, max_value=600), max_size=3, unique=True)
             )
             frames: list[FrameDetectionsDTO] = []
             total = 0
-            for frame_number in frame_numbers:
+            for second in seconds:
                 # Each frame carries at least one detection (an empty frame drops).
                 dets = draw(st.lists(detections, min_size=1, max_size=3))
                 total += len(dets)
                 frames.append(
                     FrameDetectionsDTO(
-                        frame_number=frame_number, timestamp=draw(secs), detections=dets
+                        frame_number=fps * second, timestamp=float(second), detections=dets
                     )
                 )
             return DetectObjectsResponseDTO(

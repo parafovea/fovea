@@ -11,16 +11,20 @@ import {
   annotationToLayers,
   layersToAnnotation,
   isVideoAnnotationSubkind,
+  applyTrackMembership,
+  removeTrackMembership,
+  tracksByAnnotation,
   VIDEO_ANNOTATION_SUBKINDS,
   type VideoAnnotationInput,
   type VideoAnnotationLinkType,
   type MappedDenotesNode,
+  type MappedTrack,
 } from '../../services/video-annotation-mapper.js'
 import {
   getOrCreateVideoExpression,
   parseResolution,
 } from '../../services/video-expression-service.js'
-import { layersOntologyForPersonaId } from '../../services/layers-id-map.js'
+import { layersOntologyForPersonaId, trackClusterSetId } from '../../services/layers-id-map.js'
 import { demoLayersAnnotationReadWhere } from '../../lib/demo-rbac.js'
 import type { BoundingBoxSequence } from '../../services/layers-conversion-service.js'
 
@@ -113,6 +117,38 @@ const videoAnnotationsRoutes: FastifyPluginAsync = async (fastify: FastifyInstan
     return { id: saved.id, nodeType: saved.nodeType, label: saved.label }
   }
 
+  /**
+   * Folds an annotation's track membership into the video's track `ClusterSet`,
+   * get-or-creating the set keyed by a deterministic id. The annotation is moved
+   * into its track's cluster (or detached when it carries no track); the cluster's
+   * `uuid` is the `trackId`, its `canonicalLabel` the `trackingSource`, and a
+   * cluster feature the `trackingConfidence`.
+   */
+  const upsertTrackMembership = async (
+    videoId: string,
+    expressionId: string,
+    annotationId: string,
+    track: MappedTrack | null,
+    scope: { projectId: string | null; userId: string | null },
+  ): Promise<void> => {
+    const setId = trackClusterSetId(videoId)
+    const existing = await prisma.clusterSet.findUnique({ where: { id: setId } })
+    if (!existing && track === null) return
+    const clusters = applyTrackMembership(existing?.clusters ?? null, annotationId, track)
+    await prisma.clusterSet.upsert({
+      where: { id: setId },
+      create: {
+        id: setId,
+        kind: 'clustering',
+        expressionId,
+        clusters: toJsonInput(clusters),
+        projectId: scope.projectId,
+        createdByUserId: scope.userId,
+      },
+      update: { clusters: toJsonInput(clusters) },
+    })
+  }
+
   // ---- GET -----------------------------------------------------------------
 
   /**
@@ -152,11 +188,18 @@ const videoAnnotationsRoutes: FastifyPluginAsync = async (fastify: FastifyInstan
       orderBy: { createdAt: 'asc' },
     })
 
+    // The video's track ClusterSet resolves each annotation's tracker identity.
+    const trackSet = await prisma.clusterSet.findUnique({
+      where: { id: trackClusterSetId(videoId) },
+    })
+    const tracks = tracksByAnnotation(trackSet?.clusters ?? null)
+
     return reply.send(rows.map((row) => layersToAnnotation(
       row,
-      { personaId: row.layer.personaId },
+      { personaId: row.layer.personaId, sourceMethod: row.layer.sourceMethod },
       { id: video.id, frameRate: video.frameRate },
       row.denotesNode ? { nodeType: row.denotesNode.nodeType, label: row.denotesNode.label } : null,
+      tracks.get(row.id) ?? null,
     )))
   })
 
@@ -284,6 +327,7 @@ const videoAnnotationsRoutes: FastifyPluginAsync = async (fastify: FastifyInstan
         expressionId: mapping.layer.expressionId,
         kind: mapping.layer.kind,
         subkind: mapping.layer.subkind,
+        sourceMethod: mapping.layer.sourceMethod,
         ontologyId: mapping.layer.ontologyId,
         personaId: mapping.layer.personaId,
       },
@@ -295,13 +339,20 @@ const videoAnnotationsRoutes: FastifyPluginAsync = async (fastify: FastifyInstan
     })
     const denotesNodeId = denotesNode?.id ?? null
 
+    // Record the annotation's tracker identity as native cluster membership. Keyed
+    // by annotationId, this holds whether the row is created below or updated in
+    // place, so it is folded once before the write branches.
+    await upsertTrackMembership(videoId, expressionId, annotationId, mapping.track, {
+      projectId,
+      userId,
+    })
+
     const writeData = {
       anchor: toJsonInput(mapping.annotation.anchor),
       label: mapping.annotation.label,
       confidence: mapping.annotation.confidence,
       ontologyTypeRefId: mapping.annotation.ontologyTypeRefId,
       denotesNodeId,
-      features: toJsonInput(mapping.annotation.features),
       startMs: mapping.annotation.startMs,
       endMs: mapping.annotation.endMs,
     }
@@ -309,9 +360,10 @@ const videoAnnotationsRoutes: FastifyPluginAsync = async (fastify: FastifyInstan
     const respond = (row: LayersAnnotation, statusCode: 200 | 201) =>
       reply.code(statusCode).send(layersToAnnotation(
         row,
-        { personaId: input.personaId },
+        { personaId: input.personaId, sourceMethod: mapping.layer.sourceMethod },
         { id: video.id, frameRate: video.frameRate },
         denotesNode ? { nodeType: denotesNode.nodeType, label: denotesNode.label } : null,
+        mapping.track,
       ))
 
     // Idempotent update of an existing annotation by its client id. Authorizes
@@ -429,7 +481,7 @@ const videoAnnotationsRoutes: FastifyPluginAsync = async (fastify: FastifyInstan
 
     const existing = await prisma.layersAnnotation.findUnique({
       where: { id },
-      include: { layer: true },
+      include: { layer: true, denotesNode: true },
     })
     // Treat a non-video-annotation row (e.g. a claim span sharing the
     // Expression) as absent so this route only ever mutates bounding-box
@@ -446,14 +498,24 @@ const videoAnnotationsRoutes: FastifyPluginAsync = async (fastify: FastifyInstan
     const { width, height } = parseResolution(video.resolution)
     const frameRate = video.frameRate ?? 30
 
+    // The annotation's existing track (its video track ClusterSet membership), so
+    // a frames-only PUT keeps the tracker identity rather than dropping it.
+    const existingTrackSet = await prisma.clusterSet.findUnique({
+      where: { id: trackClusterSetId(videoId) },
+    })
+    const existingTrack = tracksByAnnotation(existingTrackSet?.clusters ?? null).get(id) ?? null
+
     // Reconstruct the current legacy shape, then overlay the provided fields, so
     // an omitted field (e.g. linkType, which the frontend never sends on PUT)
     // keeps its stored value.
     const current = layersToAnnotation(
       existing,
-      { personaId: existing.layer.personaId },
+      { personaId: existing.layer.personaId, sourceMethod: existing.layer.sourceMethod },
       { id: video.id, frameRate: video.frameRate },
-      null,
+      existing.denotesNode
+        ? { nodeType: existing.denotesNode.nodeType, label: existing.denotesNode.label }
+        : null,
+      existingTrack,
     )
 
     const input: VideoAnnotationInput = {
@@ -488,17 +550,28 @@ const videoAnnotationsRoutes: FastifyPluginAsync = async (fastify: FastifyInstan
         confidence: mapping.annotation.confidence,
         ontologyTypeRefId: mapping.annotation.ontologyTypeRefId,
         denotesNodeId: denotesNode?.id ?? null,
-        features: toJsonInput(mapping.annotation.features),
         startMs: mapping.annotation.startMs,
         endMs: mapping.annotation.endMs,
       },
     })
 
+    // Refresh the layer's source method (the annotation's authoring source) and
+    // re-fold the annotation's tracker identity into the video's track ClusterSet.
+    await prisma.annotationLayer.update({
+      where: { id: existing.layerId },
+      data: { sourceMethod: mapping.layer.sourceMethod },
+    })
+    await upsertTrackMembership(videoId, existing.layer.expressionId, id, mapping.track, {
+      projectId: existing.projectId,
+      userId: existing.createdByUserId,
+    })
+
     return reply.send(layersToAnnotation(
       updated,
-      { personaId: existing.layer.personaId },
+      { personaId: existing.layer.personaId, sourceMethod: mapping.layer.sourceMethod },
       { id: video.id, frameRate: video.frameRate },
       denotesNode ? { nodeType: denotesNode.nodeType, label: denotesNode.label } : null,
+      mapping.track,
     ))
   })
 
@@ -517,7 +590,7 @@ const videoAnnotationsRoutes: FastifyPluginAsync = async (fastify: FastifyInstan
       response: { 204: Type.Null() },
     },
   }, async (request, reply) => {
-    const { id } = request.params as { videoId: string; id: string }
+    const { videoId, id } = request.params as { videoId: string; id: string }
     if (!request.ability) throw new ForbiddenError('No abilities defined')
 
     const existing = await prisma.layersAnnotation.findUnique({
@@ -535,6 +608,19 @@ const videoAnnotationsRoutes: FastifyPluginAsync = async (fastify: FastifyInstan
     }
 
     await prisma.layersAnnotation.delete({ where: { id } })
+
+    // Detach the annotation from the video's track ClusterSet.
+    const trackSet = await prisma.clusterSet.findUnique({
+      where: { id: trackClusterSetId(videoId) },
+    })
+    if (trackSet) {
+      const clusters = removeTrackMembership(trackSet.clusters, id)
+      await prisma.clusterSet.update({
+        where: { id: trackSet.id },
+        data: { clusters: toJsonInput(clusters) },
+      })
+    }
+
     return reply.code(204).send()
   })
 }
