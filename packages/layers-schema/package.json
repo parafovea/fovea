@@ -9,14 +9,17 @@
       "default": "./dist/index.js"
     },
     "./json-schema/openapi.json": "./json-schema/openapi.json",
-    "./json-schema/components.json": "./json-schema/components.json"
+    "./json-schema/components.json": "./json-schema/components.json",
+    "./lexicons/*": "./lexicons/*",
+    "./package.json": "./package.json"
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "files": [
     "dist",
     "src",
-    "json-schema"
+    "json-schema",
+    "lexicons"
   ],
   "scripts": {
     "gen:layers-schema": "bash scripts/regenerate.sh",
