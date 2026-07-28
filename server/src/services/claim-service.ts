@@ -22,22 +22,25 @@ import {
 } from './layers-id-map.js'
 import {
   claimFromLayers,
-  claimToLayers,
   collectSubtreeIds,
   edgeToRelation,
   isClaimNode,
   isClaimRefEdge,
   isClaimRelationEdge,
   nestClaims,
-  nodeToClaim,
-  reconstructClaims,
   relationSpanRelationId,
-  relationToLayers,
   type ClaimAnnotationRow,
+  type ClaimLayersProjection,
   type StoredClaim,
   type StoredClaimNode,
   type StoredRelation,
-} from './claim-layers-mapper.js'
+} from './claim-model.js'
+import {
+  claimToLayersViaLens,
+  nodeToClaimViaLens,
+  reconstructClaimsViaLens,
+  relationToLayersViaLens,
+} from './layers-lens/claim-lens.js'
 import { syncChildIds } from './layers-bridge/claim-bridge.js'
 
 /**
@@ -297,7 +300,7 @@ export class ClaimService {
     const nodes = await this.graphRepo.findAccessibleNodes({}, { id: { in: nodeIds }, nodeType: 'claim' })
     const edges = await this.graphRepo.findAccessibleEdges({}, { sourceLocalId: { in: nodeIds } })
 
-    return reconstructClaims(nodes, annotations, edges).filter((claim) => claim.summaryId === summaryId)
+    return (await reconstructClaimsViaLens(nodes, annotations, edges)).filter((claim) => claim.summaryId === summaryId)
   }
 
   /** Reads a summary's flat claim list from the layers store. */
@@ -312,7 +315,7 @@ export class ClaimService {
     const primary = await this.prisma.layersAnnotation.findUnique({
       where: { id: claimAnnotationId(claimId) },
     })
-    if (!primary) return nodeToClaim(node)
+    if (!primary) return nodeToClaimViaLens(node)
     const children = await this.prisma.layersAnnotation.findMany({
       where: { parentAnnotationId: primary.id },
     })
@@ -417,7 +420,7 @@ export class ClaimService {
   /** Creates one mapped claim annotation (primary, child, or relation span) under a layer. */
   private async createClaimAnnotation(
     layerId: string,
-    ann: ReturnType<typeof claimToLayers>['annotations'][number],
+    ann: ClaimLayersProjection['annotations'][number],
   ): Promise<void> {
     await this.annotationLayerRepo.createAnnotation({
       id: ann.id,
@@ -443,7 +446,7 @@ export class ClaimService {
 
   /** Creates one mapped claim edge (a cross-object reference or a relation). */
   private async createRefEdge(
-    edge: ReturnType<typeof claimToLayers>['refEdges'][number],
+    edge: ClaimLayersProjection['refEdges'][number],
   ): Promise<void> {
     await this.graphRepo.createEdge({
       id: edge.id,
@@ -463,7 +466,7 @@ export class ClaimService {
   /** Persists a claim's annotations (primary + child spans) and reference edges under a layer. */
   private async createClaimAnnotations(
     layerId: string,
-    projection: ReturnType<typeof claimToLayers>,
+    projection: ClaimLayersProjection,
   ): Promise<void> {
     for (const ann of projection.annotations) await this.createClaimAnnotation(layerId, ann)
     for (const edge of projection.refEdges) await this.createRefEdge(edge)
@@ -471,7 +474,7 @@ export class ClaimService {
 
   /** Creates a claim node, its bearer + child annotations, and its reference edges. */
   private async persistClaimNode(layerId: string, claim: StoredClaim): Promise<void> {
-    const projection = claimToLayers(claim)
+    const projection = await claimToLayersViaLens(claim)
     await this.graphRepo.createNode({
       id: projection.node.id,
       nodeType: projection.node.nodeType,
@@ -493,7 +496,7 @@ export class ClaimService {
    * severed by the FK's SetNull-on-delete; its `childIds` are preserved.
    */
   private async updateClaimNode(layerId: string, claim: StoredClaim): Promise<void> {
-    const projection = claimToLayers(claim)
+    const projection = await claimToLayersViaLens(claim)
     await this.graphRepo.updateNode(projection.node.id, {
       label: projection.node.label,
       properties: toJson(projection.node.properties),
@@ -558,7 +561,7 @@ export class ClaimService {
     projectId: string | null,
     spanLayerId: string,
   ): Promise<void> {
-    const { edge, spanAnnotations } = relationToLayers(relation, projectId)
+    const { edge, spanAnnotations } = await relationToLayersViaLens(relation, projectId)
     await this.createRefEdge(edge)
     for (const ann of spanAnnotations) await this.createClaimAnnotation(spanLayerId, ann)
   }

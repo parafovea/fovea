@@ -25,7 +25,7 @@ import type { WorldStateAggregate } from '../world-layers-mapper.js'
 import { writeOntologyAggregate } from '../layers-bridge/ontology-bridge.js'
 import { readClaimById, writeClaim, writeClaimRelation, type ClaimSummaryContext } from '../layers-bridge/claim-bridge.js'
 import { writeVideoAnnotation } from '../layers-bridge/annotation-bridge.js'
-import { nodeToClaim } from '../claim-layers-mapper.js'
+import { nodeToClaimViaLens } from '../layers-lens/claim-lens.js'
 import type {
   VideoAnnotationInput,
   VideoAnnotationLinkType,
@@ -710,7 +710,7 @@ export class EntityImporter {
 
       // Resolve the source claim's summary and project scope for edge denormalization.
       const sourceNode = await tx.graphNode.findUnique({ where: { id: sourceClaimId } })
-      const sourceClaim = sourceNode ? nodeToClaim(sourceNode) : null
+      const sourceClaim = sourceNode ? nodeToClaimViaLens(sourceNode) : null
       const summaryId = sourceClaim?.summaryId ?? ''
       const projectId = sourceClaim?.projectId ?? this.projectId
 
@@ -726,7 +726,7 @@ export class EntityImporter {
         const existingSourceNode = existingEdge.sourceLocalId
           ? await tx.graphNode.findUnique({ where: { id: existingEdge.sourceLocalId } })
           : null
-        const existingSourceClaim = existingSourceNode ? nodeToClaim(existingSourceNode) : null
+        const existingSourceClaim = existingSourceNode ? nodeToClaimViaLens(existingSourceNode) : null
         if (
           this.ability &&
           (!existingSourceClaim || !this.ability.can('update', subject('Claim', existingSourceClaim)))

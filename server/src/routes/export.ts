@@ -9,7 +9,7 @@ import type { VideoAnnotationOutput } from '../services/video-annotation-shared.
 import { readOntologyAggregate } from '../services/layers-bridge/ontology-bridge.js'
 import { readWorldAggregate } from '../services/layers-bridge/world-bridge.js'
 import { readSummaryClaims } from '../services/layers-bridge/claim-bridge.js'
-import type { StoredClaim, StoredRelation } from '../services/claim-layers-mapper.js'
+import type { StoredClaim, StoredRelation } from '../services/claim-model.js'
 import { requireAuth } from '../middleware/auth.js'
 import { buildAbilities } from '../middleware/abilities.js'
 import { ForbiddenError } from '../lib/errors.js'

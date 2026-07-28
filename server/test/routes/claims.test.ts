@@ -12,7 +12,7 @@ import {
   readClaimById,
 } from '../../src/services/layers-bridge/claim-bridge.js'
 import { writeOntologyAggregate } from '../../src/services/layers-bridge/ontology-bridge.js'
-import type { StoredClaim, StoredRelation } from '../../src/services/claim-layers-mapper.js'
+import type { StoredClaim, StoredRelation } from '../../src/services/claim-model.js'
 
 /** Claim seed fields, matching the legacy `prisma.claim.create` data shape. */
 type SeedClaimInput = Partial<StoredClaim> & { summaryId: string; summaryType: string; text: string }

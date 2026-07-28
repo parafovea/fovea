@@ -11,7 +11,7 @@ import {
   writeClaim,
   type ClaimSummaryContext,
 } from "../services/layers-bridge/claim-bridge.js";
-import { nestClaims, type StoredClaim, type StoredClaimNode } from "../services/claim-layers-mapper.js";
+import { nestClaims, type StoredClaim, type StoredClaimNode } from "../services/claim-model.js";
 import {
   queueJobCounter,
   queueJobDuration,

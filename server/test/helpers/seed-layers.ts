@@ -21,7 +21,7 @@ import {
   writeClaimRelation,
   readClaimById,
 } from '../../src/services/layers-bridge/claim-bridge.js'
-import type { StoredClaim, StoredRelation } from '../../src/services/claim-layers-mapper.js'
+import type { StoredClaim, StoredRelation } from '../../src/services/claim-model.js'
 import type { BoundingBoxSequence } from '../../src/services/layers-conversion-service.js'
 
 export { readClaimById }

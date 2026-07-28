@@ -1,22 +1,16 @@
 import { describe, it, expect } from 'vitest'
 import { Prisma } from '@prisma/client'
 
-import {
-  claimToLayers,
-  relationToLayers,
-  claimFromLayers,
-  edgeToRelation,
-  type StoredClaim,
-  type StoredRelation,
-  type ClaimLayersProjection,
-  type RelationLayersProjection,
-  type ClaimNodeRow,
-  type ClaimAnnotationRow,
-  type ClaimEdgeRow,
-  type ClaimReconstructionContext,
-} from '../../claim-layers-mapper.js'
+import type {
+  StoredClaim,
+  StoredRelation,
+  ClaimLayersProjection,
+  ClaimNodeRow,
+  ClaimAnnotationRow,
+  ClaimEdgeRow,
+  ClaimReconstructionContext,
+} from '../../claim-model.js'
 import { getPanproto, loadFoveaSchema } from '../panproto-registry.js'
-import { assertOracleParity, assertBackwardParity, type LayersRow } from '../oracle-parity.js'
 import {
   buildClaimLens,
   buildRelationLens,
@@ -49,14 +43,14 @@ import {
 } from '../claim-lens.js'
 
 /**
- * Verifies the FOVEA claim surface's lens+adapter path against the committed
- * hand-rolled forward mapper (the oracle): the claim-core and relation-core lenses
- * compile to native panproto lenses whose round-trip laws hold and whose `getJson`
- * output already carries the gloss fold, the confidence scale, the interleaved
- * argument encoding, and the text-span / temporal anchor regroups; and the
- * composition + adapter reproduce the oracle's rows exactly over a corpus of
- * representative claims and relations, reconstructing identically through the
- * oracle's backward mapper.
+ * Verifies the FOVEA claim surface's lens path end to end: the claim-core and
+ * relation-core lenses compile to native panproto lenses whose round-trip laws hold and
+ * whose `getJson` output already carries the gloss fold, the confidence scale, the
+ * interleaved argument encoding, and the text-span / temporal anchor regroups; the
+ * composition and adapter assemble those into the layers rows; and the backward lenses
+ * reconstruct each claim and relation faithfully to the original, so the forward and
+ * backward `getJson` paths are self-consistent over a corpus of representative claims
+ * and relations.
  */
 
 const richClaim: StoredClaim = {
@@ -176,23 +170,6 @@ const RELATION_CORPUS: Array<{ name: string; relation: StoredRelation; projectId
   { name: 'one-sided relation with notes', relation, projectId: null },
   { name: 'two-sided relation, project-scoped', relation: twoSidedRelation, projectId: 'project-9' },
 ]
-
-/** Flattens a claim projection into tagged Prisma-table rows for comparison. */
-function claimProjectionToRows(p: ClaimLayersProjection): LayersRow[] {
-  return [
-    { __table: 'GraphNode', ...p.node },
-    ...p.annotations.map((a) => ({ __table: 'LayersAnnotation', ...a })),
-    ...p.refEdges.map((e) => ({ __table: 'GraphEdge', ...e })),
-  ]
-}
-
-/** Flattens a relation projection into tagged Prisma-table rows for comparison. */
-function relationProjectionToRows(p: RelationLayersProjection): LayersRow[] {
-  return [
-    { __table: 'GraphEdge', ...p.edge },
-    ...p.spanAnnotations.map((a) => ({ __table: 'LayersAnnotation', ...a })),
-  ]
-}
 
 describe('claim-lens core lenses', () => {
   it('compiles a native claim lens carrying the value, confidence, argument, and span transforms', async () => {
@@ -314,27 +291,7 @@ describe('claim-lens core lenses', () => {
   })
 })
 
-describe('claim-lens oracle parity', () => {
-  it('reproduces the oracle rows for every corpus claim', async () => {
-    const oracleRows: LayersRow[] = []
-    const lensRows: LayersRow[] = []
-    for (const { claim } of CLAIM_CORPUS) {
-      oracleRows.push(...claimProjectionToRows(claimToLayers(claim)))
-      lensRows.push(...claimProjectionToRows(await foveaClaimToLayersRows(claim)))
-    }
-    assertOracleParity(oracleRows, lensRows)
-  })
-
-  it('reproduces the oracle rows for every corpus relation', async () => {
-    const oracleRows: LayersRow[] = []
-    const lensRows: LayersRow[] = []
-    for (const { relation: rel, projectId } of RELATION_CORPUS) {
-      oracleRows.push(...relationProjectionToRows(relationToLayers(rel, projectId)))
-      lensRows.push(...relationProjectionToRows(await foveaRelationToLayersRows(rel, projectId)))
-    }
-    assertOracleParity(oracleRows, lensRows)
-  })
-
+describe('claim-lens forward composition', () => {
   it('composes the claim record types with deterministic-id cross-refs', async () => {
     const rows = await foveaClaimToLayersRows(richClaim)
     // The identity node, the primary bearer denoting it, two text-span children,
@@ -470,34 +427,22 @@ describe('claim-lens backward core lenses', () => {
   })
 })
 
-// --- reconstruction parity (through the backward lens, not the oracle) -------
+// --- forward -> backward self-consistency round trip ------------------------
 
-describe('claim-lens reconstruction parity', () => {
-  it('reconstructs each claim through the backward lens, matching the oracle and the original', async () => {
+describe('claim-lens reconstruction round trip', () => {
+  it('reconstructs each claim through the backward lens, faithful to the original', async () => {
     for (const { name, claim } of CLAIM_CORPUS) {
       const parentClaimId = claim.parentClaimId ?? null
-      // The oracle reconstruction is the parity target; the lens path never calls it.
-      const oracleRows = claimRows(claimToLayers(claim), parentClaimId)
-      const oracleClaim = claimFromLayers(oracleRows.node, oracleRows.primary, oracleRows.context)
-
       const lensRows = claimRows(await foveaClaimToLayersRows(claim), parentClaimId)
       const lensClaim = await layersToClaimViaLens(lensRows.node, lensRows.primary, lensRows.context)
-
-      assertBackwardParity(oracleClaim, lensClaim)
-      // And the lens reconstruction is faithful to the original claim.
       expect(lensClaim, `round trip for ${name}`).toEqual(claim)
     }
   })
 
-  it('reconstructs each relation through the backward lens, matching the oracle and the original', async () => {
+  it('reconstructs each relation through the backward lens, faithful to the original', async () => {
     for (const { name, relation: rel, projectId } of RELATION_CORPUS) {
-      const oracle = relationToLayers(rel, projectId)
-      const oracleRelation = edgeToRelation(edgeRow(oracle.edge), oracle.spanAnnotations.map(annotationRow))
-
       const lens = await foveaRelationToLayersRows(rel, projectId)
       const lensRelation = await layersToRelationViaLens(edgeRow(lens.edge), lens.spanAnnotations.map(annotationRow))
-
-      assertBackwardParity(oracleRelation, lensRelation)
       expect(lensRelation, `relation round trip for ${name}`).toEqual(rel)
     }
   })

@@ -67,6 +67,9 @@ import { z } from 'zod'
 import {
   CLAIM_NODE_TYPE,
   claimScope,
+  isClaimNode,
+  isClaimRefEdge,
+  isPrimaryClaimAnnotation,
   type ClaimLayersScope,
   type StoredClaim,
   type StoredRelation,
@@ -79,7 +82,7 @@ import {
   type ClaimAnnotationRow,
   type ClaimEdgeRow,
   type ClaimReconstructionContext,
-} from '../claim-layers-mapper.js'
+} from '../claim-model.js'
 import {
   claimAnnotationId,
   claimTextSpanAnnotationId,
@@ -1678,5 +1681,124 @@ export async function layersToRelationViaLens(
     createdBy: edge.createdByUserId ?? null,
     createdAt: view.createdAt,
     updatedAt: view.updatedAt,
+  }
+}
+
+// --------------------------------------------------------------------------
+// Production drop-ins (the claim surface's write + read entry points)
+// --------------------------------------------------------------------------
+
+/**
+ * Projects one FOVEA claim onto its native layers rows through the lens: the identity
+ * `graphNode`, the primary bearer annotation, its text-span and temporal child
+ * annotations, and the cross-object reference edges. The primary is emitted before its
+ * children, so a parents-first writer satisfies the child annotations'
+ * `parentAnnotationId` foreign key. Async because the claim-core lens compiles once
+ * per process.
+ *
+ * @param claim - the stored claim
+ * @returns the node, annotation, and reference-edge rows
+ */
+export function claimToLayersViaLens(claim: StoredClaim): Promise<ClaimLayersProjection> {
+  return foveaClaimToLayersRows(claim)
+}
+
+/**
+ * Projects one FOVEA claim relation onto its native layers rows through the lens: a
+ * `graphEdge` between the two claim nodes and one `textSpan`-anchored annotation per
+ * source/target endpoint span. Async because the relation-core lens compiles once per
+ * process.
+ *
+ * @param relation - the stored relation
+ * @param projectId - the source claim's project scope
+ * @returns the edge and endpoint-span rows
+ */
+export function relationToLayersViaLens(
+  relation: StoredRelation,
+  projectId: string | null,
+): Promise<RelationLayersProjection> {
+  return foveaRelationToLayersRows(relation, projectId)
+}
+
+/**
+ * Reconstructs every claim in one summary's claim-span layer from its native rows
+ * through the backward lens: the claim `graphNode`s, the layer's annotations (primaries
+ * plus text-span / temporal children), and the claims' outgoing cross-object reference
+ * edges. Each claim's parent link is recovered from its primary's `parentAnnotationId`
+ * self-relation, mapping back to the parent claim id. Async because the backward
+ * claim-core lens compiles once per process.
+ *
+ * @param nodes - the claim `graphNode` rows
+ * @param annotations - every annotation in the summary's claim-span layer
+ * @param refEdges - the claims' outgoing edges (ref edges are consumed, others skipped)
+ * @returns the reconstructed flat claims
+ */
+export async function reconstructClaimsViaLens(
+  nodes: ClaimNodeRow[],
+  annotations: ClaimAnnotationRow[],
+  refEdges: ClaimEdgeRow[],
+): Promise<StoredClaim[]> {
+  const nodeById = new Map(nodes.map((node) => [node.id, node]))
+  const primaries = annotations.filter(isPrimaryClaimAnnotation)
+
+  // Map each primary annotation id to the claim it denotes, so a child claim's
+  // parentAnnotationId resolves back to the parent claim id natively.
+  const claimIdByAnnId = new Map(primaries.map((p) => [p.id, p.denotesNodeId as string]))
+
+  const childrenByParent = new Map<string, ClaimAnnotationRow[]>()
+  for (const ann of annotations) {
+    if (isPrimaryClaimAnnotation(ann) || ann.parentAnnotationId === null) continue
+    const list = childrenByParent.get(ann.parentAnnotationId) ?? []
+    list.push(ann)
+    childrenByParent.set(ann.parentAnnotationId, list)
+  }
+
+  const edgesBySource = new Map<string, ClaimEdgeRow[]>()
+  for (const edge of refEdges) {
+    if (!isClaimRefEdge(edge) || edge.sourceLocalId === null) continue
+    const list = edgesBySource.get(edge.sourceLocalId) ?? []
+    list.push(edge)
+    edgesBySource.set(edge.sourceLocalId, list)
+  }
+
+  const claims: StoredClaim[] = []
+  for (const primary of primaries) {
+    const claimId = primary.denotesNodeId as string
+    const node = nodeById.get(claimId)
+    if (!node) continue
+    const parentClaimId =
+      primary.parentAnnotationId !== null ? claimIdByAnnId.get(primary.parentAnnotationId) ?? null : null
+    claims.push(
+      await layersToClaimViaLens(node, primary, {
+        children: childrenByParent.get(primary.id) ?? [],
+        refEdges: edgesBySource.get(claimId) ?? [],
+        parentClaimId,
+      }),
+    )
+  }
+  return claims
+}
+
+/**
+ * Reconstructs a shallow claim from a claim `graphNode` alone: its id, text, and scope.
+ * The rich fields (gloss, spans, confidence, summary membership, ...) are absent — this
+ * is the shape scope-only callers need, not the full contract shape. The node carries
+ * no annotation payload, so this needs no lens and stays synchronous.
+ *
+ * @param node - the claim `graphNode` row
+ * @returns the shallow claim, or null when the row is not a claim node
+ */
+export function nodeToClaimViaLens(node: ClaimNodeRow): StoredClaim | null {
+  if (!isClaimNode(node)) return null
+  return {
+    id: node.id,
+    summaryId: '',
+    summaryType: 'video',
+    text: node.label ?? '',
+    gloss: [],
+    createdBy: node.createdByUserId ?? null,
+    projectId: node.projectId ?? null,
+    createdAt: '',
+    updatedAt: '',
   }
 }

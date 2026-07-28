@@ -15,21 +15,24 @@
 import { PrismaClient, Prisma } from '@prisma/client'
 
 import {
-  claimToLayers,
   claimFromLayers,
-  reconstructClaims,
-  relationToLayers,
   edgeToRelation,
   isClaimNode,
   isClaimRelationEdge,
   isPrimaryClaimAnnotation,
   relationSpanRelationId,
-  nodeToClaim,
   claimSummaryId,
   type StoredClaim,
   type StoredRelation,
   type ClaimAnnotationRow,
-} from '../claim-layers-mapper.js'
+  type ClaimLayersProjection,
+} from '../claim-model.js'
+import {
+  claimToLayersViaLens,
+  nodeToClaimViaLens,
+  reconstructClaimsViaLens,
+  relationToLayersViaLens,
+} from '../layers-lens/claim-lens.js'
 import { claimAnnotationId, claimSpanLayerId, expressionTranscriptId } from '../layers-id-map.js'
 import { getOrCreateVideoExpression } from '../video-expression-service.js'
 import { requiredJson, toJson, type PrismaLike } from './util.js'
@@ -64,7 +67,7 @@ async function findSummaryClaimNodes(prisma: PrismaLike, summaryId: string): Pro
   const nodes = await prisma.graphNode.findMany({ where: { id: { in: nodeIds }, nodeType: 'claim' } })
   const edges = await prisma.graphEdge.findMany({ where: { sourceLocalId: { in: nodeIds } } })
 
-  return reconstructClaims(nodes, annotations, edges).filter((claim) => claim.summaryId === summaryId)
+  return (await reconstructClaimsViaLens(nodes, annotations, edges)).filter((claim) => claim.summaryId === summaryId)
 }
 
 /** Loads a summary's relation endpoint-span annotations grouped by relation id. */
@@ -163,7 +166,7 @@ async function ensureClaimSpanLayer(
 async function createClaimAnnotation(
   prisma: PrismaLike,
   layerId: string,
-  ann: ReturnType<typeof claimToLayers>['annotations'][number],
+  ann: ClaimLayersProjection['annotations'][number],
 ): Promise<void> {
   await prisma.layersAnnotation.create({
     data: {
@@ -214,7 +217,7 @@ async function persistClaimNode(
   layerId: string,
   claim: StoredClaim,
 ): Promise<void> {
-  const projection = claimToLayers(claim)
+  const projection = await claimToLayersViaLens(claim)
   await prisma.graphNode.create({
     data: {
       id: projection.node.id,
@@ -295,7 +298,7 @@ export async function writeClaimRelation(
   projectId: string | null,
 ): Promise<void> {
   void summaryId
-  const { edge, spanAnnotations } = relationToLayers(relation, projectId)
+  const { edge, spanAnnotations } = await relationToLayersViaLens(relation, projectId)
   await prisma.graphEdge.create({
     data: {
       id: edge.id,
@@ -397,7 +400,7 @@ export async function readClaimById(prisma: PrismaClient, id: string): Promise<S
   const node = await prisma.graphNode.findUnique({ where: { id } })
   if (!node || !isClaimNode(node)) return null
   const primary = await prisma.layersAnnotation.findUnique({ where: { id: claimAnnotationId(id) } })
-  if (!primary) return nodeToClaim(node)
+  if (!primary) return nodeToClaimViaLens(node)
   const children = await prisma.layersAnnotation.findMany({ where: { parentAnnotationId: primary.id } })
   const refEdges = await prisma.graphEdge.findMany({ where: { sourceLocalId: id } })
   const parentClaimId = await resolveParentClaimId(prisma, primary.parentAnnotationId)
