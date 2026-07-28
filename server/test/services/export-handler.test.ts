@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { AnnotationExporter } from '../../src/services/export-handler.js'
 import type { Persona, Ontology, VideoSummary, Claim, ClaimRelation } from '@prisma/client'
-import type { VideoAnnotationOutput } from '../../src/services/video-annotation-mapper.js'
+import type { VideoAnnotationOutput } from '../../src/services/video-annotation-shared.js'
 
 /**
  * Creates a reconstructed layers annotation (the annotation wire shape the

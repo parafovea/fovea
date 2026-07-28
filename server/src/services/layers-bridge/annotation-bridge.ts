@@ -18,7 +18,7 @@ import {
   type VideoAnnotationInput,
   type VideoAnnotationOutput,
   type MappedTrack,
-} from '../video-annotation-mapper.js'
+} from '../video-annotation-shared.js'
 import { annotationToLayers, layersToAnnotation } from '../layers-lens/video-lens.js'
 import { getOrCreateVideoExpression, parseResolution } from '../video-expression-service.js'
 import { layersOntologyForPersonaId, trackClusterSetId, worldInstanceNodeId } from '../layers-id-map.js'

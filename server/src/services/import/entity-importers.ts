@@ -29,7 +29,7 @@ import { nodeToClaim } from '../claim-layers-mapper.js'
 import type {
   VideoAnnotationInput,
   VideoAnnotationLinkType,
-} from '../video-annotation-mapper.js'
+} from '../video-annotation-shared.js'
 import type { BoundingBoxSequence } from '../layers-conversion-service.js'
 
 /**

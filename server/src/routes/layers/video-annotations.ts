@@ -17,7 +17,7 @@ import {
   type VideoAnnotationLinkType,
   type MappedDenotesNode,
   type MappedTrack,
-} from '../../services/video-annotation-mapper.js'
+} from '../../services/video-annotation-shared.js'
 import { annotationToLayers, layersToAnnotation } from '../../services/layers-lens/video-lens.js'
 import {
   getOrCreateVideoExpression,

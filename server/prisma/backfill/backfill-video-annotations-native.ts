@@ -40,11 +40,11 @@
 
 import { PrismaClient } from '@prisma/client'
 
-import {
-  annotationToLayers,
-  type VideoAnnotationInput,
-  type VideoAnnotationLinkType,
-} from '../../src/services/video-annotation-mapper.js'
+import { annotationToLayers } from '../../src/services/layers-lens/video-lens.js'
+import type {
+  VideoAnnotationInput,
+  VideoAnnotationLinkType,
+} from '../../src/services/video-annotation-shared.js'
 import { from1000, type BoundingBoxSequence } from '../../src/services/layers-conversion-service.js'
 
 /** The legacy `fovea.annotation` meta object stashed in the features bag. */
@@ -196,7 +196,7 @@ async function main(): Promise<void> {
         source: meta.source ?? 'manual',
       }
 
-      const mapping = annotationToLayers(input, {
+      const mapping = await annotationToLayers(input, {
         expressionId: layer.expressionId,
         ontologyId: layer.ontologyId,
         frameRate,

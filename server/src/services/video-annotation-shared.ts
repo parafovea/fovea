@@ -1,68 +1,44 @@
 /**
- * Bidirectional map between the legacy `Annotation` shape and the layers rows
- * that store it: an `AnnotationLayer` grouping plus one `LayersAnnotation`, with
- * a per-video track `ClusterSet` grouping the tracked sequences.
+ * The video-annotation view-model types and the track-membership helpers that
+ * fold a video's tracked sequences into its per-video track `ClusterSet`.
  *
- * This is the persistence boundary for video annotations: the video timeline UI
- * operates on the in-memory `Annotation` / `BoundingBoxSequence` view-model, and
- * this module projects that shape onto the unified layers store and back. It
- * mirrors `prisma/backfill/backfill-annotations.ts` so an annotation authored
- * through the layers endpoint lands in the same rows a prior backfill produces
- * (same deterministic layer id, same spatio-temporal anchor, same denotation link).
+ * The view-model types describe the `Annotation` wire shape at the persistence
+ * boundary ({@link VideoAnnotationInput} the frontend sends,
+ * {@link VideoAnnotationOutput} the endpoint returns) and the layers rows a single
+ * annotation projects onto (the grouping {@link MappedAnnotationLayer}, the
+ * {@link MappedLayersAnnotation}, the denoted {@link MappedDenotesNode}, and the
+ * {@link MappedTrack}), together with the stored-row shapes the read path reads
+ * back ({@link StoredLayersAnnotation}, {@link StoredAnnotationLayer},
+ * {@link VideoRow}, {@link DenotesNode}). The forward and backward maps between the
+ * `Annotation` shape and these rows live in the video-annotation lens
+ * (`layers-lens/video-lens`); this module holds the shapes both directions share.
  *
- * Every field lands in a native home:
- *
- *   - The bounding-box sequence's geometry, time, per-box confidence, visibility,
- *     and interpolation ride in the spatio-temporal anchor and its keyframe
- *     features (see `layers-conversion-service`).
- *   - The annotation `confidence` is the native 0-1000 integer column.
- *   - The authoring `source` is the grouping layer's `sourceMethod`.
- *   - A tracked sequence's `trackId` is membership in the video's track
- *     `ClusterSet` (the cluster whose `uuid` is the track id), its `trackingSource`
- *     the cluster's `canonicalLabel`, and its `trackingConfidence` a cluster
- *     feature on the 0-1000 integer scale.
- *   - `type` derives from the layer persona and denotation: an object layer's
- *     annotation is `object`; a persona layer's is a `type` annotation unless it
- *     denotes a world node, when its `type` is the node's instance kind.
- *   - An object annotation denotes a world-object `GraphNode` from its `linkType`;
- *     a persona-scoped world-instance annotation (`type` entity/event/time/
- *     location) denotes a world `GraphNode` of the matching `nodeType`; a persona
- *     type-annotation denotes an ontology type (`ontologyTypeRefId`).
+ * The track helpers ({@link applyTrackMembership}, {@link removeTrackMembership},
+ * {@link tracksByAnnotation}) index and rewrite the per-video track `ClusterSet`
+ * whose clusters are the tracked object sequences: each annotation's `trackId` is
+ * membership in the cluster whose `uuid` is the track id, its tracker name the
+ * cluster's `canonicalLabel`, and its tracking confidence a cluster feature on the
+ * layers 0-1000 integer scale.
  *
  * @module
  */
 
 import type { SpatioTemporalAnchor } from '@fovea/layers-schema'
 
-import {
-  boundingBoxSequenceToSpatioTemporalAnchor,
-  spatioTemporalAnchorToBoundingBoxSequence,
-  to1000,
-  from1000,
-  type BoundingBoxSequence,
-  type FoveaTrackingSource,
-} from './layers-conversion-service.js'
-import { annotationLayerId } from './layers-id-map.js'
+import type { BoundingBoxSequence, FoveaTrackingSource } from './layers-conversion-service.js'
 
 /** The kind of world object an object annotation's `label` references. */
 export type VideoAnnotationLinkType = 'entity' | 'event' | 'time' | 'location'
 
 /**
- * The `AnnotationLayer.subkind` values a video annotation lives under (see
- * {@link annotationToLayers}): `ontology-type` for persona-scoped type and
- * world-instance annotations and `world-object` for object-linked annotations.
- * Reconstruction queries MUST constrain to these so span layers of other kinds
- * (notably claim text spans, whose subkind is `claim`) never surface as video
- * annotations even when they anchor over the same video Expression.
+ * The `AnnotationLayer.subkind` values a video annotation lives under:
+ * `ontology-type` for persona-scoped type and world-instance annotations and
+ * `world-object` for object-linked annotations. Reconstruction queries MUST
+ * constrain to these so span layers of other kinds (notably claim text spans,
+ * whose subkind is `claim`) never surface as video annotations even when they
+ * anchor over the same video Expression.
  */
 export const VIDEO_ANNOTATION_SUBKINDS = ['ontology-type', 'world-object'] as const
-
-/**
- * The annotation `type` values that mark a persona-scoped annotation as denoting
- * a world instance (an entity, event, time, or location) rather than assigning an
- * ontology type. Such an annotation materializes a world `GraphNode`.
- */
-const WORLD_INSTANCE_TYPES: readonly string[] = ['entity', 'event', 'time', 'location']
 
 /**
  * Whether an `AnnotationLayer.subkind` denotes a video annotation. Single-row
@@ -77,7 +53,7 @@ export function isVideoAnnotationSubkind(subkind: string | null | undefined): bo
 }
 
 /**
- * The legacy `Annotation` shape at the persistence boundary (the wire shape the
+ * The `Annotation` shape at the persistence boundary (the wire shape the
  * frontend sends and receives). Type annotations carry a `personaId` and a
  * `type` of `'type'`; a persona-scoped world-instance annotation carries a
  * `personaId` and a `type` of entity/event/time/location; object annotations
@@ -97,8 +73,8 @@ export interface VideoAnnotationInput {
 }
 
 /**
- * The reconstructed legacy `Annotation` shape returned by the endpoint. Matches
- * the legacy `/api/annotations` response contract, including the server-resolved
+ * The reconstructed `Annotation` shape returned by the endpoint. Matches the
+ * `/api/annotations` response contract, including the server-resolved
  * `linkedObjectName` for object annotations.
  */
 export interface VideoAnnotationOutput {
@@ -185,7 +161,7 @@ export interface MappedLayersAnnotation {
   endMs: number
 }
 
-/** The layers rows a single legacy annotation projects onto. */
+/** The layers rows a single annotation projects onto. */
 export interface AnnotationLayersMapping {
   layer: MappedAnnotationLayer
   annotation: MappedLayersAnnotation
@@ -355,215 +331,4 @@ export function tracksByAnnotation(clusters: unknown): Map<string, MappedTrack> 
     }
   }
   return map
-}
-
-// --------------------------------------------------------------------------
-// Forward + inverse map
-// --------------------------------------------------------------------------
-
-/** The default frame rate when a video row carries none. */
-const DEFAULT_FRAME_RATE = 30
-
-/** The nodeType an object-annotation link kind maps to (its denoted node's type). */
-function linkTypeToNodeType(linkType: VideoAnnotationLinkType | null): string {
-  switch (linkType) {
-    case 'event':
-      return 'situation'
-    case 'time':
-      return 'time'
-    case 'location':
-      return 'location'
-    default:
-      return 'entity'
-  }
-}
-
-/** Maps a graph node's `nodeType` back to the legacy object-annotation link kind. */
-function nodeTypeToLinkType(nodeType: string | null | undefined): VideoAnnotationLinkType | null {
-  switch (nodeType) {
-    case 'entity':
-      return 'entity'
-    case 'situation':
-      return 'event'
-    case 'time':
-      return 'time'
-    case 'location':
-      return 'location'
-    default:
-      return null
-  }
-}
-
-/** The nodeType a persona-scoped world-instance annotation's `type` denotes. */
-function instanceTypeToNodeType(type: string): string {
-  return linkTypeToNodeType(type as VideoAnnotationLinkType)
-}
-
-/** The empty sequence used when an anchor carries no spatio-temporal region. */
-function emptySequence(): BoundingBoxSequence {
-  return {
-    boxes: [],
-    interpolationSegments: [],
-    visibilityRanges: [],
-    totalFrames: 0,
-    keyframeCount: 0,
-    interpolatedFrameCount: 0,
-  }
-}
-
-/**
- * Projects a legacy annotation onto its grouping `AnnotationLayer`,
- * `LayersAnnotation`, and (when the sequence is tracked) its track, mirroring the
- * backfill. A set `personaId` yields an ontology-type layer; a null `personaId`
- * yields a world-object layer. A persona type-annotation (`type` `'type'`)
- * denotes an ontology type (`ontologyTypeRefId = label`); a persona-scoped
- * world-instance annotation (`type` entity/event/time/location) denotes a world
- * node of the matching nodeType; an object annotation with a `linkType` denotes a
- * world node of the link kind's nodeType. The authoring `source` becomes the
- * layer `sourceMethod`, and a tracked sequence's identity becomes a track the
- * write path folds into the video's track ClusterSet.
- *
- * @param annotation - the legacy annotation to project
- * @param ctx - the resolved expression, ontology, and frame-rate context
- * @returns the layer, annotation, and track rows the annotation maps onto
- */
-export function annotationToLayers(
-  annotation: VideoAnnotationInput,
-  ctx: AnnotationToLayersContext,
-): AnnotationLayersMapping {
-  const { personaId } = annotation
-  const layerId = annotationLayerId(annotation.videoId, personaId)
-  const isInstance = personaId != null && WORLD_INSTANCE_TYPES.includes(annotation.type)
-
-  const layer: MappedAnnotationLayer = {
-    id: layerId,
-    expressionId: ctx.expressionId,
-    kind: 'span',
-    subkind: personaId ? 'ontology-type' : 'world-object',
-    sourceMethod: annotation.source,
-    ontologyId: personaId ? ctx.ontologyId : null,
-    personaId,
-  }
-
-  const anchor = boundingBoxSequenceToSpatioTemporalAnchor(annotation.frames, {
-    frameRate: ctx.frameRate,
-    videoWidth: ctx.videoWidth,
-    videoHeight: ctx.videoHeight,
-  })
-
-  // An object annotation with an intentional link kind denotes a world node; a
-  // persona-scoped world-instance annotation denotes a world node of its type's
-  // nodeType; a persona type-annotation and an unlinked object annotation denote
-  // none, so a free-text label never materializes a stray world node (matching
-  // the world save's node semantics).
-  let denotesNode: MappedDenotesNode | null = null
-  if (!personaId && annotation.label && annotation.linkType) {
-    denotesNode = {
-      id: annotation.label,
-      nodeType: linkTypeToNodeType(annotation.linkType),
-      label: annotation.label,
-    }
-  } else if (isInstance && annotation.label) {
-    denotesNode = {
-      id: annotation.label,
-      nodeType: instanceTypeToNodeType(annotation.type),
-      label: annotation.label,
-    }
-  }
-
-  const annotationRow: MappedLayersAnnotation = {
-    id: annotation.id,
-    layerId,
-    anchor: { spatioTemporalAnchor: anchor },
-    label: annotation.label,
-    confidence: to1000(annotation.confidence ?? undefined) ?? null,
-    ontologyTypeRefId: personaId && !isInstance ? annotation.label || null : null,
-    denotesNode,
-    startMs: anchor.temporalSpan.start,
-    endMs: anchor.temporalSpan.ending,
-  }
-
-  const seq = annotation.frames
-  const track: MappedTrack | null =
-    seq.trackId !== undefined
-      ? {
-          trackId: seq.trackId,
-          ...(seq.trackingSource !== undefined ? { trackingSource: seq.trackingSource } : {}),
-          ...(seq.trackingConfidence !== undefined
-            ? { trackingConfidence: to1000(seq.trackingConfidence) }
-            : {}),
-        }
-      : null
-
-  return { layer, annotation: annotationRow, track }
-}
-
-/**
- * Reconstructs the legacy annotation from its stored layers rows, the inverse of
- * {@link annotationToLayers}. The bounding-box sequence rebuilds from the anchor;
- * `source` reads the layer `sourceMethod`; `confidence` the native 0-1000 column;
- * `type`/`linkType` derive from the layer persona and the denoted node; and the
- * tracker identity from the track (the video's track ClusterSet membership).
- *
- * @param row - the stored layers annotation
- * @param layer - its grouping layer (supplies the persona and source method)
- * @param video - the video row (supplies identity and frame rate)
- * @param node - the denoted graph node, when the annotation links one
- * @param track - the track this annotation belongs to, when tracked
- * @returns the reconstructed legacy annotation
- */
-export function layersToAnnotation(
-  row: StoredLayersAnnotation,
-  layer: StoredAnnotationLayer,
-  video: VideoRow,
-  node: DenotesNode | null,
-  track: MappedTrack | null = null,
-): VideoAnnotationOutput {
-  const frameRate = video.frameRate ?? DEFAULT_FRAME_RATE
-
-  const anchorWrapper = row.anchor as { spatioTemporalAnchor?: SpatioTemporalAnchor } | null
-  const spatioTemporalAnchor = anchorWrapper?.spatioTemporalAnchor
-  const frames = spatioTemporalAnchor
-    ? spatioTemporalAnchorToBoundingBoxSequence(spatioTemporalAnchor, { frameRate })
-    : emptySequence()
-
-  if (track) {
-    frames.trackId = track.trackId
-    if (track.trackingSource !== undefined) frames.trackingSource = track.trackingSource
-    if (track.trackingConfidence !== undefined) {
-      frames.trackingConfidence = from1000(track.trackingConfidence)
-    }
-  }
-
-  // An object layer's annotation is `object`; a persona layer's is a `type`
-  // annotation unless it denotes a world node, when its `type` is the node's
-  // instance kind (entity/event/time/location).
-  let type: string
-  let linkType: VideoAnnotationLinkType | null
-  if (!layer.personaId) {
-    type = 'object'
-    linkType = nodeTypeToLinkType(node?.nodeType)
-  } else if (node) {
-    linkType = nodeTypeToLinkType(node.nodeType)
-    type = linkType ?? 'type'
-  } else {
-    type = 'type'
-    linkType = null
-  }
-
-  return {
-    id: row.id,
-    videoId: video.id,
-    personaId: layer.personaId,
-    type,
-    label: row.label ?? '',
-    linkType,
-    frames,
-    confidence: row.confidence != null ? from1000(row.confidence) ?? null : null,
-    source: layer.sourceMethod,
-    linkedObjectName: node?.label ?? null,
-    createdBy: row.createdByUserId,
-    createdAt: row.createdAt.toISOString(),
-    updatedAt: row.updatedAt.toISOString(),
-  }
 }

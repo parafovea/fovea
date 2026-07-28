@@ -15,14 +15,13 @@
 import { PrismaClient } from '@prisma/client'
 
 import {
-  layersToWorldState,
-  worldStateToLayers,
   isWorldEdge,
   emptyWorldState,
   personalWorldStateId,
   WORLD_NODE_TYPES,
   type WorldStateAggregate,
 } from '../world-layers-mapper.js'
+import { worldStateToLayersViaLens, layersToWorldStateViaLens } from '../layers-lens/world-lens.js'
 import { readWorldRows, pruneWorldRows, createWorldProjection, upsertWorldProjection } from './world-store.js'
 import { type PrismaLike } from './util.js'
 
@@ -52,7 +51,7 @@ function layersScope(scope: WorldScope): { createdByUserId: string | null; proje
  */
 export async function readWorldAggregate(prisma: PrismaLike, scope: WorldScope): Promise<WorldRead> {
   const { rows, exists } = await readWorldRows(prisma, layersScope(scope))
-  return exists ? { aggregate: layersToWorldState(rows), exists } : { aggregate: emptyWorldState(), exists }
+  return exists ? { aggregate: await layersToWorldStateViaLens(rows), exists } : { aggregate: emptyWorldState(), exists }
 }
 
 /**
@@ -70,7 +69,7 @@ export async function writeWorldAggregate(
 ): Promise<void> {
   const layers = layersScope(scope)
   await pruneWorldRows(prisma, layers)
-  await createWorldProjection(prisma, worldStateToLayers(aggregate, layers))
+  await createWorldProjection(prisma, await worldStateToLayersViaLens(aggregate, layers))
 }
 
 /**
@@ -94,7 +93,7 @@ export async function mergeWorldObjects(
   aggregate: WorldStateAggregate,
 ): Promise<void> {
   const layers = layersScope(scope)
-  await upsertWorldProjection(prisma, layers, worldStateToLayers(aggregate, layers), 1)
+  await upsertWorldProjection(prisma, layers, await worldStateToLayersViaLens(aggregate, layers), 1)
 }
 
 /**

@@ -70,7 +70,7 @@ import type {
   DenotesNode,
   MappedTrack as OracleMappedTrack,
   VideoAnnotationOutput,
-} from '../video-annotation-mapper.js'
+} from '../video-annotation-shared.js'
 
 // --------------------------------------------------------------------------
 // FOVEA video-annotation view-model (the lens source)
@@ -1097,15 +1097,76 @@ export async function annotationToLayers(
 
 /**
  * The FOVEA video backward map, the surface's synchronous public entry point for
- * reconstruction: rebuilds the FOVEA annotation from its stored layers rows (the
- * spatio-temporal anchor, the grouping layer's persona and source method, the
- * denoted node, and the track).
+ * reconstruction: rebuilds the FOVEA annotation from its stored layers rows. The
+ * bounding-box sequence rebuilds from the spatio-temporal anchor; `source` reads
+ * the grouping layer's `sourceMethod`; `confidence` descales the native 0-1000
+ * column to a 0-1 float; `type`/`linkType` derive from the layer persona and the
+ * denoted node; and the tracker identity comes from the track (the video's track
+ * ClusterSet membership).
  *
  * The lens-native reconstruction is {@link layersToAnnotationViaLens}, which runs
- * the backward inverse lens; the backward-parity test asserts the two agree over a
- * corpus. This synchronous entry point stays in place because the compiled lens is
- * built asynchronously and the read routes call this map synchronously; the lead
- * makes those call sites async and swaps the lens-native reconstruction in behind
- * this name once the full database suite is green.
+ * the backward inverse lens's `getJson` and produces the same annotation. The read
+ * routes call this synchronous map because the compiled lens builds asynchronously.
+ *
+ * @param row - the stored layers annotation
+ * @param layer - its grouping layer (supplies the persona and source method)
+ * @param video - the video row (supplies identity and frame rate)
+ * @param node - the denoted graph node, when the annotation links one
+ * @param track - the track this annotation belongs to, when tracked
+ * @returns the reconstructed FOVEA annotation
  */
-export { layersToAnnotation } from '../video-annotation-mapper.js'
+export function layersToAnnotation(
+  row: StoredLayersAnnotation,
+  layer: StoredAnnotationLayer,
+  video: VideoRow,
+  node: DenotesNode | null,
+  track: OracleMappedTrack | null = null,
+): VideoAnnotationOutput {
+  const frameRate = video.frameRate ?? DEFAULT_FRAME_RATE
+
+  const anchorWrapper = row.anchor as { spatioTemporalAnchor?: SpatioTemporalAnchor } | null
+  const spatioTemporalAnchor = anchorWrapper?.spatioTemporalAnchor
+  const frames = spatioTemporalAnchor
+    ? spatioTemporalAnchorToBoundingBoxSequence(spatioTemporalAnchor, { frameRate })
+    : emptyFrames()
+
+  if (track) {
+    frames.trackId = track.trackId
+    if (track.trackingSource !== undefined) frames.trackingSource = track.trackingSource
+    if (track.trackingConfidence !== undefined) {
+      frames.trackingConfidence = from1000(track.trackingConfidence)
+    }
+  }
+
+  // An object layer's annotation is `object`; a persona layer's is a `type`
+  // annotation unless it denotes a world node, when its `type` is the node's
+  // instance kind (entity/event/time/location).
+  let type: string
+  let linkType: VideoAnnotationLinkType | null
+  if (!layer.personaId) {
+    type = 'object'
+    linkType = nodeTypeToLinkType(node?.nodeType)
+  } else if (node) {
+    linkType = nodeTypeToLinkType(node.nodeType)
+    type = linkType ?? 'type'
+  } else {
+    type = 'type'
+    linkType = null
+  }
+
+  return {
+    id: row.id,
+    videoId: video.id,
+    personaId: layer.personaId,
+    type,
+    label: row.label ?? '',
+    linkType,
+    frames,
+    confidence: row.confidence != null ? (from1000(row.confidence) ?? null) : null,
+    source: layer.sourceMethod,
+    linkedObjectName: node?.label ?? null,
+    createdBy: row.createdByUserId,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+  }
+}

@@ -4,7 +4,7 @@ import {
   PrismaClient
 } from '@prisma/client'
 
-import type { VideoAnnotationOutput } from './video-annotation-mapper.js'
+import type { VideoAnnotationOutput } from './video-annotation-shared.js'
 import { readOntologyAggregate } from './layers-bridge/ontology-bridge.js'
 import { readWorldAggregate } from './layers-bridge/world-bridge.js'
 import { readSummaryClaims } from './layers-bridge/claim-bridge.js'

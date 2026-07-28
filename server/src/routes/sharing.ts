@@ -37,7 +37,7 @@ import {
 } from '../services/layers-bridge/ontology-bridge.js'
 import { emptyOntology } from '../services/ontology-layers-mapper.js'
 import { personalWorldStateId, type WorldStateAggregate } from '../services/world-layers-mapper.js'
-import type { VideoAnnotationInput } from '../services/video-annotation-mapper.js'
+import type { VideoAnnotationInput } from '../services/video-annotation-shared.js'
 import type { StoredClaim } from '../services/claim-layers-mapper.js'
 import { trace } from '@opentelemetry/api'
 import { requireAuth } from '@middleware/auth.js'

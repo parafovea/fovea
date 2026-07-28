@@ -9,12 +9,11 @@ import { LayersOntologyRepository } from '../repositories/LayersOntologyReposito
 import { isSingleUserMode } from './user-service.js'
 import { layersOntologyForPersonaId, worldScaffoldExpressionId, worldScaffoldLayerId } from './layers-id-map.js'
 import {
-  worldStateToLayers,
-  layersToWorldState,
   emptyWorldState,
   personalWorldStateId,
   type WorldStateAggregate,
 } from './world-layers-mapper.js'
+import { worldStateToLayersViaLens, layersToWorldStateViaLens } from './layers-lens/world-lens.js'
 import {
   readWorldRows,
   pruneWorldRows,
@@ -236,7 +235,7 @@ export class WorldStateService {
   async readPersonalWorld(userId: string): Promise<PersonalWorldRead> {
     const { rows, exists } = await readWorldRows(this.prisma, { createdByUserId: userId, projectId: null })
     return exists
-      ? { aggregate: layersToWorldState(rows), exists: true }
+      ? { aggregate: await layersToWorldStateViaLens(rows), exists: true }
       : { aggregate: emptyWorldState(), exists: false }
   }
 
@@ -250,7 +249,7 @@ export class WorldStateService {
    */
   async writePersonalWorld(userId: string, aggregate: WorldStateAggregate): Promise<void> {
     const scope = { createdByUserId: userId, projectId: null }
-    const projection = worldStateToLayers(aggregate, scope)
+    const projection = await worldStateToLayersViaLens(aggregate, scope)
 
     const hasRows =
       projection.nodes.length > 0 || projection.edges.length > 0 || projection.clusters.length > 0
@@ -298,7 +297,7 @@ export class WorldStateService {
     aggregate: WorldStateAggregate,
   ): Promise<void> {
     const scope = { createdByUserId: userId, projectId }
-    const projection = worldStateToLayers(aggregate, scope)
+    const projection = await worldStateToLayersViaLens(aggregate, scope)
     if (projection.nodes.length === 0 && projection.edges.length === 0 && projection.clusters.length === 0) return
 
     if (this.ability) {

@@ -3,8 +3,6 @@ import { describe, it, expect } from 'vitest'
 import type { SpatioTemporalAnchor } from '@fovea/layers-schema'
 
 import {
-  annotationToLayers,
-  layersToAnnotation,
   tracksByAnnotation,
   applyTrackMembership,
   type VideoAnnotationInput as OracleInput,
@@ -13,9 +11,8 @@ import {
   type StoredAnnotationLayer,
   type DenotesNode,
   type MappedTrack,
-} from '../../video-annotation-mapper.js'
+} from '../../video-annotation-shared.js'
 import { getPanproto, loadFoveaSchema } from '../panproto-registry.js'
-import { assertOracleParity, assertBackwardParity, type LayersRow } from '../oracle-parity.js'
 import {
   buildVideoAnnotationLens,
   getVideoAnnotationLens,
@@ -37,16 +34,16 @@ import {
 } from '../video-lens.js'
 
 /**
- * Verifies the FOVEA video surface's bidirectional lens path against the committed
- * hand-rolled mapper (the oracle). The forward annotation-core lens compiles to a
- * native panproto lens whose `getJson` output carries the keyframe regroup, the
- * folded temporal span, and the scaled confidence, and the composition + adapter
- * reproduce the oracle's rows exactly. The backward annotation-core lens compiles
- * to a native inverse lens whose `getJson` flattens the keyframe geometry and
- * descales the confidence, and the reconstruction reproduces the oracle's backward
- * view-model exactly. Both directions run the reliable forward projection
- * (`getJson`) of a lens authored in that direction; the round-trip laws hold on
- * both compiled lenses.
+ * Verifies the FOVEA video surface's bidirectional lens path. The forward
+ * annotation-core lens compiles to a native panproto lens whose `getJson` output
+ * carries the keyframe regroup, the folded temporal span, and the scaled
+ * confidence, and the composition + adapter distribute it to rows. The backward
+ * annotation-core lens compiles to a native inverse lens whose `getJson` flattens
+ * the keyframe geometry and descales the confidence, and the reconstruction
+ * rebuilds the FOVEA annotation from it. Both directions run the reliable forward
+ * projection (`getJson`) of a lens authored in that direction; the round-trip laws
+ * hold on both compiled lenses, and running the surface forward then backward
+ * returns the annotation.
  */
 
 const FRAME_RATE = 30
@@ -184,20 +181,10 @@ const CORPUS: Array<{ name: string; input: OracleInput & VideoAnnotationInput }>
   },
 ]
 
-/** Flattens the oracle/lens mapping into tagged Prisma-table rows for comparison. */
-function mappingToRows(m: AnnotationLayersMapping): LayersRow[] {
-  const rows: LayersRow[] = [
-    { __table: 'AnnotationLayer', ...m.layer },
-    { __table: 'LayersAnnotation', ...m.annotation },
-  ]
-  if (m.track) rows.push({ __table: 'Track', ...m.track })
-  return rows
-}
-
 /**
- * Rebuilds the stored-row shape the backward mappers read from a forward mapping,
- * the way the persistence boundary hands them back: the annotation row, its
- * grouping layer, the denoted node, and the track resolved from the video's track
+ * Rebuilds the stored-row shape the backward map reads from a forward mapping, the
+ * way the persistence boundary hands it back: the annotation row, its grouping
+ * layer, the denoted node, and the track resolved from the video's track
  * ClusterSet membership.
  */
 function toStored(m: AnnotationLayersMapping): {
@@ -320,11 +307,12 @@ describe('video-lens backward annotation-core lens', () => {
     const { lens } = await getVideoAnnotationBackLens()
 
     for (const { name, input } of CORPUS) {
-      const anchor = annotationToLayers(input, CTX).annotation.anchor.spatioTemporalAnchor
+      const mapping = await foveaAnnotationToLayersRows(input, CTX)
+      const anchor = mapping.annotation.anchor.spatioTemporalAnchor
       const record: Record<string, unknown> = {
         id: input.id,
         label: input.label,
-        confidence: annotationToLayers(input, CTX).annotation.confidence,
+        confidence: mapping.annotation.confidence,
         interpolation: anchor.interpolation,
         temporalSpan: anchor.temporalSpan,
         keyframes: anchor.keyframes,
@@ -338,7 +326,7 @@ describe('video-lens backward annotation-core lens', () => {
 
   it('flattens the keyframe geometry and descales the confidence on getJson', async () => {
     const { lens } = await getVideoAnnotationBackLens()
-    const { row } = toStored(annotationToLayers(CORPUS[0].input, CTX))
+    const { row } = toStored(await foveaAnnotationToLayersRows(CORPUS[0].input, CTX))
     const anchor = (row.anchor as { spatioTemporalAnchor: SpatioTemporalAnchor }).spatioTemporalAnchor
     const view = projectBackView(lens, row, anchor)
 
@@ -358,7 +346,7 @@ describe('video-lens backward annotation-core lens', () => {
     expect(view.confidence).toBe(0.8)
 
     // A null-confidence stored annotation descales to null.
-    const { row: nullRow } = toStored(annotationToLayers(CORPUS[2].input, CTX))
+    const { row: nullRow } = toStored(await foveaAnnotationToLayersRows(CORPUS[2].input, CTX))
     const nullAnchor = (nullRow.anchor as { spatioTemporalAnchor: SpatioTemporalAnchor })
       .spatioTemporalAnchor
     const nullView = projectBackView(lens, nullRow, nullAnchor)
@@ -366,19 +354,7 @@ describe('video-lens backward annotation-core lens', () => {
   })
 })
 
-describe('video-lens oracle parity', () => {
-  it('reproduces the oracle rows for every corpus annotation (forward)', async () => {
-    const oracleRows: LayersRow[] = []
-    const lensRows: LayersRow[] = []
-
-    for (const { input } of CORPUS) {
-      oracleRows.push(...mappingToRows(annotationToLayers(input, CTX)))
-      lensRows.push(...mappingToRows(await foveaAnnotationToLayersRows(input, CTX)))
-    }
-
-    assertOracleParity(oracleRows, lensRows)
-  })
-
+describe('video-lens composition and reconstruction', () => {
   it('composes the three layers record types with deterministic-id cross-refs', async () => {
     const tracked = CORPUS[0].input
     const rows = await foveaAnnotationToLayersRows(tracked, CTX)
@@ -394,20 +370,30 @@ describe('video-lens oracle parity', () => {
     expect(rows.annotation.endMs).toBe(1000)
   })
 
-  it('reconstructs the oracle backward view-model via the inverse lens (backward)', async () => {
-    // Reconstructs the same stored rows through the oracle backward mapper and
-    // through the backward lens, asserting the two produce the same FOVEA
-    // annotation. The reconstruction runs the inverse lens's getJson, not the
-    // oracle backward mapper, so this is a genuine lens-vs-oracle comparison.
+  it('reconstructs the annotation from its own composed rows (forward then backward)', async () => {
+    // Runs the surface forward (annotation -> getJson forward -> adapter -> rows),
+    // then backward (rows -> getJson backward -> annotation) over the same
+    // annotation, and asserts the bounding-box sequence and the persona/link-derived
+    // scalars survive the round trip. The reconstruction runs the inverse lens's
+    // getJson, so this is a genuine end-to-end lens self-consistency check.
     for (const { name, input } of CORPUS) {
-      const forward = annotationToLayers(input, CTX)
+      const forward = await foveaAnnotationToLayersRows(input, CTX)
       const { row, layer, node, track } = toStored(forward)
       const video = { id: input.videoId, frameRate: FRAME_RATE }
+      const out = await layersToAnnotationViaLens(row, layer, video, node, track)
 
-      const fromOracle = layersToAnnotation(row, layer, video, node, track)
-      const fromLens = await layersToAnnotationViaLens(row, layer, video, node, track)
-      assertBackwardParity(fromOracle, fromLens)
-      expect(fromLens, `reconstruction for ${name}`).toEqual(fromOracle)
+      expect(out.id, `id for ${name}`).toBe(input.id)
+      expect(out.videoId).toBe(input.videoId)
+      expect(out.personaId).toBe(input.personaId)
+      expect(out.label).toBe(input.label)
+      expect(out.source).toBe(input.source)
+      expect(out.confidence, `confidence for ${name}`).toBe(input.confidence)
+      // The keyframe geometry (box, time, per-box confidence, metadata) survives
+      // the round trip; the anchor records visibility and interpolation only at
+      // keyframes, so a sequence's inter-keyframe range boundaries need not.
+      expect(out.frames.boxes, `keyframes for ${name}`).toEqual(input.frames.boxes)
+      expect(out.frames.trackId, `track for ${name}`).toBe(input.frames.trackId)
+      expect(out.frames.trackingSource).toBe(input.frames.trackingSource)
     }
   })
 })
