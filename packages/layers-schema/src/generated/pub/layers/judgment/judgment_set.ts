@@ -12,16 +12,28 @@ export interface JudgmentSet {
   * The agent (human annotator, ML model, crowd worker, etc.) who produced this judgment set. Use did for ATProto-native annotators, id for anonymized/platform-specific identifiers, knowledgeRef for ORCID or model cards.
   */
   agent?: AgentRef;
+  /**
+  * When this judgment set record was created.
+  */
   createdAt: string;
+  /**
+  * AT-URI of the pub.layers.judgment.experimentDef this judgment set was collected for.
+  */
   experimentRef: string;
   /**
   * Open-ended features (e.g., annotator demographics, session metadata, completion time, payment info).
   */
   features?: FeatureMap;
+  /**
+  * The judgments in this set, each a pub.layers.judgment.defs#judgment, all produced by the one annotator.
+  */
   judgments: Judgment[];
   /**
   * Knowledge graph references (e.g., crowdsourcing platform, annotator population, methodology source).
   */
   knowledgeRefs?: KnowledgeRef[];
+  /**
+  * Provenance: who created this judgment set record, with what tool.
+  */
   metadata?: AnnotationMetadata;
 }

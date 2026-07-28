@@ -18,21 +18,36 @@ import {
 import { typeDefRowId as bridgeTypeDefRowId } from '../../layers-bridge/ontology-bridge.js'
 import { glossExpressionId, glossLayerId, layersOntologyForPersonaId } from '../../layers-id-map.js'
 import { getPanproto, loadFoveaSchema } from '../panproto-registry.js'
-import { assertOracleParity, type LayersRow } from '../oracle-parity.js'
+import { assertOracleParity, assertBackwardParity, type LayersRow } from '../oracle-parity.js'
 import {
-  buildGlossRegroupLens,
+  buildGlossStandoffLens,
+  getGlossStandoffLens,
+  buildGlossStandoffBackLens,
+  getGlossStandoffBackLens,
   foveaOntologyToLayersRows,
-  glossRegroupSourceRecord,
-  glossRegroupSourceSchema,
+  glossLensSourceRecord,
+  glossLensSourceSchema,
+  glossBackLensSourceRecord,
+  glossBackLensSourceSchema,
+  projectGlossStandoff,
+  glossFromStandoffViaLens,
+  layersToOntologyViaLens,
+  GLOSS_STANDOFF_BODY_VERTEX,
   type OntologyLayersRows,
 } from '../ontology-lens.js'
 
 /**
- * Verifies the FOVEA persona-ontology surface's lens+adapter path against the
- * committed hand-rolled forward mapper (the oracle: `ontologyToLayers` plus
- * `glossStandoffFor`): the gloss reference-segment regroup compiles to a native
- * panproto lens whose round-trip laws hold, and the composition + adapter reproduce
- * the oracle's rows exactly over a corpus of representative persona ontologies.
+ * Verifies the FOVEA persona-ontology surface's bidirectional lens+adapter path
+ * against the committed hand-rolled mapper (the oracle: `ontologyToLayers` /
+ * `glossStandoffFor` forward, `layersToOntology` / `glossFromStandoff` backward):
+ * the forward and backward gloss stand-off lenses compile native, their round-trip
+ * laws hold, and their `getJson` output already carries — forward — the
+ * reference-segment offset scan, the anchor regroup, the
+ * `ontologyTypeRefId`/`arguments`/`features` derivations, and the folded gloss text,
+ * and — backward — the recovered per-segment `type`/`content`/`refType`/
+ * `refPersonaId`/`refClaimId`. The composition + adapter reproduce the oracle's rows
+ * exactly forward, and the backward lens + regrouping reconstruct the oracle's
+ * ontology exactly, over a corpus of representative persona ontologies.
  */
 
 const SCOPE: OntologyLayersScope = { projectId: 'project-1', createdByUserId: 'user-1' }
@@ -158,11 +173,11 @@ function taggedRows(rows: OntologyLayersRows): LayersRow[] {
   return tagged
 }
 
-/** Rebuilds the reconstruction inputs (TypeDef rows + reconstructed gloss map) from a row set. */
+/** Rebuilds the TypeDef rows and the per-row gloss text + reference annotations from a row set. */
 function reconstructionInputs(
   rows: OntologyLayersRows,
   personaId: string,
-): { typeDefRows: TypeDefRow[]; glossMap: Map<string, GlossItem[]> } {
+): { typeDefRows: TypeDefRow[]; textByRow: Map<string, string>; refsByRow: Map<string, GlossRefRow[]> } {
   const ontologyId = layersOntologyForPersonaId(personaId)
   // Mirror the bridge's row distribution: the persisted TypeDef id is the derived
   // row id, and a parent ref resolves to the parent's derived row id.
@@ -178,8 +193,8 @@ function reconstructionInputs(
     features: typeDef.features as TypeDefRow['features'],
   }))
 
-  // Walk the gloss back from the stand-off, keyed by the TypeDef row id the gloss
-  // expression and span-layer ids fan off (mirrors the bridge's readGlossMap).
+  // Key the stand-off by the TypeDef row id its expression and span-layer ids fan
+  // off (mirrors the bridge's readGlossMap).
   const expressionIdToRow = new Map<string, string>()
   const layerIdToRow = new Map<string, string>()
   for (const row of typeDefRows) {
@@ -203,54 +218,148 @@ function reconstructionInputs(
     refsByRow.set(rowId, list)
   }
 
-  const glossMap = new Map<string, GlossItem[]>()
+  const textByRow = new Map<string, string>()
   for (const expression of rows.glossExpressions) {
     const rowId = expressionIdToRow.get(expression.id)
-    if (!rowId) continue
-    glossMap.set(rowId, glossFromStandoff(expression.text, refsByRow.get(rowId) ?? []))
+    if (rowId) textByRow.set(rowId, expression.text)
   }
-  return { typeDefRows, glossMap }
+
+  return { typeDefRows, textByRow, refsByRow }
 }
 
-describe('ontology-lens gloss regroup lens', () => {
-  it('compiles a native gloss regroup lens carrying the anchor field transform', async () => {
-    const { requirementKind, fieldTransforms } = await buildGlossRegroupLens()
+/** Reconstructs the per-row gloss map through the oracle's `glossFromStandoff`. */
+function oracleGlossMap(inputs: ReturnType<typeof reconstructionInputs>): Map<string, GlossItem[]> {
+  const map = new Map<string, GlossItem[]>()
+  for (const [rowId, text] of inputs.textByRow) {
+    map.set(rowId, glossFromStandoff(text, inputs.refsByRow.get(rowId) ?? []))
+  }
+  return map
+}
+
+/** Reconstructs the per-row gloss map through the backward gloss stand-off lens. */
+function lensGlossMap(lens: import('@panproto/core').LensHandle, inputs: ReturnType<typeof reconstructionInputs>): Map<string, GlossItem[]> {
+  const map = new Map<string, GlossItem[]>()
+  for (const [rowId, text] of inputs.textByRow) {
+    map.set(rowId, glossFromStandoffViaLens(lens, text, inputs.refsByRow.get(rowId) ?? []))
+  }
+  return map
+}
+
+describe('ontology-lens forward gloss stand-off lens', () => {
+  it('compiles a native lens carrying the segment and flatten field transforms', async () => {
+    const { requirementKind, fieldTransforms } = await buildGlossStandoffLens()
+    // The lens is native (its complement requirement is empty) and its two computed
+    // fields survive compilation, keyed by the gloss root vertex.
     expect(requirementKind).toBe('empty')
-    expect(Object.keys(fieldTransforms)).toContain('root.segments:items')
+    expect(Object.keys(fieldTransforms)).toContain(GLOSS_STANDOFF_BODY_VERTEX)
+    const rootTransforms = fieldTransforms[GLOSS_STANDOFF_BODY_VERTEX] as Array<{
+      ComputeField?: { target_key?: string }
+    }>
+    const targets = rootTransforms.map((t) => t.ComputeField?.target_key)
+    expect(targets).toEqual(expect.arrayContaining(['segments', 'glossText']))
   })
 
-  it("holds the round-trip laws over every corpus type's gloss segments", async () => {
+  it("holds the round-trip laws over every corpus type's gloss", async () => {
     const p = await getPanproto()
-    const source = await loadFoveaSchema(glossRegroupSourceSchema)
-    const { lens } = await buildGlossRegroupLens()
+    const source = await loadFoveaSchema(glossLensSourceSchema)
+    const { lens } = await getGlossStandoffLens()
 
     const glosses: Array<{ name: string; gloss: GlossItem[] }> = [
       { name: 'entity typeRef gloss', gloss: ENTITY_GLOSS },
       { name: 'event object/claim gloss', gloss: EVENT_GLOSS },
       { name: 'role text-only gloss', gloss: ROLE_GLOSS },
+      { name: 'empty gloss', gloss: [] },
     ]
     for (const { name, gloss } of glosses) {
-      const record = glossRegroupSourceRecord(gloss)
+      const record = glossLensSourceRecord(gloss)
       const bytes = p.parseJson(source, JSON.stringify(record))._bytes
       expect(lens.checkGetPut(bytes).holds, `GetPut for ${name}`).toBe(true)
       expect(lens.checkPutGet(bytes).holds, `PutGet for ${name}`).toBe(true)
     }
   })
+
+  it('scans each reference segment offset and derives its anchor, typeRef, and features', async () => {
+    const { lens } = await getGlossStandoffLens()
+    const view = projectGlossStandoff(lens, ENTITY_GLOSS)
+
+    // The lens folded the segment contents into the flattened gloss text.
+    expect(view.glossText).toBe('A person, such as a entity-journalist.')
+
+    // The typeRef segment: the lens scanned its running offsets into anchor.textSpan,
+    // projected its content into ontologyTypeRefId, left arguments null, and built
+    // its feature map from the present ref scalars.
+    const typeRef = view.segments[1]
+    expect(typeRef.anchor).toEqual({ textSpan: { byteStart: 20, byteEnd: 37, charStart: 20, charEnd: 37 } })
+    expect(typeRef.ontologyTypeRefId).toBe('entity-journalist')
+    expect(typeRef.arguments).toBeNull()
+    expect(typeRef.features).toEqual([
+      { key: 'fovea.refType', value: 'entity' },
+      { key: 'fovea.refPersonaId', value: 'persona-1' },
+    ])
+
+    // A text segment has no reference: ontologyTypeRefId null.
+    expect(view.segments[0].label).toBe('text')
+    expect(view.segments[0].ontologyTypeRefId).toBeNull()
+  })
+
+  it('constructs the denotes argument for object and claim references', async () => {
+    const { lens } = await getGlossStandoffLens()
+    const view = projectGlossStandoff(lens, EVENT_GLOSS)
+
+    // The objectRef segment points at its target through arguments (never a typeRef).
+    const objectRef = view.segments[1]
+    expect(objectRef.ontologyTypeRefId).toBeNull()
+    expect(objectRef.arguments).toEqual([{ role: 'denotes', target: { localId: { value: 'obj-election-2024' } } }])
+
+    // The claimRef segment points at its refClaimId and carries it as a feature.
+    const claimRef = view.segments[3]
+    expect(claimRef.arguments).toEqual([{ role: 'denotes', target: { localId: { value: 'claim-9' } } }])
+    expect(claimRef.features).toEqual([{ key: 'fovea.refClaimId', value: 'claim-9' }])
+  })
+})
+
+describe('ontology-lens backward gloss stand-off lens', () => {
+  it('compiles a native backward lens carrying the segment inverse transform', async () => {
+    const { requirementKind, fieldTransforms } = await buildGlossStandoffBackLens()
+    expect(requirementKind).toBe('empty')
+    const rootTransforms = fieldTransforms[GLOSS_STANDOFF_BODY_VERTEX] as Array<{
+      ComputeField?: { target_key?: string }
+    }>
+    const targets = rootTransforms.map((t) => t.ComputeField?.target_key)
+    expect(targets).toEqual(expect.arrayContaining(['segments']))
+  })
+
+  it('holds the round-trip laws over every reference-bearing stand-off', async () => {
+    const p = await getPanproto()
+    const source = await loadFoveaSchema(glossBackLensSourceSchema)
+    const { lens } = await getGlossStandoffBackLens()
+
+    // Drive the backward source from the forward lens's own stand-off rows.
+    for (const { name, aggregate, personaId } of CORPUS) {
+      const inputs = reconstructionInputs(await foveaOntologyToLayersRows(aggregate, personaId, META, SCOPE), personaId)
+      for (const [rowId, text] of inputs.textByRow) {
+        const record = glossBackLensSourceRecord(text, inputs.refsByRow.get(rowId) ?? [])
+        const bytes = p.parseJson(source, JSON.stringify(record))._bytes
+        expect(lens.checkGetPut(bytes).holds, `GetPut for ${name} ${rowId}`).toBe(true)
+        expect(lens.checkPutGet(bytes).holds, `PutGet for ${name} ${rowId}`).toBe(true)
+      }
+    }
+  })
 })
 
 describe('ontology-lens oracle parity', () => {
-  it('reproduces the oracle rows for every corpus ontology', () => {
+  it('reproduces the oracle rows for every corpus ontology (forward)', async () => {
     const oracle: LayersRow[] = []
     const lens: LayersRow[] = []
     for (const { aggregate, personaId } of CORPUS) {
       oracle.push(...taggedRows(oracleRows(aggregate, personaId)))
-      lens.push(...taggedRows(foveaOntologyToLayersRows(aggregate, personaId, META, SCOPE)))
+      lens.push(...taggedRows(await foveaOntologyToLayersRows(aggregate, personaId, META, SCOPE)))
     }
     assertOracleParity(oracle, lens)
   })
 
-  it('composes the gloss stand-off with deterministic-id cross-refs', () => {
-    const rows = foveaOntologyToLayersRows(RICH, 'persona-1', META, SCOPE)
+  it('composes the gloss stand-off with deterministic-id cross-refs', async () => {
+    const rows = await foveaOntologyToLayersRows(RICH, 'persona-1', META, SCOPE)
     // The rich ontology has three reference-bearing glosses (Person, Reporting,
     // coauthorOf); each yields one Expression + one span AnnotationLayer.
     expect(rows.glossExpressions).toHaveLength(3)
@@ -272,22 +381,36 @@ describe('ontology-lens oracle parity', () => {
     expect(claimRef?.arguments).toEqual([{ role: 'denotes', target: { localId: { value: 'claim-9' } } }])
   })
 
-  it('reconstructs identically to the oracle backward mapper from the composed rows', () => {
+  it('reconstructs each gloss through the backward lens identically to the oracle', async () => {
+    const { lens } = await getGlossStandoffBackLens()
     for (const { name, aggregate, personaId } of CORPUS) {
-      const fromOracle = reconstructionInputs(oracleRows(aggregate, personaId), personaId)
-      const fromLens = reconstructionInputs(foveaOntologyToLayersRows(aggregate, personaId, META, SCOPE), personaId)
-      const reconstructedOracle = layersToOntology(fromOracle.typeDefRows, fromOracle.glossMap)
-      const reconstructedLens = layersToOntology(fromLens.typeDefRows, fromLens.glossMap)
+      const inputs = reconstructionInputs(await foveaOntologyToLayersRows(aggregate, personaId, META, SCOPE), personaId)
+      const fromLens = lensGlossMap(lens, inputs)
+      const fromOracle = oracleGlossMap(inputs)
+      // Backward parity for the lens-carried transform: the reconstruction runs the
+      // backward lens, never the oracle's glossFromStandoff.
+      assertBackwardParity([...fromOracle.entries()], [...fromLens.entries()])
+      expect([...fromLens.keys()].sort(), `gloss rows for ${name}`).toEqual([...fromOracle.keys()].sort())
+    }
+  })
+
+  it('reconstructs the ontology aggregate identically to the oracle backward mapper', async () => {
+    const { lens } = await getGlossStandoffBackLens()
+    for (const { name, aggregate, personaId } of CORPUS) {
+      const inputs = reconstructionInputs(await foveaOntologyToLayersRows(aggregate, personaId, META, SCOPE), personaId)
+      // The lens path reconstructs the gloss through the backward lens and regroups
+      // the rows itself; the oracle path uses layersToOntology + glossFromStandoff.
+      const reconstructedLens = layersToOntologyViaLens(inputs.typeDefRows, lensGlossMap(lens, inputs))
+      const reconstructedOracle = layersToOntology(inputs.typeDefRows, oracleGlossMap(inputs))
+      assertBackwardParity(reconstructedOracle, reconstructedLens)
       expect(reconstructedLens, `reconstruction for ${name}`).toEqual(reconstructedOracle)
     }
   })
 
-  it('round-trips the rich ontology gloss references through reconstruction', () => {
-    const { typeDefRows, glossMap } = reconstructionInputs(
-      foveaOntologyToLayersRows(RICH, 'persona-1', META, SCOPE),
-      'persona-1',
-    )
-    const reconstructed = layersToOntology(typeDefRows, glossMap)
+  it('round-trips the rich ontology gloss references through the backward lens', async () => {
+    const { lens } = await getGlossStandoffBackLens()
+    const inputs = reconstructionInputs(await foveaOntologyToLayersRows(RICH, 'persona-1', META, SCOPE), 'persona-1')
+    const reconstructed = layersToOntologyViaLens(inputs.typeDefRows, lensGlossMap(lens, inputs))
     // The Person entity's gloss recovers its typeRef segment (content + refType).
     const person = reconstructed.entityTypes[0] as { name: string; gloss: GlossItem[] }
     expect(person.name).toBe('Person')

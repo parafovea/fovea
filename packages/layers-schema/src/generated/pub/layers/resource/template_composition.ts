@@ -16,16 +16,25 @@ export interface TemplateComposition {
   * AT-URI of the composition type definition node. Community-expandable via knowledge graph.
   */
   compositionTypeUri?: string;
+  /**
+  * When this composition record was created.
+  */
   createdAt: string;
   /**
   * Reference to the experiment this composition was designed for.
   */
   experimentRef?: string;
+  /**
+  * Open-ended features describing this composition not captured by the typed fields.
+  */
   features?: FeatureMap;
   /**
   * Ordered members of this composition.
   */
   members: TemplateMember[];
+  /**
+  * Provenance: who assembled this composition, with what tool.
+  */
   metadata?: AnnotationMetadata;
 }
 

@@ -20,6 +20,9 @@ export interface Eprint {
   * Reference to a corpus record.
   */
   corpusRef?: string;
+  /**
+  * Timestamp when this eprint link record was created.
+  */
   createdAt: string;
   /**
   * Description of the relationship.
@@ -45,6 +48,9 @@ export interface Eprint {
   * References to Layers expressions linked to this eprint.
   */
   expressionRefs?: string[];
+  /**
+  * Open-ended features for this eprint link as key-value pairs.
+  */
   features?: FeatureMap;
   /**
   * Knowledge graph references (e.g., Wikidata for the venue, DBLP, Semantic Scholar corpus ID).

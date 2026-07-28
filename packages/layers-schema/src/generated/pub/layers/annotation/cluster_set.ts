@@ -8,11 +8,17 @@ import type { Cluster } from "././defs";
 * Groups annotations into equivalence classes. Used for coreference resolution (entity clusters, situation clusters), bridging anaphora grouping, and any annotation clustering task.
 */
 export interface ClusterSet {
+  /**
+  * The equivalence classes in this set; each cluster groups annotations judged to corefer.
+  */
   clusters: Cluster[];
   /**
   * Corpus these clusters span (for cross-document clustering).
   */
   corpusRef?: string;
+  /**
+  * Timestamp when this cluster set record was created.
+  */
   createdAt: string;
   /**
   * Eprint records (papers/preprints) describing or associated with this cluster set.
@@ -42,6 +48,9 @@ export interface ClusterSet {
   * Licensing terms governing this cluster set (supports dual/multi/component licensing).
   */
   licensing?: Licensing;
+  /**
+  * Provenance: who produced this cluster set, when, with what tool or model.
+  */
   metadata?: AnnotationMetadata;
   /**
   * How this cluster set was produced (code, commit, command, environment, seed).

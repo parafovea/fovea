@@ -131,3 +131,25 @@ export function assertOracleParity(
   }
   throw new Error(lines.join('\n'))
 }
+
+/**
+ * Asserts the lens-path reconstruction reproduces the oracle's reconstructed
+ * FOVEA view-model exactly, throwing an Error whose message names the divergence
+ * when the two differ. Where {@link assertOracleParity} compares the forward rows,
+ * this compares one backward view-model — the reconstructed annotation — up to
+ * object-key ordering (arrays, such as a keyframe or box sequence, stay
+ * order-significant). Surfaces call this after reconstructing the same stored rows
+ * through both the oracle backward mapper and the backward lens.
+ *
+ * @param oracleViewModel - the view-model the committed backward mapper produced
+ * @param lensViewModel - the view-model the backward lens path produced
+ * @throws when the two view-models differ as canonical (key-sorted) values
+ */
+export function assertBackwardParity(oracleViewModel: unknown, lensViewModel: unknown): void {
+  const oracle = canonicalKey(oracleViewModel)
+  const lens = canonicalKey(lensViewModel)
+  if (oracle === lens) return
+  throw new Error(
+    ['Backward parity failed.', `  oracle: ${oracle}`, `  lens:   ${lens}`].join('\n'),
+  )
+}

@@ -8,6 +8,9 @@ import type { GraphEdgeEntry } from "././defs";
 * A batch of typed, directed edges between Layers objects. Use for bulk edge creation when many edges share the same provenance and context.
 */
 export interface GraphEdgeSet {
+  /**
+  * Timestamp when this edge set record was created.
+  */
   createdAt: string;
   /**
   * Edge type slug shared by all edges in this set (fallback when edgeTypeUri unavailable).
@@ -17,6 +20,9 @@ export interface GraphEdgeSet {
   * AT-URI of the edge type definition node. Community-expandable via knowledge graph.
   */
   edgeTypeUri?: string;
+  /**
+  * The directed edge entries contained in this set.
+  */
   edges: GraphEdgeEntry[];
   /**
   * Eprint records (papers/preprints) describing or associated with this edge set.
@@ -38,6 +44,9 @@ export interface GraphEdgeSet {
   * Licensing terms governing this edge set (supports dual/multi/component licensing).
   */
   licensing?: Licensing;
+  /**
+  * Provenance: who produced this edge set, when, with what tool or model.
+  */
   metadata?: AnnotationMetadata;
   /**
   * How this edge set was produced (code, commit, command, environment, seed).

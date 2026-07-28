@@ -17,6 +17,9 @@ export interface ExperimentDesign {
   * AT-URI of the distribution strategy definition node. Community-expandable.
   */
   distributionStrategyUri?: string;
+  /**
+  * Open-ended features carrying experiment-design detail not covered by the typed fields.
+  */
   features?: FeatureMap;
   /**
   * How items are ordered within a list.
@@ -48,7 +51,13 @@ export interface Judgment {
   * Categorical judgment label.
   */
   categoricalValue?: string;
+  /**
+  * Annotator's stated confidence in this judgment, scaled 0-1000.
+  */
   confidence?: number;
+  /**
+  * Open-ended features carrying judgment detail not covered by the typed fields.
+  */
   features?: FeatureMap;
   /**
   * Reference to the pub.layers.resource#filling that generated the item being judged.
@@ -107,13 +116,20 @@ export interface ListConstraint {
 */
 export interface PresentationSpec {
   /**
-  * How text is segmented for incremental presentation.
+  * How text is segmented for incremental presentation (fallback when chunkingUnitUri unavailable).
   */
   chunkingUnit?: PresentationSpecChunkingUnit;
+  /**
+  * AT-URI of the chunking unit definition node. Community-expandable via knowledge graph.
+  */
+  chunkingUnitUri?: string;
   /**
   * Whether previous chunks remain visible during incremental presentation.
   */
   cumulative?: boolean;
+  /**
+  * Open-ended features carrying presentation detail not covered by the typed fields.
+  */
   features?: FeatureMap;
   /**
   * Inter-stimulus interval in milliseconds.
@@ -124,6 +140,10 @@ export interface PresentationSpec {
   */
   maskChar?: string;
   /**
+  * AT-URIs of pub.layers.media.media records delivered as stimuli under this specification.
+  */
+  mediaRefs?: string[];
+  /**
   * Presentation method (fallback when methodUri unavailable).
   */
   method?: PresentationSpecMethod;
@@ -132,24 +152,145 @@ export interface PresentationSpec {
   */
   methodUri?: string;
   /**
+  * AT-URIs of pub.layers.acquisition.participant records presented under this specification.
+  */
+  participantRefs?: string[];
+  /**
+  * Pixels subtending one degree of visual angle at the stated viewing distance.
+  */
+  pixelsPerDegree?: number;
+  /**
+  * Display refresh rate in millihertz (e.g., 60000 for 60 Hz).
+  */
+  refreshRateMilliHz?: number;
+  /**
+  * Physical display height in millimeters.
+  */
+  screenHeightMm?: number;
+  /**
+  * Display height in pixels.
+  */
+  screenHeightPx?: number;
+  /**
+  * Physical display width in millimeters.
+  */
+  screenWidthMm?: number;
+  /**
+  * Display width in pixels.
+  */
+  screenWidthPx?: number;
+  /**
+  * AT-URI of the pub.layers.acquisition.session whose clock and setup this presentation was delivered under.
+  */
+  sessionRef?: string;
+  /**
   * Per-chunk display duration in milliseconds.
   */
   timingMs?: number;
+  /**
+  * Participant eye-to-screen distance in millimeters.
+  */
+  viewingDistanceMm?: number;
 }
 
 /**
 * A data capture instrument used in an experiment.
 */
 export interface RecordingMethod {
+  /**
+  * Open-ended features carrying recording-method detail not covered by the typed fields.
+  */
   features?: FeatureMap;
+  /**
+  * AT-URIs of pub.layers.media.media records produced by this recording instrument.
+  */
+  mediaRefs?: string[];
   /**
   * Recording method (fallback when methodUri unavailable).
   */
   method: RecordingMethodMethod;
   /**
-  * AT-URI of the recording method definition node. Community-expandable via knowledge graph.
+  * AT-URI of the recording method definition node. Resolves into the shared modality node set in layers-acquisition.ontology.layers.pub (the same nodes backing media signalInfo.modalityUri and catalog contentSummary.modalityUri). Community-expandable via knowledge graph.
   */
   methodUri?: string;
+  /**
+  * AT-URIs of pub.layers.acquisition.participant records this recording captured.
+  */
+  participantRefs?: string[];
+  /**
+  * AT-URI of the pub.layers.acquisition.session whose clock this recording was captured on.
+  */
+  sessionRef?: string;
+}
+
+/**
+* A per-region reading-time or response measurement within a judgment, addressing one region of the presented stimulus (e.g., in self-paced reading or eye-tracking region analysis).
+*/
+export interface RegionResponse {
+  /**
+  * Categorical per-region response label.
+  */
+  categoricalValue?: string;
+  /**
+  * Open key-value map for per-region measures not covered by the named fields.
+  */
+  features?: FeatureMap;
+  /**
+  * First-fixation duration on this region in milliseconds.
+  */
+  firstFixationMs?: number;
+  /**
+  * Number of fixations on this region.
+  */
+  fixationCount?: number;
+  /**
+  * Gaze (first-pass) duration on this region in milliseconds.
+  */
+  gazeDurationMs?: number;
+  /**
+  * Go-past (regression-path) duration on this region in milliseconds.
+  */
+  goPastMs?: number;
+  /**
+  * Total reading time on this region in milliseconds.
+  */
+  readingTimeMs?: number;
+  /**
+  * Reference to the region being measured. Use recordRef for the stimulus record, objectId for a specific region object within it, localId for same-record references.
+  */
+  region: ObjectRef;
+  /**
+  * Zero-indexed position of this region within the stimulus presentation order.
+  */
+  regionIndex?: number;
+  /**
+  * Analysis role of this region (fallback when regionRoleUri unavailable).
+  */
+  regionRole?: RegionResponseRegionRole;
+  /**
+  * AT-URI of the region role definition node. Community-expandable via knowledge graph.
+  */
+  regionRoleUri?: string;
+  /**
+  * Count of regressions landing in this region.
+  */
+  regressionsIn?: number;
+  /**
+  * Count of regressions launched out of this region.
+  */
+  regressionsOut?: number;
+  /**
+  * Response time in milliseconds for a per-region response task (e.g., maze, grammaticality-at-region).
+  */
+  responseTimeMs?: number;
+  /**
+  * Numeric per-region response value (e.g., rating at this region).
+  */
+  scalarValue?: number;
+  /**
+  * Total dwell time across all fixations on this region in milliseconds.
+  */
+  totalTimeMs?: number;
 }
 
 export type ExperimentDesignDistributionStrategy = "latin-square" | "random" | "blocked" | "stratified" | "custom" | string & {};
@@ -158,8 +299,10 @@ export type ExperimentDesignItemOrder = "random-order" | "fixed-order" | "blocke
 
 export type ListConstraintKind = "latin-square" | "no-adjacent-same-condition" | "balanced-frequency" | "minimum-distance" | "custom" | string & {};
 
-export type PresentationSpecChunkingUnit = "word" | "character" | "morpheme" | "phrase" | "sentence" | "region" | "custom" | string & {};
+export type PresentationSpecChunkingUnit = "word" | "character" | "morpheme" | "phrase" | "clause" | "sentence" | "region" | "sign" | "gesture-phrase" | "custom" | string & {};
 
 export type PresentationSpecMethod = "rsvp" | "self-paced" | "whole-sentence" | "auditory" | "visual-world" | "masked-priming" | "cross-modal" | "naturalistic" | "gating" | "maze" | "boundary" | "moving-window" | "custom" | string & {};
 
 export type RecordingMethodMethod = "button-box" | "keyboard" | "mouse-click" | "touchscreen" | "voice" | "eeg" | "meg" | "fmri" | "fnirs" | "eye-tracking" | "pupillometry" | "mouse-tracking" | "emg" | "skin-conductance" | "ecog" | "custom" | string & {};
+
+export type RegionResponseRegionRole = "critical" | "spillover" | "precritical" | "pretarget" | "target" | "posttarget" | "filler" | "custom" | string & {};

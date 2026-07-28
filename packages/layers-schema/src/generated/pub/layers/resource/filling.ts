@@ -8,6 +8,9 @@ import type { SlotFilling } from "././defs";
 * A filled template: a template with all slots mapped to specific fillers, producing a rendered text. Generalizes bead's FilledTemplate and Item. The rendered text can optionally be materialized as a pub.layers.expression for annotation. Fillings are composable: they reference templates, entries, and communications via AT-URIs.
 */
 export interface Filling {
+  /**
+  * When this filling record was created.
+  */
   createdAt: string;
   /**
   * AT-URI of the pub.layers.expression materializing this filling (for annotation).

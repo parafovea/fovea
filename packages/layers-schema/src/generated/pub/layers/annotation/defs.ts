@@ -67,6 +67,9 @@ export interface Annotation {
   * For token-level annotations: 0-based index into the tokenization.
   */
   tokenIndex?: number;
+  /**
+  * Stable identifier for this annotation, used as the referent for parentId, childIds, and argument targets.
+  */
   uuid: Uuid;
   /**
   * Secondary value (lemma form, gloss, normalized temporal value, etc.).
@@ -78,6 +81,9 @@ export interface Annotation {
 * A role/argument reference in a predicate-argument structure. Uses the composable objectRef to point to another annotation, either locally (same layer, by UUID) or remotely (cross-layer or cross-record, by AT-URI + UUID).
 */
 export interface ArgumentRef {
+  /**
+  * Open-ended features for this argument (e.g., syntactic realization, optionality, span-level attributes).
+  */
   features?: FeatureMap;
   /**
   * The argument role label (e.g., ARG0, Agent, Theme, CAUSE, connective, etc.).
@@ -97,11 +103,20 @@ export interface Cluster {
   * The canonical/representative label for this cluster.
   */
   canonicalLabel?: string;
+  /**
+  * Open-ended features for this cluster (e.g., entity type, salience, discourse status).
+  */
   features?: FeatureMap;
+  /**
+  * Links from this cluster to external knowledge bases (e.g., the Wikidata or DBpedia entity the members denote).
+  */
   knowledgeRefs?: KnowledgeRef[];
   /**
   * References to the annotations in this cluster. Use localId for same-layer members, recordRef+objectId for cross-layer or cross-document coreference.
   */
   members: ObjectRef[];
+  /**
+  * Stable identifier for this cluster within the cluster set.
+  */
   uuid: Uuid;
 }

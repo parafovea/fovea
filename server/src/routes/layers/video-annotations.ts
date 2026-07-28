@@ -8,8 +8,6 @@ import { subject } from '@casl/ability'
 
 import { NotFoundError, ForbiddenError, ConflictError } from '../../lib/errors.js'
 import {
-  annotationToLayers,
-  layersToAnnotation,
   isVideoAnnotationSubkind,
   applyTrackMembership,
   removeTrackMembership,
@@ -20,6 +18,7 @@ import {
   type MappedDenotesNode,
   type MappedTrack,
 } from '../../services/video-annotation-mapper.js'
+import { annotationToLayers, layersToAnnotation } from '../../services/layers-lens/video-lens.js'
 import {
   getOrCreateVideoExpression,
   parseResolution,
@@ -297,7 +296,7 @@ const videoAnnotationsRoutes: FastifyPluginAsync = async (fastify: FastifyInstan
       source: body.source || 'manual',
     }
 
-    const mapping = annotationToLayers(input, {
+    const mapping = await annotationToLayers(input, {
       expressionId,
       ontologyId,
       frameRate,
@@ -530,7 +529,7 @@ const videoAnnotationsRoutes: FastifyPluginAsync = async (fastify: FastifyInstan
       source: body.source || current.source,
     }
 
-    const mapping = annotationToLayers(input, {
+    const mapping = await annotationToLayers(input, {
       expressionId: existing.layer.expressionId,
       ontologyId: existing.layer.ontologyId,
       frameRate,

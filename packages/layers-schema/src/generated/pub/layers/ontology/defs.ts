@@ -27,11 +27,17 @@ export interface RoleSlot {
   * References to allowed filler types (pub.layers.ontology#typeDef AT-URIs).
   */
   fillerTypeRefs?: string[];
+  /**
+  * Knowledge graph groundings for this role (e.g., a FrameNet frame element or PropBank argument).
+  */
   knowledgeRefs?: KnowledgeRef[];
   /**
   * Whether this role is obligatory.
   */
   required?: boolean;
+  /**
+  * Prose describing what this role means and what fills it.
+  */
   roleDescription?: string;
   /**
   * The role label (e.g., Agent, Patient, Theme, ARG0).

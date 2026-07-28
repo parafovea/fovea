@@ -10,6 +10,9 @@ import type { Tokenization } from "././defs";
 * A segmentation of an expression into tokenizations. Structural hierarchy (sections, sentences, paragraphs) is expressed via expression records with parentRef; this record provides the token-level decomposition.
 */
 export interface Segmentation {
+  /**
+  * Timestamp when this segmentation record was created.
+  */
   createdAt: string;
   /**
   * Eprint records (papers/preprints) describing or associated with this segmentation.
@@ -31,6 +34,9 @@ export interface Segmentation {
   * Licensing terms governing this segmentation (supports dual/multi/component licensing).
   */
   licensing?: Licensing;
+  /**
+  * Provenance: who produced this segmentation, when, with what tool or model.
+  */
   metadata?: AnnotationMetadata;
   /**
   * How this segmentation was produced (code, commit, command, environment, seed).

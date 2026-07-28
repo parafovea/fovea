@@ -9,6 +9,9 @@ import type { FeatureMap, ObjectRef, Uuid } from "./../defs";
 * A single directed edge entry within a graphEdgeSet.
 */
 export interface GraphEdgeEntry {
+  /**
+  * Confidence 0-1000.
+  */
   confidence?: number;
   /**
   * Edge type slug. Overrides the set-level edgeType if different.
@@ -18,6 +21,9 @@ export interface GraphEdgeEntry {
   * AT-URI of the edge type definition node. Overrides the set-level edgeType.
   */
   edgeTypeUri?: string;
+  /**
+  * Open-ended features for this edge as key-value pairs.
+  */
   features?: FeatureMap;
   /**
   * Source node.
@@ -27,5 +33,8 @@ export interface GraphEdgeEntry {
   * Target node.
   */
   target: ObjectRef;
+  /**
+  * Stable identifier for this edge within the set.
+  */
   uuid: Uuid;
 }

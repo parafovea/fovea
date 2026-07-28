@@ -7,6 +7,9 @@ import type { AnnotationMetadata, Span, TemporalSpan, Uuid } from "./../defs";
 * A single token within a tokenization.
 */
 export interface Token {
+  /**
+  * Time interval this token occupies in associated media, for audio or video tokenizations.
+  */
   temporalSpan?: TemporalSpan;
   /**
   * The surface form of the token.
@@ -38,11 +41,17 @@ export interface Tokenization {
   * AT-URI of the tokenization kind definition node. Community-expandable via knowledge graph.
   */
   kindUri?: string;
+  /**
+  * Provenance: who produced this tokenization, when, with what tool or model.
+  */
   metadata?: AnnotationMetadata;
   /**
   * The ordered token sequence.
   */
   tokens: Token[];
+  /**
+  * Stable identifier for this tokenization within the segmentation record, referenced by alignments via localId.
+  */
   uuid: Uuid;
 }
 

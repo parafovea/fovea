@@ -16,7 +16,13 @@ export interface TypeDef {
   * For attribute types: enumerated allowed values.
   */
   allowedValues?: string[];
+  /**
+  * When this type definition record was created.
+  */
   createdAt: string;
+  /**
+  * Open-ended features describing this type not reached by the named fields.
+  */
   features?: FeatureMap;
   /**
   * Rich text definition/gloss of this type. May include references to other types and Wikidata entities, following FOVEA conventions.

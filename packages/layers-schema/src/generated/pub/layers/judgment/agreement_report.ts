@@ -7,8 +7,17 @@ import type { FeatureMap } from "./../defs";
 * An inter-annotator agreement report summarizing agreement metrics across judgment sets.
 */
 export interface AgreementReport {
+  /**
+  * When this agreement report record was created.
+  */
   createdAt: string;
+  /**
+  * AT-URI of the pub.layers.judgment.experimentDef this report summarizes agreement for.
+  */
   experimentRef: string;
+  /**
+  * Open-ended features carrying agreement-report detail not covered by the typed fields.
+  */
   features?: FeatureMap;
   /**
   * The judgment sets compared.
@@ -22,7 +31,13 @@ export interface AgreementReport {
   * AT-URI of the metric definition node. Community-expandable via knowledge graph.
   */
   metricUri?: string;
+  /**
+  * Number of annotators whose judgment sets entered this agreement computation.
+  */
   numAnnotators?: number;
+  /**
+  * Number of items over which agreement was computed.
+  */
   numItems?: number;
   /**
   * Metric value scaled 0-1000.

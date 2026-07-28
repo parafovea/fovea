@@ -12,9 +12,16 @@ export interface DataLink {
   */
   annotationRefs?: string[];
   /**
+  * Reference to a pub.layers.catalog.collection record: the browsable dataset artifact this eprint produced or is associated with.
+  */
+  catalogRef?: string;
+  /**
   * Reference to a Layers corpus.
   */
   corpusRef?: string;
+  /**
+  * Timestamp when this data link record was created.
+  */
   createdAt: string;
   /**
   * Data kind slug (fallback when dataKindUri unavailable).
@@ -24,6 +31,9 @@ export interface DataLink {
   * AT-URI of the data kind definition node. Community-expandable via knowledge graph.
   */
   dataKindUri?: string;
+  /**
+  * Free-text description of this data link.
+  */
   description?: string;
   /**
   * DID of the eprint author/owner on the publication platform.
@@ -34,15 +44,25 @@ export interface DataLink {
   */
   eprintUri: string;
   /**
+  * References to pub.layers.judgment.experimentDef records this eprint produced or describes.
+  */
+  experimentRefs?: string[];
+  /**
   * References to specific Layers expressions.
   */
   expressionRefs?: string[];
+  /**
+  * Open-ended features for this data link as key-value pairs.
+  */
   features?: FeatureMap;
   /**
   * Which section of the paper this data corresponds to (e.g., 'Section 4.2', 'Table 3', 'Appendix A').
   */
   paperSection?: string;
+  /**
+  * How this data was produced (code, commit, command, environment, seed).
+  */
   reproducibility?: ReproducibilityInfo;
 }
 
-export type DataLinkDataKind = "corpus" | "annotation-layer" | "model-output" | "gold-standard" | "evaluation-data" | "supplementary" | "replication" | string & {};
+export type DataLinkDataKind = "corpus" | "annotation-layer" | "model-output" | "gold-standard" | "evaluation-data" | "supplementary" | "replication" | "experiment" | "judgments" | "dataset" | string & {};

@@ -11,11 +11,17 @@ export interface CollectionMembership {
   * AT-URI of the collection.
   */
   collectionRef: string;
+  /**
+  * When this membership record was created.
+  */
   createdAt: string;
   /**
   * AT-URI of the entry.
   */
   entryRef: string;
+  /**
+  * Open-ended features describing this membership: curation confidence, ordering rationale, etc.
+  */
   features?: FeatureMap;
   /**
   * Provenance: who added this entry to this collection, when, with what tool.

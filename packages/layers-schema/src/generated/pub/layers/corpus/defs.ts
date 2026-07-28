@@ -15,6 +15,9 @@ export interface AdjudicationSpec {
   * Whether a separate adjudicator (not one of the annotators) resolves disagreements.
   */
   dedicatedAdjudicator?: boolean;
+  /**
+  * Open-ended features for this adjudication specification (e.g., tie-breaking rules, escalation policy).
+  */
   features?: FeatureMap;
   /**
   * Adjudication method (fallback when methodUri unavailable).
@@ -38,6 +41,9 @@ export interface AnnotationDesign {
   * Number of annotation passes in the project workflow.
   */
   annotationRounds?: number;
+  /**
+  * Open-ended features for this annotation design (e.g., platform, interface, pay structure).
+  */
   features?: FeatureMap;
   /**
   * AT-URI of the annotation guidelines document (e.g., a pub.layers.persona or external resource).
@@ -61,6 +67,9 @@ export interface AnnotationDesign {
 * An acceptance criterion for annotation quality.
 */
 export interface QualityCriterion {
+  /**
+  * Open-ended features for this quality criterion (e.g., measurement window, exclusion rules).
+  */
   features?: FeatureMap;
   /**
   * Agreement or quality metric (fallback when metricUri unavailable).
@@ -104,6 +113,9 @@ export interface RedundancySpec {
   * Number of independent annotators per item.
   */
   count?: number;
+  /**
+  * Open-ended features for this redundancy specification (e.g., overlap sampling, batch size).
+  */
   features?: FeatureMap;
 }
 

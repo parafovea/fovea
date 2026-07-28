@@ -7,12 +7,16 @@
 // family identity (`FAMILY_ID`, `FAMILY_NSID_PREFIX`, `FamilyMarker`)
 // that mirror the Rust `family.rs` surface.
 
+import type { Participant } from "./pub/layers/acquisition/participant";
+import type { Session } from "./pub/layers/acquisition/session";
 import type { Alignment } from "./pub/layers/alignment/alignment";
 import type { AnnotationLayer } from "./pub/layers/annotation/annotation_layer";
 import type { ClusterSet } from "./pub/layers/annotation/cluster_set";
+import type { Collection as CatalogCollection } from "./pub/layers/catalog/collection";
+import type { Membership as CatalogMembership } from "./pub/layers/catalog/membership";
 import type { Entry as ChangelogEntry } from "./pub/layers/changelog/entry";
 import type { Corpus } from "./pub/layers/corpus/corpus";
-import type { Membership } from "./pub/layers/corpus/membership";
+import type { Membership as CorpusMembership } from "./pub/layers/corpus/membership";
 import type { DataLink } from "./pub/layers/eprint/data_link";
 import type { Eprint } from "./pub/layers/eprint/eprint";
 import type { Expression } from "./pub/layers/expression/expression";
@@ -26,7 +30,7 @@ import type { Media } from "./pub/layers/media/media";
 import type { Ontology } from "./pub/layers/ontology/ontology";
 import type { TypeDef } from "./pub/layers/ontology/type_def";
 import type { Persona } from "./pub/layers/persona/persona";
-import type { Collection } from "./pub/layers/resource/collection";
+import type { Collection as ResourceCollection } from "./pub/layers/resource/collection";
 import type { CollectionMembership } from "./pub/layers/resource/collection_membership";
 import type { Entry as ResourceEntry } from "./pub/layers/resource/entry";
 import type { Filling } from "./pub/layers/resource/filling";
@@ -47,12 +51,16 @@ export type FamilyMarker = "LayersFamily";
  * Canonical NSIDs, keyed by record kind for ergonomic call sites.
  */
 export const NSID = {
+  participant: "pub.layers.acquisition.participant",
+  session: "pub.layers.acquisition.session",
   alignment: "pub.layers.alignment.alignment",
   annotation_layer: "pub.layers.annotation.annotationLayer",
   cluster_set: "pub.layers.annotation.clusterSet",
+  catalogCollection: "pub.layers.catalog.collection",
+  catalogMembership: "pub.layers.catalog.membership",
   changelogEntry: "pub.layers.changelog.entry",
   corpus: "pub.layers.corpus.corpus",
-  membership: "pub.layers.corpus.membership",
+  corpusMembership: "pub.layers.corpus.membership",
   data_link: "pub.layers.eprint.dataLink",
   eprint: "pub.layers.eprint.eprint",
   expression: "pub.layers.expression.expression",
@@ -66,7 +74,7 @@ export const NSID = {
   ontology: "pub.layers.ontology.ontology",
   type_def: "pub.layers.ontology.typeDef",
   persona: "pub.layers.persona.persona",
-  collection: "pub.layers.resource.collection",
+  resourceCollection: "pub.layers.resource.collection",
   collection_membership: "pub.layers.resource.collectionMembership",
   resourceEntry: "pub.layers.resource.entry",
   filling: "pub.layers.resource.filling",
@@ -81,12 +89,16 @@ export type NSID = (typeof NSID)[keyof typeof NSID];
  * Mapping from record NSID to its TypeScript record type.
  */
 export type RecordTypes = {
+  [NSID.participant]: Participant;
+  [NSID.session]: Session;
   [NSID.alignment]: Alignment;
   [NSID.annotation_layer]: AnnotationLayer;
   [NSID.cluster_set]: ClusterSet;
+  [NSID.catalogCollection]: CatalogCollection;
+  [NSID.catalogMembership]: CatalogMembership;
   [NSID.changelogEntry]: ChangelogEntry;
   [NSID.corpus]: Corpus;
-  [NSID.membership]: Membership;
+  [NSID.corpusMembership]: CorpusMembership;
   [NSID.data_link]: DataLink;
   [NSID.eprint]: Eprint;
   [NSID.expression]: Expression;
@@ -100,7 +112,7 @@ export type RecordTypes = {
   [NSID.ontology]: Ontology;
   [NSID.type_def]: TypeDef;
   [NSID.persona]: Persona;
-  [NSID.collection]: Collection;
+  [NSID.resourceCollection]: ResourceCollection;
   [NSID.collection_membership]: CollectionMembership;
   [NSID.resourceEntry]: ResourceEntry;
   [NSID.filling]: Filling;
@@ -113,12 +125,16 @@ export type RecordTypes = {
  * Discriminated union tagged by `$nsid` for runtime dispatch.
  */
 export type AnyRecord =
+  | { readonly $nsid: typeof NSID.participant; readonly value: Participant }
+  | { readonly $nsid: typeof NSID.session; readonly value: Session }
   | { readonly $nsid: typeof NSID.alignment; readonly value: Alignment }
   | { readonly $nsid: typeof NSID.annotation_layer; readonly value: AnnotationLayer }
   | { readonly $nsid: typeof NSID.cluster_set; readonly value: ClusterSet }
+  | { readonly $nsid: typeof NSID.catalogCollection; readonly value: CatalogCollection }
+  | { readonly $nsid: typeof NSID.catalogMembership; readonly value: CatalogMembership }
   | { readonly $nsid: typeof NSID.changelogEntry; readonly value: ChangelogEntry }
   | { readonly $nsid: typeof NSID.corpus; readonly value: Corpus }
-  | { readonly $nsid: typeof NSID.membership; readonly value: Membership }
+  | { readonly $nsid: typeof NSID.corpusMembership; readonly value: CorpusMembership }
   | { readonly $nsid: typeof NSID.data_link; readonly value: DataLink }
   | { readonly $nsid: typeof NSID.eprint; readonly value: Eprint }
   | { readonly $nsid: typeof NSID.expression; readonly value: Expression }
@@ -132,7 +148,7 @@ export type AnyRecord =
   | { readonly $nsid: typeof NSID.ontology; readonly value: Ontology }
   | { readonly $nsid: typeof NSID.type_def; readonly value: TypeDef }
   | { readonly $nsid: typeof NSID.persona; readonly value: Persona }
-  | { readonly $nsid: typeof NSID.collection; readonly value: Collection }
+  | { readonly $nsid: typeof NSID.resourceCollection; readonly value: ResourceCollection }
   | { readonly $nsid: typeof NSID.collection_membership; readonly value: CollectionMembership }
   | { readonly $nsid: typeof NSID.resourceEntry; readonly value: ResourceEntry }
   | { readonly $nsid: typeof NSID.filling; readonly value: Filling }
@@ -146,6 +162,16 @@ export function isKind<K extends NSID>(
   nsid: K,
 ): r is Extract<AnyRecord, { $nsid: K }> {
   return r.$nsid === nsid;
+}
+
+/** True if `r` wraps a `Participant`. */
+export function isParticipant(r: AnyRecord): r is { readonly $nsid: typeof NSID.participant; readonly value: Participant } {
+  return r.$nsid === NSID.participant;
+}
+
+/** True if `r` wraps a `Session`. */
+export function isSession(r: AnyRecord): r is { readonly $nsid: typeof NSID.session; readonly value: Session } {
+  return r.$nsid === NSID.session;
 }
 
 /** True if `r` wraps a `Alignment`. */
@@ -163,6 +189,16 @@ export function isClusterSet(r: AnyRecord): r is { readonly $nsid: typeof NSID.c
   return r.$nsid === NSID.cluster_set;
 }
 
+/** True if `r` wraps a `CatalogCollection`. */
+export function isCatalogCollection(r: AnyRecord): r is { readonly $nsid: typeof NSID.catalogCollection; readonly value: CatalogCollection } {
+  return r.$nsid === NSID.catalogCollection;
+}
+
+/** True if `r` wraps a `CatalogMembership`. */
+export function isCatalogMembership(r: AnyRecord): r is { readonly $nsid: typeof NSID.catalogMembership; readonly value: CatalogMembership } {
+  return r.$nsid === NSID.catalogMembership;
+}
+
 /** True if `r` wraps a `ChangelogEntry`. */
 export function isChangelogEntry(r: AnyRecord): r is { readonly $nsid: typeof NSID.changelogEntry; readonly value: ChangelogEntry } {
   return r.$nsid === NSID.changelogEntry;
@@ -173,9 +209,9 @@ export function isCorpus(r: AnyRecord): r is { readonly $nsid: typeof NSID.corpu
   return r.$nsid === NSID.corpus;
 }
 
-/** True if `r` wraps a `Membership`. */
-export function isMembership(r: AnyRecord): r is { readonly $nsid: typeof NSID.membership; readonly value: Membership } {
-  return r.$nsid === NSID.membership;
+/** True if `r` wraps a `CorpusMembership`. */
+export function isCorpusMembership(r: AnyRecord): r is { readonly $nsid: typeof NSID.corpusMembership; readonly value: CorpusMembership } {
+  return r.$nsid === NSID.corpusMembership;
 }
 
 /** True if `r` wraps a `DataLink`. */
@@ -243,9 +279,9 @@ export function isPersona(r: AnyRecord): r is { readonly $nsid: typeof NSID.pers
   return r.$nsid === NSID.persona;
 }
 
-/** True if `r` wraps a `Collection`. */
-export function isCollection(r: AnyRecord): r is { readonly $nsid: typeof NSID.collection; readonly value: Collection } {
-  return r.$nsid === NSID.collection;
+/** True if `r` wraps a `ResourceCollection`. */
+export function isResourceCollection(r: AnyRecord): r is { readonly $nsid: typeof NSID.resourceCollection; readonly value: ResourceCollection } {
+  return r.$nsid === NSID.resourceCollection;
 }
 
 /** True if `r` wraps a `CollectionMembership`. */
@@ -290,12 +326,16 @@ export function tagRecord<K extends NSID>(
 
 /** All record NSIDs in declaration order. */
 export const RECORD_NSIDS = [
+  NSID.participant,
+  NSID.session,
   NSID.alignment,
   NSID.annotation_layer,
   NSID.cluster_set,
+  NSID.catalogCollection,
+  NSID.catalogMembership,
   NSID.changelogEntry,
   NSID.corpus,
-  NSID.membership,
+  NSID.corpusMembership,
   NSID.data_link,
   NSID.eprint,
   NSID.expression,
@@ -309,7 +349,7 @@ export const RECORD_NSIDS = [
   NSID.ontology,
   NSID.type_def,
   NSID.persona,
-  NSID.collection,
+  NSID.resourceCollection,
   NSID.collection_membership,
   NSID.resourceEntry,
   NSID.filling,

@@ -11,6 +11,9 @@ export interface GraphEdge {
   * Confidence 0-1000.
   */
   confidence?: number;
+  /**
+  * Timestamp when this edge record was created.
+  */
   createdAt: string;
   /**
   * Edge type slug (fallback when edgeTypeUri unavailable).
@@ -24,6 +27,9 @@ export interface GraphEdge {
   * Optional edge label.
   */
   label?: string;
+  /**
+  * Provenance: who asserted this edge, under what persona, with what tool.
+  */
   metadata?: AnnotationMetadata;
   /**
   * Optional ordering among edges of the same type.

@@ -27,9 +27,21 @@ export interface Citation {
   * DOI (CSL 'DOI'), e.g., '10.18653/v1/2020.acl-main.1'.
   */
   doi?: string;
+  /**
+  * Edition (CSL 'edition').
+  */
   edition?: string;
+  /**
+  * ISBN (CSL 'ISBN').
+  */
   isbn?: string;
+  /**
+  * ISSN (CSL 'ISSN').
+  */
   issn?: string;
+  /**
+  * Issue number (CSL 'issue').
+  */
   issue?: string;
   /**
   * Issue/publication date (CSL 'issued'; DataCite publicationYear).
@@ -83,6 +95,9 @@ export interface Citation {
   * Version of the cited artifact (CSL 'version'; DataCite version).
   */
   version?: string;
+  /**
+  * Volume number (CSL 'volume').
+  */
   volume?: string;
 }
 

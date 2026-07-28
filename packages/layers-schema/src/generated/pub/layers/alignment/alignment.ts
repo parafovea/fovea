@@ -9,6 +9,9 @@ import type { AlignmentLink, AnnotationMetadata, FeatureMap, KnowledgeRef, Licen
 * An alignment between two parallel sequences. The sequences can be tokenizations, annotation layers, expressions (for parallel text), or tiers. Links establish many-to-many correspondence between elements indexed by position.
 */
 export interface Alignment {
+  /**
+  * Timestamp when this alignment record was created.
+  */
   createdAt: string;
   /**
   * Eprint records (papers/preprints) describing or associated with this alignment.
@@ -18,6 +21,9 @@ export interface Alignment {
   * Primary expression context (for within-document alignments).
   */
   expression?: string;
+  /**
+  * Open-ended features (e.g., alignment scores, confidence, model parameters).
+  */
   features?: FeatureMap;
   /**
   * Alignment kind slug (fallback). The type of alignment.
@@ -39,6 +45,9 @@ export interface Alignment {
   * The alignment links.
   */
   links: AlignmentLink[];
+  /**
+  * Provenance: who produced this alignment, when, with what tool or model.
+  */
   metadata?: AnnotationMetadata;
   /**
   * How this alignment was produced (code, commit, command, environment, seed).

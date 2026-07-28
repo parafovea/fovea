@@ -12,8 +12,6 @@
 import { PrismaClient, Prisma } from '@prisma/client'
 
 import {
-  annotationToLayers,
-  layersToAnnotation,
   applyTrackMembership,
   tracksByAnnotation,
   VIDEO_ANNOTATION_SUBKINDS,
@@ -21,6 +19,7 @@ import {
   type VideoAnnotationOutput,
   type MappedTrack,
 } from '../video-annotation-mapper.js'
+import { annotationToLayers, layersToAnnotation } from '../layers-lens/video-lens.js'
 import { getOrCreateVideoExpression, parseResolution } from '../video-expression-service.js'
 import { layersOntologyForPersonaId, trackClusterSetId, worldInstanceNodeId } from '../layers-id-map.js'
 import type { PrismaLike } from './util.js'
@@ -62,7 +61,7 @@ export async function writeVideoAnnotation(
     ontologyId = exists ? candidate : null
   }
 
-  const mapping = annotationToLayers(input, {
+  const mapping = await annotationToLayers(input, {
     expressionId,
     ontologyId,
     frameRate,

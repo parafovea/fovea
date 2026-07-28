@@ -414,6 +414,8 @@ model Project {
   corpora                 Corpus[]
   clusterSets             ClusterSet[]
   alignments              Alignment[]
+  catalogCollections      CatalogCollection[]
+  catalogMemberships      CatalogMembership[]
 
   @@map("projects")
 }
@@ -1096,4 +1098,83 @@ model Alignment {
   @@index([projectId])
   @@index([createdByUserId])
   @@map("alignments")
+}
+
+/// pub.layers.catalog.collection: a first-class collection node grouping members
+/// via catalog memberships. Homes FOVEA world collections (entity/event/time);
+/// clusterSets remain for coreference and video tracks.
+model CatalogCollection {
+  id String @id @default(uuid())
+
+  localId     String?
+  name        String
+  kind        String
+  kindUri     String?
+  description String?
+  parentRef   String?
+  rootRef     String?
+  depth       Int?
+  version     String?
+  access      String?
+  stability   String?
+  pinPolicy   String?
+  /// JSON value-objects/arrays: contents (contentSummary[]), citation, languages,
+  /// languageRefs, knowledgeRefs, ontologyRefs, eprintRefs, licensing,
+  /// reproducibility, features.
+  contents        Json?
+  citation        Json?
+  languageRefs    Json?
+  knowledgeRefs   Json?
+  licensing       Json?
+  reproducibility Json?
+  features        Json?
+  metadata        Json?
+
+  projectId       String?
+  project         Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  createdByUserId String?
+  layersUri       String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([parentRef])
+  @@index([projectId])
+  @@index([createdByUserId])
+  @@map("catalog_collections")
+}
+
+/// pub.layers.catalog.membership: one member of a collection. `catalogRef` is a
+/// soft string ref (the collection's id / at-uri) matching the lexicon, not a
+/// Prisma foreign key, so memberships need no parent-first write ordering.
+model CatalogMembership {
+  id String @id @default(uuid())
+
+  catalogRef String
+  /// JSON memberRef value-object: the member pointer (objectRef) plus memberType.
+  member     Json
+  role       String
+  roleUri    String?
+  ordinal    Int?
+  pinPolicy  String?
+  validFrom  DateTime?
+  validUntil DateTime?
+  selfAsserted Boolean?
+  notes      String?
+  knowledgeRefs Json?
+  features      Json?
+  metadata      Json?
+
+  projectId       String?
+  project         Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  createdByUserId String?
+  layersUri       String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([catalogRef])
+  @@index([projectId])
+  @@index([createdByUserId])
+  @@map("catalog_memberships")
 }

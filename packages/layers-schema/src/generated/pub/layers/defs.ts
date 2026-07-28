@@ -33,6 +33,9 @@ export interface AlignmentLink {
   * Alignment confidence 0-1000.
   */
   confidence?: number;
+  /**
+  * Open-ended features of this alignment link not reached by the named fields.
+  */
   features?: FeatureMap;
   /**
   * Knowledge graph references for this link (e.g., bilingual dictionary entry, translation memory source).
@@ -57,6 +60,10 @@ export interface AlignmentLink {
 */
 export interface Anchor {
   /**
+  * Static spatial region in an image or single frame. Imposes no temporal span; for a region that tracks over time use spatioTemporalAnchor.
+  */
+  boundingBox?: BoundingBox;
+  /**
   * External resource target (web page, document, etc.).
   */
   externalTarget?: ExternalTarget;
@@ -64,6 +71,14 @@ export interface Anchor {
   * Page and region in a paged document.
   */
   pageAnchor?: PageAnchor;
+  /**
+  * Sample-indexed or time-indexed span over one or more channels of a continuous signal (EEG, MEG, audio waveform, sensor stream, etc.).
+  */
+  signalSpan?: SignalSpan;
+  /**
+  * Normalized spatial region used as an anchor (aliased so anchor-use is distinct from the annotation.spatial content-use of the same type).
+  */
+  spatialRegion?: SpatialEntity;
   /**
   * Spatio-temporal region in video.
   */
@@ -99,13 +114,13 @@ export interface AnnotationMetadata {
   */
   confidence?: number;
   /**
+  * Structured content hash for integrity verification of this annotation.
+  */
+  contentDigest?: ContentDigest;
+  /**
   * References to upstream records this annotation was derived from.
   */
   dependencies?: ObjectRef[];
-  /**
-  * Content hash for integrity verification, in '<algorithm>:<lowercase-hex>' form (e.g. 'sha256:9f86d081...'). sha256 is recommended; verifiers dispatch on the algorithm prefix and should treat digests without a recognized prefix as opaque.
-  */
-  digest?: string;
   /**
   * Reference to the persona/annotation framework under which this annotation was produced. Distinct from agent (who did it).
   */
@@ -115,9 +130,13 @@ export interface AnnotationMetadata {
   */
   timestamp?: string;
   /**
-  * Name or identifier of the software tool used to produce this annotation (e.g., 'spaCy 3.7', 'brat 1.3', 'ELAN 6.4'). Distinct from agent (who ran the tool).
+  * Name or identifier of the software tool used to produce this annotation (e.g., 'spaCy 3.7', 'brat 1.3', 'ELAN 6.4'). Distinct from agent (who ran the tool). Display fallback when toolRef is unavailable.
   */
   tool: string;
+  /**
+  * Grounded reference to the software tool, typically via rrid (a Research Resource Identifier). Distinct from agent (who ran the tool).
+  */
+  toolRef?: KnowledgeRef;
 }
 
 /**
@@ -125,9 +144,33 @@ export interface AnnotationMetadata {
 */
 export interface BoundingBox {
   /**
+  * 0-indexed frame this box lies on, for framed media.
+  */
+  frameIndex?: number;
+  /**
   * Height in pixels.
   */
   height: number;
+  /**
+  * 0-indexed page this box lies on, for paged media.
+  */
+  page?: number;
+  /**
+  * Which medium, session clock, stream, and track this box is measured against. Absent means the single medium reachable from the annotated expression.
+  */
+  scope?: MediaScope;
+  /**
+  * Signed time in nanoseconds, session-relative, at which this box applies.
+  */
+  timeNanos?: number;
+  /**
+  * Coordinate unit slug (fallback when unitUri unavailable). Absent means pixel.
+  */
+  unit?: BoundingBoxUnit;
+  /**
+  * AT-URI of the coordinate unit definition node (a unit typeDef under layers-core.ontology.layers.pub). Community-expandable via knowledge graph.
+  */
+  unitUri?: string;
   /**
   * Width in pixels.
   */
@@ -174,6 +217,54 @@ export interface Constraint {
   * AT-URI of the scope definition node. Community-expandable via knowledge graph.
   */
   scopeUri?: string;
+}
+
+/**
+* A structured content hash for integrity verification. Separates the algorithm from the digest value so verifiers dispatch on algorithm rather than parsing a packed string.
+*/
+export interface ContentDigest {
+  /**
+  * Digest algorithm slug (fallback when algorithmUri unavailable).
+  */
+  algorithm: ContentDigestAlgorithm;
+  /**
+  * AT-URI of the digest algorithm definition node. Community-expandable via knowledge graph.
+  */
+  algorithmUri?: string;
+  /**
+  * The digest as lowercase hexadecimal.
+  */
+  value: string;
+}
+
+/**
+* A reference to an ethics or institutional review board approval covering a piece of work. Shared across acquisition consent, sessions, and reproducibility info.
+*/
+export interface EthicsApproval {
+  /**
+  * When the approval was granted.
+  */
+  approvedAt?: string;
+  /**
+  * Advisory name of the approving board; bodyRef wins where both are present.
+  */
+  bodyName?: string;
+  /**
+  * The approving board, grounded via ror; clinicaltrials for a registered trial.
+  */
+  bodyRef?: KnowledgeRef;
+  /**
+  * When the approval expires.
+  */
+  expiresAt?: string;
+  /**
+  * Protocol or approval number.
+  */
+  protocolId: string;
+  /**
+  * URI of the approval record.
+  */
+  uri?: string;
 }
 
 /**
@@ -237,9 +328,56 @@ export interface FragmentSelector {
 }
 
 /**
+* A frequency band selecting a sub-band of a continuous signal (e.g., an EEG rhythm or a speech formant). Follows the URI+slug pattern; explicit low/high bounds override the slug where present.
+*/
+export interface FrequencyBand {
+  /**
+  * Frequency band slug (fallback when bandUri unavailable).
+  */
+  band?: FrequencyBandBand;
+  /**
+  * AT-URI of the frequency band definition node. Community-expandable via knowledge graph.
+  */
+  bandUri?: string;
+  /**
+  * Upper bound of the band in millihertz.
+  */
+  highMilliHz?: number;
+  /**
+  * Lower bound of the band in millihertz.
+  */
+  lowMilliHz?: number;
+}
+
+/**
+* A reference to a grant or award that funded a piece of work. Shared across acquisition consent and reproducibility info.
+*/
+export interface FundingRef {
+  /**
+  * Grant or award number.
+  */
+  awardId: string;
+  /**
+  * The funding body, grounded via ror or the Crossref Funder Registry.
+  */
+  funderRef?: KnowledgeRef;
+  /**
+  * Title of the grant or award.
+  */
+  title?: string;
+  /**
+  * URI of the award record.
+  */
+  uri?: string;
+}
+
+/**
 * A spatial annotation at a specific time point.
 */
 export interface Keyframe {
+  /**
+  * The spatial bounding box occupied at this time point.
+  */
   bbox: BoundingBox;
   /**
   * Per-keyframe features (e.g., visibility, occlusion percentage, confidence, pose data).
@@ -278,13 +416,55 @@ export interface KnowledgeRef {
 }
 
 /**
+* A structured reference to a language or language variety, decomposing a BCP-47 tag into its codes plus a knowledge-graph grounding and a role. The tag is the canonical addressable key; importers normalize it on write.
+*/
+export interface LanguageRef {
+  /**
+  * Grounding of the language, with source glottolog, iso639-3, or cldr.
+  */
+  knowledgeRef?: KnowledgeRef;
+  /**
+  * AT-URI of the language definition node. Community-expandable via knowledge graph.
+  */
+  languageUri?: string;
+  /**
+  * ISO 3166-1 or UN M.49 region code.
+  */
+  regionCode?: string;
+  /**
+  * Language-role slug (fallback when roleUri unavailable), naming the role this language plays in the record.
+  */
+  role?: LanguageRefRole;
+  /**
+  * AT-URI of the language-role definition node (a language-role typeDef under layers-core.ontology.layers.pub). Community-expandable via knowledge graph.
+  */
+  roleUri?: string;
+  /**
+  * ISO 15924 script code.
+  */
+  scriptCode?: string;
+  /**
+  * Canonical BCP-47 tag using the shortest ISO 639 code (en not eng, fi not fin, poma for Pomak). Importers must normalize on write.
+  */
+  tag: string;
+  /**
+  * Prose residue naming the variety after every code applies.
+  */
+  varietyLabel?: string;
+}
+
+/**
 * Detail for a single license. Follows the URI+slug pattern (spdxUri is the canonical knowledge-graph node, spdx is the human-readable fallback) and mirrors one entry of a DataCite rightsList (rightsIdentifier + rightsURI).
 */
 export interface LicenseRef {
   /**
-  * Component this license covers when an artifact mixes licenses by part (e.g., 'annotations', 'underlying-text', 'code', 'media'). Omit when the license covers the whole artifact.
+  * Component this license covers when an artifact mixes licenses by part (fallback when appliesToUri unavailable). Omit when the license covers the whole artifact.
   */
-  appliesTo?: string;
+  appliesTo?: LicenseRefAppliesTo;
+  /**
+  * AT-URI of the license-component definition node (a license-component typeDef under layers-core.ontology.layers.pub). Community-expandable via knowledge graph.
+  */
+  appliesToUri?: string;
   /**
   * Required attribution / credit text for downstream users.
   */
@@ -326,6 +506,32 @@ export interface Licensing {
 }
 
 /**
+* Identifies which medium, session clock, stream, and track a sample-indexed or time-indexed anchor is measured against. Absent means the single medium reachable from the annotated expression, which preserves the single-stream reading of records that omit it.
+*/
+export interface MediaScope {
+  /**
+  * CID pinning the exact version of the media record.
+  */
+  mediaCid?: string;
+  /**
+  * AT-URI of the pub.layers.media.media record this anchor addresses.
+  */
+  mediaRef?: string;
+  /**
+  * AT-URI of the pub.layers.acquisition.session whose clock the sample and nanosecond times are on.
+  */
+  sessionRef?: string;
+  /**
+  * The session stream this anchor is on; recordRef is the sessionRef and objectId is the stream uuid (acquisition.defs#stream).
+  */
+  stream?: ObjectRef;
+  /**
+  * 0-indexed track within the medium (e.g., an audio track or a subtitle track).
+  */
+  trackIndex?: number;
+}
+
+/**
 * A composable reference to any Layers object, whether local (same record, by UUID), remote (different record, by AT-URI + optional object UUID), or external (knowledge graph entry). This is the universal cross-referencing primitive; consumers dispatch on which field(s) are populated. Used by argumentRef, graphNode, alignment endpoints, and any other cross-object pointer.
 */
 export interface ObjectRef {
@@ -351,6 +557,9 @@ export interface ObjectRef {
 * Anchor to a specific page and region in a paged document (PDF, etc.). Compatible with chive.pub's page-level annotation model.
 */
 export interface PageAnchor {
+  /**
+  * Bounding box of the anchored region within the page.
+  */
   boundingBox?: BoundingBox;
   /**
   * 0-indexed page number.
@@ -379,13 +588,99 @@ export interface ReproducibilityInfo {
   */
   commitHash?: string;
   /**
+  * The container or environment image the procedure ran in.
+  */
+  container?: ReproducibilityInfoContainer;
+  /**
   * Environment specification (Docker image, conda env, etc.).
   */
   environment?: string;
   /**
+  * Ethics or IRB approvals covering the work producing this data.
+  */
+  ethicsApprovals?: EthicsApproval[];
+  /**
+  * Grants or awards that funded the work producing this data.
+  */
+  funding?: FundingRef[];
+  /**
+  * Human-readable name of the pipeline, model, or procedure that produced the data.
+  */
+  name?: string;
+  /**
+  * Operating system the procedure ran on.
+  */
+  operatingSystem?: string;
+  /**
   * Random seed used.
   */
   randomSeed?: number;
+  /**
+  * Grounded references to the software used, typically via rrid (Research Resource Identifiers).
+  */
+  softwareRefs?: KnowledgeRef[];
+  /**
+  * Version string of the pipeline, model, or procedure.
+  */
+  version?: string;
+}
+
+/**
+* A span over one or more channels of a continuous signal (EEG, MEG, ECoG, audio waveform, motion or eye-tracking stream). Addressable by sample index or by session-relative nanoseconds; scope is required because an unscoped sample index is meaningless.
+*/
+export interface SignalSpan {
+  /**
+  * Advisory channel-name fallback; channels wins where both are present.
+  */
+  channelNames?: string[];
+  /**
+  * Channels this span covers; each objectRef has recordRef the media record and objectId a signalChannel uuid. Empty or absent means all channels.
+  */
+  channels?: ObjectRef[];
+  /**
+  * Exclusive end sample, signed.
+  */
+  endSample?: number;
+  /**
+  * Signed end on the stream or session clock, session-relative.
+  */
+  endingNanos?: number;
+  /**
+  * 0-indexed epoch within an epoched signal.
+  */
+  epochIndex?: number;
+  /**
+  * Frequency band this span selects, for time-frequency annotation.
+  */
+  frequencyBand?: FrequencyBand;
+  /**
+  * Spatial region this span applies to, reusing the promoted spatial anchor (no separate voxel-region type is introduced).
+  */
+  region?: SpatialEntity;
+  /**
+  * Which medium, session clock, stream, and track the sample and nanosecond indices are measured against. Required.
+  */
+  scope: MediaScope;
+  /**
+  * Sensors this span covers; each objectRef has recordRef the media record and objectId a sensorSpec uuid.
+  */
+  sensors?: ObjectRef[];
+  /**
+  * Signed start on the stream or session clock, session-relative and never UTC-epoch. Authoritative when startSample is absent; startSample wins where both are present.
+  */
+  startNanos?: number;
+  /**
+  * Inclusive 0-indexed start sample, signed (may precede the clock origin).
+  */
+  startSample?: number;
+  /**
+  * Exclusive end volume, for volumetric time series.
+  */
+  volumeIndexEnd?: number;
+  /**
+  * Inclusive 0-indexed start volume, for volumetric time series (e.g., fMRI runs).
+  */
+  volumeIndexStart?: number;
 }
 
 /**
@@ -415,6 +710,14 @@ export interface Span {
 */
 export interface SpatialEntity {
   /**
+  * Articulator slug (fallback when articulatorUri unavailable), naming the body part or articulator this region tracks.
+  */
+  articulator?: SpatialEntityArticulator;
+  /**
+  * AT-URI of the articulator definition node (an articulator typeDef under layers-annotation.ontology.layers.pub). Community-expandable via knowledge graph.
+  */
+  articulatorUri?: string;
+  /**
   * Structured pixel bounding box (axis-aligned rectangle). The most common case for image/video annotation.
   */
   bbox?: BoundingBox;
@@ -430,7 +733,14 @@ export interface SpatialEntity {
   * Number of coordinate dimensions (2 for planar, 3 for volumetric/elevation).
   */
   dimensions?: number;
+  /**
+  * Open-ended features of this spatial value not reached by the named fields.
+  */
   features?: FeatureMap;
+  /**
+  * 0-indexed frame this region lies on, for framed media.
+  */
+  frameIndex?: number;
   /**
   * Geometry as a string in the format specified by geometryFormat. WKT examples: 'POINT(37.7749 -122.4194)', 'POLYGON((0 0, 100 0, 100 100, 0 100, 0 0))'. GeoJSON example: '{"type":"Point","coordinates":[-122.4194,37.7749]}'. SVG path example: 'M 10 10 L 100 10 L 100 100 Z'. Default format is WKT.
   */
@@ -443,6 +753,42 @@ export interface SpatialEntity {
   * AT-URI of the geometry format definition node. Community-expandable via knowledge graph.
   */
   geometryFormatUri?: string;
+  /**
+  * AT-URI of a pub.layers.media.media record carrying a pixel or voxel mask for this region.
+  */
+  maskMediaRef?: string;
+  /**
+  * 0-indexed page this region lies on, for paged media.
+  */
+  page?: number;
+  /**
+  * Reference to an atlas parcel grounding this region (e.g., an Uberon or atlas node).
+  */
+  parcelRef?: KnowledgeRef;
+  /**
+  * 0-indexed reading order of this region among sibling regions on the same page or surface.
+  */
+  readingOrder?: number;
+  /**
+  * Spatial-region role slug (fallback when roleUri unavailable), naming what layout or anatomical part this region is.
+  */
+  role?: SpatialEntityRole;
+  /**
+  * AT-URI of the spatial-region role definition node (a role typeDef under layers-annotation.ontology.layers.pub). Community-expandable via knowledge graph.
+  */
+  roleUri?: string;
+  /**
+  * Which medium, session clock, stream, and track this region is measured against. Absent means the single medium reachable from the annotated expression.
+  */
+  scope?: MediaScope;
+  /**
+  * Sensors whose positions define this region; each objectRef has recordRef the media record and objectId a sensorSpec uuid.
+  */
+  sensors?: ObjectRef[];
+  /**
+  * Signed time in nanoseconds, session-relative, at which this region applies.
+  */
+  timeNanos?: number;
   /**
   * Geometry type slug (fallback when typeUri unavailable). For dispatch without parsing the geometry string.
   */
@@ -465,6 +811,9 @@ export interface SpatialExpression {
   * What this spatial expression is relative to (e.g., a landmark annotation, a reference location, a trajector). For relative spatial expressions like 'behind the building'.
   */
   anchorRef?: ObjectRef;
+  /**
+  * Open-ended features of this spatial annotation not reached by the named fields.
+  */
   features?: FeatureMap;
   /**
   * Document function slug (fallback when functionUri unavailable). What role this place plays in the document.
@@ -496,6 +845,9 @@ export interface SpatialExpression {
 * Qualitative modification of a spatial value. Parallel to temporalModifier. Indicates precision, derivation method, or processing applied to a spatial entity.
 */
 export interface SpatialModifier {
+  /**
+  * Open-ended features of this spatial modifier not reached by the named fields.
+  */
   features?: FeatureMap;
   /**
   * Spatial modifier slug (fallback when modUri unavailable).
@@ -523,6 +875,9 @@ export interface SpatioTemporalAnchor {
   * Keyframes defining spatial positions at specific times.
   */
   keyframes?: Keyframe[];
+  /**
+  * The temporal extent over which this spatio-temporal region is tracked.
+  */
   temporalSpan: TemporalSpan;
 }
 
@@ -546,6 +901,9 @@ export interface TemporalEntity {
   * Lower bound for uncertain or vague times, as ISO 8601 datetime.
   */
   earliest?: string;
+  /**
+  * Open-ended features of this temporal value not reached by the named fields.
+  */
   features?: FeatureMap;
   /**
   * Temporal granularity slug (fallback when granularityUri unavailable). Maps to OWL-Time unitType.
@@ -585,6 +943,9 @@ export interface TemporalExpression {
   * What this temporal expression is relative to (e.g., document creation time, another temporal expression, a situation). Maps to TimeML anchorTimeID.
   */
   anchorRef?: ObjectRef;
+  /**
+  * Open-ended features of this temporal annotation not reached by the named fields.
+  */
   features?: FeatureMap;
   /**
   * Document function slug (fallback when functionUri unavailable). Maps to TimeML functionInDocument.
@@ -616,6 +977,9 @@ export interface TemporalExpression {
 * Qualitative modification of a temporal value. Subsumes TimeML TIMEX3 mod attribute and OWL-Time DateTimeDescription qualifiers.
 */
 export interface TemporalModifier {
+  /**
+  * Open-ended features of this temporal modifier not reached by the named fields.
+  */
   features?: FeatureMap;
   /**
   * Temporal modifier slug (fallback when modUri unavailable). Maps to TimeML TIMEX3 mod.
@@ -628,17 +992,29 @@ export interface TemporalModifier {
 }
 
 /**
-* A temporal span within a media source, defined by start and end times in milliseconds.
+* A temporal span within a media source, defined by start and end times in milliseconds on the referenced session or stream clock. Times are signed and session-relative (they may precede the clock origin, matching BIDS StartTime); they are never UTC-epoch values.
 */
 export interface TemporalSpan {
   /**
-  * End time in milliseconds.
+  * End time in milliseconds, signed and session-relative.
   */
   ending: number;
   /**
-  * Start time in milliseconds.
+  * Exact signed end in nanoseconds, session-relative; authoritative over ending where both are present.
+  */
+  endingNanos?: number;
+  /**
+  * Which medium, session clock, stream, and track this span is measured against. Absent means the single medium reachable from the annotated expression.
+  */
+  scope?: MediaScope;
+  /**
+  * Start time in milliseconds, signed and session-relative (may be negative when it precedes the clock origin).
   */
   start: number;
+  /**
+  * Exact signed start in nanoseconds, session-relative; authoritative over start where both are present.
+  */
+  startNanos?: number;
 }
 
 /**
@@ -723,9 +1099,13 @@ export interface Uuid {
   value: string;
 }
 
+export type BoundingBoxUnit = "pixel" | "per-mille-normalized" | string & {};
+
 export type ConstraintExpressionFormat = "python-expr" | "json-logic" | "regex" | "sparql-filter" | "type-ref" | "custom" | string & {};
 
 export type ConstraintScope = "slot" | "template" | "cross-template" | "global" | string & {};
+
+export type ContentDigestAlgorithm = "sha256" | "sha512" | "blake3" | "md5" | "custom" | string & {};
 
 export type ExternalTargetSelector = {
   $type: "pub.layers.defs#textQuoteSelector";
@@ -735,13 +1115,51 @@ export type ExternalTargetSelector = {
   $type: "pub.layers.defs#fragmentSelector";
 } & FragmentSelector;
 
-export type KnowledgeRefSource = "chive.pub" | "wikidata" | "wordnet" | "framenet" | "propbank" | "verbnet" | "unimorph" | "glottolog" | "cldr" | "orcid" | "ror" | "openalex" | "crossref" | "dblp" | "semantic-scholar" | "custom" | string & {};
+export type FrequencyBandBand = "delta" | "theta" | "alpha" | "mu" | "beta" | "low-gamma" | "high-gamma" | "ripple" | "broadband" | "f0" | "f1" | "f2" | "f3" | "f4" | "custom" | string & {};
+
+export type KnowledgeRefSource = "chive.pub" | "wikidata" | "wordnet" | "framenet" | "propbank" | "verbnet" | "unimorph" | "glottolog" | "cldr" | "iso639-3" | "orcid" | "ror" | "openalex" | "crossref" | "dblp" | "semantic-scholar" | "doi" | "handle" | "islrn" | "datacite" | "ldc" | "elra" | "lindat" | "openneuro" | "dandi" | "paradisec" | "talkbank" | "ncbi-taxonomy" | "rrid" | "cognitive-atlas" | "cogpo" | "hed" | "uberon" | "mesh" | "clinicaltrials" | "custom" | string & {};
+
+export type LanguageRefRole = "primary" | "source" | "target" | "metalanguage" | "gloss" | "translation" | "contact" | "l1" | "l2" | "heritage" | "simultaneous-bilingual" | "signed-l1" | "signed-l2" | "custom" | string & {};
+
+export type LicenseRefAppliesTo = "whole" | "annotations" | "underlying-text" | "underlying-media" | "code" | "documentation" | "ontology" | "derived-data" | "custom" | string & {};
 
 export type LicenseRefSpdx = "CC0-1.0" | "CC-BY-4.0" | "CC-BY-SA-4.0" | "CC-BY-NC-4.0" | "CC-BY-NC-SA-4.0" | "CC-BY-ND-4.0" | "CC-BY-NC-ND-4.0" | "MIT" | "Apache-2.0" | "BSD-3-Clause" | "GPL-3.0-only" | "LGPL-3.0-only" | "LDC-User-Agreement" | "ELRA-END-USER" | "proprietary" | "custom" | string & {};
 
-export type SpatialEntityCrs = "pixel" | "percentage" | "wgs84" | "web-mercator" | "custom" | string & {};
+/**
+* The container or environment image the procedure ran in.
+*/
+export interface ReproducibilityInfoContainer {
+  /**
+  * Content digest pinning the exact image.
+  */
+  digest?: ContentDigest;
+  /**
+  * Image tag or reference (e.g., 'python:3.13-slim').
+  */
+  tag?: string;
+  /**
+  * Container type slug (fallback when typeUri unavailable).
+  */
+  type?: ReproducibilityInfoContainerType;
+  /**
+  * AT-URI of the container type definition node. Community-expandable via knowledge graph.
+  */
+  typeUri?: string;
+  /**
+  * URI of the container registry entry or image definition.
+  */
+  uri?: string;
+}
 
-export type SpatialEntityGeometryFormat = "wkt" | "geojson" | "svg-path" | "coco-polygon" | "coco-rle" | "custom" | string & {};
+export type ReproducibilityInfoContainerType = "docker" | "singularity" | "apptainer" | "podman" | "conda" | "nix" | "custom" | string & {};
+
+export type SpatialEntityArticulator = "dominant-hand" | "non-dominant-hand" | "both-hands" | "head" | "torso" | "face" | "eyebrows" | "mouth" | "eye-gaze" | "tongue" | "lips" | "jaw" | "velum" | "custom" | string & {};
+
+export type SpatialEntityCrs = "pixel" | "percentage" | "wgs84" | "web-mercator" | "per-mille-normalized" | "mni152-nlin-2009c" | "mni305" | "talairach" | "acpc" | "scanner-ras" | "fsaverage" | "individual-t1" | "voxel-index" | "world-metric" | "custom" | string & {};
+
+export type SpatialEntityGeometryFormat = "wkt" | "geojson" | "svg-path" | "coco-polygon" | "coco-rle" | "page-xml-coords" | "alto-polygon" | "custom" | string & {};
+
+export type SpatialEntityRole = "text-region" | "text-line" | "baseline" | "word" | "glyph" | "column" | "margin-note" | "figure" | "table" | "instance-mask" | "interest-area" | "articulator-contour" | "region-of-interest" | "custom" | string & {};
 
 export type SpatialEntityType = "point" | "box" | "polygon" | "multi-polygon" | "line-string" | "multi-line-string" | "circle" | "ellipse" | "multi-point" | "geometry-collection" | "custom" | string & {};
 

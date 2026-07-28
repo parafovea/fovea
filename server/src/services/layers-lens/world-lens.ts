@@ -1,33 +1,64 @@
 /**
- * The FOVEA world surface as `@panproto/core` lens specifications plus an
- * executable composition that distributes a WorldState aggregate to its layers
- * rows.
+ * The FOVEA world surface as bidirectional `@panproto/core` lenses plus a
+ * multi-record composition and a record<->row adapter.
  *
- * A WorldState aggregate projects onto several layers records: a
+ * A WorldState aggregate splits into many layers records: a
  * `pub.layers.graph.graphNode` per entity/location/situation/time, a
  * `pub.layers.graph.graphEdge` per relation, a `pub.layers.annotation.clusterSet`
  * per collection, and a scope-scaffold layer of `LayersAnnotation`s that carry the
- * world-denoting values — a Time's `temporalExpression`, a Location's
- * `spatialExpression`, an Event's interpretation, an object's type assignments,
- * and each object's stand-off description gloss. {@link composeWorldToProjection}
- * builds all of them and wires the cross-record references (the denoted node, the
- * relation endpoints, the collection membership, the gloss parentage) by
- * deterministic id from {@link ../layers-id-map}.
+ * world-denoting values — a node's presence, its type assignments, an event's
+ * interpretations, and each object's stand-off description gloss. Splitting one
+ * aggregate into those records, and regrouping those records back into one
+ * aggregate, is the composition's job; every per-record value/structure transform
+ * within a record is a lens, run in both directions through `getJson`.
  *
- * The structural value transforms at the surface's core are authored as panproto
- * lens documents so their bidirectional laws and native-ness are verified against
- * the schema graph: {@link NODE_LABEL_RENAME_LENS_DOC} renames an object's `name`
- * to a GraphNode `label`; {@link TEMPORAL_VALUE_REGROUP_LENS_DOC},
- * {@link EDGE_ENDPOINT_REGROUP_LENS_DOC}, and {@link CLUSTER_MEMBER_REGROUP_LENS_DOC}
- * regroup flat scalars into the nested `temporalEntity`, `objectRef`, and cluster
- * member records. The rename is a fully native, both-laws lens; the nested
- * regroups are native and satisfy get/put but — over string-valued leaves under
- * `@panproto/core` 0.65.0 — do not satisfy put/get (the same regroup over integer
- * leaves does, as the video keyframe regroup shows). {@link buildWorldLens}
- * reports each lens's measured law and requirement signals. Because 0.65.0 does
- * not surface a value-transform lens's output to JavaScript, the composition is
- * the executable image of these specifications and reproduces, row for row, the
- * hand-rolled world mapper the parity test checks against.
+ * The forward lenses (fovea view-model -> layers record) each carry one transform:
+ *
+ *   - {@link WORLD_NODE_LABEL_LENS_DOC} renames a world object's `name` to the
+ *     GraphNode `label`;
+ *   - {@link WORLD_CONFIDENCE_LENS_DOC} scales a 0-1 confidence float to the
+ *     layers-native 0-1000 integer;
+ *   - {@link WORLD_EDGE_ENDPOINT_LENS_DOC} regroups a relation's flat endpoints into
+ *     nested `objectRef` records;
+ *   - {@link WORLD_CLUSTER_MEMBER_LENS_DOC} regroups a collection member id into an
+ *     `objectRef` at the member item vertex;
+ *   - {@link WORLD_GLOSS_TEXT_LENS_DOC} folds a description gloss's segments into the
+ *     presence text;
+ *   - {@link WORLD_GEOMETRY_POINT_LENS_DOC} / {@link WORLD_GEOMETRY_POLYGON_LENS_DOC}
+ *     render a Location's ordered coordinate tuple(s) into a WKT `POINT`/`POLYGON`;
+ *   - {@link WORLD_KNOWLEDGE_REFS_LENS_DOC} builds a node's `knowledgeRefs` list from
+ *     its wikidata/wikibase/externalIds groundings;
+ *   - {@link WORLD_TEMPORAL_LENS_DOC} builds a Time's `temporalExpression` value
+ *     (calendar `value`, deictic `anchorRef`/`features`, and `type`) from the flat,
+ *     nullable-present temporal fields, and {@link WORLD_TEMPORAL_MODIFIER_LENS_DOC}
+ *     builds its `temporalModifier` (whose reserved-keyword `mod` field a
+ *     `compute_field` cannot construct, so it is reached by `rename_field`);
+ *   - {@link WORLD_GLOSS_OFFSETS_LENS_DOC} folds a gloss's segments into their running
+ *     UTF-8 byte offsets by a record-accumulator scan;
+ *   - {@link WORLD_OPEN_PROPERTIES_LENS_DOC} carries an object's open extension —
+ *     already quantized to featureMap-native `{ key, value }` entries at ingress — into
+ *     the target `featureMap`, a lossless passthrough with both round-trip laws.
+ *
+ * The backward lenses (layers record -> fovea view-model) invert the invertible
+ * scalar/structure transforms on `getJson`: {@link WORLD_NODE_LABEL_BACK_LENS_DOC}
+ * un-renames `label` to `name`, {@link WORLD_CONFIDENCE_BACK_LENS_DOC} descales the
+ * 0-1000 integer to a 0-1 float, and {@link WORLD_CLUSTER_MEMBER_BACK_LENS_DOC}
+ * flattens an `objectRef` member back to its id. Each holds both round-trip laws;
+ * the backward direction runs the reverse-authored lens's `getJson` rather than the
+ * forward lens's `putJson`, since on `@panproto/core@0.66.0` the JSON `putJson`
+ * restore path does not apply a step's inverse and reorders array elements.
+ *
+ * {@link composeWorldToProjection} owns only what a single lens cannot: the
+ * multi-record framing and the cross-record wiring by deterministic id (the denoted
+ * node, the relation endpoints, the collection membership, the gloss parentage).
+ * {@link layersToWorldStateViaLens} is its inverse: it regroups the rows back into
+ * one aggregate — indexing annotations by the node they denote, assembling a gloss
+ * from its parent text and reference children, and distributing collections to their
+ * buckets — while routing the invertible value transforms through the backward
+ * lenses. The value-object *deserializations* that have no independent complement
+ * (parsing a WKT geometry string, reading a `temporalExpression` back to a Time,
+ * `JSON.parse` of an open-extension entry, and rebuilding the dynamic-key
+ * `externalIds` map) stay at this egress boundary.
  *
  * @module
  */
@@ -36,7 +67,7 @@ import { z } from 'zod'
 
 import type { GlossItem } from '@models/types.js'
 import type { ObjectRef } from '@fovea/layers-schema'
-import type { LensHandle, ProtolensChainHandle } from '@panproto/core'
+import type { BuiltSchema, LensHandle, ProtolensChainHandle } from '@panproto/core'
 
 import {
   worldScaffoldExpressionId,
@@ -48,15 +79,21 @@ import {
   worldGlossRefAnnotationId,
 } from '../layers-id-map.js'
 import { getPanproto, loadFoveaSchema } from './panproto-registry.js'
-import type {
-  WorldStateAggregate,
-  WorldLayersScope,
-  WorldLayersProjection,
-  MappedWorldNode,
-  MappedWorldEdge,
-  MappedWorldCluster,
-  MappedWorldScaffold,
-  MappedWorldAnnotation,
+import {
+  emptyWorldState,
+  type WorldStateAggregate,
+  type WorldLayersScope,
+  type WorldLayersProjection,
+  type WorldLayersRows,
+  type WorldNodeRow,
+  type WorldEdgeRow,
+  type WorldClusterRow,
+  type WorldAnnotationRow,
+  type MappedWorldNode,
+  type MappedWorldEdge,
+  type MappedWorldCluster,
+  type MappedWorldScaffold,
+  type MappedWorldAnnotation,
 } from '../world-layers-mapper.js'
 
 // --------------------------------------------------------------------------
@@ -64,10 +101,9 @@ import type {
 // --------------------------------------------------------------------------
 
 /**
- * The Zod schema for a world node's naming core — the shape the label rename lens
- * binds to. An entity or event carries a display `name`; the GraphNode carries it
- * as `label`. The rename is a fully native, both-laws-holding lens over this
- * shape.
+ * The Zod schema for a world object's naming core — the shape the label rename lens
+ * binds to. An entity, event, or location carries a display `name`; the GraphNode
+ * carries it as `label`. Native and lawful in both directions over the string leaf.
  */
 export const worldNodeSourceSchema = z.object({
   id: z.string(),
@@ -75,24 +111,25 @@ export const worldNodeSourceSchema = z.object({
 })
 
 /**
- * The Zod schema for a Time's calendar core — the flat ISO-datetime scalars the
- * temporal value regroup nests under a `temporalEntity`. The regroup is native and
- * holds get/put; its put/get law does not hold over these string leaves under the
- * installed `@panproto/core` (see {@link buildWorldLens}).
+ * The Zod schema the backward label lens binds to: a GraphNode carrying `label`,
+ * which the un-rename turns back into the world object's `name`.
  */
-export const temporalValueSourceSchema = z.object({
-  instant: z.string(),
-  intervalStart: z.string(),
-  intervalEnd: z.string(),
-  earliest: z.string(),
-  latest: z.string(),
-  granularity: z.string(),
+export const worldNodeLabelSourceSchema = z.object({
+  id: z.string(),
+  label: z.string(),
+})
+
+/**
+ * The Zod schema for a confidence scalar — the 0-1 float the confidence scale lens
+ * maps to the layers-native 0-1000 integer. Native and lawful in both directions.
+ */
+export const confidenceSourceSchema = z.object({
+  confidence: z.number(),
 })
 
 /**
  * The Zod schema for a relation's endpoint core — the flat `sourceId`/`targetId`
- * the edge-endpoint regroup nests into `objectRef` records. Native, holds get/put;
- * put/get does not hold over the string leaves (see {@link buildWorldLens}).
+ * the edge-endpoint regroup nests into `objectRef` records.
  */
 export const edgeEndpointSourceSchema = z.object({
   id: z.string(),
@@ -102,25 +139,116 @@ export const edgeEndpointSourceSchema = z.object({
 
 /**
  * The Zod schema for a collection's membership core — an array of flat member id
- * carriers the cluster-member regroup nests into per-item `objectRef` records. The
- * regroup anchors at the member item vertex; native, holds get/put, put/get does
- * not hold over the string leaf.
+ * carriers the cluster-member regroup nests into per-item `objectRef` records.
  */
 export const clusterMemberSourceSchema = z.object({
   id: z.string(),
   members: z.array(z.object({ value: z.string() })),
 })
 
-// --------------------------------------------------------------------------
-// Lens documents (the verified specifications of the structural transforms)
-// --------------------------------------------------------------------------
+/**
+ * The Zod schema for a description gloss's segment contents — the shape the gloss
+ * text fold binds to. The lens joins the segment contents into the presence text.
+ */
+export const glossTextSourceSchema = z.object({
+  segments: z.array(z.object({ content: z.string() })),
+})
 
 /**
- * The label rename: a world object's `name` becomes the GraphNode `label`. A pure
- * structural rename, native (empty complement requirement) and lawful in both
- * directions over the string leaf.
+ * The Zod schema for a point Location's ordered coordinate tuple — the numeric home
+ * (native to the source) the geometry lens renders into a WKT `POINT`. The ingress
+ * orders the coordinates per the coordinate system; the lens formats each element,
+ * branching on `int`/`float` so the string matches the world mapper's `String()`.
  */
-export const NODE_LABEL_RENAME_LENS_DOC = {
+export const geometryPointSourceSchema = z.object({
+  coords: z.array(z.number()),
+})
+
+/**
+ * The Zod schema for an extent Location's boundary ring — the numeric home the
+ * geometry lens renders into a WKT `POLYGON`.
+ */
+export const geometryPolygonSourceSchema = z.object({
+  ring: z.array(z.array(z.number())),
+})
+
+/**
+ * The Zod schema for a node's grounding refs — the source-native, featureMap-adjacent
+ * home for wikidata/wikibase/externalIds groundings the knowledgeRefs lens builds a
+ * `knowledgeRef` list from. `uri`/`label` are nullable-present so the lens guards them
+ * by `is_null` (an absent optional field would be unbound at the record root).
+ */
+export const knowledgeRefsSourceSchema = z.object({
+  refs: z.array(
+    z.object({
+      source: z.string(),
+      identifier: z.string(),
+      uri: z.string().nullable(),
+      label: z.string().nullable(),
+    }),
+  ),
+})
+
+/**
+ * The Zod schema for an object's open extension — the fields with no first-class
+ * native home, quantized once at ingress to featureMap-native `{ key, value }` string
+ * entries. The lens carries them into the target `featureMap` losslessly, so both
+ * round-trip laws hold and the mapping never stashes a JSON blob mid-lens.
+ */
+export const openPropertiesSourceSchema = z.object({
+  openProperties: z.array(z.object({ key: z.string(), value: z.string() })),
+})
+
+/**
+ * The Zod schema for a Time's flat, nullable-present temporal fields — the source
+ * home the temporal lens assembles into a `temporalExpression` value. Every optional
+ * calendar/vagueness/deictic field is present with a `null` sentinel so the lens can
+ * guard it by `is_null`; the ingress filters the granularity to the valid slug set
+ * and resolves the deictic scalars, so the lens only assembles.
+ */
+export const temporalSourceSchema = z.object({
+  isInterval: z.boolean(),
+  instant: z.string().nullable(),
+  intervalStart: z.string().nullable(),
+  intervalEnd: z.string().nullable(),
+  earliest: z.string().nullable(),
+  latest: z.string().nullable(),
+  typical: z.string().nullable(),
+  granularity: z.string().nullable(),
+  anchorType: z.string().nullable(),
+  deicticAnchorTime: z.string().nullable(),
+  deicticExpression: z.string().nullable(),
+})
+
+/**
+ * The Zod schema for a Time's vagueness modifier — the `mod` slug and its optional
+ * description. `modKw` is a real source field so `rename_field` can rename it to the
+ * target's reserved-keyword `mod` key, which a `compute_field` expression cannot
+ * construct.
+ */
+export const temporalModifierSourceSchema = z.object({
+  modKw: z.string(),
+  modDescription: z.string().nullable(),
+})
+
+/**
+ * The Zod schema for a gloss's segments — the shape the byte-offset scan folds into
+ * running UTF-8 byte offsets. The parallel UTF-16 char offsets are computed at the
+ * boundary, since panproto's `len` is UTF-8 byte length with no char-count builtin.
+ */
+export const glossOffsetsSourceSchema = z.object({
+  segments: z.array(z.object({ content: z.string() })),
+})
+
+// --------------------------------------------------------------------------
+// Forward lens documents (fovea view-model -> layers record)
+// --------------------------------------------------------------------------
+
+/** Renders one numeric coordinate as a string, matching `String()` on int vs float. */
+const NUM_TO_STR = '(\\c -> if type_of c == "int" then int_to_str c else float_to_str c)'
+
+/** The label rename: a world object's `name` becomes the GraphNode `label`. */
+export const WORLD_NODE_LABEL_LENS_DOC = {
   id: 'fovea.world.node-label.v1',
   source: 'fovea.world.node',
   target: 'pub.layers.graph.graphNode',
@@ -128,37 +256,25 @@ export const NODE_LABEL_RENAME_LENS_DOC = {
 } as const
 
 /** The body vertex the label rename binds to: the node record root. */
-export const NODE_LABEL_RENAME_BODY_VERTEX = 'root'
+export const WORLD_NODE_LABEL_BODY_VERTEX = 'root'
 
 /**
- * The temporal value regroup: a Time's flat calendar scalars are gathered into a
- * nested `temporalEntity` under `value`. Native and get/put-lawful; its put/get
- * law does not hold over the string leaves under `@panproto/core` 0.65.0.
+ * The confidence scale: a 0-1 float becomes the layers-native 0-1000 integer by
+ * `clamp (floor (x * 1000 + 0.5)) 0 1000`, mirroring the half-up rounding and
+ * [0,1000] clamp of the world mapper's `toMilli`.
  */
-export const TEMPORAL_VALUE_REGROUP_LENS_DOC = {
-  id: 'fovea.world.temporal-value.v1',
-  source: 'fovea.world.time',
-  target: 'pub.layers.defs.temporalExpression',
-  steps: [
-    {
-      compute_field: {
-        target: 'value',
-        expr:
-          '{ instant = instant, intervalStart = intervalStart, intervalEnd = intervalEnd, earliest = earliest, latest = latest, granularity = granularity }',
-      },
-    },
-  ],
+export const WORLD_CONFIDENCE_LENS_DOC = {
+  id: 'fovea.world.confidence.v1',
+  source: 'fovea.world.confidence',
+  target: 'pub.layers.x',
+  steps: [{ compute_field: { target: 'confidence', expr: 'clamp (floor (confidence * 1000.0 + 0.5)) 0 1000' } }],
 } as const
 
-/** The body vertex the temporal value regroup binds to: the time record root. */
-export const TEMPORAL_VALUE_REGROUP_BODY_VERTEX = 'root'
+/** The body vertex the confidence scale binds to: the scalar record root. */
+export const WORLD_CONFIDENCE_BODY_VERTEX = 'root'
 
-/**
- * The edge-endpoint regroup: a relation's flat `sourceId`/`targetId` are nested
- * into `objectRef` records. Native and get/put-lawful; put/get does not hold over
- * the string leaves under `@panproto/core` 0.65.0.
- */
-export const EDGE_ENDPOINT_REGROUP_LENS_DOC = {
+/** The edge-endpoint regroup: flat `sourceId`/`targetId` nest into `objectRef`s. */
+export const WORLD_EDGE_ENDPOINT_LENS_DOC = {
   id: 'fovea.world.edge-endpoints.v1',
   source: 'fovea.world.relation',
   target: 'pub.layers.graph.graphEdge',
@@ -169,14 +285,10 @@ export const EDGE_ENDPOINT_REGROUP_LENS_DOC = {
 } as const
 
 /** The body vertex the edge-endpoint regroup binds to: the relation record root. */
-export const EDGE_ENDPOINT_REGROUP_BODY_VERTEX = 'root'
+export const WORLD_EDGE_ENDPOINT_BODY_VERTEX = 'root'
 
-/**
- * The cluster-member regroup: each flat member id carrier is nested into an
- * `objectRef` at the member item vertex. Native and get/put-lawful; put/get does
- * not hold over the string leaf under `@panproto/core` 0.65.0.
- */
-export const CLUSTER_MEMBER_REGROUP_LENS_DOC = {
+/** The cluster-member regroup: each flat member id nests into an `objectRef`. */
+export const WORLD_CLUSTER_MEMBER_LENS_DOC = {
   id: 'fovea.world.cluster-members.v1',
   source: 'fovea.world.collection',
   target: 'pub.layers.annotation.clusterSet',
@@ -184,7 +296,205 @@ export const CLUSTER_MEMBER_REGROUP_LENS_DOC = {
 } as const
 
 /** The body vertex the cluster-member regroup binds to: each member array item. */
-export const CLUSTER_MEMBER_REGROUP_BODY_VERTEX = 'root.members:items'
+export const WORLD_CLUSTER_MEMBER_BODY_VERTEX = 'root.members:items'
+
+/** The gloss text fold: a description gloss's segment contents join into the text. */
+export const WORLD_GLOSS_TEXT_LENS_DOC = {
+  id: 'fovea.world.gloss-text.v1',
+  source: 'fovea.world.gloss',
+  target: 'pub.layers.x',
+  steps: [{ compute_field: { target: 'text', expr: 'join (map (\\s -> s.content) segments) ""' } }],
+} as const
+
+/** The body vertex the gloss text fold binds to: the gloss record root. */
+export const WORLD_GLOSS_TEXT_BODY_VERTEX = 'root'
+
+/** The point geometry: an ordered coordinate tuple renders into a WKT `POINT`. */
+export const WORLD_GEOMETRY_POINT_LENS_DOC = {
+  id: 'fovea.world.geometry-point.v1',
+  source: 'fovea.world.point',
+  target: 'pub.layers.defs.spatialEntity',
+  steps: [
+    {
+      compute_field: {
+        target: 'geometry',
+        expr: `concat "POINT(" (concat (join (map ${NUM_TO_STR} coords) " ") ")")`,
+      },
+    },
+  ],
+} as const
+
+/** The body vertex the point geometry binds to: the coordinate record root. */
+export const WORLD_GEOMETRY_POINT_BODY_VERTEX = 'root'
+
+/** The polygon geometry: a boundary ring renders into a WKT `POLYGON`. */
+export const WORLD_GEOMETRY_POLYGON_LENS_DOC = {
+  id: 'fovea.world.geometry-polygon.v1',
+  source: 'fovea.world.polygon',
+  target: 'pub.layers.defs.spatialEntity',
+  steps: [
+    {
+      compute_field: {
+        target: 'geometry',
+        expr: `concat "POLYGON((" (concat (join (map (\\pt -> join (map ${NUM_TO_STR} pt) " ") ring) ", ") "))")`,
+      },
+    },
+  ],
+} as const
+
+/** The body vertex the polygon geometry binds to: the ring record root. */
+export const WORLD_GEOMETRY_POLYGON_BODY_VERTEX = 'root'
+
+/**
+ * The knowledgeRefs build: a node's groundings become `knowledgeRef` value-objects,
+ * carrying the optional `uri`/`label` only when present (guarded by `is_null`).
+ */
+export const WORLD_KNOWLEDGE_REFS_LENS_DOC = {
+  id: 'fovea.world.knowledge-refs.v1',
+  source: 'fovea.world.groundings',
+  target: 'pub.layers.graph.graphNode',
+  steps: [
+    {
+      compute_field: {
+        target: 'knowledgeRefs',
+        expr:
+          'map (\\e -> merge { source = e.source, identifier = e.identifier } (merge (if is_null e.uri then {} else { uri = e.uri }) (if is_null e.label then {} else { label = e.label }))) refs',
+      },
+    },
+  ],
+} as const
+
+/** The body vertex the knowledgeRefs build binds to: the groundings record root. */
+export const WORLD_KNOWLEDGE_REFS_BODY_VERTEX = 'root'
+
+/** The open-extension passthrough: quantized `{ key, value }` entries into a featureMap. */
+export const WORLD_OPEN_PROPERTIES_LENS_DOC = {
+  id: 'fovea.world.open-properties.v1',
+  source: 'fovea.world.open',
+  target: 'pub.layers.defs.featureMap',
+  steps: [{ compute_field: { target: 'properties', expr: '{ entries = openProperties }' } }],
+} as const
+
+/** The body vertex the open-extension passthrough binds to: the open record root. */
+export const WORLD_OPEN_PROPERTIES_BODY_VERTEX = 'root'
+
+/** The calendar `value` singletons a Time projects, merged and omitted when empty. */
+const TEMPORAL_VALUE_BASE =
+  'merge (if is_null instant then {} else { instant = instant }) (merge (if is_null intervalStart then {} else { intervalStart = intervalStart }) (merge (if is_null intervalEnd then {} else { intervalEnd = intervalEnd }) (merge (if is_null earliest then {} else { earliest = earliest }) (merge (if is_null latest then {} else { latest = latest }) (if is_null granularity then {} else { granularity = granularity })))))'
+const TEMPORAL_VALUE_WITH_FEATURES = `merge (${TEMPORAL_VALUE_BASE}) (if is_null typical then {} else { features = { entries = [{ key = "typical", value = typical }] } })`
+const TEMPORAL_VALUE_BLOCK = `if length (keys (${TEMPORAL_VALUE_WITH_FEATURES})) == 0 then {} else { value = ${TEMPORAL_VALUE_WITH_FEATURES} }`
+const TEMPORAL_ANCHOR_BLOCK = 'if is_null anchorType then {} else { anchorRef = { localId = { value = anchorType } } }'
+const TEMPORAL_DEICTIC_LIST =
+  'flat_map (\\x -> x) [(if is_null deicticAnchorTime then [] else [{ key = "deicticAnchorTime", value = deicticAnchorTime }]), (if is_null deicticExpression then [] else [{ key = "deicticExpression", value = deicticExpression }])]'
+const TEMPORAL_DEICTIC_BLOCK = `if length (${TEMPORAL_DEICTIC_LIST}) == 0 then {} else { features = { entries = ${TEMPORAL_DEICTIC_LIST} } }`
+const TEMPORAL_EXPR = `merge { type = if isInterval then "interval" else "time" } (merge (${TEMPORAL_VALUE_BLOCK}) (merge (${TEMPORAL_ANCHOR_BLOCK}) (${TEMPORAL_DEICTIC_BLOCK})))`
+
+/**
+ * The temporal value-object build: the calendar `value`, the deictic `anchorRef` and
+ * `features`, and the `type`, each assembled conditionally from the nullable-present
+ * source fields by `merge` of `is_null`-guarded singletons and empty-record omission.
+ * The `temporalModifier` is built by {@link WORLD_TEMPORAL_MODIFIER_LENS_DOC} and
+ * spliced by the composition, since its `mod` key is a reserved keyword.
+ */
+export const WORLD_TEMPORAL_LENS_DOC = {
+  id: 'fovea.world.temporal.v1',
+  source: 'fovea.world.temporal',
+  target: 'pub.layers.defs.temporalExpression',
+  steps: [{ compute_field: { target: 'temporal', expr: TEMPORAL_EXPR } }],
+} as const
+
+/** The body vertex the temporal build binds to: the temporal record root. */
+export const WORLD_TEMPORAL_BODY_VERTEX = 'root'
+
+/**
+ * The temporal-modifier build: the `mod` slug (reached by `rename_field`, since a
+ * `compute_field` cannot construct the reserved-keyword key) and the optional
+ * description `features`. The composition reads `mod` and the present `features`.
+ */
+export const WORLD_TEMPORAL_MODIFIER_LENS_DOC = {
+  id: 'fovea.world.temporal-modifier.v1',
+  source: 'fovea.world.temporal-modifier',
+  target: 'pub.layers.defs.temporalModifier',
+  steps: [
+    {
+      compute_field: {
+        target: 'features',
+        expr: 'if is_null modDescription then Nothing else { entries = [{ key = "description", value = modDescription }] }',
+      },
+    },
+    { rename_field: { old: 'modKw', new: 'mod' } },
+  ],
+} as const
+
+/** The body vertex the temporal-modifier build binds to: the modifier record root. */
+export const WORLD_TEMPORAL_MODIFIER_BODY_VERTEX = 'root'
+
+/**
+ * The gloss byte-offset scan: a record-accumulator fold carries a running UTF-8 byte
+ * cursor over the segments, emitting each segment's `[byteStart, byteEnd)`. The
+ * parallel UTF-16 char offsets are computed at the boundary.
+ */
+export const WORLD_GLOSS_OFFSETS_LENS_DOC = {
+  id: 'fovea.world.gloss-offsets.v1',
+  source: 'fovea.world.gloss',
+  target: 'pub.layers.defs.textSpan',
+  steps: [
+    {
+      compute_field: {
+        target: 'offsets',
+        expr:
+          '(fold (\\acc s -> { cursor = acc.cursor + len s.content, list = append acc.list { byteStart = acc.cursor, byteEnd = acc.cursor + len s.content } }) { cursor = 0, list = [] } segments).list',
+      },
+    },
+  ],
+} as const
+
+/** The body vertex the gloss byte-offset scan binds to: the gloss record root. */
+export const WORLD_GLOSS_OFFSETS_BODY_VERTEX = 'root'
+
+// --------------------------------------------------------------------------
+// Backward lens documents (layers record -> fovea view-model)
+// --------------------------------------------------------------------------
+
+/** The label un-rename: a GraphNode `label` becomes the world object's `name`. */
+export const WORLD_NODE_LABEL_BACK_LENS_DOC = {
+  id: 'fovea.world.node-label.back.v1',
+  source: 'pub.layers.graph.graphNode',
+  target: 'fovea.world.node',
+  steps: [{ rename_field: { old: 'label', new: 'name' } }],
+} as const
+
+/** The body vertex the label un-rename binds to: the node record root. */
+export const WORLD_NODE_LABEL_BACK_BODY_VERTEX = 'root'
+
+/** The confidence descale: the 0-1000 integer becomes a 0-1 float, null passing through. */
+export const WORLD_CONFIDENCE_BACK_LENS_DOC = {
+  id: 'fovea.world.confidence.back.v1',
+  source: 'pub.layers.x',
+  target: 'fovea.world.confidence',
+  steps: [{ compute_field: { target: 'confidence', expr: 'if is_null confidence then Nothing else int_to_float confidence / 1000.0' } }],
+} as const
+
+/** The body vertex the confidence descale binds to: the scalar record root. */
+export const WORLD_CONFIDENCE_BACK_BODY_VERTEX = 'root'
+
+/** The cluster-member flatten: an `objectRef` member becomes its flat id. */
+export const WORLD_CLUSTER_MEMBER_BACK_LENS_DOC = {
+  id: 'fovea.world.cluster-members.back.v1',
+  source: 'pub.layers.annotation.clusterSet',
+  target: 'fovea.world.collection',
+  steps: [{ compute_field: { target: 'value', expr: 'localId.value' } }],
+} as const
+
+/** The body vertex the cluster-member flatten binds to: each member array item. */
+export const WORLD_CLUSTER_MEMBER_BACK_BODY_VERTEX = 'root.members:items'
+
+/** The source-schema vertex a source record roots at for `getJson`. */
+const ROOT_VERTEX = 'root'
+
+// --------------------------------------------------------------------------
+// Lens compilation
+// --------------------------------------------------------------------------
 
 /** A compiled world lens with its schema-independent chain and measured signals. */
 export interface WorldLens {
@@ -204,8 +514,8 @@ export interface WorldLens {
 
 /**
  * Compiles a world lens document against its source schema and measures its
- * native-ness (complement-requirement kind) and its get/put and put/get laws over
- * a representative record.
+ * native-ness (complement-requirement kind) and its get/put and put/get laws over a
+ * representative record.
  *
  * @param doc - the lens document to compile
  * @param bodyVertex - the vertex the transform anchors at
@@ -234,8 +544,243 @@ export async function buildWorldLens(
   }
 }
 
+/** The instantiated world lenses the composition executes through `getJson`. */
+export interface WorldLenses {
+  /** Renames a node's `name` to the GraphNode `label`. */
+  nodeLabel: LensHandle
+  /** Scales a 0-1 confidence float to the 0-1000 integer. */
+  confidence: LensHandle
+  /** Regroups a relation's flat endpoints into `objectRef` records. */
+  edgeEndpoint: LensHandle
+  /** Regroups a collection member id into an `objectRef`. */
+  clusterMember: LensHandle
+  /** Folds a gloss's segment contents into the presence text. */
+  glossText: LensHandle
+  /** Renders an ordered coordinate tuple into a WKT `POINT`. */
+  geometryPoint: LensHandle
+  /** Renders a boundary ring into a WKT `POLYGON`. */
+  geometryPolygon: LensHandle
+  /** Builds a node's `knowledgeRefs` list from its groundings. */
+  knowledgeRefs: LensHandle
+  /** Carries quantized open-extension entries into a featureMap. */
+  openProperties: LensHandle
+  /** Assembles a Time's `temporalExpression` value. */
+  temporal: LensHandle
+  /** Builds a Time's `temporalModifier` (its `mod` key via rename). */
+  temporalModifier: LensHandle
+  /** Folds a gloss's segments into running UTF-8 byte offsets. */
+  glossOffsets: LensHandle
+  /** Un-renames a GraphNode `label` back to the world object's `name`. */
+  nodeLabelBack: LensHandle
+  /** Descales a 0-1000 integer confidence back to a 0-1 float. */
+  confidenceBack: LensHandle
+  /** Flattens an `objectRef` collection member back to its id. */
+  clusterMemberBack: LensHandle
+}
+
+/** Compiles and instantiates the world lenses against their source schemas. */
+export async function buildWorldLenses(): Promise<WorldLenses> {
+  const p = await getPanproto()
+  const [
+    nodeSrc, labelBackSrc, confSrc, edgeSrc, memberSrc, glossSrc, pointSrc, polygonSrc, groundingsSrc, openSrc, temporalSrc, modifierSrc,
+  ] = await Promise.all([
+    loadFoveaSchema(worldNodeSourceSchema),
+    loadFoveaSchema(worldNodeLabelSourceSchema),
+    loadFoveaSchema(confidenceSourceSchema),
+    loadFoveaSchema(edgeEndpointSourceSchema),
+    loadFoveaSchema(clusterMemberSourceSchema),
+    loadFoveaSchema(glossTextSourceSchema),
+    loadFoveaSchema(geometryPointSourceSchema),
+    loadFoveaSchema(geometryPolygonSourceSchema),
+    loadFoveaSchema(knowledgeRefsSourceSchema),
+    loadFoveaSchema(openPropertiesSourceSchema),
+    loadFoveaSchema(temporalSourceSchema),
+    loadFoveaSchema(temporalModifierSourceSchema),
+  ])
+  const compile = (doc: unknown, vertex: string, src: BuiltSchema): LensHandle =>
+    p.compileLensDocument(doc as never, vertex).instantiate(src)
+  return {
+    nodeLabel: compile(WORLD_NODE_LABEL_LENS_DOC, WORLD_NODE_LABEL_BODY_VERTEX, nodeSrc),
+    confidence: compile(WORLD_CONFIDENCE_LENS_DOC, WORLD_CONFIDENCE_BODY_VERTEX, confSrc),
+    edgeEndpoint: compile(WORLD_EDGE_ENDPOINT_LENS_DOC, WORLD_EDGE_ENDPOINT_BODY_VERTEX, edgeSrc),
+    clusterMember: compile(WORLD_CLUSTER_MEMBER_LENS_DOC, WORLD_CLUSTER_MEMBER_BODY_VERTEX, memberSrc),
+    glossText: compile(WORLD_GLOSS_TEXT_LENS_DOC, WORLD_GLOSS_TEXT_BODY_VERTEX, glossSrc),
+    geometryPoint: compile(WORLD_GEOMETRY_POINT_LENS_DOC, WORLD_GEOMETRY_POINT_BODY_VERTEX, pointSrc),
+    geometryPolygon: compile(WORLD_GEOMETRY_POLYGON_LENS_DOC, WORLD_GEOMETRY_POLYGON_BODY_VERTEX, polygonSrc),
+    knowledgeRefs: compile(WORLD_KNOWLEDGE_REFS_LENS_DOC, WORLD_KNOWLEDGE_REFS_BODY_VERTEX, groundingsSrc),
+    openProperties: compile(WORLD_OPEN_PROPERTIES_LENS_DOC, WORLD_OPEN_PROPERTIES_BODY_VERTEX, openSrc),
+    temporal: compile(WORLD_TEMPORAL_LENS_DOC, WORLD_TEMPORAL_BODY_VERTEX, temporalSrc),
+    temporalModifier: compile(WORLD_TEMPORAL_MODIFIER_LENS_DOC, WORLD_TEMPORAL_MODIFIER_BODY_VERTEX, modifierSrc),
+    glossOffsets: compile(WORLD_GLOSS_OFFSETS_LENS_DOC, WORLD_GLOSS_OFFSETS_BODY_VERTEX, glossSrc),
+    nodeLabelBack: compile(WORLD_NODE_LABEL_BACK_LENS_DOC, WORLD_NODE_LABEL_BACK_BODY_VERTEX, labelBackSrc),
+    confidenceBack: compile(WORLD_CONFIDENCE_BACK_LENS_DOC, WORLD_CONFIDENCE_BACK_BODY_VERTEX, confSrc),
+    clusterMemberBack: compile(WORLD_CLUSTER_MEMBER_BACK_LENS_DOC, WORLD_CLUSTER_MEMBER_BACK_BODY_VERTEX, memberSrc),
+  }
+}
+
+let worldLensesPromise: Promise<WorldLenses> | null = null
+
+/** The world lenses, compiled and instantiated once per process. */
+export function getWorldLenses(): Promise<WorldLenses> {
+  worldLensesPromise ??= buildWorldLenses()
+  return worldLensesPromise
+}
+
 // --------------------------------------------------------------------------
-// Shared readers (the executable image's small helpers)
+// Lens-projected value/structure transforms (each executed through getJson)
+// --------------------------------------------------------------------------
+
+/** Projects a world object's `name` to its GraphNode `label` through the lens. */
+export function projectNodeLabel(lenses: WorldLenses, name: string): string {
+  const { view } = lenses.nodeLabel.getJson({ id: '', name }, ROOT_VERTEX)
+  return (view as { label: string }).label
+}
+
+/** Scales a 0-1 confidence float to the layers-native 0-1000 integer through the lens. */
+export function scaleConfidence(lenses: WorldLenses, value: number): number {
+  const { view } = lenses.confidence.getJson({ confidence: value }, ROOT_VERTEX)
+  return (view as { confidence: number }).confidence
+}
+
+/** Descales a 0-1000 integer confidence back to a 0-1 float through the backward lens. */
+export function descaleConfidence(lenses: WorldLenses, value: number): number {
+  const { view } = lenses.confidenceBack.getJson({ confidence: value }, ROOT_VERTEX)
+  return (view as { confidence: number }).confidence
+}
+
+/** Un-renames a GraphNode `label` back to the world object's `name` through the backward lens. */
+export function projectNodeName(lenses: WorldLenses, label: string): string {
+  const { view } = lenses.nodeLabelBack.getJson({ id: '', label }, ROOT_VERTEX)
+  return (view as { name: string }).name
+}
+
+/** Regroups a relation's flat endpoints into `objectRef` records through the lens. */
+export function projectEdgeEndpoints(
+  lenses: WorldLenses,
+  sourceId: string,
+  targetId: string,
+): { source: ObjectRef; target: ObjectRef } {
+  const { view } = lenses.edgeEndpoint.getJson({ id: '', sourceId, targetId }, ROOT_VERTEX)
+  const v = view as { source: ObjectRef; target: ObjectRef }
+  return { source: v.source, target: v.target }
+}
+
+/** Regroups collection member ids into `objectRef`s at the member item vertex through the lens. */
+export function projectClusterMembers(lenses: WorldLenses, ids: string[]): ObjectRef[] {
+  const record = { id: '', members: ids.map((id) => ({ value: id })) }
+  const { view } = lenses.clusterMember.getJson(record, ROOT_VERTEX)
+  const members = (view as { members: Array<{ localId: { value: string } }> }).members
+  return members.map((m) => ({ localId: m.localId }))
+}
+
+/** Flattens `objectRef` collection members back to their flat ids through the backward lens. */
+export function projectClusterMemberIds(lenses: WorldLenses, members: unknown[]): string[] {
+  const record = { members: members.map((m) => (m && typeof m === 'object' ? m : { localId: { value: '' } })) }
+  const { view } = lenses.clusterMemberBack.getJson(record as never, ROOT_VERTEX)
+  const out = (view as { members: Array<{ value?: unknown }> }).members
+  return out.map((m) => (typeof m.value === 'string' ? m.value : '')).filter((v) => v !== '')
+}
+
+/** Folds a gloss's segment contents into the presence text through the lens. */
+export function projectGlossText(lenses: WorldLenses, contents: string[]): string {
+  const { view } = lenses.glossText.getJson({ segments: contents.map((content) => ({ content })) }, ROOT_VERTEX)
+  return (view as { text: string }).text
+}
+
+/** Renders an ordered coordinate tuple into a WKT `POINT` string through the lens. */
+export function projectPointGeometry(lenses: WorldLenses, coords: number[]): string {
+  const { view } = lenses.geometryPoint.getJson({ coords }, ROOT_VERTEX)
+  return (view as { geometry: string }).geometry
+}
+
+/** Renders a boundary ring into a WKT `POLYGON` string through the lens. */
+export function projectPolygonGeometry(lenses: WorldLenses, ring: number[][]): string {
+  const { view } = lenses.geometryPolygon.getJson({ ring }, ROOT_VERTEX)
+  return (view as { geometry: string }).geometry
+}
+
+/** A grounding ref in the lens source shape (nullable-present `uri`/`label`). */
+interface GroundingInput {
+  source: string
+  identifier: string
+  uri: string | null
+  label: string | null
+}
+
+/** A layers knowledgeRef value-object. */
+interface KnowledgeRef {
+  source: string
+  identifier: string
+  uri?: string
+  label?: string
+}
+
+/** Builds a node's `knowledgeRefs` list from its groundings through the lens. */
+export function projectKnowledgeRefs(lenses: WorldLenses, refs: GroundingInput[]): KnowledgeRef[] {
+  const { view } = lenses.knowledgeRefs.getJson({ refs }, ROOT_VERTEX)
+  return (view as { knowledgeRefs: KnowledgeRef[] }).knowledgeRefs
+}
+
+/** A single featureMap entry. */
+interface FeatureEntry {
+  key: string
+  value: string
+}
+
+/** Carries quantized open-extension entries into a featureMap through the lens. */
+export function projectOpenProperties(lenses: WorldLenses, entries: FeatureEntry[]): FeatureEntry[] {
+  const { view } = lenses.openProperties.getJson({ openProperties: entries }, ROOT_VERTEX)
+  return (view as { properties: { entries: FeatureEntry[] } }).properties.entries
+}
+
+/** The flat, nullable-present temporal source fields the temporal lens assembles from. */
+interface TemporalInput {
+  isInterval: boolean
+  instant: string | null
+  intervalStart: string | null
+  intervalEnd: string | null
+  earliest: string | null
+  latest: string | null
+  typical: string | null
+  granularity: string | null
+  anchorType: string | null
+  deicticAnchorTime: string | null
+  deicticExpression: string | null
+}
+
+/** Assembles a Time's `temporalExpression` value through the temporal lens. */
+export function projectTemporal(lenses: WorldLenses, input: TemporalInput): Record<string, unknown> {
+  const { view } = lenses.temporal.getJson(input as never, ROOT_VERTEX)
+  return (view as { temporal: Record<string, unknown> }).temporal
+}
+
+/** Builds a Time's `temporalModifier` record through the modifier lens (its `mod` via rename). */
+export function projectTemporalModifier(
+  lenses: WorldLenses,
+  modKw: string,
+  modDescription: string | null,
+): Record<string, unknown> {
+  const { view } = lenses.temporalModifier.getJson({ modKw, modDescription }, ROOT_VERTEX)
+  const v = view as { mod: string; features?: unknown }
+  const modifier: Record<string, unknown> = { mod: v.mod }
+  if (v.features !== null && v.features !== undefined) modifier.features = v.features
+  return modifier
+}
+
+/** A gloss segment's running UTF-8 byte offsets. */
+interface ByteOffset {
+  byteStart: number
+  byteEnd: number
+}
+
+/** Folds a gloss's segments into their running UTF-8 byte offsets through the lens. */
+export function projectGlossByteOffsets(lenses: WorldLenses, contents: string[]): ByteOffset[] {
+  const { view } = lenses.glossOffsets.getJson({ segments: contents.map((content) => ({ content })) }, ROOT_VERTEX)
+  return (view as { offsets: ByteOffset[] }).offsets
+}
+
+// --------------------------------------------------------------------------
+// Shared readers (the composition's small helpers)
 // --------------------------------------------------------------------------
 
 /** Reads a JSON value expected to hold an array, tolerating null/non-array. */
@@ -254,15 +799,10 @@ function localRef(id: string): ObjectRef {
   return { localId: { value: id } }
 }
 
-/** Rounds a 0-1 float to the layers 0-1000 integer confidence scale. */
-function toMilli(value: number): number {
-  return Math.min(1000, Math.max(0, Math.round(value * 1000)))
-}
-
-/** A single featureMap entry. */
-interface FeatureEntry {
-  key: string
-  value: string
+/** The localId value of an objectRef, or null. */
+function localRefValue(ref: unknown): string | null {
+  const value = (ref as { localId?: { value?: unknown } } | null)?.localId?.value
+  return typeof value === 'string' ? value : null
 }
 
 /** Wraps feature entries in a featureMap, or null when empty. */
@@ -270,18 +810,57 @@ function featureMap(entries: FeatureEntry[]): { entries: FeatureEntry[] } | null
   return entries.length > 0 ? { entries } : null
 }
 
+/** Reads the entries of a featureMap column, tolerating null/non-object. */
+function entriesOf(features: unknown): FeatureEntry[] {
+  if (features === null || typeof features !== 'object') return []
+  const entries = (features as { entries?: unknown }).entries
+  if (!Array.isArray(entries)) return []
+  const out: FeatureEntry[] = []
+  for (const entry of entries) {
+    if (entry && typeof entry === 'object') {
+      const key = (entry as { key?: unknown }).key
+      const value = (entry as { value?: unknown }).value
+      if (typeof key === 'string' && typeof value === 'string') out.push({ key, value })
+    }
+  }
+  return out
+}
+
+/** Reads one feature value by key, or null. */
+function readFeature(entries: FeatureEntry[], key: string): string | null {
+  for (const entry of entries) if (entry.key === key) return entry.value
+  return null
+}
+
 /**
- * Encodes an object's open, unstructured leftover — the fields the native
- * projection did not consume — as flat featureMap entries: one entry per
- * top-level field, keyed by the field name, valued as its JSON.
+ * Quantizes an object's open, unstructured leftover to featureMap-native `{ key,
+ * value }` string entries: one entry per top-level field, keyed by the field name,
+ * valued as its JSON. This runs at the ingress boundary that builds the lens source,
+ * so the open-extension lens is a lossless passthrough.
  */
-function openExtensionEntries(leftover: Record<string, unknown>): FeatureEntry[] {
+function openPropertyEntries(leftover: Record<string, unknown>): FeatureEntry[] {
   const entries: FeatureEntry[] = []
   for (const [key, value] of Object.entries(leftover)) {
     if (value === undefined) continue
     entries.push({ key, value: JSON.stringify(value) })
   }
   return entries
+}
+
+/** Applies open-extension feature entries back onto an object, skipping reserved keys. */
+function applyOpenExtension(
+  object: Record<string, unknown>,
+  entries: FeatureEntry[],
+  reserved: ReadonlySet<string>,
+): void {
+  for (const entry of entries) {
+    if (reserved.has(entry.key)) continue
+    try {
+      object[entry.key] = JSON.parse(entry.value)
+    } catch {
+      object[entry.key] = entry.value
+    }
+  }
 }
 
 /** The leftover of an object after its natively-homed fields are removed. */
@@ -304,54 +883,86 @@ function metadataLeftover(object: Record<string, unknown>): Record<string, unkno
 
 // --- knowledge refs ----------------------------------------------------------
 
-/** A layers knowledgeRef value-object. */
-interface KnowledgeRef {
-  source: string
-  identifier: string
-  uri?: string
-  label?: string
-}
-
 /** The reserved knowledgeRef source label the native projection owns. */
 const WIKIBASE_LABEL = 'wikibase'
 
 /**
- * Builds an object's knowledgeRefs from its wikidata/wikibase groundings and its
- * `metadata.externalIds` map, or null when it has none.
+ * Builds an object's grounding inputs (the lens source shape) from its
+ * wikidata/wikibase groundings and its `metadata.externalIds` map, or null when it
+ * has none. The lens turns these into `knowledgeRef` value-objects.
  */
-function knowledgeRefsFor(object: Record<string, unknown>): KnowledgeRef[] | null {
-  const refs: KnowledgeRef[] = []
+function groundingInputs(object: Record<string, unknown>): GroundingInput[] | null {
+  const refs: GroundingInput[] = []
   const wikidataId = stringField(object, 'wikidataId')
   if (wikidataId) {
-    const ref: KnowledgeRef = { source: 'wikidata', identifier: wikidataId }
-    const url = stringField(object, 'wikidataUrl')
-    if (url) ref.uri = url
-    refs.push(ref)
+    refs.push({ source: 'wikidata', identifier: wikidataId, uri: stringField(object, 'wikidataUrl'), label: null })
   }
   const wikibaseId = stringField(object, 'wikibaseId')
-  if (wikibaseId) refs.push({ source: 'custom', identifier: wikibaseId, label: WIKIBASE_LABEL })
+  if (wikibaseId) refs.push({ source: 'custom', identifier: wikibaseId, uri: null, label: WIKIBASE_LABEL })
 
   const metadata = object.metadata
   const externalIds = (metadata as { externalIds?: unknown } | null)?.externalIds
   if (externalIds !== null && typeof externalIds === 'object' && !Array.isArray(externalIds)) {
     for (const [source, identifier] of Object.entries(externalIds as Record<string, unknown>)) {
-      if (typeof identifier === 'string') refs.push({ source, identifier, label: 'externalId' })
+      if (typeof identifier === 'string') refs.push({ source, identifier, uri: null, label: 'externalId' })
     }
   }
   return refs.length > 0 ? refs : null
 }
 
+/** A node's `knowledgeRefs` built through the lens, or null when it has none. */
+function knowledgeRefsFor(lenses: WorldLenses, object: Record<string, unknown>): KnowledgeRef[] | null {
+  const inputs = groundingInputs(object)
+  return inputs === null ? null : projectKnowledgeRefs(lenses, inputs)
+}
+
+/** The groundings recovered from a node's knowledgeRefs. */
+interface RecoveredGroundings {
+  wikidataId?: string
+  wikidataUrl?: string
+  wikibaseId?: string
+  externalIds?: Record<string, string>
+}
+
+/**
+ * Recovers the wikidata/wikibase/externalIds groundings a node's knowledgeRefs carry.
+ * The dynamic-key `externalIds` map is rebuilt here at the egress boundary, since a
+ * lens `compute_field` cannot construct a record with a computed key name.
+ */
+function recoverGroundings(knowledgeRefs: unknown): RecoveredGroundings {
+  const out: RecoveredGroundings = {}
+  for (const raw of asArray(knowledgeRefs)) {
+    const source = stringField(raw, 'source')
+    const identifier = stringField(raw, 'identifier')
+    const uri = stringField(raw, 'uri')
+    const label = stringField(raw, 'label')
+    if (!source || !identifier) continue
+    if (source === 'wikidata' && label !== 'externalId') {
+      out.wikidataId = identifier
+      if (uri) out.wikidataUrl = uri
+    } else if (source === 'custom' && label === WIKIBASE_LABEL) {
+      out.wikibaseId = identifier
+    } else if (label === 'externalId') {
+      out.externalIds = out.externalIds ?? {}
+      out.externalIds[source] = identifier
+    }
+  }
+  return out
+}
+
 // --- gloss stand-off ---------------------------------------------------------
 
-/** Concatenates a gloss's segment contents into its plain text, or null when empty. */
-function glossToText(gloss: unknown): string | null {
+/**
+ * The plain text of a description gloss, folded through the lens: null for an empty
+ * or non-array gloss, else the lens-joined segment contents.
+ */
+function glossText(lenses: WorldLenses, gloss: unknown): string | null {
   if (!Array.isArray(gloss) || gloss.length === 0) return null
-  return gloss
-    .map((seg) => {
-      const content = (seg as { content?: unknown }).content
-      return typeof content === 'string' ? content : ''
-    })
-    .join('')
+  const contents = gloss.map((seg) => {
+    const content = (seg as { content?: unknown }).content
+    return typeof content === 'string' ? content : ''
+  })
+  return projectGlossText(lenses, contents)
 }
 
 /** The argumentRef roles a world annotation uses. */
@@ -365,12 +976,17 @@ const KEY_REF_PERSONA_ID = 'refPersonaId'
 const KEY_REF_CLAIM_ID = 'refClaimId'
 
 /**
- * Builds the child reference annotations for a description gloss: one per
- * non-text segment, anchored by a textSpan into the parent text. typeRefs carry
- * the type id in `ontologyTypeRefId`; every other reference points at its target
- * via an `argumentRef` role `denotes`.
+ * Builds the child reference annotations for a description gloss: one per non-text
+ * segment, anchored by a textSpan into the parent text. The running UTF-8 byte
+ * offsets are folded through {@link projectGlossByteOffsets}; the parallel UTF-16
+ * char offsets are cumulated here at the boundary, since panproto's `len` is byte
+ * length with no char-count builtin. typeRefs carry the type id in
+ * `ontologyTypeRefId`; every other reference points at its target via an
+ * `argumentRef` role `denotes`. Fanning one gloss out to N child records, and wiring
+ * their `parentAnnotationId`, is the composition's multi-record job.
  */
 function glossRefAnnotations(
+  lenses: WorldLenses,
   objectId: string,
   gloss: unknown,
   layerId: string,
@@ -379,16 +995,19 @@ function glossRefAnnotations(
   scope: WorldLayersScope,
 ): MappedWorldAnnotation[] {
   if (!Array.isArray(gloss)) return []
+  const contents = gloss.map((seg) => {
+    const content = (seg as { content?: unknown }).content
+    return typeof content === 'string' ? content : ''
+  })
+  const byteOffsets = projectGlossByteOffsets(lenses, contents)
   const annotations: MappedWorldAnnotation[] = []
   let charCursor = 0
-  let byteCursor = 0
   gloss.forEach((raw, index) => {
     const segment = raw as GlossItem
-    const content = typeof segment.content === 'string' ? segment.content : ''
+    const content = contents[index]
     const charStart = charCursor
-    const byteStart = byteCursor
     charCursor += content.length
-    byteCursor += Buffer.byteLength(content, 'utf8')
+    const { byteStart, byteEnd } = byteOffsets[index]
     if (segment.type === 'text') return
 
     const featureEntries: FeatureEntry[] = []
@@ -404,7 +1023,7 @@ function glossRefAnnotations(
       parentAnnotationId: parentId,
       label: segment.type,
       text: content,
-      anchor: { textSpan: { byteStart, byteEnd: byteCursor, charStart, charEnd: charCursor } },
+      anchor: { textSpan: { byteStart, byteEnd, charStart, charEnd: charCursor } },
       ontologyTypeRefId: isTypeRef ? content : null,
       arguments: isTypeRef ? null : [{ role: ROLE_DENOTES, target: localRef(segment.refClaimId ?? content) }],
       temporal: null,
@@ -424,71 +1043,129 @@ function glossRefAnnotations(
 const GRANULARITIES = new Set(['millisecond', 'second', 'minute', 'hour', 'day', 'week', 'month', 'year'])
 
 /**
- * Builds the temporalExpression value a Time projects onto its presence
- * annotation, modeling the deep temporal constructs with their typed layers
- * value-objects: the calendar value on `temporalEntity`, vagueness on
- * `temporalModifier.mod` plus `earliest`/`latest`/`granularity`, and a deictic
- * reference on `anchorRef`. This is the executable image of
- * {@link TEMPORAL_VALUE_REGROUP_LENS_DOC} extended with the vagueness and deictic
- * moves the composition owns.
+ * Builds the temporalExpression value a Time projects onto its presence annotation.
+ * The flat calendar/vagueness/deictic fields are shaped into the nullable-present
+ * temporal source here, the `temporalExpression` value (calendar `value`, deictic
+ * `anchorRef`/`features`, `type`) is assembled by {@link projectTemporal}, and the
+ * `temporalModifier` — whose `mod` key a `compute_field` cannot construct — is built
+ * by {@link projectTemporalModifier} and spliced. The certainty confidence is scaled
+ * through the confidence lens.
  */
-function temporalExpressionFor(time: Record<string, unknown>): {
-  temporal: Record<string, unknown> | null
-  confidence: number | null
-} {
+function temporalExpressionFor(
+  lenses: WorldLenses,
+  time: Record<string, unknown>,
+): { temporal: Record<string, unknown>; confidence: number | null } {
   const type = stringField(time, 'type')
-  const entity: Record<string, unknown> = {}
-  const instant = stringField(time, 'timestamp')
-  const start = stringField(time, 'startTime')
-  const end = stringField(time, 'endTime')
-  if (instant) entity.instant = instant
-  if (start) entity.intervalStart = start
-  if (end) entity.intervalEnd = end
+  const input: TemporalInput = {
+    isInterval: type === 'interval',
+    instant: stringField(time, 'timestamp'),
+    intervalStart: stringField(time, 'startTime'),
+    intervalEnd: stringField(time, 'endTime'),
+    earliest: null,
+    latest: null,
+    typical: null,
+    granularity: null,
+    anchorType: null,
+    deicticAnchorTime: null,
+    deicticExpression: null,
+  }
 
-  const temporal: Record<string, unknown> = { type: type === 'interval' ? 'interval' : 'time' }
-
+  let modifier: Record<string, unknown> | null = null
   const vagueness = time.vagueness
   if (vagueness !== null && typeof vagueness === 'object') {
     const v = vagueness as Record<string, unknown>
-    const modifier: Record<string, unknown> = {}
-    if (typeof v.type === 'string') modifier.mod = v.type
-    if (typeof v.description === 'string') modifier.features = { entries: [{ key: 'description', value: v.description }] }
-    if (Object.keys(modifier).length > 0) temporal.modifier = modifier
+    const modKw = typeof v.type === 'string' ? v.type : null
+    const modDescription = typeof v.description === 'string' ? v.description : null
+    if (modKw !== null || modDescription !== null) {
+      modifier = projectTemporalModifier(lenses, modKw ?? '', modDescription)
+      if (modKw === null) delete modifier.mod
+    }
     const bounds = v.bounds
     if (bounds !== null && typeof bounds === 'object') {
       const b = bounds as Record<string, unknown>
-      if (typeof b.earliest === 'string') entity.earliest = b.earliest
-      if (typeof b.latest === 'string') entity.latest = b.latest
-      if (typeof b.typical === 'string') {
-        entity.features = { entries: [{ key: 'typical', value: b.typical }] }
-      }
+      if (typeof b.earliest === 'string') input.earliest = b.earliest
+      if (typeof b.latest === 'string') input.latest = b.latest
+      if (typeof b.typical === 'string') input.typical = b.typical
     }
-    if (typeof v.granularity === 'string' && GRANULARITIES.has(v.granularity)) entity.granularity = v.granularity
+    if (typeof v.granularity === 'string' && GRANULARITIES.has(v.granularity)) input.granularity = v.granularity
   }
 
   const deictic = time.deictic
   if (deictic !== null && typeof deictic === 'object') {
     const d = deictic as Record<string, unknown>
-    if (typeof d.anchorType === 'string') temporal.anchorRef = localRef(d.anchorType)
-    const deicticEntries: FeatureEntry[] = []
-    if (typeof d.anchorTime === 'string') deicticEntries.push({ key: 'deicticAnchorTime', value: d.anchorTime })
-    if (typeof d.expression === 'string') deicticEntries.push({ key: 'deicticExpression', value: d.expression })
-    if (deicticEntries.length > 0) temporal.features = { entries: deicticEntries }
+    if (typeof d.anchorType === 'string') input.anchorType = d.anchorType
+    if (typeof d.anchorTime === 'string') input.deicticAnchorTime = d.anchorTime
+    if (typeof d.expression === 'string') input.deicticExpression = d.expression
   }
 
-  if (Object.keys(entity).length > 0) temporal.value = entity
+  const temporal = projectTemporal(lenses, input)
+  if (modifier !== null) temporal.modifier = modifier
 
   const certainty = typeof time.certainty === 'number' ? time.certainty : null
-  return { temporal, confidence: certainty === null ? null : toMilli(certainty) }
+  return { temporal, confidence: certainty === null ? null : scaleConfidence(lenses, certainty) }
+}
+
+/** Recovers a Time's calendar, vagueness, deictic, and certainty from its presence annotation. */
+function readTemporal(lenses: WorldLenses, annotation: WorldAnnotationRow): Record<string, unknown> {
+  const out: Record<string, unknown> = {}
+  const temporal = annotation.temporal as Record<string, unknown> | null
+  const type = typeof temporal?.type === 'string' ? temporal.type : null
+  out.type = type === 'interval' ? 'interval' : 'instant'
+
+  const value = (temporal?.value as Record<string, unknown> | undefined) ?? undefined
+  if (value) {
+    if (type === 'interval') {
+      if (typeof value.intervalStart === 'string') out.startTime = value.intervalStart
+      if (typeof value.intervalEnd === 'string') out.endTime = value.intervalEnd
+    } else if (typeof value.instant === 'string') {
+      out.timestamp = value.instant
+    }
+  }
+
+  const modifier = temporal?.modifier as Record<string, unknown> | undefined
+  const vagueness: Record<string, unknown> = {}
+  if (typeof modifier?.mod === 'string') vagueness.type = modifier.mod
+  const modDescription = readFeature(entriesOf(modifier?.features), 'description')
+  if (modDescription !== null) vagueness.description = modDescription
+  const bounds: Record<string, unknown> = {}
+  if (value && typeof value.earliest === 'string') bounds.earliest = value.earliest
+  if (value && typeof value.latest === 'string') bounds.latest = value.latest
+  const typical = readFeature(entriesOf(value?.features), 'typical')
+  if (typical !== null) bounds.typical = typical
+  if (Object.keys(bounds).length > 0) vagueness.bounds = bounds
+  if (value && typeof value.granularity === 'string') vagueness.granularity = value.granularity
+  if (Object.keys(vagueness).length > 0) out.vagueness = vagueness
+
+  const anchorType = localRefValue(temporal?.anchorRef)
+  const deicticEntries = entriesOf(temporal?.features)
+  const anchorTime = readFeature(deicticEntries, 'deicticAnchorTime')
+  const expression = readFeature(deicticEntries, 'deicticExpression')
+  if (anchorType !== null || anchorTime !== null || expression !== null) {
+    const deictic: Record<string, unknown> = {}
+    if (anchorType !== null) deictic.anchorType = anchorType
+    if (anchorTime !== null) deictic.anchorTime = anchorTime
+    if (expression !== null) deictic.expression = expression
+    out.deictic = deictic
+  }
+
+  if (typeof annotation.confidence === 'number') out.certainty = descaleConfidence(lenses, annotation.confidence)
+  return out
 }
 
 // --- spatial value objects ---------------------------------------------------
 
-/** Maps a FOVEA coordinate system to a layers `spatialEntity.crs` slug. */
+/** Maps a FOVEA coordinate system to a layers `spatialEntity.crs` slug, bijectively. */
 function crsForSystem(system: string | null): string {
   if (system === 'cartesian') return 'pixel'
   if (system === 'relative') return 'percentage'
   return 'wgs84'
+}
+
+/** Recovers a FOVEA coordinate system from a layers `spatialEntity.crs` slug. */
+function systemForCrs(crs: string | null): string {
+  if (crs === 'pixel') return 'cartesian'
+  if (crs === 'percentage') return 'relative'
+  return 'GPS'
 }
 
 /** Orders a coordinate object into a numeric tuple per the coordinate system. */
@@ -500,12 +1177,47 @@ function orderedCoordinates(coordinates: Record<string, unknown>, system: string
   return ordered.filter((v): v is number => typeof v === 'number')
 }
 
+/** Reconstructs a coordinate object from a numeric tuple per the coordinate system. */
+function coordinatesFromNumbers(numbers: number[], system: string | null): Record<string, unknown> {
+  const out: Record<string, unknown> = {}
+  const keys = system === 'cartesian' || system === 'relative' ? ['x', 'y', 'z'] : ['latitude', 'longitude', 'altitude']
+  numbers.forEach((n, i) => {
+    if (keys[i]) out[keys[i]] = n
+  })
+  return out
+}
+
+/** Extracts a WKT `POINT(...)` coordinate list, or null. */
+function parseWktPoint(geometry: unknown): number[] | null {
+  if (typeof geometry !== 'string') return null
+  const match = /^POINT\s*\(([^)]*)\)$/i.exec(geometry.trim())
+  if (!match) return null
+  return match[1].trim().split(/\s+/).map(Number).filter((n) => Number.isFinite(n))
+}
+
+/** Extracts a WKT `POLYGON((...))` ring of coordinate pairs, or null. */
+function parseWktPolygon(geometry: unknown): number[][] | null {
+  if (typeof geometry !== 'string') return null
+  const match = /^POLYGON\s*\(\((.*)\)\)$/i.exec(geometry.trim())
+  if (!match) return null
+  return match[1]
+    .split(',')
+    .map((pair) => pair.trim().split(/\s+/).map(Number).filter((n) => Number.isFinite(n)))
+    .filter((pair) => pair.length >= 2)
+}
+
 /**
  * Builds the spatialExpression value a Location projects onto its presence
  * annotation: a point's coordinates as a WKT POINT, an extent's boundary as a WKT
- * POLYGON, both carrying the coordinate system on `spatialEntity.crs`.
+ * POLYGON, both carrying the coordinate system on `spatialEntity.crs`. The WKT
+ * geometry string — the surface's spatial value transform — is rendered through the
+ * geometry lens; the surrounding `{ crs, geometryFormat, type, dimensions }` wrapper
+ * is deterministic composition.
  */
-function spatialExpressionFor(location: Record<string, unknown>): Record<string, unknown> | null {
+function spatialExpressionFor(
+  lenses: WorldLenses,
+  location: Record<string, unknown>,
+): Record<string, unknown> | null {
   const locationType = stringField(location, 'locationType')
   if (locationType === null) return null
   const system = stringField(location, 'coordinateSystem')
@@ -517,7 +1229,7 @@ function spatialExpressionFor(location: Record<string, unknown>): Record<string,
     const boundary = asArray(location.boundary)
     if (boundary.length > 0) {
       const ring = boundary.map((point) => orderedCoordinates(point, system))
-      value.geometry = `POLYGON((${ring.map((p) => p.join(' ')).join(', ')}))`
+      value.geometry = projectPolygonGeometry(lenses, ring)
       value.type = 'polygon'
       value.dimensions = ring[0] && ring[0].length >= 3 ? 3 : 2
     }
@@ -526,13 +1238,32 @@ function spatialExpressionFor(location: Record<string, unknown>): Record<string,
     if (coordinates !== null && typeof coordinates === 'object') {
       const numbers = orderedCoordinates(coordinates as Record<string, unknown>, system)
       if (numbers.length >= 2) {
-        value.geometry = `POINT(${numbers.map(String).join(' ')})`
+        value.geometry = projectPointGeometry(lenses, numbers)
         value.type = 'point'
         value.dimensions = numbers.length >= 3 ? 3 : 2
       }
     }
   }
   return { type, value }
+}
+
+/** Recovers a Location's locationType, coordinateSystem, and coordinates/boundary. */
+function readSpatial(annotation: WorldAnnotationRow): Record<string, unknown> {
+  const spatial = annotation.spatial as { type?: unknown; value?: Record<string, unknown> } | null
+  const value = spatial?.value
+  const crs = typeof value?.crs === 'string' ? value.crs : null
+  const system = systemForCrs(crs)
+  const out: Record<string, unknown> = { coordinateSystem: system }
+  if (spatial?.type === 'region') {
+    out.locationType = 'extent'
+    const ring = parseWktPolygon(value?.geometry)
+    if (ring) out.boundary = ring.map((pair) => coordinatesFromNumbers(pair, system))
+  } else {
+    out.locationType = 'point'
+    const numbers = parseWktPoint(value?.geometry)
+    if (numbers) out.coordinates = coordinatesFromNumbers(numbers, system)
+  }
+  return out
 }
 
 // --- type assignments --------------------------------------------------------
@@ -542,6 +1273,7 @@ const LABEL_TYPE_ASSIGNMENT = 'type-assignment'
 
 /** Builds the type-assignment annotations a type-assignment list projects to. */
 function typeAssignmentAnnotations(
+  lenses: WorldLenses,
   subjectId: string,
   denotesNodeId: string | null,
   assignments: Record<string, unknown>[],
@@ -567,8 +1299,8 @@ function typeAssignmentAnnotations(
       arguments: args,
       temporal: null,
       spatial: null,
-      confidence: typeof raw.confidence === 'number' ? toMilli(raw.confidence) : null,
-      features: featureMap(openExtensionEntries(leftover)),
+      confidence: typeof raw.confidence === 'number' ? scaleConfidence(lenses, raw.confidence) : null,
+      features: featureMap(projectOpenProperties(lenses, openPropertyEntries(leftover))),
       projectId: scope.projectId,
       createdByUserId: scope.createdByUserId,
     }
@@ -576,7 +1308,7 @@ function typeAssignmentAnnotations(
 }
 
 // --------------------------------------------------------------------------
-// The executable composition (FOVEA aggregate -> layers projection rows)
+// Multi-record composition (fovea aggregate -> layers projection)
 // --------------------------------------------------------------------------
 
 /** Presence-annotation labels marking a node's world membership and kind. */
@@ -587,6 +1319,7 @@ const LABEL_TIME = 'time'
 const LABEL_COLLECTION_TIME = 'collection-time'
 const LABEL_INTERPRETATION = 'interpretation'
 const LABEL_COLLECTION_DESCRIPTION = 'collection-description'
+const PRESENCE_LABELS = [LABEL_ENTITY, LABEL_LOCATION, LABEL_SITUATION, LABEL_TIME, LABEL_COLLECTION_TIME]
 
 /** The flat edge-property marking a graph edge as a world-model relation. */
 const KEY_WORLD_ROLE = 'worldRole'
@@ -603,18 +1336,20 @@ const KEY_MEMBER_FIELD = 'memberField'
  * GraphNode per entity/location/situation/time, a GraphEdge per relation, a
  * ClusterSet per collection, the scope scaffold, and the world-denoting
  * LayersAnnotations (presence with its temporal/spatial/gloss value, type
- * assignments, interpretations, gloss reference children). This is the executable
- * image of the world lens specifications extended with the record framing and
- * cross-record wiring the composition owns; it reproduces the hand-rolled world
- * mapper row for row.
+ * assignments, interpretations, gloss reference children). Every per-record value
+ * and structure transform is projected through {@link WorldLenses} by `getJson`; this
+ * owns the multi-record framing and the cross-record id wiring. It reproduces the
+ * hand-rolled world mapper row for row.
  *
  * @param world - the WorldState aggregate to project
  * @param scope - the scope columns every produced row carries
+ * @param lenses - the instantiated world lenses the value/structure transforms run through
  * @returns the nodes, edges, clusters, scaffold, and annotations to persist
  */
 export function composeWorldToProjection(
   world: WorldStateAggregate,
   scope: WorldLayersScope,
+  lenses: WorldLenses,
 ): WorldLayersProjection {
   const nodes: MappedWorldNode[] = []
   const edges: MappedWorldEdge[] = []
@@ -640,7 +1375,7 @@ export function composeWorldToProjection(
       denotesNodeId: node.id,
       parentAnnotationId: null,
       label: presenceLabel,
-      text: glossToText(gloss),
+      text: glossText(lenses, gloss),
       anchor: null,
       ontologyTypeRefId: null,
       arguments: null,
@@ -651,7 +1386,7 @@ export function composeWorldToProjection(
       projectId: scope.projectId,
       createdByUserId: scope.createdByUserId,
     })
-    annotations.push(...glossRefAnnotations(node.id, gloss, layerId, presenceId, node.id, scope))
+    annotations.push(...glossRefAnnotations(lenses, node.id, gloss, layerId, presenceId, node.id, scope))
   }
 
   // Entities and Locations (both live in the entities bucket).
@@ -659,13 +1394,14 @@ export function composeWorldToProjection(
     const id = stringField(entity, 'id')
     if (id === null) return
     const isLocation = typeof entity.locationType === 'string'
-    const label = stringField(entity, 'name')
+    const name = stringField(entity, 'name')
+    const label = name === null ? null : projectNodeLabel(lenses, name)
 
     annotations.push(
-      ...typeAssignmentAnnotations(id, id, asArray(entity.typeAssignments), 'entityTypeId', layerId, scope),
+      ...typeAssignmentAnnotations(lenses, id, id, asArray(entity.typeAssignments), 'entityTypeId', layerId, scope),
     )
 
-    const spatial = isLocation ? spatialExpressionFor(entity) : null
+    const spatial = isLocation ? spatialExpressionFor(lenses, entity) : null
     const homed = [
       'id', 'name', 'description', 'wikidataId', 'wikidataUrl', 'wikibaseId', 'typeAssignments',
       'metadata', 'locationType', 'coordinateSystem', 'coordinates', 'boundary',
@@ -679,8 +1415,8 @@ export function composeWorldToProjection(
         id,
         nodeType: isLocation ? 'location' : 'entity',
         label,
-        properties: featureMap(openExtensionEntries(leftover)),
-        knowledgeRefs: knowledgeRefsFor(entity),
+        properties: featureMap(projectOpenProperties(lenses, openPropertyEntries(leftover))),
+        knowledgeRefs: knowledgeRefsFor(lenses, entity),
         metadata: null,
         projectId: scope.projectId,
         createdByUserId: scope.createdByUserId,
@@ -697,14 +1433,18 @@ export function composeWorldToProjection(
   asArray(world.events).forEach((event) => {
     const id = stringField(event, 'id')
     if (id === null) return
-    const label = stringField(event, 'name')
+    const name = stringField(event, 'name')
+    const label = name === null ? null : projectNodeLabel(lenses, name)
 
     asArray(event.personaInterpretations).forEach((raw, index) => {
       const personaId = stringField(raw, 'personaId') ?? ''
       const eventTypeId = stringField(raw, 'eventTypeId') ?? ''
       const args: Array<Record<string, unknown>> = [{ role: ROLE_PERSONA, target: localRef(personaId) }]
-      for (const p of asArray(raw.participants)) {
-        args.push({ role: stringField(p, 'roleTypeId') ?? '', target: localRef(stringField(p, 'entityId') ?? '') })
+      for (const participant of asArray(raw.participants)) {
+        args.push({
+          role: stringField(participant, 'roleTypeId') ?? '',
+          target: localRef(stringField(participant, 'entityId') ?? ''),
+        })
       }
       const features: FeatureEntry[] = []
       const justification = stringField(raw, 'justification')
@@ -721,7 +1461,7 @@ export function composeWorldToProjection(
         arguments: args,
         temporal: null,
         spatial: null,
-        confidence: typeof raw.confidence === 'number' ? toMilli(raw.confidence) : null,
+        confidence: typeof raw.confidence === 'number' ? scaleConfidence(lenses, raw.confidence) : null,
         features: featureMap(features),
         projectId: scope.projectId,
         createdByUserId: scope.createdByUserId,
@@ -734,8 +1474,8 @@ export function composeWorldToProjection(
         id,
         nodeType: 'situation',
         label,
-        properties: featureMap(openExtensionEntries(leftover)),
-        knowledgeRefs: knowledgeRefsFor(event),
+        properties: featureMap(projectOpenProperties(lenses, openPropertyEntries(leftover))),
+        knowledgeRefs: knowledgeRefsFor(lenses, event),
         metadata: null,
         projectId: scope.projectId,
         createdByUserId: scope.createdByUserId,
@@ -752,7 +1492,7 @@ export function composeWorldToProjection(
     const id = stringField(time, 'id')
     if (id === null || materializedTimeIds.has(id)) return
     materializedTimeIds.add(id)
-    const { temporal, confidence } = temporalExpressionFor(time)
+    const { temporal, confidence } = temporalExpressionFor(lenses, time)
     const leftover = leftoverAfter(time, [
       'id', 'type', 'timestamp', 'startTime', 'endTime', 'certainty', 'vagueness', 'deictic',
     ])
@@ -761,8 +1501,8 @@ export function composeWorldToProjection(
         id,
         nodeType: 'time',
         label: null,
-        properties: featureMap(openExtensionEntries(leftover)),
-        knowledgeRefs: knowledgeRefsFor(time),
+        properties: featureMap(projectOpenProperties(lenses, openPropertyEntries(leftover))),
+        knowledgeRefs: knowledgeRefsFor(lenses, time),
         metadata: null,
         projectId: scope.projectId,
         createdByUserId: scope.createdByUserId,
@@ -791,28 +1531,29 @@ export function composeWorldToProjection(
       const canonicalLabel = stringField(collection, 'name')
       const memberField = candidates.find((f) => Array.isArray(collection[f])) ?? candidates[0]
 
-      let members: ObjectRef[] = []
+      let memberIds: string[] = []
       if (memberField === 'times') {
-        members = asArray(collection.times)
+        memberIds = asArray(collection.times)
           .map((time) => {
             const memberId = stringField(time, 'id')
             if (memberId === null) return null
             if (!materializedTimeIds.has(memberId)) pushTime(time, LABEL_COLLECTION_TIME)
-            return localRef(memberId)
+            return memberId
           })
-          .filter((ref): ref is ObjectRef => ref !== null)
+          .filter((memberId): memberId is string => memberId !== null)
       } else {
         const ids = Array.isArray(collection[memberField]) ? (collection[memberField] as unknown[]) : []
-        members = ids.filter((mid): mid is string => typeof mid === 'string').map(localRef)
+        memberIds = ids.filter((mid): mid is string => typeof mid === 'string')
       }
+      const members = projectClusterMembers(lenses, memberIds)
 
       annotations.push(
-        ...typeAssignmentAnnotations(id, null, asArray(collection.typeAssignments), typeField, layerId, scope),
+        ...typeAssignmentAnnotations(lenses, id, null, asArray(collection.typeAssignments), typeField, layerId, scope),
       )
 
       const gloss = collection.description
-      const glossText = glossToText(gloss)
-      const glossHasContent = glossText !== null || asArray(gloss).some((s) => s.type !== 'text')
+      const text = glossText(lenses, gloss)
+      const glossHasContent = text !== null || asArray(gloss).some((s) => s.type !== 'text')
       if (glossHasContent) {
         const descId = worldCollectionDescriptionAnnotationId(id)
         annotations.push({
@@ -821,7 +1562,7 @@ export function composeWorldToProjection(
           denotesNodeId: null,
           parentAnnotationId: null,
           label: LABEL_COLLECTION_DESCRIPTION,
-          text: glossText,
+          text,
           anchor: null,
           ontologyTypeRefId: null,
           arguments: [{ role: ROLE_SUBJECT, target: localRef(id) }],
@@ -832,7 +1573,7 @@ export function composeWorldToProjection(
           projectId: scope.projectId,
           createdByUserId: scope.createdByUserId,
         })
-        annotations.push(...glossRefAnnotations(id, gloss, layerId, descId, null, scope))
+        annotations.push(...glossRefAnnotations(lenses, id, gloss, layerId, descId, null, scope))
       }
 
       const homed = ['id', 'name', memberField, 'typeAssignments']
@@ -841,7 +1582,7 @@ export function composeWorldToProjection(
       const features: FeatureEntry[] = [
         { key: KEY_BUCKET, value: bucket },
         { key: KEY_MEMBER_FIELD, value: memberField },
-        ...openExtensionEntries(leftover),
+        ...projectOpenProperties(lenses, openPropertyEntries(leftover)),
       ]
       const cluster: Record<string, unknown> = { uuid: { value: id }, members, features: { entries: features } }
       if (canonicalLabel !== null) cluster.canonicalLabel = canonicalLabel
@@ -876,11 +1617,12 @@ export function composeWorldToProjection(
     const leftover = leftoverAfter(relation, [
       'id', 'relationTypeId', 'relationType', 'sourceId', 'targetId', 'sourceType', 'targetType',
     ])
-    entries.push(...openExtensionEntries(leftover))
+    entries.push(...projectOpenProperties(lenses, openPropertyEntries(leftover)))
+    const { source, target } = projectEdgeEndpoints(lenses, sourceId, targetId)
     edges.push({
       id,
-      source: localRef(sourceId),
-      target: localRef(targetId),
+      source,
+      target,
       sourceLocalId: sourceId || null,
       targetLocalId: targetId || null,
       edgeType,
@@ -901,3 +1643,327 @@ export function composeWorldToProjection(
 
   return { nodes, edges, clusters, scaffold, annotations }
 }
+
+/**
+ * The end-to-end new path for a WorldState aggregate: get the world lenses, then
+ * project the aggregate to its native layers rows through them. Equivalent, row for
+ * row, to the committed hand-rolled forward mapper (the oracle).
+ *
+ * @param world - the WorldState aggregate to project
+ * @param scope - the scope columns every produced row carries
+ * @returns the nodes, edges, clusters, scaffold, and annotations to persist
+ */
+export async function worldStateToLayersViaLens(
+  world: WorldStateAggregate,
+  scope: WorldLayersScope,
+): Promise<WorldLayersProjection> {
+  const lenses = await getWorldLenses()
+  return composeWorldToProjection(world, scope, lenses)
+}
+
+// --------------------------------------------------------------------------
+// Multi-record regrouping (layers rows -> fovea aggregate), the backward path
+// --------------------------------------------------------------------------
+
+/** Reads the char span of a gloss child's textSpan anchor. */
+function readCharSpan(anchor: unknown): { charStart: number; charEnd: number } {
+  const span = (anchor as { textSpan?: { charStart?: unknown; charEnd?: unknown } } | null)?.textSpan
+  const charStart = typeof span?.charStart === 'number' ? span.charStart : 0
+  const charEnd = typeof span?.charEnd === 'number' ? span.charEnd : charStart
+  return { charStart, charEnd }
+}
+
+/** A reconstructed gloss reference child. */
+interface GlossChild {
+  anchor: unknown
+  label: string | null
+  text: string | null
+  ontologyTypeRefId: string | null
+  arguments: unknown
+  features: unknown
+}
+
+/** A gloss child as a {@link GlossChild}. */
+function toGlossChild(annotation: WorldAnnotationRow): GlossChild {
+  return {
+    anchor: annotation.anchor,
+    label: annotation.label,
+    text: annotation.text,
+    ontologyTypeRefId: annotation.ontologyTypeRefId,
+    arguments: annotation.arguments,
+    features: annotation.features,
+  }
+}
+
+/**
+ * Reconstructs a description gloss from its plain text and reference children, by the
+ * char spans the children carry — a regroup of N child rows and their parent text
+ * back into one gloss, the composition's multi-record inverse.
+ */
+function glossFromParts(text: string | null, children: GlossChild[]): GlossItem[] {
+  if (text === null && children.length === 0) return []
+  const base = text ?? ''
+  const ordered = children
+    .map((child) => ({ ...child, ...readCharSpan(child.anchor) }))
+    .sort((a, b) => a.charStart - b.charStart || a.charEnd - b.charEnd)
+
+  const items: GlossItem[] = []
+  let cursor = 0
+  const pushText = (from: number, to: number): void => {
+    if (to > from) items.push({ type: 'text', content: base.slice(from, to) })
+  }
+
+  for (const child of ordered) {
+    if (child.charStart < cursor) continue
+    pushText(cursor, child.charStart)
+    const content = child.text ?? base.slice(child.charStart, child.charEnd)
+    const type = (child.label ?? 'text') as GlossItem['type']
+    const item: GlossItem = { type, content }
+    const entries = entriesOf(child.features)
+    const refType = readFeature(entries, KEY_REF_TYPE)
+    if (refType !== null) item.refType = refType as GlossItem['refType']
+    const refPersonaId = readFeature(entries, KEY_REF_PERSONA_ID)
+    if (refPersonaId !== null) item.refPersonaId = refPersonaId
+    const denotesTarget = localRefValue(asArray(child.arguments).find((a) => a.role === ROLE_DENOTES)?.target)
+    const refClaimId = readFeature(entries, KEY_REF_CLAIM_ID) ?? (type === 'claimRef' ? denotesTarget : null)
+    if (refClaimId !== null) item.refClaimId = refClaimId
+    items.push(item)
+    cursor = Math.max(cursor, child.charEnd)
+  }
+  pushText(cursor, base.length)
+  return items
+}
+
+/** Rebuilds a type assignment from its LayersAnnotation, descaling confidence through the lens. */
+function readTypeAssignment(
+  lenses: WorldLenses,
+  annotation: WorldAnnotationRow,
+  typeField: 'entityTypeId' | 'eventTypeId',
+): Record<string, unknown> {
+  const out: Record<string, unknown> = {}
+  const personaId = localRefValue(asArray(annotation.arguments).find((a) => a.role === ROLE_PERSONA)?.target)
+  out.personaId = personaId ?? ''
+  applyOpenExtension(out, entriesOf(annotation.features), new Set())
+  if (annotation.ontologyTypeRefId) out[typeField] = annotation.ontologyTypeRefId
+  if (typeof annotation.confidence === 'number') out.confidence = descaleConfidence(lenses, annotation.confidence)
+  return out
+}
+
+/** Rebuilds an event interpretation from its LayersAnnotation, descaling confidence through the lens. */
+function readInterpretation(lenses: WorldLenses, annotation: WorldAnnotationRow): Record<string, unknown> {
+  const out: Record<string, unknown> = {}
+  const args = asArray(annotation.arguments)
+  const personaId = localRefValue(args.find((a) => a.role === ROLE_PERSONA)?.target)
+  out.personaId = personaId ?? ''
+  if (annotation.ontologyTypeRefId) out.eventTypeId = annotation.ontologyTypeRefId
+  out.participants = args
+    .filter((a) => a.role !== ROLE_PERSONA)
+    .map((a) => ({ entityId: localRefValue(a.target) ?? '', roleTypeId: typeof a.role === 'string' ? a.role : '' }))
+  if (typeof annotation.confidence === 'number') out.confidence = descaleConfidence(lenses, annotation.confidence)
+  const justification = readFeature(entriesOf(annotation.features), 'justification')
+  if (justification !== null) out.justification = justification
+  return out
+}
+
+/** True when a graph edge is a world relation (it carries the world-role property). */
+function isWorldEdge(edge: { properties: unknown }): boolean {
+  return readFeature(entriesOf(edge.properties), KEY_WORLD_ROLE) === WORLD_ROLE_RELATION
+}
+
+/** The annotations denoting or describing a single world node. */
+interface NodeAnnotations {
+  presence: WorldAnnotationRow | null
+  typeAssignments: WorldAnnotationRow[]
+  interpretations: WorldAnnotationRow[]
+}
+
+/**
+ * Reconstructs the WorldState aggregate from its native layers rows through the
+ * backward lenses — the lens-native inverse of {@link composeWorldToProjection}. The
+ * per-record value transforms (the node name un-rename, the confidence descale, the
+ * cluster-member flatten) run through {@link WorldLenses}; this owns the multi-record
+ * regrouping (indexing annotations by their node, assembling glosses from parts,
+ * distributing collections to buckets) and the value-object deserializations with no
+ * independent complement (parsing a WKT geometry, reading a `temporalExpression`,
+ * `JSON.parse` of an open-extension entry, and rebuilding the `externalIds` map). It
+ * reproduces the committed hand-rolled backward mapper (the oracle) aggregate for
+ * aggregate.
+ *
+ * @param rows - the world nodes, edges, clusters, and annotations in one scope
+ * @param lenses - the instantiated world lenses the value inversions run through
+ * @returns the reconstructed WorldState aggregate
+ */
+export function composeProjectionToWorld(rows: WorldLayersRows, lenses: WorldLenses): WorldStateAggregate {
+  const aggregate = emptyWorldState()
+
+  const byNode = new Map<string, NodeAnnotations>()
+  const glossByParent = new Map<string, WorldAnnotationRow[]>()
+  const collectionAssignments = new Map<string, WorldAnnotationRow[]>()
+  const collectionDescription = new Map<string, WorldAnnotationRow>()
+
+  const nodeBucket = (nodeId: string): NodeAnnotations => {
+    let entry = byNode.get(nodeId)
+    if (!entry) {
+      entry = { presence: null, typeAssignments: [], interpretations: [] }
+      byNode.set(nodeId, entry)
+    }
+    return entry
+  }
+
+  for (const annotation of rows.annotations) {
+    if (annotation.parentAnnotationId !== null) {
+      const list = glossByParent.get(annotation.parentAnnotationId) ?? []
+      list.push(annotation)
+      glossByParent.set(annotation.parentAnnotationId, list)
+      continue
+    }
+    const nodeId = annotation.denotesNodeId
+    if (annotation.label === LABEL_TYPE_ASSIGNMENT) {
+      if (nodeId) nodeBucket(nodeId).typeAssignments.push(annotation)
+      else {
+        const subject = localRefValue(asArray(annotation.arguments).find((a) => a.role === ROLE_SUBJECT)?.target)
+        if (subject) {
+          const list = collectionAssignments.get(subject) ?? []
+          list.push(annotation)
+          collectionAssignments.set(subject, list)
+        }
+      }
+    } else if (annotation.label === LABEL_INTERPRETATION) {
+      if (nodeId) nodeBucket(nodeId).interpretations.push(annotation)
+    } else if (annotation.label === LABEL_COLLECTION_DESCRIPTION) {
+      const subject = localRefValue(asArray(annotation.arguments).find((a) => a.role === ROLE_SUBJECT)?.target)
+      if (subject) collectionDescription.set(subject, annotation)
+    } else if (nodeId && PRESENCE_LABELS.includes(annotation.label ?? '')) {
+      nodeBucket(nodeId).presence = annotation
+    }
+  }
+
+  const glossChildrenOf = (parentId: string | null): WorldAnnotationRow[] =>
+    parentId === null ? [] : (glossByParent.get(parentId) ?? [])
+
+  const describeFrom = (presence: WorldAnnotationRow | null): GlossItem[] =>
+    glossFromParts(presence?.text ?? null, glossChildrenOf(presence?.id ?? null).map(toGlossChild))
+
+  const timeById = new Map<string, Record<string, unknown>>()
+  const entities: Record<string, unknown>[] = []
+  const events: Record<string, unknown>[] = []
+  const times: Record<string, unknown>[] = []
+
+  for (const node of rows.nodes) {
+    const anns = byNode.get(node.id)
+    if (!anns || !anns.presence) continue // not a world-authored node (e.g. a video stub)
+    const label = anns.presence.label
+
+    if (label === LABEL_TIME || label === LABEL_COLLECTION_TIME) {
+      const object: Record<string, unknown> = { id: node.id }
+      applyOpenExtension(object, entriesOf(node.properties), new Set())
+      Object.assign(object, readTemporal(lenses, anns.presence))
+      timeById.set(node.id, object)
+      if (label === LABEL_TIME) times.push(object)
+      continue
+    }
+
+    const object: Record<string, unknown> = { id: node.id }
+    if (node.label !== null) object.name = projectNodeName(lenses, node.label)
+    applyOpenExtension(object, entriesOf(node.properties), new Set())
+    object.description = describeFrom(anns.presence)
+
+    const grounds = recoverGroundings(node.knowledgeRefs)
+    if (grounds.wikidataId) object.wikidataId = grounds.wikidataId
+    if (grounds.wikidataUrl) object.wikidataUrl = grounds.wikidataUrl
+    if (grounds.wikibaseId) object.wikibaseId = grounds.wikibaseId
+    if (grounds.externalIds) {
+      const metadata =
+        object.metadata && typeof object.metadata === 'object' && !Array.isArray(object.metadata)
+          ? (object.metadata as Record<string, unknown>)
+          : {}
+      metadata.externalIds = grounds.externalIds
+      object.metadata = metadata
+    }
+
+    if (label === LABEL_SITUATION) {
+      object.personaInterpretations = anns.interpretations.map((a) => readInterpretation(lenses, a))
+      events.push(object)
+    } else {
+      object.typeAssignments = anns.typeAssignments.map((a) => readTypeAssignment(lenses, a, 'entityTypeId'))
+      if (label === LABEL_LOCATION && anns.presence.spatial !== null) {
+        Object.assign(object, readSpatial(anns.presence))
+      }
+      entities.push(object)
+    }
+  }
+
+  aggregate.entities = entities
+  aggregate.events = events
+  aggregate.times = times
+
+  for (const clusterSet of rows.clusters) {
+    const first = asArray(clusterSet.clusters)[0]
+    if (!first) continue
+    const featureEntries = entriesOf(first.features)
+    const bucket = readFeature(featureEntries, KEY_BUCKET)
+    if (bucket !== 'entityCollections' && bucket !== 'eventCollections' && bucket !== 'timeCollections') continue
+    const memberField = readFeature(featureEntries, KEY_MEMBER_FIELD) ?? 'members'
+
+    const object: Record<string, unknown> = { id: clusterSet.id }
+    applyOpenExtension(object, featureEntries, new Set([KEY_BUCKET, KEY_MEMBER_FIELD]))
+    const canonicalLabel = first.canonicalLabel
+    if (typeof canonicalLabel === 'string') object.name = canonicalLabel
+
+    const desc = collectionDescription.get(clusterSet.id)
+    if (desc) object.description = glossFromParts(desc.text ?? null, glossChildrenOf(desc.id).map(toGlossChild))
+
+    const memberIds = projectClusterMemberIds(lenses, asArray(first.members))
+
+    if (bucket === 'entityCollections') {
+      object.typeAssignments = (collectionAssignments.get(clusterSet.id) ?? []).map((a) =>
+        readTypeAssignment(lenses, a, 'entityTypeId'),
+      )
+    } else if (bucket === 'eventCollections') {
+      object.typeAssignments = (collectionAssignments.get(clusterSet.id) ?? []).map((a) =>
+        readTypeAssignment(lenses, a, 'eventTypeId'),
+      )
+    }
+
+    if (memberField === 'times') object.times = memberIds.map((id) => timeById.get(id) ?? { id })
+    else object[memberField] = memberIds
+
+    aggregate[bucket].push(object)
+  }
+
+  const relations = rows.edges
+    .filter((edge) => isWorldEdge(edge))
+    .slice()
+    .sort((a, b) => (a.ordinal ?? 0) - (b.ordinal ?? 0))
+    .map((edge) => {
+      const entries = entriesOf(edge.properties)
+      const object: Record<string, unknown> = { id: edge.id }
+      applyOpenExtension(object, entries, new Set([KEY_WORLD_ROLE, KEY_SOURCE_KIND, KEY_TARGET_KIND]))
+      object.relationTypeId = edge.edgeType
+      if (edge.sourceLocalId) object.sourceId = edge.sourceLocalId
+      if (edge.targetLocalId) object.targetId = edge.targetLocalId
+      const sourceKind = readFeature(entries, KEY_SOURCE_KIND)
+      if (sourceKind !== null) object.sourceType = sourceKind
+      const targetKind = readFeature(entries, KEY_TARGET_KIND)
+      if (targetKind !== null) object.targetType = targetKind
+      return object
+    })
+  aggregate.relations = relations
+
+  return aggregate
+}
+
+/**
+ * The end-to-end new backward path: get the world lenses, then regroup the stored
+ * layers rows into the WorldState aggregate through them. Equivalent, aggregate for
+ * aggregate, to the committed hand-rolled backward mapper (the oracle).
+ *
+ * @param rows - the world nodes, edges, clusters, and annotations in one scope
+ * @returns the reconstructed WorldState aggregate
+ */
+export async function layersToWorldStateViaLens(rows: WorldLayersRows): Promise<WorldStateAggregate> {
+  const lenses = await getWorldLenses()
+  return composeProjectionToWorld(rows, lenses)
+}
+
+export type { WorldNodeRow, WorldEdgeRow, WorldClusterRow, WorldAnnotationRow }

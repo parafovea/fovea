@@ -9,6 +9,9 @@ import type { Constraint, FeatureMap, KnowledgeRef } from "./../defs";
 * A component of a multi-word expression entry.
 */
 export interface MweComponent {
+  /**
+  * Open-ended features describing this component (e.g., pos, morphological features).
+  */
   features?: FeatureMap;
   /**
   * Surface form of this component.
@@ -44,12 +47,21 @@ export interface Slot {
   * Default filler value if not explicitly filled.
   */
   defaultValue?: string;
+  /**
+  * Human-readable description of this slot's role and the fillers it expects.
+  */
   description?: string;
+  /**
+  * Open-ended features describing this slot not captured by the typed fields.
+  */
   features?: FeatureMap;
   /**
   * Multiple allowed filler type references (disjunctive constraint).
   */
   fillerTypeRefs?: string[];
+  /**
+  * Knowledge graph groundings for this slot (e.g., the semantic role or ontology type it corresponds to).
+  */
   knowledgeRefs?: KnowledgeRef[];
   /**
   * Slot name (used as placeholder key in template text, e.g., 'subject', 'verb', 'arg0').
@@ -73,6 +85,9 @@ export interface SlotFilling {
   * AT-URI of the resource entry filling this slot.
   */
   entryRef?: string;
+  /**
+  * Open-ended features describing this filler assignment (e.g., sampling weight, generation source).
+  */
   features?: FeatureMap;
   /**
   * Literal string value for this slot (used when no entry reference is needed, or as override).
@@ -96,6 +111,9 @@ export interface TemplateMember {
   * AT-URI of a nested templateComposition (for tree structures).
   */
   compositionRef?: string;
+  /**
+  * Open-ended features describing this composition member.
+  */
   features?: FeatureMap;
   /**
   * Optional label for this member (e.g., 'context', 'target', 'filler').

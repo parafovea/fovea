@@ -7,8 +7,17 @@ import type { AnnotationMetadata, FeatureMap } from "./../defs";
 * A record indicating that a expression belongs to a corpus, with optional split assignment.
 */
 export interface Membership {
+  /**
+  * AT-URI of the corpus this expression belongs to.
+  */
   corpusRef: string;
+  /**
+  * Timestamp when this membership record was created.
+  */
   createdAt: string;
+  /**
+  * AT-URI of the expression that is a member of the corpus.
+  */
   expressionRef: string;
   /**
   * Open-ended features for this membership (e.g., source file, import batch, quality flags).

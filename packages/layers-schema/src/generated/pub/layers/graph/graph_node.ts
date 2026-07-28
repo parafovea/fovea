@@ -7,6 +7,9 @@ import type { AnnotationMetadata, FeatureMap, KnowledgeRef } from "./../defs";
 * A standalone node in the property graph. Represents entities, concepts, situations, claims, or any domain object that does not have another Layers record. Existing Layers records (expressions, annotations, typeDefs) are implicitly nodes via objectRef.
 */
 export interface GraphNode {
+  /**
+  * Timestamp when this node record was created.
+  */
   createdAt: string;
   /**
   * Knowledge graph references grounding this node (Wikidata, chive.pub, FrameNet, etc.).
@@ -16,6 +19,9 @@ export interface GraphNode {
   * Human-readable node label.
   */
   label?: string;
+  /**
+  * Provenance: who created this node, under what persona, with what tool.
+  */
   metadata?: AnnotationMetadata;
   /**
   * Node type slug (fallback when nodeTypeUri unavailable).

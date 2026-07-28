@@ -13,26 +13,50 @@ import {
   type ClaimNodeRow,
   type ClaimAnnotationRow,
   type ClaimEdgeRow,
+  type ClaimReconstructionContext,
 } from '../../claim-layers-mapper.js'
 import { getPanproto, loadFoveaSchema } from '../panproto-registry.js'
-import { assertOracleParity, type LayersRow } from '../oracle-parity.js'
+import { assertOracleParity, assertBackwardParity, type LayersRow } from '../oracle-parity.js'
 import {
-  buildClaimTextSpanRegroupLens,
-  buildClaimTemporalRegroupLens,
+  buildClaimLens,
+  buildRelationLens,
+  getClaimLens,
+  getRelationLens,
   toClaimSource,
+  toRelationSource,
+  toClaimLensRecord,
+  toRelationLensRecord,
+  projectClaimCore,
+  projectRelationCore,
   foveaClaimToLayersRows,
   foveaRelationToLayersRows,
-  claimTextSpanRegroupSourceSchema,
-  claimTemporalRegroupSourceSchema,
+  claimLensSourceSchema,
+  relationLensSourceSchema,
+  CLAIM_LENS_BODY_VERTEX,
+  RELATION_LENS_BODY_VERTEX,
+  buildClaimBackLens,
+  buildRelationBackLens,
+  getClaimBackLens,
+  getRelationBackLens,
+  layersToClaimViaLens,
+  layersToRelationViaLens,
+  regroupClaimBackRecord,
+  regroupRelationBackRecord,
+  claimBackLensSourceSchema,
+  relationBackLensSourceSchema,
+  CLAIM_BACK_LENS_BODY_VERTEX,
+  RELATION_BACK_LENS_BODY_VERTEX,
 } from '../claim-lens.js'
 
 /**
  * Verifies the FOVEA claim surface's lens+adapter path against the committed
- * hand-rolled forward mapper (the oracle): the text-span and temporal anchor
- * regroups compile to native panproto lenses whose round-trip laws hold, and the
+ * hand-rolled forward mapper (the oracle): the claim-core and relation-core lenses
+ * compile to native panproto lenses whose round-trip laws hold and whose `getJson`
+ * output already carries the gloss fold, the confidence scale, the interleaved
+ * argument encoding, and the text-span / temporal anchor regroups; and the
  * composition + adapter reproduce the oracle's rows exactly over a corpus of
- * representative claims and relations. The corpus reuses the fixtures from the
- * oracle's co-located test.
+ * representative claims and relations, reconstructing identically through the
+ * oracle's backward mapper.
  */
 
 const richClaim: StoredClaim = {
@@ -170,77 +194,149 @@ function relationProjectionToRows(p: RelationLayersProjection): LayersRow[] {
   ]
 }
 
-describe('claim-lens span-anchor regroup lenses', () => {
-  it('compiles a native text-span regroup lens carrying the anchor field transform', async () => {
-    const { requirementKind, fieldTransforms } = await buildClaimTextSpanRegroupLens()
+describe('claim-lens core lenses', () => {
+  it('compiles a native claim lens carrying the value, confidence, argument, and span transforms', async () => {
+    const { requirementKind, fieldTransforms } = await buildClaimLens()
     expect(requirementKind).toBe('empty')
-    expect(Object.keys(fieldTransforms)).toContain('root.textSpans:items')
+    expect(Object.keys(fieldTransforms)).toContain(CLAIM_LENS_BODY_VERTEX)
+    const rootTransforms = fieldTransforms[CLAIM_LENS_BODY_VERTEX] as Array<{ ComputeField?: { target_key?: string } }>
+    const targets = rootTransforms.map((t) => t.ComputeField?.target_key)
+    expect(targets).toEqual(expect.arrayContaining(['value', 'confidence', 'arguments', 'textSpans', 'timeSpans']))
   })
 
-  it('compiles a native temporal regroup lens carrying the anchor field transform', async () => {
-    const { requirementKind, fieldTransforms } = await buildClaimTemporalRegroupLens()
+  it('compiles a native relation lens carrying the endpoint, confidence, property, and span transforms', async () => {
+    const { requirementKind, fieldTransforms } = await buildRelationLens()
     expect(requirementKind).toBe('empty')
-    expect(Object.keys(fieldTransforms)).toContain('root.timeSpans:items')
+    expect(Object.keys(fieldTransforms)).toContain(RELATION_LENS_BODY_VERTEX)
+    const rootTransforms = fieldTransforms[RELATION_LENS_BODY_VERTEX] as Array<{ ComputeField?: { target_key?: string } }>
+    const targets = rootTransforms.map((t) => t.ComputeField?.target_key)
+    expect(targets).toEqual(expect.arrayContaining(['source', 'target', 'confidence', 'properties', 'spans']))
   })
 
-  it("holds the text-span round-trip laws over every corpus claim's spans", async () => {
+  it("holds the claim lens round-trip laws over every corpus claim's core", async () => {
     const p = await getPanproto()
-    const source = await loadFoveaSchema(claimTextSpanRegroupSourceSchema)
-    const { lens } = await buildClaimTextSpanRegroupLens()
-
+    const source = await loadFoveaSchema(claimLensSourceSchema)
+    const { lens } = await getClaimLens()
     for (const { name, claim } of CLAIM_CORPUS) {
-      const vm = toClaimSource(claim)
-      const record = {
-        id: vm.id,
-        textSpans: vm.textSpans.map((s) => ({ charStart: s.charStart, charEnd: s.charEnd })),
-      }
+      const record = toClaimLensRecord(toClaimSource(claim))
       const bytes = p.parseJson(source, JSON.stringify(record))._bytes
-      expect(lens.checkGetPut(bytes).holds, `text-span GetPut for ${name}`).toBe(true)
-      expect(lens.checkPutGet(bytes).holds, `text-span PutGet for ${name}`).toBe(true)
+      expect(lens.checkGetPut(bytes).holds, `claim GetPut for ${name}`).toBe(true)
+      expect(lens.checkPutGet(bytes).holds, `claim PutGet for ${name}`).toBe(true)
     }
   })
 
-  it("holds the temporal round-trip laws over every corpus claim's spans", async () => {
+  it("holds the relation lens round-trip laws over every corpus relation's core", async () => {
     const p = await getPanproto()
-    const source = await loadFoveaSchema(claimTemporalRegroupSourceSchema)
-    const { lens } = await buildClaimTemporalRegroupLens()
-
-    for (const { name, claim } of CLAIM_CORPUS) {
-      const vm = toClaimSource(claim)
-      const record = {
-        id: vm.id,
-        timeSpans: vm.timeSpans.map((s) => ({ startMs: s.startMs, endMs: s.endMs })),
-      }
+    const source = await loadFoveaSchema(relationLensSourceSchema)
+    const { lens } = await getRelationLens()
+    for (const { name, relation: rel, projectId } of RELATION_CORPUS) {
+      const record = toRelationLensRecord(toRelationSource(rel, projectId))
       const bytes = p.parseJson(source, JSON.stringify(record))._bytes
-      expect(lens.checkGetPut(bytes).holds, `temporal GetPut for ${name}`).toBe(true)
-      expect(lens.checkPutGet(bytes).holds, `temporal PutGet for ${name}`).toBe(true)
+      expect(lens.checkGetPut(bytes).holds, `relation GetPut for ${name}`).toBe(true)
+      expect(lens.checkPutGet(bytes).holds, `relation PutGet for ${name}`).toBe(true)
     }
+  })
+
+  it('emits the gloss fold, confidence scale, interleaved arguments, and regrouped spans', async () => {
+    const { lens } = await getClaimLens()
+    const core = projectClaimCore(lens, toClaimSource(richClaim))
+
+    // The gloss segments were folded to the plain-text value, and the 0-1
+    // confidence scaled to the layers-native 0-1000 integer, by the lens.
+    expect(core.value).toBe('means et-color of the sky')
+    expect(core.confidence).toBe(912)
+
+    // The three gloss fields were index-keyed and interleaved with the object refs.
+    const roles = core.arguments.map((a) => (a as { role: string }).role)
+    expect(roles).toEqual(['gloss:0', 'gloss:1', 'gloss:2', 'claim-relation:0', 'claim-relation:1', 'claimer-gloss:0', 'summary', 'claimer'])
+    // A non-text segment points at its target through a localId objectRef.
+    const typeRefArg = core.arguments[1] as { target?: { localId: { value: string } }; features: { entries: Array<{ key: string; value: string }> } }
+    expect(typeRefArg.target?.localId.value).toBe('et-color')
+    expect(typeRefArg.features.entries).toEqual([
+      { key: 'segType', value: 'typeRef' },
+      { key: 'segContent', value: 'et-color' },
+      { key: 'refType', value: 'entity' },
+      { key: 'refPersonaId', value: 'p-1' },
+    ])
+
+    // The flat character offsets were nested under a textSpan anchor, the sentence
+    // index carried as a feature only when present.
+    expect(core.textSpans[0].anchor).toEqual({ textSpan: { charStart: 0, charEnd: 16 } })
+    expect(core.textSpans[0].features.entries).toEqual([
+      { key: 'spanIndex', value: '0' },
+      { key: 'sentenceIndex', value: '0' },
+    ])
+    expect(core.textSpans[1].features.entries).toEqual([{ key: 'spanIndex', value: '1' }])
+
+    // The seconds were scaled to milliseconds and nested under a temporalSpan
+    // anchor; the source-annotation ids became time-annotation argumentRefs.
+    expect(core.timeSpans[0].anchor).toEqual({ temporalSpan: { start: 1500, ending: 2500 } })
+    expect(core.timeSpans[0].startMs).toBe(1500)
+    expect(core.timeSpans[0].endMs).toBe(2500)
+    expect(core.timeSpans[0].arguments.map((a) => (a as { target: { localId: { value: string } } }).target.localId.value)).toEqual([
+      'a-1',
+      'a-2',
+    ])
+  })
+
+  it('emits a null value and a null confidence for a glossless, confidenceless claim', async () => {
+    const { lens } = await getClaimLens()
+    const core = projectClaimCore(lens, toClaimSource(minimalClaim))
+    expect(core.value).toBeNull()
+    expect(core.confidence).toBeNull()
+    // The summary object reference is always present, even with no gloss.
+    expect(core.arguments.map((a) => (a as { role: string }).role)).toEqual(['summary'])
+    expect(core.textSpans).toEqual([])
+    expect(core.timeSpans).toEqual([])
+  })
+
+  it('emits the nested endpoints, scaled confidence, property entries, and relation-referencing spans', async () => {
+    const { lens } = await getRelationLens()
+    const core = projectRelationCore(lens, toRelationSource(relation, null))
+
+    expect(core.source).toEqual({ localId: { value: 'claim-1' } })
+    expect(core.target).toEqual({ localId: { value: 'claim-2' } })
+    expect(core.confidence).toBe(800)
+    expect(core.properties.entries).toEqual([
+      { key: 'edgeRole', value: 'claim-relation' },
+      { key: 'createdAt', value: '2024-01-01T00:00:00.000Z' },
+      { key: 'updatedAt', value: '2024-01-01T00:00:00.000Z' },
+      { key: 'notes', value: 'both about color' },
+    ])
+    // Each endpoint span points back at the relation by the root relation id.
+    expect(core.spans[0].anchor).toEqual({ textSpan: { charStart: 0, charEnd: 5 } })
+    expect(core.spans[0].arguments).toEqual([{ role: 'relation-of', target: { localId: { value: 'rel-1' } } }])
+
+    // A null-notes relation omits the notes property entry.
+    const bare = projectRelationCore(lens, toRelationSource(twoSidedRelation, 'project-9'))
+    expect(bare.confidence).toBeNull()
+    expect(bare.properties.entries.map((e) => e.key)).toEqual(['edgeRole', 'createdAt', 'updatedAt'])
   })
 })
 
 describe('claim-lens oracle parity', () => {
-  it('reproduces the oracle rows for every corpus claim', () => {
+  it('reproduces the oracle rows for every corpus claim', async () => {
     const oracleRows: LayersRow[] = []
     const lensRows: LayersRow[] = []
     for (const { claim } of CLAIM_CORPUS) {
       oracleRows.push(...claimProjectionToRows(claimToLayers(claim)))
-      lensRows.push(...claimProjectionToRows(foveaClaimToLayersRows(claim)))
+      lensRows.push(...claimProjectionToRows(await foveaClaimToLayersRows(claim)))
     }
     assertOracleParity(oracleRows, lensRows)
   })
 
-  it('reproduces the oracle rows for every corpus relation', () => {
+  it('reproduces the oracle rows for every corpus relation', async () => {
     const oracleRows: LayersRow[] = []
     const lensRows: LayersRow[] = []
     for (const { relation: rel, projectId } of RELATION_CORPUS) {
       oracleRows.push(...relationProjectionToRows(relationToLayers(rel, projectId)))
-      lensRows.push(...relationProjectionToRows(foveaRelationToLayersRows(rel, projectId)))
+      lensRows.push(...relationProjectionToRows(await foveaRelationToLayersRows(rel, projectId)))
     }
     assertOracleParity(oracleRows, lensRows)
   })
 
-  it('composes the claim record types with deterministic-id cross-refs', () => {
-    const rows = foveaClaimToLayersRows(richClaim)
+  it('composes the claim record types with deterministic-id cross-refs', async () => {
+    const rows = await foveaClaimToLayersRows(richClaim)
     // The identity node, the primary bearer denoting it, two text-span children,
     // one temporal child, and three cross-object reference edges.
     expect(rows.node.nodeType).toBe('claim')
@@ -253,7 +349,7 @@ describe('claim-lens oracle parity', () => {
   })
 })
 
-// --- reconstruction parity (through the oracle's backward mapper) ------------
+// --- reconstruction: stored-row projection ----------------------------------
 
 /** Mimics a JSON column round-tripping through the database (strips undefined). */
 function jsonColumn(value: unknown): Prisma.JsonValue {
@@ -295,8 +391,15 @@ function edgeRow(mapped: ClaimLayersProjection['refEdges'][number]): ClaimEdgeRo
   }
 }
 
-/** Reconstructs a claim from a projection through the oracle's backward mapper. */
-function reconstruct(projection: ClaimLayersProjection, parentClaimId: string | null): StoredClaim {
+/** The stored node/primary/children/ref-edge rows a claim projection persists to. */
+interface ClaimRows {
+  node: ClaimNodeRow
+  primary: ClaimAnnotationRow
+  context: ClaimReconstructionContext
+}
+
+/** Projects a claim projection into the stored rows a read path would load back. */
+function claimRows(projection: ClaimLayersProjection, parentClaimId: string | null): ClaimRows {
   const node: ClaimNodeRow = {
     id: projection.node.id,
     nodeType: projection.node.nodeType,
@@ -306,35 +409,96 @@ function reconstruct(projection: ClaimLayersProjection, parentClaimId: string | 
     createdByUserId: projection.node.createdByUserId,
   }
   const [primaryMapped, ...childrenMapped] = projection.annotations
-  return claimFromLayers(node, annotationRow(primaryMapped), {
-    children: childrenMapped.map(annotationRow),
-    refEdges: projection.refEdges.map(edgeRow),
-    parentClaimId,
-  })
+  return {
+    node,
+    primary: annotationRow(primaryMapped),
+    context: {
+      children: childrenMapped.map(annotationRow),
+      refEdges: projection.refEdges.map(edgeRow),
+      parentClaimId,
+    },
+  }
 }
 
-describe('claim-lens reconstruction parity', () => {
-  it('reconstructs identically to the oracle backward mapper from the composed rows', () => {
+// --- backward core lenses ----------------------------------------------------
+
+describe('claim-lens backward core lenses', () => {
+  it('compiles a native backward claim lens carrying the value inversions', async () => {
+    const { requirementKind, fieldTransforms } = await buildClaimBackLens()
+    expect(requirementKind).toBe('empty')
+    const rootTransforms = fieldTransforms[CLAIM_BACK_LENS_BODY_VERTEX] as Array<{ ComputeField?: { target_key?: string } }>
+    const targets = rootTransforms.map((t) => t.ComputeField?.target_key)
+    expect(targets).toEqual(
+      expect.arrayContaining(['confidence', 'gloss', 'claimRelation', 'claimerGloss', 'summaryId', 'textSpans', 'timeSpans']),
+    )
+  })
+
+  it('compiles a native backward relation lens carrying the value inversions', async () => {
+    const { requirementKind, fieldTransforms } = await buildRelationBackLens()
+    expect(requirementKind).toBe('empty')
+    const rootTransforms = fieldTransforms[RELATION_BACK_LENS_BODY_VERTEX] as Array<{ ComputeField?: { target_key?: string } }>
+    const targets = rootTransforms.map((t) => t.ComputeField?.target_key)
+    expect(targets).toEqual(
+      expect.arrayContaining(['confidence', 'notes', 'createdAt', 'updatedAt', 'sourceSpans', 'targetSpans']),
+    )
+  })
+
+  it("holds the backward claim lens round-trip laws over every corpus claim's regrouped rows", async () => {
+    const p = await getPanproto()
+    const source = await loadFoveaSchema(claimBackLensSourceSchema)
+    const { lens } = await getClaimBackLens()
     for (const { name, claim } of CLAIM_CORPUS) {
-      const parentClaimId = claim.parentClaimId ?? null
-      const fromOracle = reconstruct(claimToLayers(claim), parentClaimId)
-      const fromLens = reconstruct(foveaClaimToLayersRows(claim), parentClaimId)
-      expect(fromLens, `reconstruction for ${name}`).toEqual(fromOracle)
-      // And the reconstruction is faithful to the original claim.
-      expect(fromLens, `round trip for ${name}`).toEqual(claim)
+      const { primary, context } = claimRows(await foveaClaimToLayersRows(claim), claim.parentClaimId ?? null)
+      const record = regroupClaimBackRecord(primary, context.children)
+      const bytes = p.parseJson(source, JSON.stringify(record))._bytes
+      expect(lens.checkGetPut(bytes).holds, `backward claim GetPut for ${name}`).toBe(true)
+      expect(lens.checkPutGet(bytes).holds, `backward claim PutGet for ${name}`).toBe(true)
     }
   })
 
-  it('reconstructs relations identically to the oracle backward mapper', () => {
+  it("holds the backward relation lens round-trip laws over every corpus relation's regrouped rows", async () => {
+    const p = await getPanproto()
+    const source = await loadFoveaSchema(relationBackLensSourceSchema)
+    const { lens } = await getRelationBackLens()
+    for (const { name, relation: rel, projectId } of RELATION_CORPUS) {
+      const projection = await foveaRelationToLayersRows(rel, projectId)
+      const record = regroupRelationBackRecord(edgeRow(projection.edge), projection.spanAnnotations.map(annotationRow))
+      const bytes = p.parseJson(source, JSON.stringify(record))._bytes
+      expect(lens.checkGetPut(bytes).holds, `backward relation GetPut for ${name}`).toBe(true)
+      expect(lens.checkPutGet(bytes).holds, `backward relation PutGet for ${name}`).toBe(true)
+    }
+  })
+})
+
+// --- reconstruction parity (through the backward lens, not the oracle) -------
+
+describe('claim-lens reconstruction parity', () => {
+  it('reconstructs each claim through the backward lens, matching the oracle and the original', async () => {
+    for (const { name, claim } of CLAIM_CORPUS) {
+      const parentClaimId = claim.parentClaimId ?? null
+      // The oracle reconstruction is the parity target; the lens path never calls it.
+      const oracleRows = claimRows(claimToLayers(claim), parentClaimId)
+      const oracleClaim = claimFromLayers(oracleRows.node, oracleRows.primary, oracleRows.context)
+
+      const lensRows = claimRows(await foveaClaimToLayersRows(claim), parentClaimId)
+      const lensClaim = await layersToClaimViaLens(lensRows.node, lensRows.primary, lensRows.context)
+
+      assertBackwardParity(oracleClaim, lensClaim)
+      // And the lens reconstruction is faithful to the original claim.
+      expect(lensClaim, `round trip for ${name}`).toEqual(claim)
+    }
+  })
+
+  it('reconstructs each relation through the backward lens, matching the oracle and the original', async () => {
     for (const { name, relation: rel, projectId } of RELATION_CORPUS) {
       const oracle = relationToLayers(rel, projectId)
-      const lens = foveaRelationToLayersRows(rel, projectId)
-      const oracleSpans = oracle.spanAnnotations.map(annotationRow)
-      const lensSpans = lens.spanAnnotations.map(annotationRow)
-      const fromOracle = edgeToRelation(edgeRow(oracle.edge), oracleSpans)
-      const fromLens = edgeToRelation(edgeRow(lens.edge), lensSpans)
-      expect(fromLens, `relation reconstruction for ${name}`).toEqual(fromOracle)
-      expect(fromLens, `relation round trip for ${name}`).toEqual(rel)
+      const oracleRelation = edgeToRelation(edgeRow(oracle.edge), oracle.spanAnnotations.map(annotationRow))
+
+      const lens = await foveaRelationToLayersRows(rel, projectId)
+      const lensRelation = await layersToRelationViaLens(edgeRow(lens.edge), lens.spanAnnotations.map(annotationRow))
+
+      assertBackwardParity(oracleRelation, lensRelation)
+      expect(lensRelation, `relation round trip for ${name}`).toEqual(rel)
     }
   })
 })

@@ -9,6 +9,9 @@ import type { FeatureMap, KnowledgeRef, Licensing } from "./../defs";
 * A persona representing an annotator's role, expertise, and interpretive framework.
 */
 export interface Persona {
+  /**
+  * Timestamp when this persona record was created.
+  */
   createdAt: string;
   /**
   * Description of the persona's role, expertise, and information needs.
