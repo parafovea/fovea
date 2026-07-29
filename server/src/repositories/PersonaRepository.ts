@@ -8,8 +8,8 @@ import {
 import { readOntologyAggregate, writeOntologyAggregate } from '../services/layers-bridge/ontology-bridge.js'
 import { mergeWorldObjects, readWorldAggregate } from '../services/layers-bridge/world-bridge.js'
 import { layersOntologyForPersonaId } from '../services/layers-id-map.js'
-import { personalWorldStateId, type WorldStateAggregate } from '../services/world-layers-mapper.js'
-import type { PersonaOntologyAggregate } from '../services/ontology-layers-mapper.js'
+import { personalWorldStateId, type WorldStateAggregate } from '../services/world-model.js'
+import type { PersonaOntologyAggregate } from '../services/ontology-model.js'
 
 /**
  * A persona's ontology reconstructed from the layers store, in the row shape the

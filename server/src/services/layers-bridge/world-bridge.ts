@@ -20,7 +20,7 @@ import {
   personalWorldStateId,
   WORLD_NODE_TYPES,
   type WorldStateAggregate,
-} from '../world-layers-mapper.js'
+} from '../world-model.js'
 import { worldStateToLayersViaLens, layersToWorldStateViaLens } from '../layers-lens/world-lens.js'
 import { readWorldRows, pruneWorldRows, createWorldProjection, upsertWorldProjection } from './world-store.js'
 import { type PrismaLike } from './util.js'

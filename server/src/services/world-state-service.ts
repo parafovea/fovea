@@ -12,7 +12,7 @@ import {
   emptyWorldState,
   personalWorldStateId,
   type WorldStateAggregate,
-} from './world-layers-mapper.js'
+} from './world-model.js'
 import { worldStateToLayersViaLens, layersToWorldStateViaLens } from './layers-lens/world-lens.js'
 import {
   readWorldRows,
@@ -23,7 +23,7 @@ import {
 import {
   emptyOntology,
   type PersonaOntologyAggregate,
-} from './ontology-layers-mapper.js'
+} from './ontology-model.js'
 import { layersToOntologyViaLens, ontologyToLayersViaLens } from './layers-lens/ontology-lens.js'
 import { readGlossMap, writeGlossStandoff } from './layers-bridge/ontology-bridge.js'
 

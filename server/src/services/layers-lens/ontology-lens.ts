@@ -76,7 +76,7 @@ import type {
   OntologyMeta,
   PersonaOntologyAggregate,
   TypeDefRow,
-} from '../ontology-layers-mapper.js'
+} from '../ontology-model.js'
 
 // --------------------------------------------------------------------------
 // Ontology view-model (the composition source)
@@ -189,7 +189,7 @@ export const glossLensSourceSchema = z.object({
  * source scalars alongside the computed fields. The char offsets track the same
  * byte cursor: `len` is UTF-8 byte length, so a code-point cursor would need a
  * builtin panproto does not expose; for the ASCII/BMP-single-unit glosses the
- * ontology carries, byte and char offsets coincide, matching the oracle.
+ * ontology carries, byte and char offsets coincide.
  */
 const GLOSS_SEGMENT_EXPR =
   '(fold (\\acc s -> {' +
@@ -542,13 +542,13 @@ export function projectGlossBackSegments(lens: LensHandle, text: string, refs: G
 /**
  * Reconstructs a GlossItem[] from a gloss expression's flattened text and its
  * reference-segment annotations through the backward lens — the lens-native
- * inverse of the forward projection, replacing the oracle's `glossFromStandoff`.
+ * inverse of the forward projection.
  * The lens recovers each reference segment's `type`/`content`/`refType`/
  * `refPersonaId`/`refClaimId`; this egress step interleaves the plain-text gaps
  * between the reference offsets (a string sub-range slice the lens has no builtin
  * for) so the covered ranges become reference segments and the gaps become text
  * segments. A zero-width reference is preserved; ties on `charStart` order the
- * zero-width reference first, matching the oracle's ordering.
+ * zero-width reference first.
  *
  * @param lens - the instantiated backward gloss stand-off lens
  * @param text - the flattened gloss text
@@ -967,8 +967,8 @@ export function ontologyRecordsToRows(records: OntologyLayersRecords): OntologyL
 /**
  * The end-to-end forward path for one persona ontology: project each type's gloss
  * through the lens, compose the layers records, and distribute them to rows.
- * Equivalent, row for row, to the committed hand-rolled forward mapper (the oracle:
- * `ontologyToLayers` plus `glossStandoffFor`) — the parity test asserts this over a
+ * Produces, row for row, the LayersOntology + TypeDef + gloss stand-off rows a
+ * persona ontology projects to; the composition test asserts the wiring over a
  * corpus.
  *
  * @param aggregate - the four type-array buckets
@@ -989,8 +989,8 @@ export async function foveaOntologyToLayersRows(
 
 /**
  * Projects one persona ontology onto its LayersOntology + TypeDef records through
- * the lens — the forward production drop-in matching the oracle's `ontologyToLayers`
- * signature and `{ ontology, typeDefs }` return shape. Each TypeDef carries its
+ * the lens, returning the `{ ontology, typeDefs }` shape the write path persists.
+ * Each TypeDef carries its
  * parsed `glossItems`, so the write path materializes the gloss stand-off rows from
  * those; the composed stand-off rows are not returned here. Async because the
  * forward gloss stand-off lens compiles once per process.
@@ -1218,8 +1218,7 @@ function reconstructType(
 /**
  * Reconstructs a persona ontology's four type buckets from its TypeDef rows and the
  * lens-recovered gloss for each row — the backward inverse of
- * {@link foveaOntologyToLayersRows}, and the lens-native counterpart of the oracle's
- * `layersToOntology`. The gloss reconstruction is the backward lens's (through
+ * {@link foveaOntologyToLayersRows}. The gloss reconstruction is the backward lens's (through
  * `glossByRowId`, built by {@link glossFromStandoffViaLens}); this owns only the
  * cross-record regrouping — the bucket assignment, the positional `ordinal`
  * ordering, the parent-id resolution, and the JSON-decoded per-type field

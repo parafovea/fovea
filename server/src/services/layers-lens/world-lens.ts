@@ -94,7 +94,7 @@ import {
   type MappedWorldCluster,
   type MappedWorldScaffold,
   type MappedWorldAnnotation,
-} from '../world-layers-mapper.js'
+} from '../world-model.js'
 
 // --------------------------------------------------------------------------
 // FOVEA world source view-models (the lens sources)
@@ -1645,9 +1645,8 @@ export function composeWorldToProjection(
 }
 
 /**
- * The end-to-end new path for a WorldState aggregate: get the world lenses, then
- * project the aggregate to its native layers rows through them. Equivalent, row for
- * row, to the committed hand-rolled forward mapper (the oracle).
+ * The end-to-end forward path for a WorldState aggregate: get the world lenses, then
+ * project the aggregate to its native layers rows through them.
  *
  * @param world - the WorldState aggregate to project
  * @param scope - the scope columns every produced row carries
@@ -1786,8 +1785,7 @@ interface NodeAnnotations {
  * distributing collections to buckets) and the value-object deserializations with no
  * independent complement (parsing a WKT geometry, reading a `temporalExpression`,
  * `JSON.parse` of an open-extension entry, and rebuilding the `externalIds` map). It
- * reproduces the committed hand-rolled backward mapper (the oracle) aggregate for
- * aggregate.
+ * reconstructs the WorldState aggregate the forward path projected.
  *
  * @param rows - the world nodes, edges, clusters, and annotations in one scope
  * @param lenses - the instantiated world lenses the value inversions run through
@@ -1954,9 +1952,8 @@ export function composeProjectionToWorld(rows: WorldLayersRows, lenses: WorldLen
 }
 
 /**
- * The end-to-end new backward path: get the world lenses, then regroup the stored
- * layers rows into the WorldState aggregate through them. Equivalent, aggregate for
- * aggregate, to the committed hand-rolled backward mapper (the oracle).
+ * The end-to-end backward path: get the world lenses, then regroup the stored
+ * layers rows into the WorldState aggregate through them.
  *
  * @param rows - the world nodes, edges, clusters, and annotations in one scope
  * @returns the reconstructed WorldState aggregate

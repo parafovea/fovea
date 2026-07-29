@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 
 import type { BuiltSchema } from '@panproto/core'
 
-import type { WorldStateAggregate } from '../../world-layers-mapper.js'
+import type { WorldStateAggregate } from '../../world-model.js'
 import { getPanproto, loadFoveaSchema, loadLayersSchema } from '../panproto-registry.js'
 import {
   worldCollectionsToCatalog,

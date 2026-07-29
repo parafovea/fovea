@@ -41,7 +41,7 @@ import { readAllClaimRefs, readAllClaimRelationRefs } from './layers-bridge/clai
 import { readAllOntologyPersonaIds } from './layers-bridge/ontology-bridge.js'
 import { readAllWorldObjectIds, readWorldAggregate, writeWorldAggregate } from './layers-bridge/world-bridge.js'
 import { readWorldRows } from './layers-bridge/world-store.js'
-import { personalWorldStateId, projectWorldStateId } from './world-layers-mapper.js'
+import { personalWorldStateId, projectWorldStateId } from './world-model.js'
 
 /**
  * Handles parsing, validation, and execution of imports.

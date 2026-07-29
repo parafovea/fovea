@@ -22,7 +22,7 @@ import { z } from 'zod'
 
 import type { ObjectRef } from '@fovea/layers-schema'
 
-import type { WorldStateAggregate, WorldLayersScope } from '../world-layers-mapper.js'
+import type { WorldStateAggregate, WorldLayersScope } from '../world-model.js'
 
 // --------------------------------------------------------------------------
 // The member regroup lens (source view-model + lens document)

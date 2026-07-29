@@ -26,7 +26,7 @@ import {
   type OntologyLayersScope,
   type PersonaOntologyAggregate,
   type TypeDefRow,
-} from '../ontology-layers-mapper.js'
+} from '../ontology-model.js'
 import { layersToOntologyViaLens, ontologyToLayersViaLens } from '../layers-lens/ontology-lens.js'
 import { deriveId, glossExpressionId, glossLayerId, layersOntologyForPersonaId } from '../layers-id-map.js'
 import { toJson, type PrismaLike } from './util.js'

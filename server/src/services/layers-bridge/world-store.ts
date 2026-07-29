@@ -32,7 +32,7 @@ import {
   type WorldLayersProjection,
   type WorldLayersRows,
   type WorldLayersScope,
-} from '../world-layers-mapper.js'
+} from '../world-model.js'
 import { ConflictError } from '../../lib/errors.js'
 import { toJson, type PrismaLike } from './util.js'
 

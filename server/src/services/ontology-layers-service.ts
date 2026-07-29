@@ -6,12 +6,12 @@ import { NotFoundError, ForbiddenError } from '../lib/errors.js'
 import { GraphRepository } from '../repositories/GraphRepository.js'
 import { LayersOntologyRepository } from '../repositories/LayersOntologyRepository.js'
 import { WorldStateService, resolvePersonalUserId } from './world-state-service.js'
-import { isWorldEdge, type WorldStateAggregate } from './world-layers-mapper.js'
+import { isWorldEdge, type WorldStateAggregate } from './world-model.js'
 import {
   edgeToOntologyRelation,
   type PersonaOntologyAggregate,
   type StoredOntologyRelation,
-} from './ontology-layers-mapper.js'
+} from './ontology-model.js'
 
 /** A persona in the `/api/ontology` response shape. */
 export interface PersonaResponse {

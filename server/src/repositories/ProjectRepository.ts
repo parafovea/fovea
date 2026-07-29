@@ -2,7 +2,7 @@ import { PrismaClient, Project, ProjectMembership, Persona, Prisma } from '@pris
 
 import { mergeById } from '../services/world-state-service.js'
 import { readWorldAggregate, mergeWorldObjects } from '../services/layers-bridge/world-bridge.js'
-import { projectWorldStateId, type WorldStateAggregate } from '../services/world-layers-mapper.js'
+import { projectWorldStateId, type WorldStateAggregate } from '../services/world-model.js'
 
 /**
  * Project row joined with its members (each carrying the public user

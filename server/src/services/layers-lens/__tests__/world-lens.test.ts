@@ -3,14 +3,11 @@ import { Prisma } from '@prisma/client'
 import { z } from 'zod'
 
 import {
-  worldStateToLayers,
-  layersToWorldState,
   type WorldStateAggregate,
   type WorldLayersProjection,
   type WorldLayersRows,
-} from '../../world-layers-mapper.js'
+} from '../../world-model.js'
 import { getPanproto, loadFoveaSchema } from '../panproto-registry.js'
-import { assertOracleParity, assertBackwardParity, type LayersRow } from '../oracle-parity.js'
 import {
   buildWorldLens,
   getWorldLenses,
@@ -76,13 +73,13 @@ import {
 } from '../world-lens.js'
 
 /**
- * Verifies the FOVEA world surface's bidirectional lens+composition path against the
- * committed hand-rolled world mapper (the oracle). Every per-record value/structure
- * transform compiles to a native panproto lens whose round-trip laws hold and whose
- * `getJson` output already carries (forward) or inverts (backward) the transform. The
- * forward composition reproduces the oracle projection exactly, and the backward
- * regrouping — reconstructed through the backward lenses, not the oracle — reproduces
- * the oracle's WorldState aggregate exactly, over a corpus of representative worlds.
+ * Verifies the FOVEA world surface's bidirectional lens+composition path. Every
+ * per-record value/structure transform compiles to a native panproto lens whose
+ * round-trip laws (checkGetPut/checkPutGet) hold and whose `getJson` output already
+ * carries (forward) or inverts (backward) the transform. The forward composition
+ * wires the denoted node, relation endpoints, and cluster membership by deterministic
+ * id, and running the surface forward then backward reconstructs the WorldState
+ * aggregate it started from, over a corpus of representative worlds.
  */
 
 const scope = { projectId: null, createdByUserId: 'user-1' }
@@ -281,17 +278,6 @@ const CORPUS: Array<{ name: string; world: WorldStateAggregate }> = [
   { name: 'empty', world: empty },
   { name: 'ordered entities', world: ordered },
 ]
-
-/** Flattens a projection into tagged rows for the multiset parity comparison. */
-function flatten(projection: WorldLayersProjection): LayersRow[] {
-  const rows: LayersRow[] = []
-  for (const node of projection.nodes) rows.push({ __table: 'GraphNode', ...node })
-  for (const edge of projection.edges) rows.push({ __table: 'GraphEdge', ...edge })
-  for (const cluster of projection.clusters) rows.push({ __table: 'ClusterSet', ...cluster })
-  for (const annotation of projection.annotations) rows.push({ __table: 'LayersAnnotation', ...annotation })
-  if (projection.scaffold) rows.push({ __table: 'Scaffold', ...projection.scaffold })
-  return rows
-}
 
 /** Mimics a JSON column round-tripping through the database (strips undefined). */
 function jsonColumn(value: unknown): Prisma.JsonValue {
@@ -625,17 +611,7 @@ describe('world-lens backward value/structure transforms', () => {
   })
 })
 
-describe('world-lens oracle parity', () => {
-  it('reproduces the oracle projection rows for every corpus aggregate (forward)', async () => {
-    const oracleRows: LayersRow[] = []
-    const lensRows: LayersRow[] = []
-    for (const { world: w } of CORPUS) {
-      oracleRows.push(...flatten(worldStateToLayers(w, scope)))
-      lensRows.push(...flatten(await worldStateToLayersViaLens(w, scope)))
-    }
-    assertOracleParity(oracleRows, lensRows)
-  })
-
+describe('world-lens composition and reconstruction', () => {
   it('wires the denoted node, relation endpoints, and cluster membership by deterministic id', async () => {
     const projection = await worldStateToLayersViaLens(world, scope)
     const layerId = projection.scaffold!.layerId
@@ -650,17 +626,16 @@ describe('world-lens oracle parity', () => {
     expect(members).toEqual([{ localId: { value: 'entity-alice' } }, { localId: { value: 'entity-hall' } }])
   })
 
-  it('reconstructs the oracle backward aggregate via the backward lenses (backward)', async () => {
-    // Reconstructs the same stored rows through the oracle backward mapper and through
-    // the backward lens path, asserting the two produce the same WorldState. The lens
-    // path runs the backward lenses' getJson (the node-name un-rename, the confidence
-    // descale, the cluster-member flatten), not the oracle backward mapper, so this is
-    // a genuine lens-vs-oracle comparison.
+  it('reconstructs the world aggregate via the backward lenses (forward then backward)', async () => {
+    // Runs the surface forward (aggregate -> getJson forward -> adapter -> rows) then
+    // backward (rows -> getJson backward -> aggregate) over the same world, asserting
+    // every bucket survives the round trip. The reconstruction runs the backward
+    // lenses' getJson (the node-name un-rename, the confidence descale, the
+    // cluster-member flatten), so this is a genuine end-to-end lens self-consistency
+    // check.
     for (const { name, world: w } of CORPUS) {
       const rows = persistAndRead(await worldStateToLayersViaLens(w, scope))
-      const fromOracle = layersToWorldState(rows)
       const fromLens = await layersToWorldStateViaLens(rows)
-      assertBackwardParity(fromOracle, fromLens)
       expect(fromLens.entities, `entities for ${name}`).toEqual(w.entities)
       expect(fromLens.events, `events for ${name}`).toEqual(w.events)
       expect(fromLens.times, `times for ${name}`).toEqual(w.times)

@@ -21,7 +21,7 @@ import { ImportLine, ImportOptions, ImportResult, Resolution } from '../import-t
 import { SequenceValidator } from '../import-validator.js'
 import { validateLine } from './line-parser.js'
 import { AnnotationData } from './types.js'
-import type { WorldStateAggregate } from '../world-layers-mapper.js'
+import type { WorldStateAggregate } from '../world-model.js'
 import { writeOntologyAggregate } from '../layers-bridge/ontology-bridge.js'
 import { readClaimById, writeClaim, writeClaimRelation, type ClaimSummaryContext } from '../layers-bridge/claim-bridge.js'
 import { writeVideoAnnotation } from '../layers-bridge/annotation-bridge.js'

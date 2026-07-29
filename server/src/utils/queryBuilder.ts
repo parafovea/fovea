@@ -3,8 +3,8 @@ import { PrismaClient } from '@prisma/client'
 import type { GlossItem } from '@models/types.js'
 
 import { readOntologyAggregate } from '../services/layers-bridge/ontology-bridge.js'
-import { glossToText } from '../services/ontology-layers-mapper.js'
-import { WORLD_NODE_TYPES } from '../services/world-layers-mapper.js'
+import { glossToText } from '../services/ontology-model.js'
+import { WORLD_NODE_TYPES } from '../services/world-model.js'
 
 /**
  * A persona ontology type reconstructed from the layers store: its display name
