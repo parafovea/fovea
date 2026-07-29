@@ -21,11 +21,10 @@ import {
   upsertWorldProjection,
 } from './layers-bridge/world-store.js'
 import {
-  ontologyToLayers,
-  layersToOntology,
   emptyOntology,
   type PersonaOntologyAggregate,
 } from './ontology-layers-mapper.js'
+import { layersToOntologyViaLens, ontologyToLayersViaLens } from './layers-lens/ontology-lens.js'
 import { readGlossMap, writeGlossStandoff } from './layers-bridge/ontology-bridge.js'
 
 /**
@@ -466,7 +465,7 @@ export class WorldStateService {
       return {
         id: ontologyRow.id,
         personaId: persona.id,
-        aggregate: layersToOntology(typeDefs, glossMap),
+        aggregate: layersToOntologyViaLens(typeDefs, glossMap),
         createdAt: ontologyRow.createdAt.toISOString(),
         updatedAt: ontologyRow.updatedAt.toISOString(),
       }
@@ -517,7 +516,7 @@ export class WorldStateService {
         if (existing) {
           const currentTypeDefs = await repo.findAccessibleTypeDefs({}, { ontologyId })
           const currentGloss = await readGlossMap(client, currentTypeDefs)
-          current = layersToOntology(currentTypeDefs, currentGloss)
+          current = layersToOntologyViaLens(currentTypeDefs, currentGloss)
         }
         const merged: PersonaOntologyAggregate = {
           entityTypes: mergeBucket(current.entityTypes, buckets.entityTypes),
@@ -525,7 +524,7 @@ export class WorldStateService {
           roleTypes: mergeBucket(current.roleTypes, buckets.roleTypes),
           relationTypes: mergeBucket(current.relationTypes, buckets.relationTypes),
         }
-        const { ontology, typeDefs } = ontologyToLayers(merged, persona.id, meta, scope)
+        const { ontology, typeDefs } = await ontologyToLayersViaLens(merged, persona.id, meta, scope)
 
         if (existing) {
           // Compare-and-swap the ontology version before rewriting its types; on a

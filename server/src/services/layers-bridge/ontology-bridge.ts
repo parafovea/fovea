@@ -18,8 +18,6 @@ import { PrismaClient } from '@prisma/client'
 import type { GlossItem } from '@models/types.js'
 
 import {
-  ontologyToLayers,
-  layersToOntology,
   glossStandoffFor,
   glossFromStandoff,
   emptyOntology,
@@ -29,6 +27,7 @@ import {
   type PersonaOntologyAggregate,
   type TypeDefRow,
 } from '../ontology-layers-mapper.js'
+import { layersToOntologyViaLens, ontologyToLayersViaLens } from '../layers-lens/ontology-lens.js'
 import { deriveId, glossExpressionId, glossLayerId, layersOntologyForPersonaId } from '../layers-id-map.js'
 import { toJson, type PrismaLike } from './util.js'
 
@@ -209,7 +208,7 @@ export async function readOntologyAggregate(
     const glossMap = await readGlossMap(prisma, typeDefs)
     return {
       id: row.id,
-      aggregate: layersToOntology(typeDefs, glossMap),
+      aggregate: layersToOntologyViaLens(typeDefs, glossMap),
       exists: true,
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
@@ -245,7 +244,7 @@ export async function writeOntologyAggregate(
   meta: OntologyMeta,
   scope: OntologyLayersScope,
 ): Promise<void> {
-  const { ontology, typeDefs } = ontologyToLayers(aggregate, personaId, meta, scope)
+  const { ontology, typeDefs } = await ontologyToLayersViaLens(aggregate, personaId, meta, scope)
 
   const existing = await prisma.layersOntology.findUnique({ where: { id: ontology.id } })
   if (existing) {

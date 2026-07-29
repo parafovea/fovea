@@ -71,6 +71,7 @@ import type {
   MappedGlossAnnotation,
   MappedOntology,
   MappedTypeDef,
+  OntologyLayersProjection,
   OntologyLayersScope,
   OntologyMeta,
   PersonaOntologyAggregate,
@@ -984,6 +985,31 @@ export async function foveaOntologyToLayersRows(
 ): Promise<OntologyLayersRows> {
   const { lens } = await getGlossStandoffLens()
   return ontologyRecordsToRows(composeOntologyRecords(lens, aggregate, personaId, meta, scope))
+}
+
+/**
+ * Projects one persona ontology onto its LayersOntology + TypeDef records through
+ * the lens — the forward production drop-in matching the oracle's `ontologyToLayers`
+ * signature and `{ ontology, typeDefs }` return shape. Each TypeDef carries its
+ * parsed `glossItems`, so the write path materializes the gloss stand-off rows from
+ * those; the composed stand-off rows are not returned here. Async because the
+ * forward gloss stand-off lens compiles once per process.
+ *
+ * @param aggregate - the four type-array buckets
+ * @param personaId - the persona the ontology belongs to
+ * @param meta - the persona-derived ontology metadata
+ * @param scope - the scope columns every produced row carries
+ * @returns the ontology and type definitions to persist
+ */
+export async function ontologyToLayersViaLens(
+  aggregate: PersonaOntologyAggregate,
+  personaId: string,
+  meta: OntologyMeta,
+  scope: OntologyLayersScope,
+): Promise<OntologyLayersProjection> {
+  const { lens } = await getGlossStandoffLens()
+  const records = composeOntologyRecords(lens, aggregate, personaId, meta, scope)
+  return { ontology: records.ontology, typeDefs: records.typeDefs }
 }
 
 // --------------------------------------------------------------------------
