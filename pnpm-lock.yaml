@@ -336,8 +336,8 @@ importers:
         specifier: 'catalog:'
         version: 1.40.0
       '@panproto/core':
-        specifier: 0.67.0
-        version: 0.67.0
+        specifier: 0.68.0
+        version: 0.68.0
       '@prisma/client':
         specifier: ^6.16.3
         version: 6.19.2(prisma@6.19.2(magicast@0.3.5)(typescript@5.9.3))(typescript@5.9.3)
@@ -2068,8 +2068,8 @@ packages:
     peerDependencies:
       '@opentelemetry/api': ^1.1.0
 
-  '@panproto/core@0.67.0':
-    resolution: {integrity: sha512-0SLAvb/osfktddbXOwiJkxmSaiuMDMEO1yeeLDuvHqY3kS26V4oP8fngbAl4tB6zvxVdQ5JYRZnPd9lrXBcItw==}
+  '@panproto/core@0.68.0':
+    resolution: {integrity: sha512-jNQKZaIZQHmsOd8w6yb5OK175+b9JN8Sukc1NpdSGCF0LG/bsllpzWdmtLtJ+Am8jvYpfX/hijsbT/MOUJWlAA==}
     engines: {node: '>=20'}
 
   '@paralleldrive/cuid2@2.3.1':
@@ -8260,7 +8260,7 @@ snapshots:
       '@opentelemetry/api': 1.9.0
       '@opentelemetry/core': 2.6.0(@opentelemetry/api@1.9.0)
 
-  '@panproto/core@0.67.0':
+  '@panproto/core@0.68.0':
     dependencies:
       '@msgpack/msgpack': 3.1.3
 
