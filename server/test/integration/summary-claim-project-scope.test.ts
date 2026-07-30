@@ -70,6 +70,8 @@ describe('Summary/Claim project scope for collaborators', () => {
     await prisma.expression.deleteMany()
     await prisma.media.deleteMany()
     await prisma.graphNode.deleteMany()
+    await prisma.catalogMembership.deleteMany()
+    await prisma.catalogCollection.deleteMany()
     await prisma.typeDef.deleteMany()
     await prisma.layersOntology.deleteMany()
     await prisma.videoSummary.deleteMany()

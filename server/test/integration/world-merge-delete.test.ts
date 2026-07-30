@@ -30,6 +30,8 @@ describe('World-state merge-by-id and explicit deletes', () => {
     await prisma.loginAttempt.deleteMany()
     await prisma.graphEdge.deleteMany()
     await prisma.graphNode.deleteMany()
+    await prisma.catalogMembership.deleteMany()
+    await prisma.catalogCollection.deleteMany()
     await prisma.session.deleteMany()
     await prisma.rolePermission.deleteMany()
     await prisma.user.deleteMany()

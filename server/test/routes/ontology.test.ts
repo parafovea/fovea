@@ -41,6 +41,8 @@ describe('Ontology API', () => {
     await prisma.layersOntology.deleteMany()
     await prisma.graphEdge.deleteMany()
     await prisma.graphNode.deleteMany()
+    await prisma.catalogMembership.deleteMany()
+    await prisma.catalogCollection.deleteMany()
     await prisma.apiKey.deleteMany()
     await prisma.session.deleteMany()
     await prisma.videoSummary.deleteMany()

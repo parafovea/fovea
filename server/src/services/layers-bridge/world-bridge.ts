@@ -2,7 +2,8 @@
  * World-state bridge over the unified layers store.
  *
  * Reconstructs the WorldState aggregate the `/api/world` contract exchanges from
- * the native layers rows (GraphNode + GraphEdge + ClusterSet + world-denoting
+ * the native layers rows (GraphNode + GraphEdge + catalog collections/memberships +
+ * world-denoting
  * LayersAnnotations) and materializes an aggregate back into them. Reads read the
  * layers store only; writes prune the scope's world rows and recreate them, or
  * merge in place under each row's version guard. This is the persistence
@@ -122,7 +123,7 @@ export async function resolvePersonalWorldOwner(
 /**
  * Extracts world-object ids from every scope's world rows across the store, for
  * import conflict detection. World-object ids are the row keys directly — a node's
- * id (entity/situation/time), a ClusterSet's id (collection), a relation edge's id
+ * id (entity/situation/time), a catalog collection's id, a relation edge's id
  * — so an imported id colliding with any existing world object is detected without
  * reconstructing the aggregate.
  *
@@ -148,9 +149,9 @@ export async function readAllWorldObjectIds(prisma: PrismaClient): Promise<{
     else if (node.nodeType === 'situation') eventIds.add(node.id)
     else if (node.nodeType === 'time') timeIds.add(node.id)
   }
-  // Collections are the ClusterSets bound to a world scaffold expression.
-  const clusters = await prisma.clusterSet.findMany({ where: { expression: { sourceKind: 'world-model' } } })
-  for (const cluster of clusters) collectionIds.add(cluster.id)
+  // Collections are the catalog collections across all world scopes.
+  const collections = await prisma.catalogCollection.findMany({})
+  for (const collection of collections) collectionIds.add(collection.id)
   // Relations are the endpoint-kind-tagged world edges.
   const edges = (await prisma.graphEdge.findMany({})).filter(isWorldEdge)
   for (const edge of edges) relationIds.add(edge.id)

@@ -36,6 +36,8 @@ describe('World State API', () => {
     await prisma.layersAnnotation.deleteMany()
     await prisma.annotationLayer.deleteMany()
     await prisma.clusterSet.deleteMany()
+    await prisma.catalogMembership.deleteMany()
+    await prisma.catalogCollection.deleteMany()
     await prisma.typeDef.deleteMany()
     await prisma.layersOntology.deleteMany()
     await prisma.expression.deleteMany()
@@ -500,7 +502,7 @@ describe('World State API', () => {
       expect(got.relations).toEqual(world.relations)
 
       // World objects land natively: 2 entities (one a location) + 1 event + 1
-      // time = 4 GraphNodes; the 3 collections are ClusterSets, not nodes.
+      // time = 4 GraphNodes; the 3 collections are catalog collections, not nodes.
       const nodeCount = await prisma.graphNode.count({ where: { createdByUserId: testUserId } })
       expect(nodeCount).toBe(4)
       // Edges are the 2 relations; type assignments are LayersAnnotations, not edges.
@@ -511,9 +513,9 @@ describe('World State API', () => {
         where: { createdByUserId: testUserId, label: 'type-assignment', denotesNodeId: 'entity-alice' },
       })
       expect(typeAssignments).toBe(1)
-      // Collections are ClusterSets keyed by their own id.
-      const clusterCount = await prisma.clusterSet.count({ where: { createdByUserId: testUserId } })
-      expect(clusterCount).toBe(3)
+      // Collections are catalog collections keyed by their own id.
+      const collectionCount = await prisma.catalogCollection.count({ where: { createdByUserId: testUserId } })
+      expect(collectionCount).toBe(3)
 
       // Node types are projected: entity -> entity, location -> location,
       // event -> situation, time -> time.

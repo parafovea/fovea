@@ -47,6 +47,8 @@ describe('Cross-user import/export round-trip', () => {
     await prisma.corpusMembership.deleteMany()
     await prisma.corpus.deleteMany()
     await prisma.clusterSet.deleteMany()
+    await prisma.catalogMembership.deleteMany()
+    await prisma.catalogCollection.deleteMany()
     await prisma.alignment.deleteMany()
     await prisma.graphEdge.deleteMany()
     await prisma.graphNode.deleteMany()

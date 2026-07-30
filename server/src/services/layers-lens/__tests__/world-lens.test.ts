@@ -18,8 +18,6 @@ import {
   scaleConfidence,
   descaleConfidence,
   projectEdgeEndpoints,
-  projectClusterMembers,
-  projectClusterMemberIds,
   projectGlossText,
   projectPointGeometry,
   projectPolygonGeometry,
@@ -37,9 +35,6 @@ import {
   WORLD_EDGE_ENDPOINT_LENS_DOC,
   WORLD_EDGE_ENDPOINT_BODY_VERTEX,
   edgeEndpointSourceSchema,
-  WORLD_CLUSTER_MEMBER_LENS_DOC,
-  WORLD_CLUSTER_MEMBER_BODY_VERTEX,
-  clusterMemberSourceSchema,
   WORLD_GLOSS_TEXT_LENS_DOC,
   WORLD_GLOSS_TEXT_BODY_VERTEX,
   glossTextSourceSchema,
@@ -68,8 +63,6 @@ import {
   WORLD_NODE_LABEL_BACK_BODY_VERTEX,
   WORLD_CONFIDENCE_BACK_LENS_DOC,
   WORLD_CONFIDENCE_BACK_BODY_VERTEX,
-  WORLD_CLUSTER_MEMBER_BACK_LENS_DOC,
-  WORLD_CLUSTER_MEMBER_BACK_BODY_VERTEX,
 } from '../world-lens.js'
 
 /**
@@ -77,9 +70,9 @@ import {
  * per-record value/structure transform compiles to a native panproto lens whose
  * round-trip laws (checkGetPut/checkPutGet) hold and whose `getJson` output already
  * carries (forward) or inverts (backward) the transform. The forward composition
- * wires the denoted node, relation endpoints, and cluster membership by deterministic
- * id, and running the surface forward then backward reconstructs the WorldState
- * aggregate it started from, over a corpus of representative worlds.
+ * wires the denoted node and relation endpoints by deterministic id and delegates
+ * collections to the catalog surface, and running the surface forward then backward
+ * reconstructs the WorldState aggregate it started from, over a corpus of representative worlds.
  */
 
 const scope = { projectId: null, createdByUserId: 'user-1' }
@@ -305,11 +298,8 @@ function persistAndRead(projection: WorldLayersProjection): WorldLayersRows {
       properties: jsonColumn(e.properties),
       metadata: jsonColumn(e.metadata),
     })),
-    clusters: projection.clusters.map((c) => ({
-      id: c.id,
-      kind: c.kind,
-      clusters: jsonColumn(c.clusters),
-    })),
+    catalogCollections: projection.catalogCollections,
+    catalogMemberships: projection.catalogMemberships,
     annotations: projection.annotations.map((a) => ({
       id: a.id,
       denotesNodeId: a.denotesNodeId,
@@ -376,23 +366,6 @@ describe('world-lens forward value/structure transforms', () => {
       source: { localId: { value: 'entity-alice' } },
       target: { localId: { value: 'event-meeting' } },
     })
-  })
-
-  it('renders the cluster-member regroup as a native item-vertex, both-laws lens that getJson carries', async () => {
-    const { requirementKind, getPutHolds, putGetHolds } = await buildWorldLens(
-      WORLD_CLUSTER_MEMBER_LENS_DOC,
-      WORLD_CLUSTER_MEMBER_BODY_VERTEX,
-      clusterMemberSourceSchema,
-      { id: 'ec-people', members: [{ value: 'entity-alice' }, { value: 'entity-hall' }] },
-    )
-    expect(requirementKind).toBe('empty')
-    expect(getPutHolds).toBe(true)
-    expect(putGetHolds).toBe(true)
-    const lenses = await getWorldLenses()
-    expect(projectClusterMembers(lenses, ['entity-alice', 'entity-hall'])).toEqual([
-      { localId: { value: 'entity-alice' } },
-      { localId: { value: 'entity-hall' } },
-    ])
   })
 
   it('renders the gloss text fold as a native, both-laws lens that getJson carries', async () => {
@@ -594,25 +567,10 @@ describe('world-lens backward value/structure transforms', () => {
     expect(descaleConfidence(lenses, 950)).toBe(0.95)
   })
 
-  it('renders the cluster-member flatten as a native item-vertex, both-laws inverse lens', async () => {
-    const { requirementKind, getPutHolds, putGetHolds } = await buildWorldLens(
-      WORLD_CLUSTER_MEMBER_BACK_LENS_DOC,
-      WORLD_CLUSTER_MEMBER_BACK_BODY_VERTEX,
-      z_objectRefMembers(),
-      { members: [{ localId: { value: 'entity-alice' } }, { localId: { value: 'entity-hall' } }] },
-    )
-    expect(requirementKind).toBe('empty')
-    expect(getPutHolds).toBe(true)
-    expect(putGetHolds).toBe(true)
-    const lenses = await getWorldLenses()
-    expect(
-      projectClusterMemberIds(lenses, [{ localId: { value: 'entity-alice' } }, { localId: { value: 'entity-hall' } }]),
-    ).toEqual(['entity-alice', 'entity-hall'])
-  })
 })
 
 describe('world-lens composition and reconstruction', () => {
-  it('wires the denoted node, relation endpoints, and cluster membership by deterministic id', async () => {
+  it('wires the denoted node, relation endpoints, and collection membership by deterministic id', async () => {
     const projection = await worldStateToLayersViaLens(world, scope)
     const layerId = projection.scaffold!.layerId
     expect(projection.annotations.every((a) => a.layerId === layerId)).toBe(true)
@@ -621,8 +579,11 @@ describe('world-lens composition and reconstruction', () => {
     const attends = projection.edges.find((e) => e.id === 'rel-attends')
     expect(attends?.source).toEqual({ localId: { value: 'entity-alice' } })
     expect(attends?.target).toEqual({ localId: { value: 'event-meeting' } })
-    const people = projection.clusters.find((c) => c.id === 'ec-people')
-    const members = (people?.clusters as Array<{ members: unknown[] }>)[0].members
+    expect(projection.catalogCollections.find((c) => c.id === 'ec-people')).toBeDefined()
+    const members = projection.catalogMemberships
+      .filter((m) => m.catalogRef === 'ec-people')
+      .sort((a, b) => a.ordinal - b.ordinal)
+      .map((m) => m.member.ref)
     expect(members).toEqual([{ localId: { value: 'entity-alice' } }, { localId: { value: 'entity-hall' } }])
   })
 
@@ -652,7 +613,6 @@ describe('world-lens composition and reconstruction', () => {
       [WORLD_NODE_LABEL_LENS_DOC, WORLD_NODE_LABEL_BODY_VERTEX, worldNodeSourceSchema],
       [WORLD_CONFIDENCE_LENS_DOC, WORLD_CONFIDENCE_BODY_VERTEX, confidenceSourceSchema],
       [WORLD_EDGE_ENDPOINT_LENS_DOC, WORLD_EDGE_ENDPOINT_BODY_VERTEX, edgeEndpointSourceSchema],
-      [WORLD_CLUSTER_MEMBER_LENS_DOC, WORLD_CLUSTER_MEMBER_BODY_VERTEX, clusterMemberSourceSchema],
       [WORLD_GLOSS_TEXT_LENS_DOC, WORLD_GLOSS_TEXT_BODY_VERTEX, glossTextSourceSchema],
       [WORLD_GEOMETRY_POINT_LENS_DOC, WORLD_GEOMETRY_POINT_BODY_VERTEX, geometryPointSourceSchema],
       [WORLD_GEOMETRY_POLYGON_LENS_DOC, WORLD_GEOMETRY_POLYGON_BODY_VERTEX, geometryPolygonSourceSchema],
@@ -663,7 +623,6 @@ describe('world-lens composition and reconstruction', () => {
       [WORLD_GLOSS_OFFSETS_LENS_DOC, WORLD_GLOSS_OFFSETS_BODY_VERTEX, glossOffsetsSourceSchema],
       [WORLD_NODE_LABEL_BACK_LENS_DOC, WORLD_NODE_LABEL_BACK_BODY_VERTEX, worldNodeLabelSourceSchema],
       [WORLD_CONFIDENCE_BACK_LENS_DOC, WORLD_CONFIDENCE_BACK_BODY_VERTEX, z_intConfidence()],
-      [WORLD_CLUSTER_MEMBER_BACK_LENS_DOC, WORLD_CLUSTER_MEMBER_BACK_BODY_VERTEX, z_objectRefMembers()],
     ]
     for (const [doc, vertex, schema] of cases) {
       const source = await loadFoveaSchema(schema)
@@ -673,10 +632,7 @@ describe('world-lens composition and reconstruction', () => {
   })
 })
 
-// Local schema builders for the backward-lens law checks (integer confidence, objectRef members).
+// Local schema builder for the backward-lens law checks (integer confidence).
 function z_intConfidence() {
   return z.object({ confidence: z.number().int().nullable() })
-}
-function z_objectRefMembers() {
-  return z.object({ members: z.array(z.object({ localId: z.object({ value: z.string() }) })) })
 }

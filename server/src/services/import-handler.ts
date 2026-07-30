@@ -203,7 +203,7 @@ export class ImportHandler {
 
     // Trace the caller's owned world-object ids from their native world rows: a
     // world node's id keyed by its nodeType (entity/location -> entity, situation
-    // -> event, time -> time), and each collection ClusterSet's id.
+    // -> event, time -> time), and each catalog collection's id.
     const ownedEntityIds = new Set<string>()
     const ownedEventIds = new Set<string>()
     const ownedTimeIds = new Set<string>()
@@ -213,7 +213,7 @@ export class ImportHandler {
       else if (node.nodeType === 'situation') ownedEventIds.add(node.id)
       else if (node.nodeType === 'time') ownedTimeIds.add(node.id)
     }
-    for (const cluster of ownWorld.rows.clusters) ownedCollectionIds.add(cluster.id)
+    for (const collection of ownWorld.rows.catalogCollections) ownedCollectionIds.add(collection.id)
 
     const existingData: ExistingDataWithRelations = {
       personaIds: new Set(personas.map(p => p.id)),

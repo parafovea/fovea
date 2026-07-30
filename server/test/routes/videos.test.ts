@@ -50,6 +50,8 @@ describe('Videos API - Detection', () => {
     await prisma.annotationLayer.deleteMany()
     await prisma.graphEdge.deleteMany()
     await prisma.graphNode.deleteMany()
+    await prisma.catalogMembership.deleteMany()
+    await prisma.catalogCollection.deleteMany()
     await prisma.typeDef.deleteMany()
     await prisma.layersOntology.deleteMany()
     await prisma.expression.deleteMany()

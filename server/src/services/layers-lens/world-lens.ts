@@ -4,8 +4,10 @@
  *
  * A WorldState aggregate splits into many layers records: a
  * `pub.layers.graph.graphNode` per entity/location/situation/time, a
- * `pub.layers.graph.graphEdge` per relation, a `pub.layers.annotation.clusterSet`
- * per collection, and a scope-scaffold layer of `LayersAnnotation`s that carry the
+ * `pub.layers.graph.graphEdge` per relation, a `pub.layers.catalog.collection` plus
+ * one `pub.layers.catalog.membership` per member for each collection (built by
+ * {@link worldCollectionsToCatalog}), and a scope-scaffold layer of
+ * `LayersAnnotation`s that carry the
  * world-denoting values — a node's presence, its type assignments, an event's
  * interpretations, and each object's stand-off description gloss. Splitting one
  * aggregate into those records, and regrouping those records back into one
@@ -20,8 +22,6 @@
  *     layers-native 0-1000 integer;
  *   - {@link WORLD_EDGE_ENDPOINT_LENS_DOC} regroups a relation's flat endpoints into
  *     nested `objectRef` records;
- *   - {@link WORLD_CLUSTER_MEMBER_LENS_DOC} regroups a collection member id into an
- *     `objectRef` at the member item vertex;
  *   - {@link WORLD_GLOSS_TEXT_LENS_DOC} folds a description gloss's segments into the
  *     presence text;
  *   - {@link WORLD_GEOMETRY_POINT_LENS_DOC} / {@link WORLD_GEOMETRY_POLYGON_LENS_DOC}
@@ -41,20 +41,20 @@
  *
  * The backward lenses (layers record -> fovea view-model) invert the invertible
  * scalar/structure transforms on `getJson`: {@link WORLD_NODE_LABEL_BACK_LENS_DOC}
- * un-renames `label` to `name`, {@link WORLD_CONFIDENCE_BACK_LENS_DOC} descales the
- * 0-1000 integer to a 0-1 float, and {@link WORLD_CLUSTER_MEMBER_BACK_LENS_DOC}
- * flattens an `objectRef` member back to its id. Each holds both round-trip laws;
+ * un-renames `label` to `name` and {@link WORLD_CONFIDENCE_BACK_LENS_DOC} descales the
+ * 0-1000 integer to a 0-1 float. Each holds both round-trip laws;
  * the backward direction runs the reverse-authored lens's `getJson` rather than the
  * forward lens's `putJson`, since on `@panproto/core@0.66.0` the JSON `putJson`
  * restore path does not apply a step's inverse and reorders array elements.
  *
  * {@link composeWorldToProjection} owns only what a single lens cannot: the
  * multi-record framing and the cross-record wiring by deterministic id (the denoted
- * node, the relation endpoints, the collection membership, the gloss parentage).
+ * node, the relation endpoints, the gloss parentage), and it delegates the
+ * collection catalog records to {@link worldCollectionsToCatalog}.
  * {@link layersToWorldStateViaLens} is its inverse: it regroups the rows back into
  * one aggregate — indexing annotations by the node they denote, assembling a gloss
- * from its parent text and reference children, and distributing collections to their
- * buckets — while routing the invertible value transforms through the backward
+ * from its parent text and reference children, and rebuilding collections from their
+ * catalog collection and memberships — while routing the invertible value transforms through the backward
  * lenses. The value-object *deserializations* that have no independent complement
  * (parsing a WKT geometry string, reading a `temporalExpression` back to a Time,
  * `JSON.parse` of an open-extension entry, and rebuilding the dynamic-key
@@ -79,6 +79,7 @@ import {
   worldGlossRefAnnotationId,
 } from '../layers-id-map.js'
 import { getPanproto, loadFoveaSchema } from './panproto-registry.js'
+import { worldCollectionsToCatalog } from './world-collection-catalog.js'
 import {
   emptyWorldState,
   type WorldStateAggregate,
@@ -87,11 +88,10 @@ import {
   type WorldLayersRows,
   type WorldNodeRow,
   type WorldEdgeRow,
-  type WorldClusterRow,
   type WorldAnnotationRow,
   type MappedWorldNode,
   type MappedWorldEdge,
-  type MappedWorldCluster,
+  type MappedCatalogMembership,
   type MappedWorldScaffold,
   type MappedWorldAnnotation,
 } from '../world-model.js'
@@ -135,15 +135,6 @@ export const edgeEndpointSourceSchema = z.object({
   id: z.string(),
   sourceId: z.string(),
   targetId: z.string(),
-})
-
-/**
- * The Zod schema for a collection's membership core — an array of flat member id
- * carriers the cluster-member regroup nests into per-item `objectRef` records.
- */
-export const clusterMemberSourceSchema = z.object({
-  id: z.string(),
-  members: z.array(z.object({ value: z.string() })),
 })
 
 /**
@@ -286,17 +277,6 @@ export const WORLD_EDGE_ENDPOINT_LENS_DOC = {
 
 /** The body vertex the edge-endpoint regroup binds to: the relation record root. */
 export const WORLD_EDGE_ENDPOINT_BODY_VERTEX = 'root'
-
-/** The cluster-member regroup: each flat member id nests into an `objectRef`. */
-export const WORLD_CLUSTER_MEMBER_LENS_DOC = {
-  id: 'fovea.world.cluster-members.v1',
-  source: 'fovea.world.collection',
-  target: 'pub.layers.annotation.clusterSet',
-  steps: [{ compute_field: { target: 'localId', expr: '{ value = value }' } }],
-} as const
-
-/** The body vertex the cluster-member regroup binds to: each member array item. */
-export const WORLD_CLUSTER_MEMBER_BODY_VERTEX = 'root.members:items'
 
 /** The gloss text fold: a description gloss's segment contents join into the text. */
 export const WORLD_GLOSS_TEXT_LENS_DOC = {
@@ -478,17 +458,6 @@ export const WORLD_CONFIDENCE_BACK_LENS_DOC = {
 /** The body vertex the confidence descale binds to: the scalar record root. */
 export const WORLD_CONFIDENCE_BACK_BODY_VERTEX = 'root'
 
-/** The cluster-member flatten: an `objectRef` member becomes its flat id. */
-export const WORLD_CLUSTER_MEMBER_BACK_LENS_DOC = {
-  id: 'fovea.world.cluster-members.back.v1',
-  source: 'pub.layers.annotation.clusterSet',
-  target: 'fovea.world.collection',
-  steps: [{ compute_field: { target: 'value', expr: 'localId.value' } }],
-} as const
-
-/** The body vertex the cluster-member flatten binds to: each member array item. */
-export const WORLD_CLUSTER_MEMBER_BACK_BODY_VERTEX = 'root.members:items'
-
 /** The source-schema vertex a source record roots at for `getJson`. */
 const ROOT_VERTEX = 'root'
 
@@ -552,8 +521,6 @@ export interface WorldLenses {
   confidence: LensHandle
   /** Regroups a relation's flat endpoints into `objectRef` records. */
   edgeEndpoint: LensHandle
-  /** Regroups a collection member id into an `objectRef`. */
-  clusterMember: LensHandle
   /** Folds a gloss's segment contents into the presence text. */
   glossText: LensHandle
   /** Renders an ordered coordinate tuple into a WKT `POINT`. */
@@ -574,21 +541,18 @@ export interface WorldLenses {
   nodeLabelBack: LensHandle
   /** Descales a 0-1000 integer confidence back to a 0-1 float. */
   confidenceBack: LensHandle
-  /** Flattens an `objectRef` collection member back to its id. */
-  clusterMemberBack: LensHandle
 }
 
 /** Compiles and instantiates the world lenses against their source schemas. */
 export async function buildWorldLenses(): Promise<WorldLenses> {
   const p = await getPanproto()
   const [
-    nodeSrc, labelBackSrc, confSrc, edgeSrc, memberSrc, glossSrc, pointSrc, polygonSrc, groundingsSrc, openSrc, temporalSrc, modifierSrc,
+    nodeSrc, labelBackSrc, confSrc, edgeSrc, glossSrc, pointSrc, polygonSrc, groundingsSrc, openSrc, temporalSrc, modifierSrc,
   ] = await Promise.all([
     loadFoveaSchema(worldNodeSourceSchema),
     loadFoveaSchema(worldNodeLabelSourceSchema),
     loadFoveaSchema(confidenceSourceSchema),
     loadFoveaSchema(edgeEndpointSourceSchema),
-    loadFoveaSchema(clusterMemberSourceSchema),
     loadFoveaSchema(glossTextSourceSchema),
     loadFoveaSchema(geometryPointSourceSchema),
     loadFoveaSchema(geometryPolygonSourceSchema),
@@ -603,7 +567,6 @@ export async function buildWorldLenses(): Promise<WorldLenses> {
     nodeLabel: compile(WORLD_NODE_LABEL_LENS_DOC, WORLD_NODE_LABEL_BODY_VERTEX, nodeSrc),
     confidence: compile(WORLD_CONFIDENCE_LENS_DOC, WORLD_CONFIDENCE_BODY_VERTEX, confSrc),
     edgeEndpoint: compile(WORLD_EDGE_ENDPOINT_LENS_DOC, WORLD_EDGE_ENDPOINT_BODY_VERTEX, edgeSrc),
-    clusterMember: compile(WORLD_CLUSTER_MEMBER_LENS_DOC, WORLD_CLUSTER_MEMBER_BODY_VERTEX, memberSrc),
     glossText: compile(WORLD_GLOSS_TEXT_LENS_DOC, WORLD_GLOSS_TEXT_BODY_VERTEX, glossSrc),
     geometryPoint: compile(WORLD_GEOMETRY_POINT_LENS_DOC, WORLD_GEOMETRY_POINT_BODY_VERTEX, pointSrc),
     geometryPolygon: compile(WORLD_GEOMETRY_POLYGON_LENS_DOC, WORLD_GEOMETRY_POLYGON_BODY_VERTEX, polygonSrc),
@@ -614,7 +577,6 @@ export async function buildWorldLenses(): Promise<WorldLenses> {
     glossOffsets: compile(WORLD_GLOSS_OFFSETS_LENS_DOC, WORLD_GLOSS_OFFSETS_BODY_VERTEX, glossSrc),
     nodeLabelBack: compile(WORLD_NODE_LABEL_BACK_LENS_DOC, WORLD_NODE_LABEL_BACK_BODY_VERTEX, labelBackSrc),
     confidenceBack: compile(WORLD_CONFIDENCE_BACK_LENS_DOC, WORLD_CONFIDENCE_BACK_BODY_VERTEX, confSrc),
-    clusterMemberBack: compile(WORLD_CLUSTER_MEMBER_BACK_LENS_DOC, WORLD_CLUSTER_MEMBER_BACK_BODY_VERTEX, memberSrc),
   }
 }
 
@@ -663,22 +625,6 @@ export function projectEdgeEndpoints(
   const { view } = lenses.edgeEndpoint.getJson({ id: '', sourceId, targetId }, ROOT_VERTEX)
   const v = view as { source: ObjectRef; target: ObjectRef }
   return { source: v.source, target: v.target }
-}
-
-/** Regroups collection member ids into `objectRef`s at the member item vertex through the lens. */
-export function projectClusterMembers(lenses: WorldLenses, ids: string[]): ObjectRef[] {
-  const record = { id: '', members: ids.map((id) => ({ value: id })) }
-  const { view } = lenses.clusterMember.getJson(record, ROOT_VERTEX)
-  const members = (view as { members: Array<{ localId: { value: string } }> }).members
-  return members.map((m) => ({ localId: m.localId }))
-}
-
-/** Flattens `objectRef` collection members back to their flat ids through the backward lens. */
-export function projectClusterMemberIds(lenses: WorldLenses, members: unknown[]): string[] {
-  const record = { members: members.map((m) => (m && typeof m === 'object' ? m : { localId: { value: '' } })) }
-  const { view } = lenses.clusterMemberBack.getJson(record as never, ROOT_VERTEX)
-  const out = (view as { members: Array<{ value?: unknown }> }).members
-  return out.map((m) => (typeof m.value === 'string' ? m.value : '')).filter((v) => v !== '')
 }
 
 /** Folds a gloss's segment contents into the presence text through the lens. */
@@ -1327,24 +1273,26 @@ const WORLD_ROLE_RELATION = 'relation'
 const KEY_SOURCE_KIND = 'sourceKind'
 const KEY_TARGET_KIND = 'targetKind'
 
-/** Flat cluster-feature keys recording a collection's bucket and member field. */
+/** Flat catalog-feature keys recording a collection's bucket, member field, and type. */
 const KEY_BUCKET = 'bucket'
 const KEY_MEMBER_FIELD = 'memberField'
+const KEY_COLLECTION_TYPE = 'collectionType'
 
 /**
  * Distributes a WorldState aggregate to its native layers projection rows: a
  * GraphNode per entity/location/situation/time, a GraphEdge per relation, a
- * ClusterSet per collection, the scope scaffold, and the world-denoting
+ * `pub.layers.catalog.collection` plus one membership per member for each collection,
+ * the scope scaffold, and the world-denoting
  * LayersAnnotations (presence with its temporal/spatial/gloss value, type
  * assignments, interpretations, gloss reference children). Every per-record value
- * and structure transform is projected through {@link WorldLenses} by `getJson`; this
- * owns the multi-record framing and the cross-record id wiring. It reproduces the
- * hand-rolled world mapper row for row.
+ * and structure transform is projected through {@link WorldLenses} by `getJson`; the
+ * collection catalog records come from {@link worldCollectionsToCatalog}; this
+ * owns the multi-record framing and the cross-record id wiring.
  *
  * @param world - the WorldState aggregate to project
  * @param scope - the scope columns every produced row carries
  * @param lenses - the instantiated world lenses the value/structure transforms run through
- * @returns the nodes, edges, clusters, scaffold, and annotations to persist
+ * @returns the nodes, edges, catalog collections/memberships, scaffold, and annotations to persist
  */
 export function composeWorldToProjection(
   world: WorldStateAggregate,
@@ -1353,7 +1301,6 @@ export function composeWorldToProjection(
 ): WorldLayersProjection {
   const nodes: MappedWorldNode[] = []
   const edges: MappedWorldEdge[] = []
-  const clusters: MappedWorldCluster[] = []
   const annotations: MappedWorldAnnotation[] = []
   const layerId = worldScaffoldLayerId(scope.createdByUserId, scope.projectId)
   const materializedTimeIds = new Set<string>()
@@ -1517,7 +1464,9 @@ export function composeWorldToProjection(
 
   asArray(world.times).forEach((time) => pushTime(time, LABEL_TIME))
 
-  // Collections -> ClusterSets bound to the world scaffold expression.
+  // Collections home onto native catalog records; only their type-assignment and
+  // description-gloss values stay world LayersAnnotations, and a time collection's
+  // member times materialize as collection-time GraphNodes.
   const expressionId = worldScaffoldExpressionId(scope.createdByUserId, scope.projectId)
   const collectionBucket = (
     bucket: 'entityCollections' | 'eventCollections' | 'timeCollections',
@@ -1528,24 +1477,14 @@ export function composeWorldToProjection(
     asArray(world[bucket]).forEach((collection) => {
       const id = stringField(collection, 'id')
       if (id === null) return
-      const canonicalLabel = stringField(collection, 'name')
       const memberField = candidates.find((f) => Array.isArray(collection[f])) ?? candidates[0]
 
-      let memberIds: string[] = []
       if (memberField === 'times') {
-        memberIds = asArray(collection.times)
-          .map((time) => {
-            const memberId = stringField(time, 'id')
-            if (memberId === null) return null
-            if (!materializedTimeIds.has(memberId)) pushTime(time, LABEL_COLLECTION_TIME)
-            return memberId
-          })
-          .filter((memberId): memberId is string => memberId !== null)
-      } else {
-        const ids = Array.isArray(collection[memberField]) ? (collection[memberField] as unknown[]) : []
-        memberIds = ids.filter((mid): mid is string => typeof mid === 'string')
+        for (const time of asArray(collection.times)) {
+          const memberId = stringField(time, 'id')
+          if (memberId !== null && !materializedTimeIds.has(memberId)) pushTime(time, LABEL_COLLECTION_TIME)
+        }
       }
-      const members = projectClusterMembers(lenses, memberIds)
 
       annotations.push(
         ...typeAssignmentAnnotations(lenses, id, null, asArray(collection.typeAssignments), typeField, layerId, scope),
@@ -1575,31 +1514,18 @@ export function composeWorldToProjection(
         })
         annotations.push(...glossRefAnnotations(lenses, id, gloss, layerId, descId, null, scope))
       }
-
-      const homed = ['id', 'name', memberField, 'typeAssignments']
-      if (glossHasContent) homed.push('description')
-      const leftover = leftoverAfter(collection, homed)
-      const features: FeatureEntry[] = [
-        { key: KEY_BUCKET, value: bucket },
-        { key: KEY_MEMBER_FIELD, value: memberField },
-        ...projectOpenProperties(lenses, openPropertyEntries(leftover)),
-      ]
-      const cluster: Record<string, unknown> = { uuid: { value: id }, members, features: { entries: features } }
-      if (canonicalLabel !== null) cluster.canonicalLabel = canonicalLabel
-
-      clusters.push({
-        id,
-        kind: 'clustering',
-        expressionId,
-        clusters: [cluster],
-        projectId: scope.projectId,
-        createdByUserId: scope.createdByUserId,
-      })
     })
   }
   collectionBucket('entityCollections', ['entityIds', 'members'], 'entityTypeId')
   collectionBucket('eventCollections', ['eventIds', 'members'], 'eventTypeId')
   collectionBucket('timeCollections', ['members'], 'entityTypeId')
+
+  // Every collection projects to one catalog collection plus one membership per member.
+  const { collections: catalogCollections, memberships: catalogMemberships } = worldCollectionsToCatalog(
+    world,
+    scope,
+    new Date().toISOString(),
+  )
 
   // Relations -> GraphEdges (reusing the relation id).
   asArray(world.relations).forEach((relation, index) => {
@@ -1637,11 +1563,11 @@ export function composeWorldToProjection(
   })
 
   const scaffold: MappedWorldScaffold | null =
-    nodes.length > 0 || clusters.length > 0
+    nodes.length > 0 || catalogCollections.length > 0
       ? { expressionId, layerId, projectId: scope.projectId, createdByUserId: scope.createdByUserId }
       : null
 
-  return { nodes, edges, clusters, scaffold, annotations }
+  return { nodes, edges, catalogCollections, catalogMemberships, scaffold, annotations }
 }
 
 /**
@@ -1650,7 +1576,7 @@ export function composeWorldToProjection(
  *
  * @param world - the WorldState aggregate to project
  * @param scope - the scope columns every produced row carries
- * @returns the nodes, edges, clusters, scaffold, and annotations to persist
+ * @returns the nodes, edges, catalog collections/memberships, scaffold, and annotations to persist
  */
 export async function worldStateToLayersViaLens(
   world: WorldStateAggregate,
@@ -1779,15 +1705,16 @@ interface NodeAnnotations {
 /**
  * Reconstructs the WorldState aggregate from its native layers rows through the
  * backward lenses — the lens-native inverse of {@link composeWorldToProjection}. The
- * per-record value transforms (the node name un-rename, the confidence descale, the
- * cluster-member flatten) run through {@link WorldLenses}; this owns the multi-record
+ * per-record value transforms (the node name un-rename, the confidence descale) run
+ * through {@link WorldLenses}; this owns the multi-record
  * regrouping (indexing annotations by their node, assembling glosses from parts,
- * distributing collections to buckets) and the value-object deserializations with no
+ * rebuilding collections from their catalog collection and memberships) and the
+ * value-object deserializations with no
  * independent complement (parsing a WKT geometry, reading a `temporalExpression`,
  * `JSON.parse` of an open-extension entry, and rebuilding the `externalIds` map). It
  * reconstructs the WorldState aggregate the forward path projected.
  *
- * @param rows - the world nodes, edges, clusters, and annotations in one scope
+ * @param rows - the world nodes, edges, catalog collections/memberships, and annotations in one scope
  * @param lenses - the instantiated world lenses the value inversions run through
  * @returns the reconstructed WorldState aggregate
  */
@@ -1895,30 +1822,44 @@ export function composeProjectionToWorld(rows: WorldLayersRows, lenses: WorldLen
   aggregate.events = events
   aggregate.times = times
 
-  for (const clusterSet of rows.clusters) {
-    const first = asArray(clusterSet.clusters)[0]
-    if (!first) continue
-    const featureEntries = entriesOf(first.features)
+  // Collections rebuild from their catalog collection plus their ordinal-sorted
+  // memberships: the member ids come from the membership refs, the bucket/memberField/
+  // collectionType from the collection features, the open leftover from the JSON-decoded
+  // feature entries, and the type assignments and description from the world annotations.
+  const membershipsByCollection = new Map<string, MappedCatalogMembership[]>()
+  for (const membership of rows.catalogMemberships) {
+    const list = membershipsByCollection.get(membership.catalogRef) ?? []
+    list.push(membership)
+    membershipsByCollection.set(membership.catalogRef, list)
+  }
+
+  for (const collection of rows.catalogCollections) {
+    const featureEntries = entriesOf(collection.features)
     const bucket = readFeature(featureEntries, KEY_BUCKET)
     if (bucket !== 'entityCollections' && bucket !== 'eventCollections' && bucket !== 'timeCollections') continue
     const memberField = readFeature(featureEntries, KEY_MEMBER_FIELD) ?? 'members'
 
-    const object: Record<string, unknown> = { id: clusterSet.id }
-    applyOpenExtension(object, featureEntries, new Set([KEY_BUCKET, KEY_MEMBER_FIELD]))
-    const canonicalLabel = first.canonicalLabel
-    if (typeof canonicalLabel === 'string') object.name = canonicalLabel
+    const object: Record<string, unknown> = { id: collection.id }
+    applyOpenExtension(object, featureEntries, new Set([KEY_BUCKET, KEY_MEMBER_FIELD, KEY_COLLECTION_TYPE]))
+    object.name = collection.name
+    const collectionType = readFeature(featureEntries, KEY_COLLECTION_TYPE)
+    if (collectionType !== null) object.collectionType = collectionType
 
-    const desc = collectionDescription.get(clusterSet.id)
-    if (desc) object.description = glossFromParts(desc.text ?? null, glossChildrenOf(desc.id).map(toGlossChild))
+    const desc = collectionDescription.get(collection.id)
+    object.description = desc ? glossFromParts(desc.text ?? null, glossChildrenOf(desc.id).map(toGlossChild)) : []
 
-    const memberIds = projectClusterMemberIds(lenses, asArray(first.members))
+    const memberIds = (membershipsByCollection.get(collection.id) ?? [])
+      .slice()
+      .sort((a, b) => a.ordinal - b.ordinal)
+      .map((m) => localRefValue(m.member?.ref))
+      .filter((value): value is string => value !== null)
 
     if (bucket === 'entityCollections') {
-      object.typeAssignments = (collectionAssignments.get(clusterSet.id) ?? []).map((a) =>
+      object.typeAssignments = (collectionAssignments.get(collection.id) ?? []).map((a) =>
         readTypeAssignment(lenses, a, 'entityTypeId'),
       )
     } else if (bucket === 'eventCollections') {
-      object.typeAssignments = (collectionAssignments.get(clusterSet.id) ?? []).map((a) =>
+      object.typeAssignments = (collectionAssignments.get(collection.id) ?? []).map((a) =>
         readTypeAssignment(lenses, a, 'eventTypeId'),
       )
     }
@@ -1955,7 +1896,7 @@ export function composeProjectionToWorld(rows: WorldLayersRows, lenses: WorldLen
  * The end-to-end backward path: get the world lenses, then regroup the stored
  * layers rows into the WorldState aggregate through them.
  *
- * @param rows - the world nodes, edges, clusters, and annotations in one scope
+ * @param rows - the world nodes, edges, catalog collections/memberships, and annotations in one scope
  * @returns the reconstructed WorldState aggregate
  */
 export async function layersToWorldStateViaLens(rows: WorldLayersRows): Promise<WorldStateAggregate> {
@@ -1963,4 +1904,4 @@ export async function layersToWorldStateViaLens(rows: WorldLayersRows): Promise<
   return composeProjectionToWorld(rows, lenses)
 }
 
-export type { WorldNodeRow, WorldEdgeRow, WorldClusterRow, WorldAnnotationRow }
+export type { WorldNodeRow, WorldEdgeRow, WorldAnnotationRow }

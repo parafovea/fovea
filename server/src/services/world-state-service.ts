@@ -7,7 +7,7 @@ import { config } from '../config.js'
 import { convertObjectRefsToText, countObjectRefsInGlosses, type TypeWithGloss } from '../lib/reference-cleanup.js'
 import { LayersOntologyRepository } from '../repositories/LayersOntologyRepository.js'
 import { isSingleUserMode } from './user-service.js'
-import { layersOntologyForPersonaId, worldScaffoldExpressionId, worldScaffoldLayerId } from './layers-id-map.js'
+import { layersOntologyForPersonaId, worldScaffoldLayerId } from './layers-id-map.js'
 import {
   emptyWorldState,
   personalWorldStateId,
@@ -251,7 +251,7 @@ export class WorldStateService {
     const projection = await worldStateToLayersViaLens(aggregate, scope)
 
     const hasRows =
-      projection.nodes.length > 0 || projection.edges.length > 0 || projection.clusters.length > 0
+      projection.nodes.length > 0 || projection.edges.length > 0 || projection.catalogCollections.length > 0
     if (hasRows && this.ability) {
       const candidate = subject('GraphNode', { projectId: null, createdByUserId: userId })
       if (!this.ability.can('create', candidate)) {
@@ -297,7 +297,8 @@ export class WorldStateService {
   ): Promise<void> {
     const scope = { createdByUserId: userId, projectId }
     const projection = await worldStateToLayersViaLens(aggregate, scope)
-    if (projection.nodes.length === 0 && projection.edges.length === 0 && projection.clusters.length === 0) return
+    if (projection.nodes.length === 0 && projection.edges.length === 0 && projection.catalogCollections.length === 0)
+      return
 
     if (this.ability) {
       const candidate = subject('GraphNode', { projectId, createdByUserId: userId })
@@ -371,8 +372,9 @@ export class WorldStateService {
 
   /**
    * Removes a single object (by id) from one of the personal world's collection
-   * or relation buckets. A collection is a ClusterSet and a relation is a
-   * GraphEdge, so removal deletes the matching row directly (scoped to the caller
+   * or relation buckets. A collection is a catalog collection plus its memberships
+   * and a relation is a
+   * GraphEdge, so removal deletes the matching rows directly (scoped to the caller
    * so another user's row cannot be touched); a collection's type-assignment and
    * description annotations are removed with it. Removal is explicit, never
    * omission from a whole-blob PUT, so the merge-by-id update cannot resurrect a
@@ -412,7 +414,8 @@ export class WorldStateService {
       await this.prisma.graphEdge.deleteMany({ where: { id: objectId, ...owner } })
     } else {
       const annotationIds = await this.collectionAnnotationIds(userId, objectId)
-      await this.prisma.clusterSet.deleteMany({ where: { id: objectId, ...owner } })
+      await this.prisma.catalogMembership.deleteMany({ where: { catalogRef: objectId, ...owner } })
+      await this.prisma.catalogCollection.deleteMany({ where: { id: objectId, ...owner } })
       if (annotationIds.length > 0) {
         await this.prisma.layersAnnotation.deleteMany({ where: { id: { in: annotationIds } } })
       }
@@ -743,11 +746,10 @@ export class WorldStateService {
   }
 
   /**
-   * Strips a deleted object's id from every collection ClusterSet in a bucket that
-   * still lists it as a member. Reads the scope's world clusters fresh (inside the
-   * caller's transaction) so a concurrent membership edit is stripped from the
-   * current member list, and only the clusters that actually lose the member are
-   * rewritten.
+   * Strips a deleted object's id from the scope's catalog memberships. Reads the
+   * scope's memberships fresh (inside the caller's transaction) so a concurrent
+   * membership edit is honored, deletes every membership whose member ref points at
+   * the id, and reports how many distinct collections the id was removed from.
    *
    * @returns the number of collections the id was removed from
    */
@@ -758,36 +760,24 @@ export class WorldStateService {
     userId: string,
   ): Promise<number> {
     void collectionBucket
-    // World collections are the ClusterSets bound to the scope's scaffold
-    // expression; a member id is unique to its object, so stripping it from every
-    // world collection that lists it removes it from exactly the right bucket.
-    const clusterSets = await tx.clusterSet.findMany({
-      where: {
-        createdByUserId: userId,
-        projectId: null,
-        expressionId: worldScaffoldExpressionId(userId, null),
-      },
+    // A member id is unique to its object, so deleting every membership that points
+    // at it removes it from exactly the collections that listed it.
+    const memberships = await tx.catalogMembership.findMany({
+      where: { createdByUserId: userId, projectId: null },
     })
-    let memberships = 0
-    for (const clusterSet of clusterSets) {
-      const clusters = Array.isArray(clusterSet.clusters) ? [...clusterSet.clusters] : []
-      const first = clusters[0]
-      if (first === null || typeof first !== 'object' || Array.isArray(first)) continue
-      const firstRecord = first as Record<string, unknown>
-      const members = Array.isArray(firstRecord.members) ? firstRecord.members : []
-      const kept = members.filter(
-        (m) => (m as { localId?: { value?: unknown } } | null)?.localId?.value !== memberId,
-      )
-      if (kept.length === members.length) continue
-
-      clusters[0] = { ...firstRecord, members: kept }
-      await tx.clusterSet.update({
-        where: { id: clusterSet.id },
-        data: { clusters: toJson(clusters) as Prisma.InputJsonValue },
-      })
-      memberships += 1
+    const removedIds: string[] = []
+    const touched = new Set<string>()
+    for (const membership of memberships) {
+      const value = (membership.member as { ref?: { localId?: { value?: unknown } } } | null)?.ref?.localId?.value
+      if (value === memberId) {
+        removedIds.push(membership.id)
+        touched.add(membership.catalogRef)
+      }
     }
-    return memberships
+    if (removedIds.length > 0) {
+      await tx.catalogMembership.deleteMany({ where: { id: { in: removedIds } } })
+    }
+    return touched.size
   }
 
   /**

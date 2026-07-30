@@ -63,6 +63,8 @@ describe('Layers interchange cross-user isolation and round-trip', () => {
     await prisma.corpusMembership.deleteMany()
     await prisma.corpus.deleteMany()
     await prisma.clusterSet.deleteMany()
+    await prisma.catalogMembership.deleteMany()
+    await prisma.catalogCollection.deleteMany()
     await prisma.alignment.deleteMany()
     await prisma.expression.deleteMany()
     await prisma.media.deleteMany()

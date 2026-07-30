@@ -2,7 +2,8 @@
  * Native persistence for the world surface over the unified layers store.
  *
  * A WorldState aggregate projects to GraphNodes (entities/locations/situations/
- * times), GraphEdges (relations), ClusterSets (collections), and world
+ * times), GraphEdges (relations), native `pub.layers.catalog` collections plus one
+ * membership per member (collections), and world
  * LayersAnnotations (a presence annotation per node carrying its typed value and
  * description, plus type-assignment and event-interpretation annotations) hung
  * off a per-scope scaffold Expression + layer. This module owns reading those
@@ -11,22 +12,23 @@
  *
  * World rows are discriminated natively, without a marker blob: a node by the
  * world-scaffold presence annotation that denotes it (a video-object-annotation
- * denotation stub has none, so it is neither surfaced nor pruned), a collection
- * ClusterSet by its binding to the scaffold expression, a relation edge by the
+ * denotation stub has none, so it is neither surfaced nor pruned), a collection by
+ * its scope's catalog rows, a relation edge by the
  * endpoint-kind property the projection stamps on it, and the annotations by the
  * deterministic scaffold layer.
  *
  * @module
  */
 
-import { Prisma } from '@prisma/client'
+import { Prisma, type CatalogCollection, type CatalogMembership } from '@prisma/client'
 
 import { worldScaffoldExpressionId, worldScaffoldLayerId } from '../layers-id-map.js'
 import {
   isWorldEdge,
   isWorldPresence,
   type MappedWorldAnnotation,
-  type MappedWorldCluster,
+  type MappedCatalogCollection,
+  type MappedCatalogMembership,
   type MappedWorldEdge,
   type MappedWorldNode,
   type WorldLayersProjection,
@@ -56,11 +58,39 @@ function presenceNodeIds(annotations: Array<{ denotesNodeId: string | null; labe
   return [...ids]
 }
 
+/** Reads a Prisma catalog collection row into its mapped projection shape. */
+function readCatalogCollection(row: CatalogCollection): MappedCatalogCollection {
+  return {
+    id: row.id,
+    localId: row.localId ?? row.id,
+    name: row.name,
+    kind: row.kind,
+    features: (row.features ?? { entries: [] }) as unknown as MappedCatalogCollection['features'],
+    createdAt: row.createdAt.toISOString(),
+    projectId: row.projectId,
+    createdByUserId: row.createdByUserId,
+  }
+}
+
+/** Reads a Prisma catalog membership row into its mapped projection shape. */
+function readCatalogMembership(row: CatalogMembership): MappedCatalogMembership {
+  return {
+    id: row.id,
+    catalogRef: row.catalogRef,
+    member: row.member as unknown as MappedCatalogMembership['member'],
+    role: row.role,
+    ordinal: row.ordinal ?? 0,
+    createdAt: row.createdAt.toISOString(),
+    projectId: row.projectId,
+    createdByUserId: row.createdByUserId,
+  }
+}
+
 /**
  * Reads a scope's world rows from the layers store. World nodes are those a
  * world-scaffold presence annotation denotes (so a video denotation stub sharing
- * a nodeType is excluded), collections are the ClusterSets bound to the scaffold
- * expression, and relations are the endpoint-kind-tagged graph edges.
+ * a nodeType is excluded), collections are the scope's catalog collections plus
+ * their memberships, and relations are the endpoint-kind-tagged graph edges.
  *
  * @param prisma - the Prisma client (or a transaction client)
  * @param scope - the owning scope
@@ -69,17 +99,17 @@ function presenceNodeIds(annotations: Array<{ denotesNodeId: string | null; labe
 export async function readWorldRows(prisma: PrismaLike, scope: WorldLayersScope): Promise<WorldRowsRead> {
   const where = scopeWhere(scope)
   const layerId = worldScaffoldLayerId(scope.createdByUserId, scope.projectId)
-  const expressionId = worldScaffoldExpressionId(scope.createdByUserId, scope.projectId)
 
   const annotations = await prisma.layersAnnotation.findMany({ where: { layerId } })
   const nodeIds = presenceNodeIds(annotations)
   const nodes =
     nodeIds.length > 0 ? await prisma.graphNode.findMany({ where: { ...where, id: { in: nodeIds } } }) : []
-  const clusters = await prisma.clusterSet.findMany({ where: { ...where, expressionId } })
+  const catalogCollections = (await prisma.catalogCollection.findMany({ where })).map(readCatalogCollection)
+  const catalogMemberships = (await prisma.catalogMembership.findMany({ where })).map(readCatalogMembership)
   const edges = (await prisma.graphEdge.findMany({ where })).filter(isWorldEdge)
 
-  const rows: WorldLayersRows = { nodes, edges, clusters, annotations }
-  const exists = nodes.length > 0 || edges.length > 0 || clusters.length > 0
+  const rows: WorldLayersRows = { nodes, edges, catalogCollections, catalogMemberships, annotations }
+  const exists = nodes.length > 0 || edges.length > 0 || catalogCollections.length > 0
   return { rows, exists }
 }
 
@@ -87,9 +117,9 @@ export async function readWorldRows(prisma: PrismaLike, scope: WorldLayersScope)
  * Prunes a scope's world rows. World nodes are recovered from their presence
  * annotations before those are deleted; a node still denoted by a non-world
  * annotation after the scaffold is cleared (a live video-object link) is left in
- * place, so `denotesNode`'s SetNull can never silently sever it. The scaffold
- * expression is deleted only after its collection ClusterSets, so their
- * `expressionId` FK is not SetNull-orphaned before they are removed.
+ * place, so `denotesNode`'s SetNull can never silently sever it. A scope's catalog
+ * collections and memberships are removed by scope, keying on the same
+ * projectId + createdByUserId every other world row carries.
  *
  * @param prisma - the Prisma client (or a transaction client)
  * @param scope - the owning scope
@@ -105,8 +135,9 @@ export async function pruneWorldRows(prisma: PrismaLike, scope: WorldLayersScope
   })
   const worldNodeIds = presenceNodeIds(annotations)
 
-  // Collections reference the scaffold expression, so remove them before it.
-  await prisma.clusterSet.deleteMany({ where: { ...where, expressionId } })
+  // Collections are the scope's catalog collections plus their memberships.
+  await prisma.catalogMembership.deleteMany({ where })
+  await prisma.catalogCollection.deleteMany({ where })
   await prisma.layersAnnotation.deleteMany({ where: { layerId } })
   await prisma.annotationLayer.deleteMany({ where: { id: layerId } })
   await prisma.expression.deleteMany({ where: { id: expressionId } })
@@ -212,16 +243,34 @@ function createEdge(prisma: PrismaLike, edge: MappedWorldEdge): Promise<unknown>
   })
 }
 
-/** Creates one collection ClusterSet from its projection. */
-function createCluster(prisma: PrismaLike, cluster: MappedWorldCluster): Promise<unknown> {
-  return prisma.clusterSet.create({
+/** Creates one catalog collection from its projection. */
+function createCatalogCollection(prisma: PrismaLike, collection: MappedCatalogCollection): Promise<unknown> {
+  return prisma.catalogCollection.create({
     data: {
-      id: cluster.id,
-      kind: cluster.kind,
-      expressionId: cluster.expressionId,
-      clusters: toJson(cluster.clusters) as Prisma.InputJsonValue,
-      projectId: cluster.projectId,
-      createdByUserId: cluster.createdByUserId,
+      id: collection.id,
+      localId: collection.localId,
+      name: collection.name,
+      kind: collection.kind,
+      features: toJson(collection.features) as Prisma.InputJsonValue,
+      createdAt: collection.createdAt,
+      projectId: collection.projectId,
+      createdByUserId: collection.createdByUserId,
+    },
+  })
+}
+
+/** Creates one catalog membership from its projection. */
+function createCatalogMembership(prisma: PrismaLike, membership: MappedCatalogMembership): Promise<unknown> {
+  return prisma.catalogMembership.create({
+    data: {
+      id: membership.id,
+      catalogRef: membership.catalogRef,
+      member: toJson(membership.member) as Prisma.InputJsonValue,
+      role: membership.role,
+      ordinal: membership.ordinal,
+      createdAt: membership.createdAt,
+      projectId: membership.projectId,
+      createdByUserId: membership.createdByUserId,
     },
   })
 }
@@ -267,9 +316,9 @@ function createAnnotation(prisma: PrismaLike, annotation: MappedWorldAnnotation)
 
 /**
  * Materializes a projection into a freshly-pruned scope: scaffold, then nodes
- * (a denoted node FK must precede its annotations), edges, clusters, annotations.
- * Nodes are upserted so a pruned-but-kept cross-denoted node is updated rather
- * than colliding.
+ * (a denoted node FK must precede its annotations), edges, catalog collections and
+ * memberships, annotations. Nodes are upserted so a pruned-but-kept cross-denoted
+ * node is updated rather than colliding.
  *
  * @param prisma - the Prisma client (or a transaction client)
  * @param projection - the projected world rows
@@ -281,7 +330,8 @@ export async function createWorldProjection(
   await ensureScaffold(prisma, projection)
   for (const node of projection.nodes) await upsertNode(prisma, node)
   for (const edge of projection.edges) await createEdge(prisma, edge)
-  for (const cluster of projection.clusters) await createCluster(prisma, cluster)
+  for (const collection of projection.catalogCollections) await createCatalogCollection(prisma, collection)
+  for (const membership of projection.catalogMemberships) await createCatalogMembership(prisma, membership)
   for (const annotation of projection.annotations) await createAnnotation(prisma, annotation)
 }
 
@@ -290,7 +340,8 @@ export async function createWorldProjection(
  * relation edge's `lockVersion`. Every object is upserted by its own id; rows the
  * projection does not mention are left untouched, so a concurrently-added object
  * is never dropped. The derived rows of each written object (its presence,
- * type-assignment, interpretation, and gloss annotations) are replaced so an edit
+ * type-assignment, interpretation, and gloss annotations, and each collection's
+ * catalog memberships) are replaced so an edit
  * does not orphan a stale value. On a same-object compare-and-swap miss the whole
  * merge retries against a fresh read; after `maxAttempts` it throws.
  *
@@ -401,24 +452,34 @@ export async function upsertWorldProjection(
       throw new ConflictError('World state update conflicted after retries')
     }
 
-    for (const cluster of projection.clusters) {
-      await prisma.clusterSet.upsert({
-        where: { id: cluster.id },
+    // Upsert each catalog collection and replace its memberships, so an edit that
+    // drops a member does not leave a stale membership row behind.
+    const collectionIds = projection.catalogCollections.map((c) => c.id)
+    if (collectionIds.length > 0) {
+      await prisma.catalogMembership.deleteMany({ where: { catalogRef: { in: collectionIds } } })
+    }
+    for (const collection of projection.catalogCollections) {
+      await prisma.catalogCollection.upsert({
+        where: { id: collection.id },
         update: {
-          kind: cluster.kind,
-          expressionId: cluster.expressionId,
-          clusters: toJson(cluster.clusters) as Prisma.InputJsonValue,
+          localId: collection.localId,
+          name: collection.name,
+          kind: collection.kind,
+          features: toJson(collection.features) as Prisma.InputJsonValue,
         },
         create: {
-          id: cluster.id,
-          kind: cluster.kind,
-          expressionId: cluster.expressionId,
-          clusters: toJson(cluster.clusters) as Prisma.InputJsonValue,
-          projectId: cluster.projectId,
-          createdByUserId: cluster.createdByUserId,
+          id: collection.id,
+          localId: collection.localId,
+          name: collection.name,
+          kind: collection.kind,
+          features: toJson(collection.features) as Prisma.InputJsonValue,
+          createdAt: collection.createdAt,
+          projectId: collection.projectId,
+          createdByUserId: collection.createdByUserId,
         },
       })
     }
+    for (const membership of projection.catalogMemberships) await createCatalogMembership(prisma, membership)
 
     return
   }

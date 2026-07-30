@@ -10,8 +10,9 @@
  * Entities and locations, events (situations), and times live as GraphNodes whose
  * nodeType is one of {@link WORLD_NODE_TYPES}; each carries a presence
  * LayersAnnotation marking its world membership and kind. Relations live as
- * GraphEdges stamped with a world-role property, and collections live as
- * ClusterSets. {@link isWorldNode}, {@link isWorldEdge}, and
+ * GraphEdges stamped with a world-role property, and collections live as native
+ * `pub.layers.catalog` collections plus one membership per member.
+ * {@link isWorldNode}, {@link isWorldEdge}, and
  * {@link isWorldPresence} recover those native markers so a world node/edge/
  * presence is never confused with a video stub or a claim/ontology edge.
  *
@@ -21,7 +22,6 @@
 import type {
   GraphNode as PrismaGraphNode,
   GraphEdge as PrismaGraphEdge,
-  ClusterSet as PrismaClusterSet,
   LayersAnnotation as PrismaLayersAnnotation,
 } from '@prisma/client'
 
@@ -94,12 +94,32 @@ export interface MappedWorldEdge {
   createdByUserId: string | null
 }
 
-/** A ClusterSet create payload a world collection projects to. */
-export interface MappedWorldCluster {
+/** A single featureMap entry a catalog collection carries. */
+interface CatalogFeatureEntry {
+  key: string
+  value: string
+}
+
+/** A `pub.layers.catalog.collection` record with its `catalog_collections` scope columns. */
+export interface MappedCatalogCollection {
   id: string
+  localId: string
+  name: string
   kind: string
-  expressionId: string
-  clusters: unknown
+  features: { entries: CatalogFeatureEntry[] }
+  createdAt: string
+  projectId: string | null
+  createdByUserId: string | null
+}
+
+/** A `pub.layers.catalog.membership` record with its `catalog_memberships` scope columns. */
+export interface MappedCatalogMembership {
+  id: string
+  catalogRef: string
+  member: { ref: ObjectRef; memberType: string }
+  role: string
+  ordinal: number
+  createdAt: string
   projectId: string | null
   createdByUserId: string | null
 }
@@ -135,7 +155,8 @@ export interface MappedWorldAnnotation {
 export interface WorldLayersProjection {
   nodes: MappedWorldNode[]
   edges: MappedWorldEdge[]
-  clusters: MappedWorldCluster[]
+  catalogCollections: MappedCatalogCollection[]
+  catalogMemberships: MappedCatalogMembership[]
   scaffold: MappedWorldScaffold | null
   annotations: MappedWorldAnnotation[]
 }
@@ -207,9 +228,6 @@ export type WorldEdgeRow = Pick<
   'id' | 'edgeType' | 'sourceLocalId' | 'targetLocalId' | 'ordinal' | 'confidence' | 'properties' | 'metadata'
 >
 
-/** The ClusterSet columns the reconstruction reads. */
-export type WorldClusterRow = Pick<PrismaClusterSet, 'id' | 'kind' | 'clusters'>
-
 /** The LayersAnnotation columns the reconstruction reads. */
 export type WorldAnnotationRow = Pick<
   PrismaLayersAnnotation,
@@ -231,7 +249,8 @@ export type WorldAnnotationRow = Pick<
 export interface WorldLayersRows {
   nodes: WorldNodeRow[]
   edges: WorldEdgeRow[]
-  clusters: WorldClusterRow[]
+  catalogCollections: MappedCatalogCollection[]
+  catalogMemberships: MappedCatalogMembership[]
   annotations: WorldAnnotationRow[]
 }
 

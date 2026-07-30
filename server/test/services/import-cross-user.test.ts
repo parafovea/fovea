@@ -47,6 +47,8 @@ function createMockPrisma() {
     graphNode: { findMany: vi.fn().mockResolvedValue([]) },
     graphEdge: { findMany: vi.fn().mockResolvedValue([]) },
     clusterSet: { findMany: vi.fn().mockResolvedValue([]) },
+    catalogCollection: { findMany: vi.fn().mockResolvedValue([]) },
+    catalogMembership: { findMany: vi.fn().mockResolvedValue([]) },
     layersAnnotation: { findMany: vi.fn().mockResolvedValue([]) },
     layersOntology: { findMany: vi.fn().mockResolvedValue([]) },
     importHistory: { create: vi.fn().mockResolvedValue({}) },
@@ -751,14 +753,17 @@ describe('Cross-user import ownership', () => {
         { id: 'evt-a1', nodeType: 'situation', label: null, properties: null, knowledgeRefs: null, metadata: null, createdByUserId: USER_A, projectId: null },
         { id: 'time-a1', nodeType: 'time', label: null, properties: null, knowledgeRefs: null, metadata: null, createdByUserId: USER_A, projectId: null },
       ])
-      // Collections are ClusterSets bound to the world scaffold expression.
-      ;(mockPrisma.clusterSet.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([
+      // Collections are catalog collections scoped by `createdByUserId`.
+      ;(mockPrisma.catalogCollection.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([
         {
           id: 'ec-a1',
-          kind: 'group',
+          localId: 'ec-a1',
+          name: 'Collection A1',
+          kind: 'custom',
+          features: { entries: [{ key: 'bucket', value: 'entityCollections' }, { key: 'memberField', value: 'entityIds' }] },
+          createdAt: new Date('2024-01-01'),
           createdByUserId: USER_A,
           projectId: null,
-          clusters: [{ uuid: { value: 'ec-a1' }, members: [], features: { entries: [] } }],
         },
       ])
 
@@ -929,6 +934,8 @@ describe('Cross-user import ownership', () => {
         graphNode: { findMany: vi.fn().mockResolvedValue([]) },
         graphEdge: { findMany: vi.fn().mockResolvedValue([]) },
         clusterSet: { findMany: vi.fn().mockResolvedValue([]) },
+        catalogCollection: { findMany: vi.fn().mockResolvedValue([]) },
+        catalogMembership: { findMany: vi.fn().mockResolvedValue([]) },
         layersAnnotation: { findMany: vi.fn().mockResolvedValue([]) },
         layersOntology: { findUnique: vi.fn().mockResolvedValue(null) },
       } as unknown as PrismaClient

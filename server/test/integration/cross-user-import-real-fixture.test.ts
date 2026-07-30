@@ -82,6 +82,8 @@ describe('cross-user import of a real Fovea export', () => {
     await prisma.corpusMembership.deleteMany()
     await prisma.corpus.deleteMany()
     await prisma.clusterSet.deleteMany()
+    await prisma.catalogMembership.deleteMany()
+    await prisma.catalogCollection.deleteMany()
     await prisma.alignment.deleteMany()
     await prisma.graphEdge.deleteMany()
     await prisma.graphNode.deleteMany()

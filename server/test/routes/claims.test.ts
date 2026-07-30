@@ -147,6 +147,8 @@ describe('Claims API', () => {
     await prisma.textAnnotationRelation.deleteMany()
     await prisma.layersAnnotation.deleteMany()
     await prisma.clusterSet.deleteMany()
+    await prisma.catalogMembership.deleteMany()
+    await prisma.catalogCollection.deleteMany()
     await prisma.alignment.deleteMany()
     await prisma.tokenization.deleteMany()
     await prisma.segmentation.deleteMany()

@@ -20,9 +20,12 @@
 
 import { z } from 'zod'
 
-import type { ObjectRef } from '@fovea/layers-schema'
-
-import type { WorldStateAggregate, WorldLayersScope } from '../world-model.js'
+import type {
+  WorldStateAggregate,
+  WorldLayersScope,
+  MappedCatalogCollection,
+  MappedCatalogMembership,
+} from '../world-model.js'
 
 // --------------------------------------------------------------------------
 // The member regroup lens (source view-model + lens document)
@@ -62,30 +65,6 @@ export const CATALOG_MEMBER_BODY_VERTEX = 'root.members:items'
 interface FeatureEntry {
   key: string
   value: string
-}
-
-/** A `pub.layers.catalog.collection` record with its `catalog_collections` scope columns. */
-export interface MappedCatalogCollection {
-  id: string
-  localId: string
-  name: string
-  kind: string
-  features: { entries: FeatureEntry[] }
-  createdAt: string
-  projectId: string | null
-  createdByUserId: string | null
-}
-
-/** A `pub.layers.catalog.membership` record with its `catalog_memberships` scope columns. */
-export interface MappedCatalogMembership {
-  id: string
-  catalogRef: string
-  member: { ref: ObjectRef; memberType: string }
-  role: string
-  ordinal: number
-  createdAt: string
-  projectId: string | null
-  createdByUserId: string | null
 }
 
 /** The catalog projection of a WorldState aggregate's collections. */
