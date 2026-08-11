@@ -328,7 +328,9 @@ class TrackingLayersLens(dx.Lens["TrackObjectsResponseDTO", CorpusFragment, Json
         ]
 
         media_features = read_feature_map(med.features)
-        total_frames = _as_int(media_features[_TOTAL_FRAMES_KEY]) if _TOTAL_FRAMES_KEY in media_features else 0
+        total_frames = (
+            _as_int(media_features[_TOTAL_FRAMES_KEY]) if _TOTAL_FRAMES_KEY in media_features else 0
+        )
 
         fps = (
             (video.frameRate / _FRAME_RATE_SCALE) if video and video.frameRate is not None else 0.0

@@ -224,7 +224,9 @@ def _track_clusters(
             order.append(track_id)
         members_by_track[track_id].append(defs.ObjectRef(localId=defs.Uuid(value=ann_uuid)))
     return tuple(
-        annotation.Cluster(uuid=defs.Uuid(value=track_id), members=tuple(members_by_track[track_id]))
+        annotation.Cluster(
+            uuid=defs.Uuid(value=track_id), members=tuple(members_by_track[track_id])
+        )
         for track_id in order
     )
 
