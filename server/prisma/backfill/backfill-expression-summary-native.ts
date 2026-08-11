@@ -216,7 +216,6 @@ async function main(): Promise<void> {
     const documents = await backfillDocumentTitles(prisma)
     const media = await backfillVideoMediaMetadata(prisma)
     const layers = await backfillTranscriptSegmentLayers(prisma)
-    // eslint-disable-next-line no-console
     console.log(
       `backfill complete: ${documents} document(s), ${media} media row(s), ${layers} transcript layer(s) migrated`
     )
@@ -226,7 +225,6 @@ async function main(): Promise<void> {
 }
 
 main().catch((error) => {
-  // eslint-disable-next-line no-console
   console.error(error)
   process.exit(1)
 })
