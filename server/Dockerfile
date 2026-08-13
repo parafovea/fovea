@@ -50,12 +50,19 @@ RUN pnpm --filter @fovea/server build
 # but not src/). The seed pulls the layers-bridge/conversion helpers from
 # ../src; esbuild inlines that whole closure so seed.cjs resolves only real
 # node_modules at runtime — no ../src or ../dist path dependency survives.
-# @prisma/client (generated, native query engine) and bcrypt (native addon)
-# stay external and load from node_modules at runtime. The .cjs extension is
-# required because server/package.json declares "type": "module".
+# @prisma/client (generated, native query engine), bcrypt (native addon), and
+# @panproto/core stay external and load from node_modules at runtime:
+# @panproto/core ships a WASM binary whose CJS entry resolves the glue relative
+# to its own install location, so inlining its ESM entry would leave an
+# import.meta.url that is undefined in a CJS bundle. The banner + define give
+# the bundle a real import.meta.url so the layers registry's createRequire
+# resolves too. The .cjs extension is required because server/package.json
+# declares "type": "module".
 RUN cd server && pnpm exec esbuild prisma/seed.ts \
       --bundle --platform=node --format=cjs --target=node22 \
-      --external:@prisma/client --external:bcrypt \
+      --external:@prisma/client --external:bcrypt --external:@panproto/core \
+      --banner:js="const import_meta_url=require('url').pathToFileURL(__filename).href;" \
+      --define:import.meta.url=import_meta_url \
       --outfile=prisma/seed.cjs
 
 # Production dependencies stage
@@ -71,8 +78,10 @@ COPY annotation-tool/package.json ./annotation-tool/
 COPY packages/layers-schema/package.json ./packages/layers-schema/
 
 # Install production dependencies for the server filter only. @fovea/layers-schema
-# is a types-only workspace dependency (never imported at runtime), so its
-# package.json is enough for the frozen-lockfile resolution to succeed here.
+# contributes only erased types to the compiled server, so its package.json is
+# enough for the frozen-lockfile resolution here; the vendored lexicon tree it
+# serves to the panproto registry at runtime is copied into the production stage
+# below.
 RUN --mount=type=cache,target=/root/.local/share/pnpm/store \
     pnpm install --frozen-lockfile --filter @fovea/server --prod
 
@@ -96,6 +105,12 @@ COPY --link --from=deps /repo /app
 # Copy built application + prisma artifacts (compiled seed.cjs) from builder
 COPY --link --from=builder /repo/server/dist ./server/dist
 COPY --link --from=builder /repo/server/prisma ./server/prisma
+
+# The panproto registry reads the vendored pub.layers.* lexicons from the
+# @fovea/layers-schema package at runtime (both the seed's ontology bridge and
+# the server's lenses), so ship its lexicon tree next to the package.json the
+# deps stage already placed.
+COPY --link --from=builder /repo/packages/layers-schema/lexicons ./packages/layers-schema/lexicons
 
 WORKDIR /app/server
 
