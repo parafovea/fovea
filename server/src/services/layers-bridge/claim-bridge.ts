@@ -18,6 +18,7 @@ import {
   claimFromLayers,
   edgeToRelation,
   isClaimNode,
+  isClaimRefEdge,
   isClaimRelationEdge,
   isPrimaryClaimAnnotation,
   relationSpanRelationId,
@@ -36,6 +37,8 @@ import {
 import { claimAnnotationId, claimSpanLayerId, expressionTranscriptId } from '../layers-id-map.js'
 import { getOrCreateVideoExpression } from '../video-expression-service.js'
 import { requiredJson, toJson, type PrismaLike } from './util.js'
+import type { GlossItem } from '@models/types.js'
+import { dereferenceGlossItems, type DereferenceTarget } from '../../lib/reference-cleanup.js'
 
 /** The summary fields the claim writers need to resolve scope and anchoring. */
 export interface ClaimSummaryContext {
@@ -479,6 +482,240 @@ export async function readAllClaimRefs(
     refs.push({ id: node.id, summaryId: summaryByClaim.get(node.id) ?? '' })
   }
   return refs
+}
+
+// ---------------------------------------------------------------------------
+// Reference-cleanup: claim as REFERRER (its prose + structured refs) and as the
+// carrier that owns freezing OTHER claims' prose when a claim is deleted.
+// ---------------------------------------------------------------------------
+
+/**
+ * Reconstructs every claim in the store, tx-aware. A type / world-object /
+ * annotation / claim deletion can be referenced by any claim in any summary, so
+ * the reference sweep scans them all (mirrors the world-state persona scan). Each
+ * claim reconstructs from its GraphNode, primary bearer annotation, span/temporal
+ * children, and outgoing reference edges — the same rows readClaimById reads.
+ */
+async function readAllClaims(prisma: PrismaLike): Promise<StoredClaim[]> {
+  const nodes = (await prisma.graphNode.findMany({ where: { nodeType: 'claim' } })).filter(isClaimNode)
+  const claims: StoredClaim[] = []
+  for (const node of nodes) {
+    const primary = await prisma.layersAnnotation.findUnique({ where: { id: claimAnnotationId(node.id) } })
+    if (!primary) continue
+    const children = await prisma.layersAnnotation.findMany({ where: { parentAnnotationId: primary.id } })
+    const refEdges = await prisma.graphEdge.findMany({ where: { sourceLocalId: node.id } })
+    const parentClaimId = await resolveParentClaimId(prisma, primary.parentAnnotationId)
+    claims.push(claimFromLayers(node, primary, { children, refEdges, parentClaimId }))
+  }
+  return claims
+}
+
+/**
+ * Rewrites one existing claim in place from its edited StoredClaim, regenerating
+ * its full native projection through the lens. Mirrors ClaimService.updateClaimNode:
+ * the primary bearer annotation is UPSERTED (never deleted) so a subclaim's
+ * `parentAnnotationId` self-relation to it survives the `onDelete: SetNull` FK, and
+ * its denormalized `childIds` are left untouched; the claim's own child annotations
+ * (text-span / temporal) and cross-object reference edges are replaced. This is the
+ * ONLY safe way to dereference claim prose / structured refs — it re-materializes
+ * the standoff rather than surgically editing argRefs or deleting annotation rows.
+ */
+async function rewriteClaimInPlace(prisma: PrismaLike, claim: StoredClaim): Promise<void> {
+  const projection = await claimToLayersViaLens(claim)
+  const [primary, ...children] = projection.annotations
+
+  // The child annotations must live in the same layer as the primary; resolve it
+  // from the stored primary row so we never depend on summaryId derivation.
+  const existingPrimary = await prisma.layersAnnotation.findUnique({
+    where: { id: primary.id },
+    select: { layerId: true },
+  })
+  const layerId = existingPrimary?.layerId ?? claimSpanLayerId(claim.summaryId)
+
+  await prisma.graphNode.update({
+    where: { id: projection.node.id },
+    data: { label: projection.node.label, properties: toJson(projection.node.properties) },
+  })
+
+  await prisma.layersAnnotation.upsert({
+    where: { id: primary.id },
+    // Update in place — never delete — so subclaim primaries' parentAnnotationId
+    // self-relation to this bearer survives; childIds/denotesNodeId/layerId untouched.
+    update: {
+      anchor: primary.anchor === null ? Prisma.DbNull : requiredJson(primary.anchor),
+      label: primary.label,
+      text: primary.text,
+      value: primary.value,
+      confidence: primary.confidence,
+      arguments: requiredJson(primary.arguments),
+      ontologyTypeRefId: primary.ontologyTypeRefId,
+      parentAnnotationId: primary.parentAnnotationId,
+      temporal: toJson(primary.temporal) ?? Prisma.DbNull,
+      startMs: primary.startMs,
+      endMs: primary.endMs,
+      features: requiredJson(primary.features),
+    },
+    create: {
+      id: primary.id,
+      layerId,
+      anchor: primary.anchor === null ? undefined : requiredJson(primary.anchor),
+      label: primary.label,
+      text: primary.text,
+      value: primary.value,
+      confidence: primary.confidence,
+      arguments: toJson(primary.arguments),
+      ontologyTypeRefId: primary.ontologyTypeRefId,
+      parentAnnotationId: primary.parentAnnotationId,
+      temporal: toJson(primary.temporal),
+      startMs: primary.startMs,
+      endMs: primary.endMs,
+      denotesNodeId: primary.denotesNodeId,
+      features: toJson(primary.features),
+      projectId: primary.projectId,
+      createdByUserId: primary.createdByUserId,
+    },
+  })
+
+  // Replace the claim's own child annotations (text-span + temporal); they denote
+  // the claim node but are not the primary, so deleting them severs no self-relation.
+  await prisma.layersAnnotation.deleteMany({ where: { denotesNodeId: claim.id, id: { not: primary.id } } })
+
+  // Replace the cross-object reference edges (describes / occurs-at / located-at);
+  // relation edges (isClaimRelationEdge) are left intact.
+  const stale = await prisma.graphEdge.findMany({ where: { sourceLocalId: claim.id } })
+  for (const edge of stale) {
+    if (isClaimRefEdge(edge)) await prisma.graphEdge.delete({ where: { id: edge.id } })
+  }
+
+  for (const child of children) await createClaimAnnotation(prisma, layerId, child)
+  for (const edge of projection.refEdges) {
+    await prisma.graphEdge.create({
+      data: {
+        id: edge.id,
+        source: toJson(edge.source) as Prisma.InputJsonValue,
+        target: toJson(edge.target) as Prisma.InputJsonValue,
+        sourceLocalId: edge.sourceLocalId,
+        targetLocalId: edge.targetLocalId,
+        edgeType: edge.edgeType,
+        label: edge.label,
+        confidence: edge.confidence,
+        properties: toJson(edge.properties),
+        projectId: edge.projectId,
+        createdByUserId: edge.createdByUserId,
+      },
+    })
+  }
+}
+
+/**
+ * Freezes every inline mention of a deleted thing in every claim's PROSE
+ * (gloss + claimerGloss + claimRelation) to its human-readable display name,
+ * regenerating each touched claim's standoff through the lens. Handles ALL four
+ * target kinds: as REFERRER it freezes typeRef / objectRef / annotationRef
+ * mentions; as the claims carrier of the REFERENT sweep it freezes claimRef
+ * mentions of a deleted claim in OTHER claims' prose. Uses the single shared
+ * matcher `dereferenceGlossItems`, so the policy is enforced identically here and
+ * in the ontology / world / annotation carriers.
+ *
+ * @param prisma - a transaction client so the rewrite commits atomically with the
+ *   delete that drives it
+ * @param target - the deleted thing (kind + id + replacement name)
+ * @param options.excludeClaimIds - claims not to touch (the subtree deleteClaim is
+ *   about to remove; rewriting them would needlessly re-materialize standoff we
+ *   then delete)
+ * @returns the total number of mentions frozen
+ */
+export async function dereferenceClaimProse(
+  prisma: PrismaLike,
+  target: DereferenceTarget,
+  options?: { excludeClaimIds?: Set<string> },
+): Promise<number> {
+  const exclude = options?.excludeClaimIds
+  const proseFields = ['gloss', 'claimerGloss', 'claimRelation'] as const
+  let total = 0
+  for (const claim of await readAllClaims(prisma)) {
+    if (exclude?.has(claim.id)) continue
+    const next: StoredClaim = { ...claim }
+    let changed = false
+    for (const field of proseFields) {
+      const value = claim[field]
+      if (!Array.isArray(value)) continue
+      const { gloss, count } = dereferenceGlossItems(value as GlossItem[], target)
+      if (count > 0) {
+        next[field] = gloss
+        total += count
+        changed = true
+      }
+    }
+    if (changed) await rewriteClaimInPlace(prisma, next)
+  }
+  return total
+}
+
+/**
+ * Clears every claim's STRUCTURED reference to a deleted thing, keeping the claim.
+ * A typeRef nulls the claimer type (regenerating the primary's `ontologyTypeRefId`
+ * and dropping its `claimer` argRef); an objectRef nulls whichever of
+ * claimEventId / claimTimeId / claimLocationId equals the deleted object (dropping
+ * the matching describes / occurs-at / located-at edge); an annotationRef removes
+ * the deleted annotation id from every `timeSpans[].annotationIds` (its
+ * time-annotation argRefs). claimRef has no structured claim-to-claim reference
+ * here (parent links + relations are handled by the delete path itself), so it is a
+ * no-op. All changes go through the lens rewrite, never a surgical row edit.
+ *
+ * @param prisma - a transaction client so the rewrite commits with the delete
+ * @param target - the deleted thing
+ * @returns the number of structured references cleared
+ */
+export async function clearClaimStructuredRefs(
+  prisma: PrismaLike,
+  target: DereferenceTarget,
+): Promise<number> {
+  let total = 0
+  for (const claim of await readAllClaims(prisma)) {
+    const next: StoredClaim = { ...claim }
+    let changed = false
+
+    if (target.kind === 'typeRef') {
+      if (next.claimerType === target.id) {
+        next.claimerType = null
+        changed = true
+        total++
+      }
+    } else if (target.kind === 'objectRef') {
+      for (const field of ['claimEventId', 'claimTimeId', 'claimLocationId'] as const) {
+        if (next[field] === target.id) {
+          next[field] = null
+          changed = true
+          total++
+        }
+      }
+    } else if (target.kind === 'annotationRef') {
+      const spans = claim.timeSpans
+      if (Array.isArray(spans)) {
+        let touched = false
+        const rewritten = (spans as Array<Record<string, unknown>>).map((span) => {
+          const ids = span.annotationIds
+          if (!Array.isArray(ids) || !ids.includes(target.id)) return span
+          const filtered = (ids as string[]).filter((id) => id !== target.id)
+          touched = true
+          total++
+          const out: Record<string, unknown> = { ...span }
+          if (filtered.length > 0) out.annotationIds = filtered
+          else delete out.annotationIds
+          return out
+        })
+        if (touched) {
+          next.timeSpans = rewritten
+          changed = true
+        }
+      }
+    }
+    // target.kind === 'claimRef': no structured claim-to-claim ref; prose-only.
+
+    if (changed) await rewriteClaimInPlace(prisma, next)
+  }
+  return total
 }
 
 /**

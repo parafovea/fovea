@@ -42,6 +42,8 @@ import {
   relationToLayersViaLens,
 } from './layers-lens/claim-lens.js'
 import { syncChildIds } from './layers-bridge/claim-bridge.js'
+import { LayersOntologyRepository } from '../repositories/LayersOntologyRepository.js'
+import { WorldStateService, resolvePersonalUserId } from './world-state-service.js'
 
 /**
  * Coerces a value to Prisma.InputJsonValue for an optional JSON column, omitting
@@ -816,7 +818,11 @@ export class ClaimService {
   }
 
   /**
-   * Deletes a claim (cascading to its subclaims) from the layers store.
+   * Deletes a claim (cascading to its subclaims) from the layers store and, in
+   * the same transaction, freezes every inline mention of each deleted claim —
+   * across the persona ontology glosses, the world-object descriptions, the video
+   * summaries, and other claims' prose — to that claim's display text, so a
+   * deleted claim never strands a dangling claimRef.
    *
    * @param summaryId - VideoSummary UUID the claim must belong to
    * @param claimId - Claim UUID
@@ -839,38 +845,71 @@ export class ClaimService {
     const subtree = new Set(collectSubtreeIds(claims, claimId))
     const subtreeIds = [...subtree]
 
-    // Bearer + child (text-span / temporal) annotations first (deleting the node
-    // would only null their FK).
-    await this.prisma.layersAnnotation.deleteMany({ where: { denotesNodeId: { in: subtreeIds } } })
-
-    // Relation and cross-object reference edges incident to any deleted claim; the
-    // deleted relations' endpoint-span annotations go with them.
-    const incident = await this.graphRepo.findAccessibleEdges(
-      {},
-      { OR: [{ sourceLocalId: { in: subtreeIds } }, { targetLocalId: { in: subtreeIds } }] },
-    )
-    const removedRelationIds: string[] = []
-    for (const edge of incident) {
-      if (isClaimRelationEdge(edge)) removedRelationIds.push(edge.id)
-      if (isClaimRelationEdge(edge) || isClaimRefEdge(edge)) await this.graphRepo.deleteEdge(edge.id)
-    }
-    if (removedRelationIds.length > 0) {
-      const spans = await this.loadRelationSpans(summaryId)
-      const spanIds = removedRelationIds.flatMap((id) => (spans.get(id) ?? []).map((span) => span.id))
-      if (spanIds.length > 0) {
-        await this.prisma.layersAnnotation.deleteMany({ where: { id: { in: spanIds } } })
-      }
-    }
-
-    for (const id of subtreeIds) {
-      await this.graphRepo.deleteNode(id)
-    }
-
-    // Keep the deleted subtree root's surviving parent's childIds consistent.
+    // Each deleted claim freezes to its OWN text in other carriers' prose; the
+    // root falls back to the already-loaded existing.text.
+    const nameById = new Map(claims.map((c) => [c.id, c.text]))
     const parentClaimId = claims.find((c) => c.id === claimId)?.parentClaimId ?? null
-    if (parentClaimId && !subtree.has(parentClaimId)) {
-      await syncChildIds(this.prisma, parentClaimId)
-    }
+    const userId = await resolvePersonalUserId(this.prisma, this.userId)
+    const world = new WorldStateService(
+      new LayersOntologyRepository(this.prisma),
+      this.prisma,
+      this.ability,
+      this.userId,
+    )
+
+    // The annotation / edge / node deletes AND the cross-carrier claimRef freeze
+    // commit in ONE transaction: deleting a claim that any carrier mentions must,
+    // in the same commit, freeze that mention to the claim's text. The subtree is
+    // removed FIRST so the claims carrier naturally excludes it (a claim about to
+    // be deleted is not needlessly re-materialized); every OTHER carrier that
+    // named a deleted claim is then frozen through its aggregate/lens rewrite.
+    await this.prisma.$transaction(async (tx) => {
+      // Bearer + child (text-span / temporal) annotations first (deleting the node
+      // would only null their FK).
+      await tx.layersAnnotation.deleteMany({ where: { denotesNodeId: { in: subtreeIds } } })
+
+      // Relation + cross-object reference edges incident to any deleted claim; the
+      // deleted relations' endpoint-span annotations go with them.
+      const incident = await tx.graphEdge.findMany({
+        where: { OR: [{ sourceLocalId: { in: subtreeIds } }, { targetLocalId: { in: subtreeIds } }] },
+      })
+      const removedRelationIds: string[] = []
+      for (const edge of incident) {
+        if (isClaimRelationEdge(edge)) removedRelationIds.push(edge.id)
+        if (isClaimRelationEdge(edge) || isClaimRefEdge(edge)) await tx.graphEdge.delete({ where: { id: edge.id } })
+      }
+      if (removedRelationIds.length > 0) {
+        const spans = await tx.layersAnnotation.findMany({
+          where: { layerId: claimSpanLayerId(summaryId), label: 'relation-span' },
+        })
+        const spanIds = spans
+          .filter((s) => {
+            const rid = relationSpanRelationId(s)
+            return rid !== null && removedRelationIds.includes(rid)
+          })
+          .map((s) => s.id)
+        if (spanIds.length > 0) {
+          await tx.layersAnnotation.deleteMany({ where: { id: { in: spanIds } } })
+        }
+      }
+
+      for (const id of subtreeIds) {
+        await tx.graphNode.delete({ where: { id } })
+      }
+
+      // Keep the deleted subtree root's surviving parent's childIds consistent.
+      if (parentClaimId && !subtree.has(parentClaimId)) {
+        await syncChildIds(tx, parentClaimId)
+      }
+
+      // Freeze every inline claimRef mention of each deleted claim to its text
+      // across all carriers. The subtree rows are already gone, so the claims
+      // carrier skips them and only OTHER claims' prose is rewritten.
+      for (const id of subtreeIds) {
+        const name = nameById.get(id) ?? existing.text
+        await world.dereferenceAcrossCarriers(userId, { kind: 'claimRef', id, name }, tx)
+      }
+    })
   }
 
   /**

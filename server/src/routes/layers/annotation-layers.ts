@@ -110,6 +110,7 @@ const annotationLayersRoutes: FastifyPluginAsync = async (fastify: FastifyInstan
       new AnnotationLayerRepository(fastify.prisma),
       request.ability,
       request.user!.id,
+      fastify.prisma,
     )
   }
 

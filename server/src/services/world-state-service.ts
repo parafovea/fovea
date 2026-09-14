@@ -4,10 +4,19 @@ import { subject } from '@casl/ability'
 import type { AppAbility } from '../lib/abilities.js'
 import { NotFoundError, UnauthorizedError, InternalError, ForbiddenError, ConflictError } from '../lib/errors.js'
 import { config } from '../config.js'
-import { convertObjectRefsToText, countObjectRefsInGlosses, type TypeWithGloss } from '../lib/reference-cleanup.js'
+import {
+  dereferenceGlossItems,
+  dereferenceSummaries,
+  countObjectRefsInGlosses,
+  type DereferenceTarget,
+  type TypeWithGloss,
+} from '../lib/reference-cleanup.js'
+import type { GlossItem } from '@models/types.js'
+import { dereferenceClaimProse, clearClaimStructuredRefs } from './layers-bridge/claim-bridge.js'
 import { LayersOntologyRepository } from '../repositories/LayersOntologyRepository.js'
 import { isSingleUserMode } from './user-service.js'
 import { layersOntologyForPersonaId, worldScaffoldLayerId } from './layers-id-map.js'
+import { clearVideoBoxesElseDelete } from './layers-bridge/annotation-bridge.js'
 import {
   emptyWorldState,
   personalWorldStateId,
@@ -141,6 +150,17 @@ const WORLD_BUCKET_KEYS: (keyof WorldStateAggregate)[] = [
 ]
 
 /**
+ * The world buckets whose objects carry a dereferenceable `.description` gloss.
+ * Times/timeCollections/relations carry no description, so they are not swept.
+ */
+const DESCRIPTION_BUCKET_KEYS: (keyof WorldStateAggregate)[] = [
+  'entities',
+  'events',
+  'entityCollections',
+  'eventCollections',
+]
+
+/**
  * How a collection bucket stores its members. Entity and event collections carry
  * a string-id array (`entityIds` / `eventIds`); a time collection carries `times`,
  * an array of Time objects matched by their `id`. World collections never carry a
@@ -229,10 +249,12 @@ export class WorldStateService {
    * Reads a user's personal world from the layers store.
    *
    * @param userId - the owning user id
+   * @param tx - optional transaction client to read inside (so a cleanup reads the
+   *   post-delete state committed earlier in the same delete transaction)
    * @returns the reconstructed aggregate and whether any backing rows existed
    */
-  async readPersonalWorld(userId: string): Promise<PersonalWorldRead> {
-    const { rows, exists } = await readWorldRows(this.prisma, { createdByUserId: userId, projectId: null })
+  async readPersonalWorld(userId: string, tx?: Prisma.TransactionClient): Promise<PersonalWorldRead> {
+    const { rows, exists } = await readWorldRows(tx ?? this.prisma, { createdByUserId: userId, projectId: null })
     return exists
       ? { aggregate: await layersToWorldStateViaLens(rows), exists: true }
       : { aggregate: emptyWorldState(), exists: false }
@@ -641,8 +663,58 @@ export class WorldStateService {
   }
 
   /**
+   * Freezes every inline mention of a deleted thing across every persona
+   * ontology's gloss to the thing's human-readable display name, returning the
+   * number of mentions frozen. This is the single seam for all four reference
+   * kinds over ontology glosses: the {@link dereferenceGlossItems} matcher
+   * decides which gloss segments belong to the target
+   * (typeRef / objectRef / claimRef / annotationRef), and the rewrite commits
+   * through {@link writePersonaOntology}, which regenerates the stand-off gloss
+   * rows from the aggregate. It never deletes a stand-off row directly — doing so
+   * would strand the gloss segment instead of freezing it to text. The read,
+   * rewrite, and version-guarded write run inside the caller's transaction when
+   * one is supplied, so the freeze commits atomically with the delete that drives
+   * it.
+   *
+   * @param userId - the owner whose persona ontologies are swept
+   * @param target - the deleted thing (kind + id) and its replacement display name
+   * @param tx - optional transaction client so the freeze commits with the delete
+   * @returns the total number of gloss mentions frozen to text
+   */
+  async dereferenceOntologyGlosses(
+    userId: string,
+    target: DereferenceTarget,
+    tx?: Prisma.TransactionClient,
+  ): Promise<number> {
+    let total = 0
+    for (const { persona, aggregate } of await this.personasWithOntology(userId, tx)) {
+      let personaHits = 0
+      const convert = (types: unknown[]): unknown[] =>
+        (types as Array<Record<string, unknown>>).map((type) => {
+          const gloss = type.gloss
+          if (!Array.isArray(gloss)) return type
+          const { gloss: rewritten, count } = dereferenceGlossItems(gloss as GlossItem[], target)
+          if (count === 0) return type
+          personaHits += count
+          return { ...type, gloss: rewritten }
+        })
+
+      const entityTypes = convert(aggregate.entityTypes)
+      const eventTypes = convert(aggregate.eventTypes)
+      const roleTypes = convert(aggregate.roleTypes)
+      const relationTypes = convert(aggregate.relationTypes)
+      if (personaHits === 0) continue
+
+      total += personaHits
+      await this.writePersonaOntology(persona, { entityTypes, eventTypes, roleTypes, relationTypes }, tx)
+    }
+    return total
+  }
+
+  /**
    * Converts every persona ontology's gloss references to a deleted world object
-   * into plain text, returning the number of references found.
+   * into plain text, returning the number of references found. A thin
+   * object-reference specialization of {@link dereferenceOntologyGlosses}.
    *
    * @param userId - owning user id
    * @param objectId - id of the deleted world object
@@ -652,38 +724,115 @@ export class WorldStateService {
    *   with the world-object delete that drives it
    * @returns the total number of gloss references converted
    */
-  private async cleanupGlossReferences(
+  private cleanupGlossReferences(
     userId: string,
     objectId: string,
     refType: 'entity-object' | 'event-object' | 'time-object',
     objectName: string,
     tx?: Prisma.TransactionClient,
   ): Promise<number> {
-    let count = 0
-    for (const { persona, aggregate } of await this.personasWithOntology(userId, tx)) {
-      const before =
-        countObjectRefsInGlosses(aggregate.entityTypes as TypeWithGloss[], objectId, refType) +
-        countObjectRefsInGlosses(aggregate.roleTypes as TypeWithGloss[], objectId, refType) +
-        countObjectRefsInGlosses(aggregate.eventTypes as TypeWithGloss[], objectId, refType) +
-        countObjectRefsInGlosses(aggregate.relationTypes as TypeWithGloss[], objectId, refType)
-      count += before
-      if (before === 0) continue
+    return this.dereferenceOntologyGlosses(
+      userId,
+      { kind: 'objectRef', id: objectId, name: objectName, refType },
+      tx,
+    )
+  }
 
-      const convert = (types: unknown[]): unknown[] =>
-        (types as Array<Record<string, unknown>>).map((type) => {
-          const gloss = type.gloss
-          if (!Array.isArray(gloss)) return type
-          return { ...type, gloss: convertObjectRefsToText(gloss, objectId, refType, objectName) }
-        })
+  /**
+   * Freezes every inline mention of a deleted thing in a world object's
+   * `.description` gloss to its human-readable display name, across the four
+   * description-carrying buckets (entities, events, entity/event collections).
+   *
+   * A `.description` is stand-off: each non-text segment materializes as a child
+   * LayersAnnotation under the object's presence annotation. The rewrite therefore
+   * goes through the aggregate — read the world, rewrite each changed object's
+   * `.description` with the shared {@link dereferenceGlossItems} matcher, and write
+   * the changed objects back through the world projection, which regenerates the
+   * stand-off from the rewritten gloss. Nulling a gloss-reference row directly would
+   * strand its segment instead of freezing it, so the write never edits a stand-off
+   * row by hand.
+   *
+   * The read and the version-guarded write both run on the caller's transaction
+   * (`tx`), so the sweep commits atomically with the delete that drives it; a
+   * same-object compare-and-swap miss rolls the whole delete back (the projection
+   * write uses a single attempt, mirroring `mergeWorldObjects`). The private
+   * {@link upsertWorldObjects} — the live `/api/world` PUT vehicle — is deliberately
+   * not reused: it writes on `this.prisma` with a 5-attempt retry and an ability
+   * gate, the wrong shape for a tx-enclosed, already-authorized cleanup.
+   *
+   * @param userId - the owning user id
+   * @param target - the deleted thing and the display name its mentions freeze to
+   * @param tx - the delete transaction the read and write join
+   * @returns the total number of description mentions frozen to text
+   */
+  async dereferenceWorldDescriptions(
+    userId: string,
+    target: DereferenceTarget,
+    tx?: Prisma.TransactionClient,
+  ): Promise<number> {
+    const { aggregate, exists } = await this.readPersonalWorld(userId, tx)
+    if (!exists) return 0
 
-      await this.writePersonaOntology(persona, {
-        entityTypes: convert(aggregate.entityTypes),
-        eventTypes: convert(aggregate.eventTypes),
-        roleTypes: convert(aggregate.roleTypes),
-        relationTypes: convert(aggregate.relationTypes),
-      }, tx)
+    let total = 0
+    const changed: Partial<WorldStateAggregate> = {}
+    for (const bucket of DESCRIPTION_BUCKET_KEYS) {
+      const changedObjects: Record<string, unknown>[] = []
+      for (const object of asRecords(aggregate[bucket])) {
+        // Never re-project the deleted object itself — that would resurrect its node.
+        if (object.id === target.id) continue
+        const description = object.description
+        if (!Array.isArray(description) || description.length === 0) continue
+        const { gloss, count } = dereferenceGlossItems(description as GlossItem[], target)
+        if (count === 0) continue
+        total += count
+        changedObjects.push({ ...object, description: gloss })
+      }
+      if (changedObjects.length > 0) changed[bucket] = changedObjects
     }
-    return count
+    if (total === 0) return 0
+
+    // Write back ONLY the changed objects as a partial aggregate: the projection
+    // upserts just those nodes/collections and regenerates only their stand-off,
+    // leaving every other object (and other collections' memberships) untouched.
+    const scope = { createdByUserId: userId, projectId: null }
+    const partial: WorldStateAggregate = { ...emptyWorldState(), ...changed }
+    const projection = await worldStateToLayersViaLens(partial, scope)
+    await upsertWorldProjection(tx ?? this.prisma, scope, projection, 1)
+    return total
+  }
+
+  /**
+   * Freezes every inline text mention of a deleted thing across ALL carriers to
+   * its human-readable display name, in one pass: the persona-ontology glosses,
+   * the world objects' `.description` glosses, the video summaries, and the claim
+   * prose. Each sub-sweep is idempotent and writes nothing when it finds no
+   * matching mention, so calling this from a path that already froze one carrier
+   * (e.g. a type deletion that already rewrote its own ontology typeRef) is a
+   * harmless no-op on that carrier rather than a double-write. The read and the
+   * version-guarded writes join the caller's transaction, so the whole freeze
+   * commits atomically with the delete that drives it.
+   *
+   * This is the TEXT-dereference half of the graceful-delete policy; the STRUCTURED
+   * clear (nulling a claim's claimer type, its world-object refs, or an annotation
+   * id in a time span) is `clearClaimStructuredRefs`, called alongside it.
+   *
+   * @param userId - the owner whose carriers are swept
+   * @param target - the deleted thing (kind + id) and its replacement display name
+   * @param tx - the delete transaction the reads and writes join
+   * @returns the total number of inline mentions frozen to text across all carriers
+   */
+  async dereferenceAcrossCarriers(
+    userId: string,
+    target: DereferenceTarget,
+    tx?: Prisma.TransactionClient,
+  ): Promise<number> {
+    const client = tx ?? this.prisma
+    let total = 0
+    total += await this.dereferenceOntologyGlosses(userId, target, tx)
+    total += await this.dereferenceWorldDescriptions(userId, target, tx)
+    total += await dereferenceSummaries(client, target)
+    total += await dereferenceClaimProse(client, target)
+    return total
   }
 
   /** Relations incident to a world object of a given kind, split from the rest. */
@@ -857,23 +1006,36 @@ export class WorldStateService {
       objectId,
     )
     const scope = { createdByUserId: userId, projectId: null }
-    // Delete the object node and its native derivations (the scaffold annotations
-    // it denotes — its presence, type-assignment, interpretation, and gloss rows),
-    // its incident relation edges, strip its collection memberships, and convert
-    // the ontology gloss references, all in ONE transaction so a partial failure
-    // rolls back rather than orphaning glosses on a half-deleted world object. The
-    // annotations are deleted before the node so `denotesNode`'s SetNull cannot
-    // strand them with a null reference.
+    // Clean up the object's references, carrier-aware, in ONE transaction so a
+    // partial failure rolls back rather than orphaning glosses on a half-deleted
+    // object. (1) Delete the object's own world-scaffold derivations (presence,
+    // type-assignment, interpretation, and its description gloss rows). (2) For
+    // the user media annotations that link it, a video bounding box KEEPS its box
+    // (its `denotesNodeId` is nulled) so the user can relink later, while a
+    // document object sibling is deleted (its base placeholder keeps the span).
+    // Then remove its incident relation edges, strip its collection memberships,
+    // and freeze other objects' gloss references to text (`cleanupGlossReferences`
+    // below). Deleted annotations' relations cascade away with them.
     const { glossReferences, memberships } = await this.prisma.$transaction(async (tx) => {
       await tx.layersAnnotation.deleteMany({
         where: { denotesNodeId: objectId, layerId: worldScaffoldLayerId(userId, null) },
       })
+      await clearVideoBoxesElseDelete(tx, { denotesNodeId: objectId }, { denotesNodeId: null })
       await tx.graphNode.deleteMany({ where: { id: objectId, ...scope } })
       if (removedIds.length > 0) {
         await tx.graphEdge.deleteMany({ where: { id: { in: removedIds }, ...scope } })
       }
       const memberships = await this.stripCollectionMemberships(tx, collectionBucket, objectId, userId)
       const glossReferences = await this.cleanupGlossReferences(userId, objectId, refType, objectName, tx)
+      // Freeze every OTHER inline text mention of the deleted object — world
+      // descriptions, video summaries, claim prose (the ontology-gloss sweep above
+      // already froze its own carrier, so its re-run here is a 0-hit no-op) — and
+      // clear the structured claim refs (describes / occurs-at / located-at) that
+      // named it. The gloss-reference count reported to the caller stays the
+      // ontology-only count from `cleanupGlossReferences`.
+      const target: DereferenceTarget = { kind: 'objectRef', id: objectId, name: objectName, refType }
+      await this.dereferenceAcrossCarriers(userId, target, tx)
+      await clearClaimStructuredRefs(tx, target)
       return { glossReferences, memberships }
     })
 
@@ -931,7 +1093,22 @@ export class WorldStateService {
       'timeCollections',
       'time-object',
       timeId,
-      () => timeId,
+      // A world Time has no `name`; freeze inline mentions of a deleted time to the
+      // most human-readable label it carries — an explicit label, else the
+      // description of its vagueness or the expression of its deictic anchor — and
+      // fall back to the id only when the time is wholly anonymous.
+      (target) => {
+        const nonEmpty = (value: unknown): string | undefined =>
+          typeof value === 'string' && value.trim() !== '' ? value : undefined
+        const nested = (value: unknown, key: string): string | undefined =>
+          nonEmpty((value as Record<string, unknown> | null | undefined)?.[key])
+        return (
+          nonEmpty(target.label) ??
+          nested(target.vagueness, 'description') ??
+          nested(target.deictic, 'expression') ??
+          timeId
+        )
+      },
     )
   }
 }

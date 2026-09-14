@@ -13,6 +13,7 @@ import { PrismaClient, Prisma } from '@prisma/client'
 
 import {
   applyTrackMembership,
+  isVideoAnnotationSubkind,
   tracksByAnnotation,
   VIDEO_ANNOTATION_SUBKINDS,
   type VideoAnnotationInput,
@@ -283,6 +284,56 @@ export async function countPersonaAnnotations(
 }
 
 /**
+ * Cleans up the USER MEDIA annotations that reference a deleted type or object,
+ * carrier-aware, and touches nothing else.
+ *
+ * Only two carriers are user media annotations: video-region boxes (layer subkind
+ * in {@link VIDEO_ANNOTATION_SUBKINDS}) and document spans (a null-subkind span
+ * layer). A video box keeps its box — its reference fields are nulled (via
+ * `clearData`) so the user can reassign a type or object later — while a document
+ * span sibling is deleted (its persona-free base placeholder keeps the span). This
+ * is the carrier-preservation policy: never delete a bounding box because its type
+ * or object was deleted.
+ *
+ * Rows in any other layer (a `gloss`/`world`/`claim` standoff whose reference is
+ * an `ontologyTypeRefId`/`denotesNodeId` too) are SKIPPED here — those are derived
+ * projections managed by the ontology/world/claim aggregate rewrites, and touching
+ * them here would strand a gloss segment instead of freezing it to text.
+ *
+ * @param prisma - the Prisma client (or a transaction client)
+ * @param where - selects the annotations that reference the deleted thing
+ * @param clearData - the reference fields to null on the surviving video boxes
+ * @returns the number of user media annotations touched (nulled plus deleted)
+ */
+export async function clearVideoBoxesElseDelete(
+  prisma: PrismaLike,
+  where: Prisma.LayersAnnotationWhereInput,
+  clearData: Prisma.LayersAnnotationUncheckedUpdateManyInput,
+): Promise<number> {
+  const rows = await prisma.layersAnnotation.findMany({
+    where,
+    select: { id: true, layer: { select: { subkind: true } } },
+  })
+  const videoIds: string[] = []
+  const documentIds: string[] = []
+  for (const row of rows) {
+    if (isVideoAnnotationSubkind(row.layer.subkind)) videoIds.push(row.id)
+    else if (row.layer.subkind == null) documentIds.push(row.id)
+    // Any other subkind is a derived standoff (gloss/world/claim); leave it to
+    // the aggregate rewrite that owns it.
+  }
+  let count = 0
+  if (videoIds.length > 0) {
+    count += (await prisma.layersAnnotation.updateMany({ where: { id: { in: videoIds } }, data: clearData }))
+      .count
+  }
+  if (documentIds.length > 0) {
+    count += (await prisma.layersAnnotation.deleteMany({ where: { id: { in: documentIds } } })).count
+  }
+  return count
+}
+
+/**
  * Deletes a persona's annotations from the layers store, optionally filtered by
  * the reconstructed `type` and `label`, for persona/type deletion.
  *
@@ -302,16 +353,39 @@ export async function deletePersonaAnnotations(
   filter: PersonaAnnotationFilter = {},
 ): Promise<number> {
   const where: Prisma.LayersAnnotationWhereInput = { layer: { personaId } }
-  if (filter.label !== undefined) where.label = filter.label
-  if (filter.type === undefined || filter.label !== undefined) {
-    const result = await prisma.layersAnnotation.deleteMany({ where })
-    return result.count
+  // A type deletion targets the annotations that DENOTE the type. The type id
+  // rides on `ontologyTypeRefId` for native document spans, and on the `label`
+  // column for video-region annotations, so match either — a display-name label
+  // never collides with a type id. Carrier preservation then splits the hits: a
+  // video bounding box keeps its box (its type ref is nulled) so the user can
+  // reassign, while a document span's type sibling is deleted (its persona-free
+  // base placeholder keeps the span). An object filter takes the same split on
+  // `denotesNodeId`.
+  if (filter.type === 'type' && filter.label !== undefined) {
+    return clearVideoBoxesElseDelete(
+      prisma,
+      { layer: { personaId }, OR: [{ ontologyTypeRefId: filter.label }, { label: filter.label }] },
+      { ontologyTypeRefId: null, label: null },
+    )
   }
-  const rows = await readLayersAnnotations(prisma, where)
-  const ids = rows.filter((r) => r.type === filter.type).map((r) => r.id)
-  if (ids.length === 0) return 0
-  const result = await prisma.layersAnnotation.deleteMany({ where: { id: { in: ids } } })
-  return result.count
+  if (filter.type === 'object' && filter.label !== undefined) {
+    return clearVideoBoxesElseDelete(
+      prisma,
+      { layer: { personaId }, denotesNodeId: filter.label },
+      { denotesNodeId: null },
+    )
+  }
+  if (filter.label !== undefined) {
+    where.label = filter.label
+    return (await prisma.layersAnnotation.deleteMany({ where })).count
+  }
+  if (filter.type !== undefined) {
+    const rows = await readLayersAnnotations(prisma, where)
+    const ids = rows.filter((r) => r.type === filter.type).map((r) => r.id)
+    if (ids.length === 0) return 0
+    return (await prisma.layersAnnotation.deleteMany({ where: { id: { in: ids } } })).count
+  }
+  return (await prisma.layersAnnotation.deleteMany({ where })).count
 }
 
 /**

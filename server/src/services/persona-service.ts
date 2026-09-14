@@ -16,10 +16,13 @@ import {
   removeTypeAssignmentsFromEntities,
   removeEventInterpretationsFromEvents,
   countTypeAssignments,
-  countEventInterpretations
+  countEventInterpretations,
+  type DereferenceTarget
 } from '../lib/reference-cleanup.js'
 import { asTypesWithGloss, asEntities, asEvents } from '../lib/prisma-json.js'
-import { mergeById } from '../services/world-state-service.js'
+import { mergeById, WorldStateService } from '../services/world-state-service.js'
+import { LayersOntologyRepository } from '../repositories/LayersOntologyRepository.js'
+import { clearClaimStructuredRefs } from './layers-bridge/claim-bridge.js'
 
 /**
  * Converts a typed array to Prisma.InputJsonValue for storage in JSON columns.
@@ -128,6 +131,17 @@ export class PersonaService {
       throw new ForbiddenError('No abilities defined')
     }
     return this.ability
+  }
+
+  /**
+   * A WorldStateService bound to this request, for the cross-carrier text
+   * dereference the type-deletion cleanup drives (persona-ontology glosses, world
+   * object descriptions, video summaries, and claim prose). Every call passes the
+   * enclosing delete transaction, so the injected `prisma` is only a fallback and
+   * the ontology repo is used solely as the service's read/write seam onto that tx.
+   */
+  private worldService(): WorldStateService {
+    return new WorldStateService(new LayersOntologyRepository(prisma), prisma, this.ability, this.userId)
   }
 
   /**
@@ -709,6 +723,19 @@ export class PersonaService {
           entities: toJson(removeTypeAssignmentsFromEntities(entities, typeId, personaId)),
         }, tx)
       }
+
+      // Freeze every remaining inline text mention of the deleted type across the
+      // sibling carriers (world descriptions, video summaries, claim prose; the
+      // ontology-gloss sweep here is a 0-hit no-op because the rewrite above
+      // already froze this ontology's own glosses) and clear the structured claim
+      // refs (a claim whose claimer is this type). Runs AFTER updateWorldState so
+      // the world sweep reads post-strip state and updateWorldState cannot clobber
+      // a description freeze.
+      const target: DereferenceTarget = {
+        kind: 'typeRef', id: typeId, name: typeName, refPersonaId: personaId, refType: 'entity',
+      }
+      await this.worldService().dereferenceAcrossCarriers(persona.userId, target, tx)
+      await clearClaimStructuredRefs(tx, target)
     })
 
     return {
@@ -834,6 +861,14 @@ export class PersonaService {
           relationTypes: toJson(cleanedRelationTypes),
         }
       }, tx)
+
+      // Freeze remaining inline text mentions of the deleted role across the
+      // sibling carriers and clear the structured claim refs that named it.
+      const target: DereferenceTarget = {
+        kind: 'typeRef', id: typeId, name: typeName, refPersonaId: personaId, refType: 'role',
+      }
+      await this.worldService().dereferenceAcrossCarriers(persona.userId, target, tx)
+      await clearClaimStructuredRefs(tx, target)
     })
 
     return {
@@ -968,6 +1003,15 @@ export class PersonaService {
           events: toJson(removeEventInterpretationsFromEvents(events, typeId, personaId)),
         }, tx)
       }
+
+      // Freeze remaining inline text mentions of the deleted event type across the
+      // sibling carriers (runs AFTER updateWorldState so the world sweep reads
+      // post-strip state) and clear the structured claim refs that named it.
+      const target: DereferenceTarget = {
+        kind: 'typeRef', id: typeId, name: typeName, refPersonaId: personaId, refType: 'event',
+      }
+      await this.worldService().dereferenceAcrossCarriers(persona.userId, target, tx)
+      await clearClaimStructuredRefs(tx, target)
     })
 
     return {
@@ -1030,27 +1074,37 @@ export class PersonaService {
 
     // Route the gloss cleanup through the version-guarded optimistic update so a
     // concurrent ontology edit is not clobbered; recompute from the fresh row.
-    // A single write needs no enclosing transaction.
+    // Wrap it and the cross-carrier freeze in ONE transaction so the sibling
+    // carriers (world descriptions, summaries, claim prose) and the structured
+    // claim-ref clear commit atomically with the ontology rewrite.
     let glossReferences = 0
-    await this.repository.updateOntologyOptimistic(personaId, (current) => {
-      const currentEntityTypes = asTypesWithGloss(current.entityTypes)
-      const currentRoleTypes = asTypesWithGloss(current.roleTypes)
-      const currentEventTypes = asTypesWithGloss(current.eventTypes)
-      const currentRelationTypes = asTypesWithGloss(current.relationTypes)
-      const updatedRelationTypes = currentRelationTypes.filter(t => t.id !== typeId)
+    await prisma.$transaction(async (tx) => {
+      await this.repository.updateOntologyOptimistic(personaId, (current) => {
+        const currentEntityTypes = asTypesWithGloss(current.entityTypes)
+        const currentRoleTypes = asTypesWithGloss(current.roleTypes)
+        const currentEventTypes = asTypesWithGloss(current.eventTypes)
+        const currentRelationTypes = asTypesWithGloss(current.relationTypes)
+        const updatedRelationTypes = currentRelationTypes.filter(t => t.id !== typeId)
 
-      glossReferences = 0
-      glossReferences += countTypeRefsInGlosses(currentEntityTypes, typeId, personaId, 'relation')
-      glossReferences += countTypeRefsInGlosses(currentRoleTypes, typeId, personaId, 'relation')
-      glossReferences += countTypeRefsInGlosses(currentEventTypes, typeId, personaId, 'relation')
-      glossReferences += countTypeRefsInGlosses(updatedRelationTypes, typeId, personaId, 'relation')
+        glossReferences = 0
+        glossReferences += countTypeRefsInGlosses(currentEntityTypes, typeId, personaId, 'relation')
+        glossReferences += countTypeRefsInGlosses(currentRoleTypes, typeId, personaId, 'relation')
+        glossReferences += countTypeRefsInGlosses(currentEventTypes, typeId, personaId, 'relation')
+        glossReferences += countTypeRefsInGlosses(updatedRelationTypes, typeId, personaId, 'relation')
 
-      return {
-        entityTypes: toJson(updateGlossesInTypes(currentEntityTypes, typeId, personaId, 'relation', typeName)),
-        roleTypes: toJson(updateGlossesInTypes(currentRoleTypes, typeId, personaId, 'relation', typeName)),
-        eventTypes: toJson(updateGlossesInTypes(currentEventTypes, typeId, personaId, 'relation', typeName)),
-        relationTypes: toJson(updateGlossesInTypes(updatedRelationTypes, typeId, personaId, 'relation', typeName)),
+        return {
+          entityTypes: toJson(updateGlossesInTypes(currentEntityTypes, typeId, personaId, 'relation', typeName)),
+          roleTypes: toJson(updateGlossesInTypes(currentRoleTypes, typeId, personaId, 'relation', typeName)),
+          eventTypes: toJson(updateGlossesInTypes(currentEventTypes, typeId, personaId, 'relation', typeName)),
+          relationTypes: toJson(updateGlossesInTypes(updatedRelationTypes, typeId, personaId, 'relation', typeName)),
+        }
+      }, tx)
+
+      const target: DereferenceTarget = {
+        kind: 'typeRef', id: typeId, name: typeName, refPersonaId: personaId, refType: 'relation',
       }
+      await this.worldService().dereferenceAcrossCarriers(persona.userId, target, tx)
+      await clearClaimStructuredRefs(tx, target)
     })
 
     return {

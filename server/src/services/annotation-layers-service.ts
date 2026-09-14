@@ -1,10 +1,14 @@
-import { Prisma, type AnnotationLayer, type LayersAnnotation, type TextAnnotationRelation } from '@prisma/client'
+import { Prisma, PrismaClient, type AnnotationLayer, type LayersAnnotation, type TextAnnotationRelation } from '@prisma/client'
 import { subject } from '@casl/ability'
 import { accessibleBy } from '@casl/prisma'
 import type { Anchor } from '@fovea/layers-schema'
 import type { AppAbility } from '../lib/abilities.js'
 import { NotFoundError, ForbiddenError, ValidationError } from '../lib/errors.js'
 import { AnnotationLayerRepository } from '../repositories/AnnotationLayerRepository.js'
+import { LayersOntologyRepository } from '../repositories/LayersOntologyRepository.js'
+import { WorldStateService, resolvePersonalUserId } from './world-state-service.js'
+import { clearClaimStructuredRefs } from './layers-bridge/claim-bridge.js'
+import type { DereferenceTarget } from '../lib/reference-cleanup.js'
 
 /**
  * Converts a typed value to Prisma.InputJsonValue for storage in a JSON column.
@@ -212,7 +216,7 @@ export interface CreateResult<T> {
  *
  * @example
  * ```typescript
- * const service = new AnnotationLayerService(repo, request.ability, request.user.id)
+ * const service = new AnnotationLayerService(repo, request.ability, request.user.id, prisma)
  * const { row, created } = await service.createLayer(input)
  * ```
  */
@@ -221,6 +225,7 @@ export class AnnotationLayerService {
     private readonly repository: AnnotationLayerRepository,
     private readonly ability: AppAbility,
     private readonly userId: string,
+    private readonly prisma: PrismaClient,
   ) {}
 
   // ---- mappers -------------------------------------------------------------
@@ -490,6 +495,27 @@ export class AnnotationLayerService {
       input.denotesNodeId,
     )
 
+    // Get-or-create the denoted world node so the write cannot lose to a race
+    // with the world-object save that creates it. A span may denote an object the
+    // client created milliseconds earlier; the two are separate requests, so the
+    // node may not be committed yet when this annotation write runs, tripping the
+    // `denotesNodeId` foreign key. An EXISTING node keeps all of its fields (empty
+    // update); a stub minted here is filled in with the object's real type and
+    // label when the world save's own id-keyed upsert lands.
+    if (denotesNodeId) {
+      await this.prisma.graphNode.upsert({
+        where: { id: denotesNodeId },
+        create: {
+          id: denotesNodeId,
+          nodeType: 'entity',
+          label: input.label ?? null,
+          projectId,
+          createdByUserId: this.userId,
+        },
+        update: {},
+      })
+    }
+
     const updateExisting = async (
       existing: LayersAnnotation,
     ): Promise<CreateResult<LayersAnnotationResponse>> => {
@@ -644,7 +670,12 @@ export class AnnotationLayerService {
   }
 
   /**
-   * Deletes a layers annotation. Requires `delete` on the specific instance.
+   * Deletes a layers annotation and, in one transaction, freezes every inline
+   * mention of it — across the persona ontology glosses, the world-object
+   * descriptions, the video summaries, and the claim prose — to the annotation's
+   * label, and strips its id from every claim's time-span annotation refs, so a
+   * deleted annotation never strands a dangling annotationRef. Requires `delete`
+   * on the specific instance.
    *
    * @param id - LayersAnnotation UUID
    */
@@ -654,7 +685,24 @@ export class AnnotationLayerService {
     if (!this.ability.can('delete', subject('LayersAnnotation', existing))) {
       throw new ForbiddenError('Cannot delete this LayersAnnotation')
     }
-    await this.repository.deleteAnnotation(id)
+
+    // The annotation's label (else its text, else its id) is the frozen
+    // replacement text for any inline mention of it.
+    const displayName = existing.label ?? existing.text ?? id
+    const userId = await resolvePersonalUserId(this.prisma, this.userId)
+    const world = new WorldStateService(
+      new LayersOntologyRepository(this.prisma),
+      this.prisma,
+      this.ability,
+      this.userId,
+    )
+    const target: DereferenceTarget = { kind: 'annotationRef', id, name: displayName }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.layersAnnotation.delete({ where: { id } })
+      await world.dereferenceAcrossCarriers(userId, target, tx)
+      await clearClaimStructuredRefs(tx, target)
+    })
   }
 
   // ---- TextAnnotationRelation ---------------------------------------------
