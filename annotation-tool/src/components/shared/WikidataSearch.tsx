@@ -15,6 +15,8 @@ import {
   WikidataParticipantData,
 } from '@hooks/wikidata/useWikidataImport'
 import debounce from 'lodash/debounce'
+import { useTourAnchor } from '@/tours/engine/anchorRegistry'
+import { mergeRefs } from '@/lib/mergeRefs'
 
 /**
  * Wikidata search result item from the API.
@@ -154,6 +156,8 @@ export default function WikidataSearch({ onImport, entityType, objectSubtype = '
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
+  const searchAnchor = useTourAnchor('augmenter-search')
+  const resultsAnchor = useTourAnchor('augmenter-results')
   // Suppress the next debouncedSearch run when the query is updated as
   // a side-effect of selecting a dropdown result rather than by the
   // user typing. Without this flag, handleSelect's `setQuery(label)`
@@ -256,7 +260,7 @@ export default function WikidataSearch({ onImport, entityType, objectSubtype = '
       </Alert>
 
       {/* Search input with dropdown */}
-      <div className="relative" data-tour-id="augmenter-search">
+      <div className="relative" ref={searchAnchor}>
         <div className="relative">
           <Globe className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
@@ -279,10 +283,9 @@ export default function WikidataSearch({ onImport, entityType, objectSubtype = '
         {/* Dropdown */}
         {isDropdownOpen && options.length > 0 && (
           <div
-            ref={dropdownRef}
+            ref={mergeRefs(dropdownRef, resultsAnchor)}
             role="listbox"
             aria-label="Wikidata search results"
-            data-tour-id="augmenter-results"
             className="absolute z-50 mt-1 w-full max-h-[300px] overflow-auto rounded-lg border bg-popover shadow-md"
           >
             {options.map((option) => (

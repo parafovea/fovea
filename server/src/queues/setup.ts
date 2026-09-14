@@ -1,7 +1,17 @@
+import { randomUUID } from "node:crypto";
 import { Queue, Worker, QueueEvents } from "bullmq";
 import { Redis } from "ioredis";
 import { PrismaClient, Prisma } from "@prisma/client";
 import snakecaseKeys from "snakecase-keys";
+import { readOntologyAggregate } from "../services/layers-bridge/ontology-bridge.js";
+import { readVideoPersonaAnnotations } from "../services/layers-bridge/annotation-bridge.js";
+import {
+  deleteExtractedSummaryClaims,
+  readSummaryClaims,
+  writeClaim,
+  type ClaimSummaryContext,
+} from "../services/layers-bridge/claim-bridge.js";
+import { nestClaims, type StoredClaim, type StoredClaimNode } from "../services/claim-layers-mapper.js";
 import {
   queueJobCounter,
   queueJobDuration,
@@ -577,26 +587,24 @@ export const claimWorker = new Worker<
 
     // Add ontology context if requested
     if (config.inputSources.includeOntology && summary.personaId) {
-      const ontology = await prisma.ontology.findUnique({
-        where: { personaId: summary.personaId },
-      });
+      const { aggregate: ontology, exists } = await readOntologyAggregate(
+        prisma,
+        summary.personaId,
+      );
 
-      if (ontology) {
-        const entityTypes = ontology.entityTypes as unknown[];
-        const eventTypes = ontology.eventTypes as unknown[];
-        requestBody.ontology_types = [...entityTypes, ...eventTypes];
+      if (exists) {
+        requestBody.ontology_types = [...ontology.entityTypes, ...ontology.eventTypes];
       }
     }
 
     // Add annotation context if requested
     if (config.inputSources.includeAnnotations && summary.videoId) {
-      const annotations = await prisma.annotation.findMany({
-        where: {
-          videoId: summary.videoId,
-          personaId: summary.personaId,
-        },
-        take: 15,
-      });
+      const annotations = await readVideoPersonaAnnotations(
+        prisma,
+        summary.videoId,
+        summary.personaId,
+        15,
+      );
 
       requestBody.annotations = annotations.map((ann) => ({
         name: ann.label,
@@ -648,9 +656,25 @@ export const claimWorker = new Worker<
 
     await job.updateProgress(60);
 
-    const countClaims = (claims: unknown[]): number => {
+    // Persist the extracted claims into the layers store idempotently, inside ONE
+    // transaction so a job retry, double-submit, or mid-write failure never
+    // leaves a mix of old and new claims. Remove the summary's previously
+    // extracted claims (preserving any manually authored ones, which carry
+    // extractionStrategy "manual"), write the fresh set under the summary's
+    // claim-span layer, then rebuild the denormalized claimsJson from the
+    // reconstructed tree, all committing or rolling back together.
+    const summaryCtx: ClaimSummaryContext = {
+      id: summary.id,
+      videoId: summary.videoId,
+      projectId: summary.projectId,
+      // Owned by the user who requested extraction so the extracted claims are
+      // readable by their creator (mirrors the interactive claim-create paths).
+      createdBy: createdBy ?? summary.createdBy,
+    };
+
+    const countClaims = (claims: StoredClaimNode[]): number => {
       let count = claims.length;
-      for (const claim of claims as { subclaims?: unknown[] }[]) {
+      for (const claim of claims) {
         if (claim.subclaims && claim.subclaims.length > 0) {
           count += countClaims(claim.subclaims);
         }
@@ -658,52 +682,25 @@ export const claimWorker = new Worker<
       return count;
     };
 
-    // Persist the extracted claims idempotently. A job retry or double-submit
-    // would otherwise duplicate every claim, since each create always inserts a
-    // new row. To keep extraction idempotent per summary, delete the summary's
-    // previously extracted claims, re-insert the fresh set, and rewrite the
-    // denormalized claimsJson in a single transaction so a partial failure
-    // never leaves the summary with a mix of old and new claims.
-    //
-    // The delete is scoped to model-extracted claims only (extractionStrategy
-    // other than "manual"); manually authored claims are stamped with
-    // extractionStrategy "manual" by the interactive create paths and must be
-    // preserved across re-extraction. Deleting the extracted root claims also
-    // removes their subclaims via the schema's onDelete: Cascade, but the
-    // extracted subclaims carry the same non-"manual" extractionStrategy and so
-    // fall within the delete scope regardless.
     const { allClaims, totalClaims } = await prisma.$transaction(
       async (tx) => {
-        // Remove the previously extracted claims for this summary, leaving any
-        // manually authored claims in place.
-        await tx.claim.deleteMany({
-          where: {
-            summaryId,
-            summaryType,
-            extractionStrategy: { not: "manual" },
-          },
-        });
+        await deleteExtractedSummaryClaims(tx, summaryId);
 
-        // Re-insert the freshly extracted claim tree.
         const saveClaim = async (
           claimData: (typeof modelResponse.claims)[0],
           parentClaimId?: string,
         ): Promise<string> => {
-          const claim = await tx.claim.create({
-            data: {
-              summaryId,
-              summaryType,
-              // Inherit the parent summary's project scope so extracted claims
-              // are project-visible (mirrors the interactive claim-create
-              // paths).
-              projectId: summary?.projectId ?? undefined,
-              // Owned by the user who requested extraction, so it is readable by
-              // its creator (mirrors the interactive claim-create paths).
-              createdBy: createdBy ?? undefined,
-              text: claimData.text,
-              gloss: [],
-              parentClaimId,
-              textSpans: claimData.char_start
+          const claimId = randomUUID();
+          const now = new Date().toISOString();
+          const claim: StoredClaim = {
+            id: claimId,
+            summaryId,
+            summaryType,
+            text: claimData.text,
+            gloss: [],
+            parentClaimId: parentClaimId ?? null,
+            textSpans:
+              typeof claimData.char_start === "number"
                 ? [
                     {
                       sentenceIndex: claimData.sentence_index,
@@ -711,21 +708,26 @@ export const claimWorker = new Worker<
                       charEnd: claimData.char_end,
                     },
                   ]
-                : undefined,
-              confidence: claimData.confidence,
-              modelUsed: modelResponse.model_used,
-              extractionStrategy: config.extractionStrategy,
-            },
-          });
+                : null,
+            timeSpans: null,
+            confidence: claimData.confidence,
+            modelUsed: modelResponse.model_used,
+            extractionStrategy: config.extractionStrategy,
+            createdBy: summaryCtx.createdBy,
+            projectId: summaryCtx.projectId,
+            createdAt: now,
+            updatedAt: now,
+          };
+          await writeClaim(tx, summaryCtx, claim);
 
           // Recursively save subclaims
           if (claimData.subclaims && claimData.subclaims.length > 0) {
             for (const subclaimData of claimData.subclaims as (typeof modelResponse.claims)[0][]) {
-              await saveClaim(subclaimData, claim.id);
+              await saveClaim(subclaimData, claimId);
             }
           }
 
-          return claim.id;
+          return claimId;
         };
 
         // Save all root claims
@@ -733,46 +735,26 @@ export const claimWorker = new Worker<
           await saveClaim(claimData);
         }
 
-        // Rebuild the denormalized JSON from the current claim tree.
-        const rootClaims = await tx.claim.findMany({
-          where: {
-            summaryId,
-            summaryType,
-            parentClaimId: null,
-          },
-          include: {
-            subclaims: {
-              include: {
-                subclaims: {
-                  include: {
-                    subclaims: true,
-                  },
-                },
-              },
-            },
-          },
-          orderBy: [{ createdAt: "asc" }],
-        });
-
+        // Rebuild the denormalized claim tree from the layers store.
+        const { claims: flatClaims } = await readSummaryClaims(tx, summaryId);
+        const rootClaims = nestClaims(flatClaims);
         const treeTotalClaims = countClaims(rootClaims);
 
-        const claimsJson = {
-          version: "1.0",
-          claims: rootClaims,
-          metadata: {
-            extractedAt: new Date().toISOString(),
-            totalClaims: treeTotalClaims,
-            totalSubclaims: treeTotalClaims - rootClaims.length,
-            maxDepth: config.maxSubclaimDepth || 3,
-          },
-        };
-
         if (summaryType === "video") {
+          const claimsJson = {
+            version: "1.0",
+            claims: rootClaims,
+            metadata: {
+              extractedAt: new Date().toISOString(),
+              totalClaims: treeTotalClaims,
+              totalSubclaims: treeTotalClaims - rootClaims.length,
+              maxDepth: config.maxSubclaimDepth || 3,
+            },
+          };
           await tx.videoSummary.update({
             where: { id: summaryId },
             data: {
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma JSON type requires any
-              claimsJson: claimsJson as any,
+              claimsJson: claimsJson as unknown as Prisma.InputJsonValue,
               claimsExtractedAt: new Date(),
             },
           });
@@ -780,6 +762,7 @@ export const claimWorker = new Worker<
 
         return { allClaims: rootClaims, totalClaims: treeTotalClaims };
       },
+      { timeout: 30000 },
     );
 
     await job.updateProgress(80);
@@ -918,28 +901,12 @@ export const synthesisWorker = new Worker<
 
     await job.updateProgress(10);
 
-    // Fetch summary with claims
+    // Fetch summary and persona; claims are reconstructed from the layers store.
     const summary =
       summaryType === "video"
         ? await prisma.videoSummary.findUnique({
             where: { id: summaryId },
-            include: {
-              claims: {
-                where: { parentClaimId: null },
-                include: {
-                  subclaims: {
-                    include: {
-                      subclaims: {
-                        include: {
-                          subclaims: true,
-                        },
-                      },
-                    },
-                  },
-                },
-              },
-              persona: true,
-            },
+            include: { persona: true },
           })
         : null; // Future: Add collection summary support
 
@@ -947,7 +914,10 @@ export const synthesisWorker = new Worker<
       throw new Error(`Summary not found: ${summaryId}`);
     }
 
-    if (!summary.claims || summary.claims.length === 0) {
+    const { claims: flatClaims } = await readSummaryClaims(prisma, summaryId);
+    const rootClaims = nestClaims(flatClaims);
+
+    if (rootClaims.length === 0) {
       throw new Error(`No claims found for summary: ${summaryId}`);
     }
 
@@ -959,7 +929,7 @@ export const synthesisWorker = new Worker<
         {
           sourceId: summary.videoId,
           sourceType: "video",
-          claims: summary.claims,
+          claims: rootClaims,
           metadata: {
             persona: summary.persona.name,
           },
@@ -977,16 +947,15 @@ export const synthesisWorker = new Worker<
       }),
     };
 
-    const ontology = await prisma.ontology.findUnique({
-      where: { personaId: summary.personaId },
-    });
+    const { aggregate: ontology, exists: ontologyExists } = await readOntologyAggregate(
+      prisma,
+      summary.personaId,
+    );
 
-    if (ontology) {
-      const entityTypes = ontology.entityTypes as unknown[];
-      const eventTypes = ontology.eventTypes as unknown[];
+    if (ontologyExists) {
       Object.assign(camelCaseRequestBody, {
         ontologyContext: {
-          types: [...entityTypes, ...eventTypes],
+          types: [...ontology.entityTypes, ...ontology.eventTypes],
         },
       });
     }

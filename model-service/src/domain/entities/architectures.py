@@ -1,9 +1,9 @@
 """Model architecture domain entities.
 
-Each architecture is a Pydantic model with a ``kind`` literal discriminator.
-Family-level :class:`Annotated` unions tag those discriminators so a YAML
-config like ``architecture: {kind: "smolvlm"}`` parses into the right
-subclass and a loader factory can dispatch on its concrete type.
+Each architecture is a :class:`didactic.api.TaggedUnion` variant with a
+``kind`` literal discriminator. The single :class:`Architecture` root parses
+a YAML config like ``architecture: {kind: "smolvlm"}`` into the right
+subclass, and a loader factory can dispatch on its concrete type.
 
 Architectures are PURE DATA. They never carry runtime model paths,
 session handles, or weights; those live on the loader implementations
@@ -25,25 +25,29 @@ The dispatch flow is:
 No code along that path may match on model-id substrings, on
 ``model_id`` itself, on weights filenames, or on user-supplied free
 text. The Architecture class is the only legitimate dispatch key.
+
+Parsing a YAML architecture block is a single call::
+
+    arch = Architecture.model_validate({"kind": "smolvlm"})
+
+Unknown ``kind`` values and malformed blocks raise loudly, so a
+misconfigured catalog fails fast at load time rather than at dispatch.
 """
 
 from __future__ import annotations
 
-from typing import Annotated, Literal, Union
+from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+import didactic.api as dx
 
 
-class _ArchitectureBase(BaseModel):
-    """Shared base for every architecture model.
+class Architecture(dx.TaggedUnion, discriminator="kind"):
+    """Discriminated-union root over every architecture family.
 
-    Pydantic config is locked down so a typo in YAML
-    (e.g. ``kindd: "smolvlm"``) raises rather than silently parsing as
-    an empty model, and so each architecture's hyperparameters are
-    typed and validated end-to-end.
+    Every concrete architecture below is a variant of this root, keyed by
+    its ``kind`` literal. ``Architecture.model_validate({"kind": ...})``
+    dispatches to the matching variant regardless of family.
     """
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
 
 
 # ---------------------------------------------------------------------------
@@ -56,55 +60,55 @@ class _ArchitectureBase(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-class SmolVLM(_ArchitectureBase):
+class SmolVLM(Architecture):
     """SmolVLM family (HuggingFaceTB), transformers backend, CPU-runnable."""
 
     kind: Literal["smolvlm"] = "smolvlm"
 
 
-class Moondream(_ArchitectureBase):
+class Moondream(Architecture):
     """Moondream family (vikhyat), transformers backend, CPU-runnable."""
 
     kind: Literal["moondream"] = "moondream"
 
 
-class QwenVL(_ArchitectureBase):
+class QwenVL(Architecture):
     """Qwen2.5-VL family, sglang / transformers / llama_cpp depending on quant."""
 
     kind: Literal["qwen2.5-vl"] = "qwen2.5-vl"
 
 
-class Qwen3VL(_ArchitectureBase):
+class Qwen3VL(Architecture):
     """Qwen3-VL family, the 2026 successor with 256K-1M context."""
 
     kind: Literal["qwen3-vl"] = "qwen3-vl"
 
 
-class Gemma3VL(_ArchitectureBase):
+class Gemma3VL(Architecture):
     """Gemma 3 multimodal family."""
 
     kind: Literal["gemma-3"] = "gemma-3"
 
 
-class InternVL3(_ArchitectureBase):
+class InternVL3(Architecture):
     """InternVL3 family."""
 
     kind: Literal["internvl3"] = "internvl3"
 
 
-class Pixtral(_ArchitectureBase):
+class Pixtral(Architecture):
     """Pixtral family (Mistral)."""
 
     kind: Literal["pixtral"] = "pixtral"
 
 
-class Llama4Maverick(_ArchitectureBase):
+class Llama4Maverick(Architecture):
     """Llama-4 Maverick multimodal family."""
 
     kind: Literal["llama-4-maverick"] = "llama-4-maverick"
 
 
-class Tarsier2(_ArchitectureBase):
+class Tarsier2(Architecture):
     """Tarsier 2 video VLM family."""
 
     kind: Literal["tarsier-2"] = "tarsier-2"
@@ -121,54 +125,51 @@ class Tarsier2(_ArchitectureBase):
 # Gemini inlineData parts).
 
 
-class ClaudeVisionAPI(_ArchitectureBase):
+class ClaudeVisionAPI(Architecture):
     """Anthropic Claude vision messages API family."""
 
     kind: Literal["claude-vision-api"] = "claude-vision-api"
 
 
-class OpenAIVisionAPI(_ArchitectureBase):
+class OpenAIVisionAPI(Architecture):
     """OpenAI chat-completions API family with vision-capable models."""
 
     kind: Literal["openai-vision-api"] = "openai-vision-api"
 
 
-class GeminiVisionAPI(_ArchitectureBase):
+class GeminiVisionAPI(Architecture):
     """Google Gemini generateContent API family with vision-capable models."""
 
     kind: Literal["gemini-vision-api"] = "gemini-vision-api"
 
 
-class GrokVisionAPI(_ArchitectureBase):
+class GrokVisionAPI(Architecture):
     """xAI Grok chat-completions API family with vision-capable models."""
 
     kind: Literal["grok-vision-api"] = "grok-vision-api"
 
 
-VLMArchitecture = Annotated[
-    Union[  # noqa: UP007 (Pydantic Annotated unions on 3.12 still need explicit Union)
-        SmolVLM,
-        Moondream,
-        QwenVL,
-        Qwen3VL,
-        Gemma3VL,
-        InternVL3,
-        Pixtral,
-        Llama4Maverick,
-        Tarsier2,
-        ClaudeVisionAPI,
-        OpenAIVisionAPI,
-        GeminiVisionAPI,
-        GrokVisionAPI,
-    ],
-    Field(discriminator="kind"),
-]
-"""Discriminated union of every VLM family the service can load.
+VLMArchitecture = (
+    SmolVLM
+    | Moondream
+    | QwenVL
+    | Qwen3VL
+    | Gemma3VL
+    | InternVL3
+    | Pixtral
+    | Llama4Maverick
+    | Tarsier2
+    | ClaudeVisionAPI
+    | OpenAIVisionAPI
+    | GeminiVisionAPI
+    | GrokVisionAPI
+)
+"""Type alias for every VLM family the service can load.
 
-Add a new architecture by (a) defining its Pydantic subclass above with
-a unique ``kind`` literal and any hyperparameters it needs, (b) adding
-it to this union, and (c) writing the corresponding loader class with
-``@vlm_registry.register(NewVLM)``.
+Add a new architecture by (a) defining its :class:`Architecture` subclass
+above with a unique ``kind`` literal and any hyperparameters it needs,
+(b) adding it to this alias, and (c) writing the corresponding loader class
+with ``@vlm_registry.register(NewVLM)``.
 """
 
 
@@ -177,37 +178,37 @@ it to this union, and (c) writing the corresponding loader class with
 # ---------------------------------------------------------------------------
 
 
-class QwenLLM(_ArchitectureBase):
+class QwenLLM(Architecture):
     """Qwen text-only LLM family (Qwen2.5, Qwen3, Qwen3.5)."""
 
     kind: Literal["qwen-llm"] = "qwen-llm"
 
 
-class Phi(_ArchitectureBase):
+class Phi(Architecture):
     """Microsoft Phi-3 / Phi-4 family."""
 
     kind: Literal["phi"] = "phi"
 
 
-class DeepSeekR1Distill(_ArchitectureBase):
+class DeepSeekR1Distill(Architecture):
     """DeepSeek-R1 distilled student model family."""
 
     kind: Literal["deepseek-r1-distill"] = "deepseek-r1-distill"
 
 
-class DeepSeekV3LLM(_ArchitectureBase):
+class DeepSeekV3LLM(Architecture):
     """DeepSeek V3 / V3.2 mixture-of-experts text family."""
 
     kind: Literal["deepseek-v3"] = "deepseek-v3"
 
 
-class Llama3LLM(_ArchitectureBase):
+class Llama3LLM(Architecture):
     """Llama 3 / 3.1 / 3.2 / 3.3 text-only family."""
 
     kind: Literal["llama-3"] = "llama-3"
 
 
-class Llama4LLM(_ArchitectureBase):
+class Llama4LLM(Architecture):
     """Llama-4 (Scout / Maverick) text-mode MoE family.
 
     Used when the Llama-4 checkpoint is loaded for text-only generation
@@ -219,19 +220,19 @@ class Llama4LLM(_ArchitectureBase):
     kind: Literal["llama-4-llm"] = "llama-4-llm"
 
 
-class Gemma3LLM(_ArchitectureBase):
+class Gemma3LLM(Architecture):
     """Gemma 3 text-mode family (gemma-3-*-it consumed as a text LLM)."""
 
     kind: Literal["gemma-3-llm"] = "gemma-3-llm"
 
 
-class KimiK2(_ArchitectureBase):
+class KimiK2(Architecture):
     """Moonshot Kimi K2 family."""
 
     kind: Literal["kimi-k2"] = "kimi-k2"
 
 
-class GLM4(_ArchitectureBase):
+class GLM4(Architecture):
     """THUDM GLM-4 family."""
 
     kind: Literal["glm-4"] = "glm-4"
@@ -248,48 +249,46 @@ class GLM4(_ArchitectureBase):
 # the desired fail-loud behaviour.
 
 
-class ClaudeAPI(_ArchitectureBase):
+class ClaudeAPI(Architecture):
     """Anthropic Claude messages API family."""
 
     kind: Literal["claude-api"] = "claude-api"
 
 
-class OpenAIChat(_ArchitectureBase):
+class OpenAIChat(Architecture):
     """OpenAI chat-completions API family (GPT-4o, GPT-5.x)."""
 
     kind: Literal["openai-chat"] = "openai-chat"
 
 
-class GeminiAPI(_ArchitectureBase):
+class GeminiAPI(Architecture):
     """Google Gemini generateContent API family."""
 
     kind: Literal["gemini-api"] = "gemini-api"
 
 
-class GrokAPI(_ArchitectureBase):
+class GrokAPI(Architecture):
     """xAI Grok chat-completions API family."""
 
     kind: Literal["grok-api"] = "grok-api"
 
 
-LLMArchitecture = Annotated[
-    Union[  # noqa: UP007
-        QwenLLM,
-        Phi,
-        DeepSeekR1Distill,
-        DeepSeekV3LLM,
-        Llama3LLM,
-        Llama4LLM,
-        Gemma3LLM,
-        KimiK2,
-        GLM4,
-        ClaudeAPI,
-        OpenAIChat,
-        GeminiAPI,
-        GrokAPI,
-    ],
-    Field(discriminator="kind"),
-]
+LLMArchitecture = (
+    QwenLLM
+    | Phi
+    | DeepSeekR1Distill
+    | DeepSeekV3LLM
+    | Llama3LLM
+    | Llama4LLM
+    | Gemma3LLM
+    | KimiK2
+    | GLM4
+    | ClaudeAPI
+    | OpenAIChat
+    | GeminiAPI
+    | GrokAPI
+)
+"""Type alias for every text-only LLM family the service can load."""
 
 
 # ---------------------------------------------------------------------------
@@ -297,7 +296,7 @@ LLMArchitecture = Annotated[
 # ---------------------------------------------------------------------------
 
 
-class YOLOWorld(_ArchitectureBase):
+class YOLOWorld(Architecture):
     """YOLO-World open-vocabulary detection family.
 
     Covers every yolov8*-worldv2 weights checkpoint regardless of which
@@ -309,43 +308,43 @@ class YOLOWorld(_ArchitectureBase):
     kind: Literal["yolo-world"] = "yolo-world"
 
 
-class YOLOE(_ArchitectureBase):
+class YOLOE(Architecture):
     """YOLOE early-fusion detection family."""
 
     kind: Literal["yoloe"] = "yoloe"
 
 
-class YOLOv12(_ArchitectureBase):
+class YOLOv12(Architecture):
     """YOLOv12 family."""
 
     kind: Literal["yolov12"] = "yolov12"
 
 
-class RFDETR(_ArchitectureBase):
+class RFDETR(Architecture):
     """Roboflow DETR (RF-DETR) family."""
 
     kind: Literal["rf-detr"] = "rf-detr"
 
 
-class GroundingDINO(_ArchitectureBase):
+class GroundingDINO(Architecture):
     """Grounding DINO open-vocabulary detection family."""
 
     kind: Literal["grounding-dino"] = "grounding-dino"
 
 
-class OWLv2(_ArchitectureBase):
+class OWLv2(Architecture):
     """OWL-v2 open-vocabulary detection family."""
 
     kind: Literal["owl-v2"] = "owl-v2"
 
 
-class Florence2Detection(_ArchitectureBase):
+class Florence2Detection(Architecture):
     """Florence-2 detection-mode family."""
 
     kind: Literal["florence-2"] = "florence-2"
 
 
-class SAM3Detection(_ArchitectureBase):
+class SAM3Detection(Architecture):
     """Meta SAM 3.1 detection-mode family.
 
     SAM 3.1 doubles as a detection and tracking architecture; the
@@ -361,19 +360,17 @@ class SAM3Detection(_ArchitectureBase):
     kind: Literal["sam-3-1-detection"] = "sam-3-1-detection"
 
 
-DetectionArchitecture = Annotated[
-    Union[  # noqa: UP007
-        YOLOWorld,
-        YOLOE,
-        YOLOv12,
-        RFDETR,
-        GroundingDINO,
-        OWLv2,
-        Florence2Detection,
-        SAM3Detection,
-    ],
-    Field(discriminator="kind"),
-]
+DetectionArchitecture = (
+    YOLOWorld
+    | YOLOE
+    | YOLOv12
+    | RFDETR
+    | GroundingDINO
+    | OWLv2
+    | Florence2Detection
+    | SAM3Detection
+)
+"""Type alias for every object-detection family the service can load."""
 
 
 # ---------------------------------------------------------------------------
@@ -381,31 +378,31 @@ DetectionArchitecture = Annotated[
 # ---------------------------------------------------------------------------
 
 
-class SAMURAI(_ArchitectureBase):
+class SAMURAI(Architecture):
     """SAMURAI tracking family."""
 
     kind: Literal["samurai"] = "samurai"
 
 
-class SAM2Long(_ArchitectureBase):
+class SAM2Long(Architecture):
     """SAM2-Long tracking family."""
 
     kind: Literal["sam2-long"] = "sam2-long"
 
 
-class SAM2(_ArchitectureBase):
+class SAM2(Architecture):
     """SAM2 tracking family."""
 
     kind: Literal["sam2"] = "sam2"
 
 
-class YOLO11Seg(_ArchitectureBase):
+class YOLO11Seg(Architecture):
     """Ultralytics YOLO11 segmentation family used as a tracking head."""
 
     kind: Literal["yolo11-seg"] = "yolo11-seg"
 
 
-class SAM3Tracking(_ArchitectureBase):
+class SAM3Tracking(Architecture):
     """Meta SAM 3.1 tracking family (Object Multiplex, shared memory).
 
     The SAM 3.1 loader lives outside the tracking-family registry because
@@ -420,10 +417,8 @@ class SAM3Tracking(_ArchitectureBase):
     kind: Literal["sam-3-1"] = "sam-3-1"
 
 
-TrackingArchitecture = Annotated[
-    Union[SAMURAI, SAM2Long, SAM2, YOLO11Seg, SAM3Tracking],  # noqa: UP007
-    Field(discriminator="kind"),
-]
+TrackingArchitecture = SAMURAI | SAM2Long | SAM2 | YOLO11Seg | SAM3Tracking
+"""Type alias for every tracking family the service can load."""
 
 
 # ---------------------------------------------------------------------------
@@ -431,31 +426,31 @@ TrackingArchitecture = Annotated[
 # ---------------------------------------------------------------------------
 
 
-class Whisper(_ArchitectureBase):
+class Whisper(Architecture):
     """OpenAI Whisper family (openai-whisper backend)."""
 
     kind: Literal["whisper"] = "whisper"
 
 
-class FasterWhisper(_ArchitectureBase):
+class FasterWhisper(Architecture):
     """faster-whisper backend over Whisper checkpoints."""
 
     kind: Literal["faster-whisper"] = "faster-whisper"
 
 
-class WhisperX(_ArchitectureBase):
+class WhisperX(Architecture):
     """WhisperX backend over Whisper checkpoints."""
 
     kind: Literal["whisperx"] = "whisperx"
 
 
-class NemoCanary(_ArchitectureBase):
+class NemoCanary(Architecture):
     """NVIDIA NeMo Canary-Qwen family."""
 
     kind: Literal["nemo-canary"] = "nemo-canary"
 
 
-class NemoParakeet(_ArchitectureBase):
+class NemoParakeet(Architecture):
     """NVIDIA NeMo Parakeet-TDT family."""
 
     kind: Literal["nemo-parakeet"] = "nemo-parakeet"
@@ -476,43 +471,43 @@ class NemoParakeet(_ArchitectureBase):
 # loudly instead of silently falling back to a local Whisper run.
 
 
-class AssemblyAI(_ArchitectureBase):
+class AssemblyAI(Architecture):
     """AssemblyAI Universal cloud transcription family."""
 
     kind: Literal["assemblyai"] = "assemblyai"
 
 
-class Deepgram(_ArchitectureBase):
+class Deepgram(Architecture):
     """Deepgram Nova cloud transcription family."""
 
     kind: Literal["deepgram"] = "deepgram"
 
 
-class RevAI(_ArchitectureBase):
+class RevAI(Architecture):
     """Rev AI cloud speech-to-text family."""
 
     kind: Literal["revai"] = "revai"
 
 
-class Gladia(_ArchitectureBase):
+class Gladia(Architecture):
     """Gladia cloud transcription family."""
 
     kind: Literal["gladia"] = "gladia"
 
 
-class AWSTranscribe(_ArchitectureBase):
+class AWSTranscribe(Architecture):
     """AWS Transcribe cloud speech-to-text family."""
 
     kind: Literal["aws-transcribe"] = "aws-transcribe"
 
 
-class GoogleSpeech(_ArchitectureBase):
+class GoogleSpeech(Architecture):
     """Google Cloud Speech-to-Text family."""
 
     kind: Literal["google-speech"] = "google-speech"
 
 
-class AzureSpeech(_ArchitectureBase):
+class AzureSpeech(Architecture):
     """Azure Cognitive Services Speech family."""
 
     kind: Literal["azure-speech"] = "azure-speech"
@@ -527,57 +522,35 @@ class AzureSpeech(_ArchitectureBase):
 # entry across the audio task sections schema-uniform.
 
 
-class PyannoteDiarization(_ArchitectureBase):
+class PyannoteDiarization(Architecture):
     """pyannote.audio speaker diarization family."""
 
     kind: Literal["pyannote-diarization"] = "pyannote-diarization"
 
 
-class SileroVAD(_ArchitectureBase):
+class SileroVAD(Architecture):
     """Silero voice-activity-detection family."""
 
     kind: Literal["silero-vad"] = "silero-vad"
 
 
-AudioArchitecture = Annotated[
-    Union[  # noqa: UP007
-        Whisper,
-        FasterWhisper,
-        WhisperX,
-        NemoCanary,
-        NemoParakeet,
-        AssemblyAI,
-        Deepgram,
-        RevAI,
-        Gladia,
-        AWSTranscribe,
-        GoogleSpeech,
-        AzureSpeech,
-        PyannoteDiarization,
-        SileroVAD,
-    ],
-    Field(discriminator="kind"),
-]
-
-
-# ---------------------------------------------------------------------------
-# Family-tagged top-level alias.
-#
-# Convenience union for code that needs to talk about "an architecture
-# from any family" without naming the family up-front (e.g. logging,
-# config validation, generic dispatch).
-# ---------------------------------------------------------------------------
-
-Architecture = Annotated[
-    Union[  # noqa: UP007
-        VLMArchitecture,
-        LLMArchitecture,
-        DetectionArchitecture,
-        TrackingArchitecture,
-        AudioArchitecture,
-    ],
-    Field(discriminator="kind"),
-]
+AudioArchitecture = (
+    Whisper
+    | FasterWhisper
+    | WhisperX
+    | NemoCanary
+    | NemoParakeet
+    | AssemblyAI
+    | Deepgram
+    | RevAI
+    | Gladia
+    | AWSTranscribe
+    | GoogleSpeech
+    | AzureSpeech
+    | PyannoteDiarization
+    | SileroVAD
+)
+"""Type alias for every audio family the service can load."""
 
 
 __all__ = [

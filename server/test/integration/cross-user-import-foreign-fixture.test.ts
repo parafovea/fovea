@@ -16,7 +16,7 @@
  * panel walk in the browser:
  *
  *   GET /api/world
- *   GET /api/annotations/:videoId
+ *   GET /api/layers/videos/:videoId/annotations
  *   GET /api/videos/:videoId/summaries
  *   GET /api/summaries/:summaryId/claims
  *
@@ -133,12 +133,25 @@ describe('cross-user import of a foreign-annotator fixture', () => {
   })
 
   beforeEach(async () => {
-    await prisma.claimRelation.deleteMany()
-    await prisma.claim.deleteMany()
+    // Layers store (reverse-FK order): the fixture import materializes into
+    // these tables, so clear them before the videos / personas / users they
+    // reference are deleted.
+    await prisma.textAnnotationRelation.deleteMany()
+    await prisma.layersAnnotation.deleteMany()
+    await prisma.annotationLayer.deleteMany()
+    await prisma.tokenization.deleteMany()
+    await prisma.segmentation.deleteMany()
+    await prisma.corpusMembership.deleteMany()
+    await prisma.corpus.deleteMany()
+    await prisma.clusterSet.deleteMany()
+    await prisma.alignment.deleteMany()
+    await prisma.graphEdge.deleteMany()
+    await prisma.graphNode.deleteMany()
+    await prisma.typeDef.deleteMany()
+    await prisma.layersOntology.deleteMany()
+    await prisma.expression.deleteMany()
+    await prisma.media.deleteMany()
     await prisma.videoSummary.deleteMany()
-    await prisma.annotation.deleteMany()
-    await prisma.worldState.deleteMany()
-    await prisma.ontology.deleteMany()
     await prisma.persona.deleteMany()
     await prisma.video.deleteMany()
     await prisma.session.deleteMany()
@@ -155,14 +168,14 @@ describe('cross-user import of a foreign-annotator fixture', () => {
     // Walk the All Annotations tab path
     const annotationsResp = await app.inject({
       method: 'GET',
-      url: `/api/annotations/${VIDEO_ID}`,
+      url: `/api/layers/videos/${VIDEO_ID}/annotations`,
       cookies: { session_token: importer.token },
     })
     expect(annotationsResp.statusCode).toBe(200)
     const annotations = annotationsResp.json() as Array<{ id: string; label: string; linkType: string | null; type: string }>
 
     // Diagnostics
-    console.log(`[cross-user-foreign] /api/annotations/${VIDEO_ID} returned ${annotations.length} rows`)
+    console.log(`[cross-user-foreign] /api/layers/videos/${VIDEO_ID}/annotations returned ${annotations.length} rows`)
     for (const a of annotations) {
       console.log(`  - id=${a.id.slice(0, 8)} type=${a.type} linkType=${a.linkType} label=${a.label.slice(0, 8)}`)
     }

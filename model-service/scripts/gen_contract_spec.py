@@ -8,14 +8,17 @@ registry, into ``model-service/openapi.json``.
 
 Why ML-free
 -----------
-The schema modules under
-``src.infrastructure.adapters.inbound.fastapi.schemas`` are pure Pydantic --
-they do not import the ML stack (``cv2``, ``torch``, the model loaders). This
-script imports the models directly from that package (NOT ``src.main``, which
-builds the FastAPI app and pulls in the loaders) so the spec can be regenerated
-in a lint-only CI job without installing the multi-gigabyte inference
-dependencies. The ``_assert_ml_free`` guard fails loudly if any import leaks
-``cv2`` into ``sys.modules``.
+The wire-model module
+``src.infrastructure.adapters.inbound.fastapi.models`` holds pure didactic
+``dx.Model`` request/response types; it does not import the ML stack (``cv2``,
+``torch``, the model loaders). This script imports those models directly (NOT
+``src.main``, which builds the FastAPI app and pulls in the loaders),
+converts each to its Pydantic mirror via
+``src.infrastructure.adapters.inbound.fastapi.dx_bodies.as_request``, and
+serializes the mirrors, so the spec can be regenerated in a lint-only CI job
+without installing the multi-gigabyte inference dependencies. The
+``_assert_ml_free`` guard fails loudly if any import leaks ``cv2`` into
+``sys.modules``.
 
 Scope
 -----
@@ -59,23 +62,27 @@ _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
 
-# Import the cross-service models DIRECTLY from the schemas package. This must
-# stay cv2-free: do NOT import from src.main or any route module that builds
-# the FastAPI app / loads models. The E402 (import-not-at-top) suppression is
-# intentional: the sys.path bootstrap above must run before this import can
-# resolve when the script is invoked as a file.
-from src.infrastructure.adapters.inbound.fastapi.schemas import (  # noqa: E402
-    AugmentRequest,
-    AugmentResponse,
-    ClaimExtractionRequest,
-    ClaimExtractionResponse,
-    DetectionRequest,
-    DetectionResponse,
-    SummarizeRequest,
-    SummarizeResponse,
-    SummarySynthesisRequest,
-    SummarySynthesisResponse,
+# Import the cross-service wire models DIRECTLY from the models module and
+# convert each to its Pydantic mirror. This must stay cv2-free: do NOT import
+# from src.main or any route module that builds the FastAPI app / loads models.
+# The E402 (import-not-at-top) suppression is intentional: the sys.path
+# bootstrap above must run before this import can resolve when the script is
+# invoked as a file.
+from src.infrastructure.adapters.inbound.fastapi import models as _wire  # noqa: E402
+from src.infrastructure.adapters.inbound.fastapi.dx_bodies import (  # noqa: E402
+    as_request,
 )
+
+AugmentRequest = as_request(_wire.AugmentRequest)
+AugmentResponse = as_request(_wire.AugmentResponse)
+ClaimExtractionRequest = as_request(_wire.ClaimExtractionRequest)
+ClaimExtractionResponse = as_request(_wire.ClaimExtractionResponse)
+DetectionRequest = as_request(_wire.DetectionRequest)
+DetectionResponse = as_request(_wire.DetectionResponse)
+SummarizeRequest = as_request(_wire.SummarizeRequest)
+SummarizeResponse = as_request(_wire.SummarizeResponse)
+SummarySynthesisRequest = as_request(_wire.SummarySynthesisRequest)
+SummarySynthesisResponse = as_request(_wire.SummarySynthesisResponse)
 
 # The committed spec lives at model-service/openapi.json (one directory up from
 # this scripts/ folder).
@@ -207,6 +214,25 @@ def _build_components(generator: type[GenerateJsonSchema]) -> dict[str, object]:
     definitions = schemas.get("$defs", {})
     if not isinstance(definitions, dict):
         raise RuntimeError("models_json_schema did not return a $defs mapping")
+    # Flatten the recursive JsonValue schema. Pydantic emits JsonValue's array
+    # items and object values as $refs back to JsonValue; openapi-typescript then
+    # renders a type alias that references itself through indexed access into the
+    # still-computing components map, which tsc rejects with TS2502. JsonValue is
+    # opaque freeform JSON to a contract consumer, so emit the primitive union
+    # with unknown-typed containers: it keeps the top-level shape and compiles.
+    if "JsonValue" in definitions:
+        definitions["JsonValue"] = {
+            "description": "An arbitrary JSON value.",
+            "anyOf": [
+                {"type": "string"},
+                {"type": "integer"},
+                {"type": "number"},
+                {"type": "boolean"},
+                {"type": "array", "items": {}},
+                {"type": "object", "additionalProperties": {}},
+                {"type": "null"},
+            ],
+        }
     # Sort so the emitted document is deterministic regardless of model order.
     return {name: definitions[name] for name in sorted(definitions)}
 

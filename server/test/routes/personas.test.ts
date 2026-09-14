@@ -1,9 +1,92 @@
+import { randomUUID } from 'node:crypto'
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest'
 import { buildApp } from '../../src/app.js'
 import { hashPassword } from '../../src/lib/password.js'
 import { seedBaselinePermissions } from '../helpers/rbac-test-setup.js'
 import { FastifyInstance } from 'fastify'
-import { PrismaClient } from '@prisma/client'
+import { PrismaClient, type Persona } from '@prisma/client'
+
+import { writeWorldAggregate } from '../../src/services/layers-bridge/world-bridge.js'
+import { readOntologyAggregate, writeOntologyAggregate } from '../../src/services/layers-bridge/ontology-bridge.js'
+import { writeVideoAnnotation } from '../../src/services/layers-bridge/annotation-bridge.js'
+
+/** A minimal empty bounding-box sequence for seeding video annotations. */
+const EMPTY_FRAMES = {
+  boxes: [],
+  interpolationSegments: [],
+  visibilityRanges: [],
+  totalFrames: 0,
+  keyframeCount: 0,
+  interpolatedFrameCount: 0,
+}
+
+/** Seeds a user's personal world in the layers store (missing buckets default to empty). */
+async function seedWorld(
+  prisma: PrismaClient,
+  userId: string,
+  aggregate: Partial<{
+    entities: unknown[]
+    events: unknown[]
+    times: unknown[]
+    entityCollections: unknown[]
+    eventCollections: unknown[]
+    timeCollections: unknown[]
+    relations: unknown[]
+  }>,
+): Promise<void> {
+  await writeWorldAggregate(
+    prisma,
+    { userId, projectId: null },
+    {
+      entities: [],
+      events: [],
+      times: [],
+      entityCollections: [],
+      eventCollections: [],
+      timeCollections: [],
+      relations: [],
+      ...aggregate,
+    },
+  )
+}
+
+/** Seeds a persona's ontology in the layers store (missing buckets default to empty). */
+async function seedOntology(
+  prisma: PrismaClient,
+  persona: Persona,
+  aggregate: Partial<{ entityTypes: unknown[]; eventTypes: unknown[]; roleTypes: unknown[]; relationTypes: unknown[] }>,
+): Promise<void> {
+  await writeOntologyAggregate(
+    prisma,
+    persona.id,
+    { entityTypes: [], eventTypes: [], roleTypes: [], relationTypes: [], ...aggregate },
+    { name: `${persona.name} ontology`, description: persona.informationNeed, domain: persona.domain },
+    { projectId: persona.projectId, createdByUserId: persona.userId },
+  )
+}
+
+/** Seeds a single video annotation for a (video, persona) pair in the layers store. */
+async function seedAnnotation(
+  prisma: PrismaClient,
+  args: { videoId: string; personaId: string; type: string; label: string },
+  userId: string,
+): Promise<void> {
+  await writeVideoAnnotation(
+    prisma,
+    {
+      id: randomUUID(),
+      videoId: args.videoId,
+      personaId: args.personaId,
+      type: args.type,
+      label: args.label,
+      linkType: null,
+      frames: EMPTY_FRAMES,
+      confidence: null,
+      source: 'manual',
+    },
+    { userId, projectId: null },
+  )
+}
 
 /**
  * Integration tests for the Personas API.
@@ -28,11 +111,18 @@ describe('Personas API', () => {
     // Clean database in dependency order
     await prisma.apiKey.deleteMany()
     await prisma.session.deleteMany()
-    await prisma.annotation.deleteMany()
+    // Layers-store tables the persona ontology/world/annotation cleanup writes to.
+    await prisma.textAnnotationRelation.deleteMany()
+    await prisma.layersAnnotation.deleteMany()
+    await prisma.annotationLayer.deleteMany()
+    await prisma.graphEdge.deleteMany()
+    await prisma.graphNode.deleteMany()
+    await prisma.typeDef.deleteMany()
+    await prisma.layersOntology.deleteMany()
+    await prisma.expression.deleteMany()
+    await prisma.media.deleteMany()
     await prisma.videoSummary.deleteMany()
-    await prisma.ontology.deleteMany()
     await prisma.persona.deleteMany()
-    await prisma.worldState.deleteMany()
     await prisma.video.deleteMany()
     await prisma.user.deleteMany()
     await prisma.rolePermission.deleteMany()
@@ -211,15 +301,13 @@ describe('Personas API', () => {
       expect(response.statusCode).toBe(201)
       const personaId = response.json().id
 
-      const ontology = await prisma.ontology.findUnique({
-        where: { personaId }
-      })
+      const { aggregate, exists } = await readOntologyAggregate(prisma, personaId)
 
-      expect(ontology).not.toBeNull()
-      expect(ontology?.entityTypes).toEqual([])
-      expect(ontology?.eventTypes).toEqual([])
-      expect(ontology?.roleTypes).toEqual([])
-      expect(ontology?.relationTypes).toEqual([])
+      expect(exists).toBe(true)
+      expect(aggregate.entityTypes).toEqual([])
+      expect(aggregate.eventTypes).toEqual([])
+      expect(aggregate.roleTypes).toEqual([])
+      expect(aggregate.relationTypes).toEqual([])
     })
 
     it('validates required fields', async () => {
@@ -437,16 +525,9 @@ describe('Personas API', () => {
           role: 'Test Role',
           informationNeed: 'Test Need',
           userId: testUserId,
-          ontology: {
-            create: {
-              entityTypes: [],
-              eventTypes: [],
-              roleTypes: [],
-              relationTypes: []
-            }
-          }
         }
       })
+      await seedOntology(prisma, created, {})
 
       await app.inject({
         method: 'DELETE',
@@ -454,10 +535,8 @@ describe('Personas API', () => {
         cookies: { session_token: testSessionToken }
       })
 
-      const ontology = await prisma.ontology.findUnique({
-        where: { personaId: created.id }
-      })
-      expect(ontology).toBeNull()
+      const { exists } = await readOntologyAggregate(prisma, created.id)
+      expect(exists).toBe(false)
     })
 
     it('returns 404 for non-existent persona', async () => {
@@ -538,15 +617,11 @@ describe('Personas API', () => {
       })
 
       // Create annotation with personaId
-      await prisma.annotation.create({
-        data: {
-          videoId: video.id,
-          personaId: persona.id,
-          type: 'type',
-          label: 'entity-type-1',
-          frames: [{ frame: 0, x: 0.1, y: 0.1, width: 0.2, height: 0.2 }]
-        }
-      })
+      await seedAnnotation(
+        prisma,
+        { videoId: video.id, personaId: persona.id, type: 'type', label: 'entity-type-1' },
+        testUserId,
+      )
 
       // Delete persona
       await app.inject({
@@ -555,11 +630,9 @@ describe('Personas API', () => {
         cookies: { session_token: testSessionToken }
       })
 
-      // Verify annotation was deleted
-      const annotation = await prisma.annotation.findFirst({
-        where: { personaId: persona.id }
-      })
-      expect(annotation).toBeNull()
+      // Verify the annotation was deleted (its grouping layer cascades on persona delete)
+      const remaining = await prisma.layersAnnotation.count({ where: { layer: { personaId: persona.id } } })
+      expect(remaining).toBe(0)
     })
 
     it('cleans up Entity.typeAssignments in WorldState', async () => {
@@ -573,27 +646,18 @@ describe('Personas API', () => {
       })
 
       // Create world state with entity having type assignment for this persona
-      await prisma.worldState.create({
-        data: {
-          userId: testUserId,
-          entities: [
-            {
-              id: 'entity-1',
-              name: 'Test Entity',
-              description: [],
-              typeAssignments: [
-                { personaId: persona.id, entityTypeId: 'type-1' },
-                { personaId: 'other-persona', entityTypeId: 'type-2' }
-              ]
-            }
-          ],
-          events: [],
-          times: [],
-          entityCollections: [],
-          eventCollections: [],
-          timeCollections: [],
-          relations: []
-        }
+      await seedWorld(prisma, testUserId, {
+        entities: [
+          {
+            id: 'entity-1',
+            name: 'Test Entity',
+            description: [],
+            typeAssignments: [
+              { personaId: persona.id, entityTypeId: 'type-1' },
+              { personaId: 'other-persona', entityTypeId: 'type-2' }
+            ]
+          }
+        ],
       })
 
       // Delete persona
@@ -603,12 +667,15 @@ describe('Personas API', () => {
         cookies: { session_token: testSessionToken }
       })
 
-      // Verify type assignment was cleaned up
-      const worldState = await prisma.worldState.findFirst({
-        where: { userId: testUserId, projectId: null }
+      // Verify type assignment was cleaned up (world lives in the layers store,
+      // read it back through the /api/world endpoint).
+      const worldResp = await app.inject({
+        method: 'GET',
+        url: '/api/world',
+        cookies: { session_token: testSessionToken }
       })
-      const entities = worldState?.entities as Array<{ typeAssignments?: Array<{ personaId: string }> }>
-      const entity = entities[0]
+      const world = worldResp.json() as { entities: Array<{ typeAssignments?: Array<{ personaId: string }> }> }
+      const entity = world.entities[0]
       expect(entity.typeAssignments).toHaveLength(1)
       expect(entity.typeAssignments![0].personaId).toBe('other-persona')
     })
@@ -624,27 +691,18 @@ describe('Personas API', () => {
       })
 
       // Create world state with event having persona interpretation
-      await prisma.worldState.create({
-        data: {
-          userId: testUserId,
-          entities: [],
-          events: [
-            {
-              id: 'event-1',
-              name: 'Test Event',
-              description: [],
-              personaInterpretations: [
-                { personaId: persona.id, eventTypeId: 'event-type-1', participants: [] },
-                { personaId: 'other-persona', eventTypeId: 'event-type-2', participants: [] }
-              ]
-            }
-          ],
-          times: [],
-          entityCollections: [],
-          eventCollections: [],
-          timeCollections: [],
-          relations: []
-        }
+      await seedWorld(prisma, testUserId, {
+        events: [
+          {
+            id: 'event-1',
+            name: 'Test Event',
+            description: [],
+            personaInterpretations: [
+              { personaId: persona.id, eventTypeId: 'event-type-1', participants: [] },
+              { personaId: 'other-persona', eventTypeId: 'event-type-2', participants: [] }
+            ]
+          }
+        ],
       })
 
       // Delete persona
@@ -654,12 +712,15 @@ describe('Personas API', () => {
         cookies: { session_token: testSessionToken }
       })
 
-      // Verify persona interpretation was cleaned up
-      const worldState = await prisma.worldState.findFirst({
-        where: { userId: testUserId, projectId: null }
+      // Verify persona interpretation was cleaned up (world lives in the layers
+      // store, read it back through the /api/world endpoint).
+      const worldResp = await app.inject({
+        method: 'GET',
+        url: '/api/world',
+        cookies: { session_token: testSessionToken }
       })
-      const events = worldState?.events as Array<{ personaInterpretations?: Array<{ personaId: string }> }>
-      const event = events[0]
+      const world = worldResp.json() as { events: Array<{ personaInterpretations?: Array<{ personaId: string }> }> }
+      const event = world.events[0]
       expect(event.personaInterpretations).toHaveLength(1)
       expect(event.personaInterpretations![0].personaId).toBe('other-persona')
     })
@@ -725,15 +786,12 @@ describe('Personas API', () => {
           role: 'Test Role',
           informationNeed: 'Test Need',
           userId: testUserId,
-          ontology: {
-            create: {
-              entityTypes: [{ id: 'e1', name: 'Entity1' }],
-              roleTypes: [{ id: 'r1', name: 'Role1' }, { id: 'r2', name: 'Role2' }],
-              eventTypes: [{ id: 'ev1', name: 'Event1' }],
-              relationTypes: []
-            }
-          }
         }
+      })
+      await seedOntology(prisma, persona, {
+        entityTypes: [{ id: 'e1', name: 'Entity1' }],
+        roleTypes: [{ id: 'r1', name: 'Role1' }, { id: 'r2', name: 'Role2' }],
+        eventTypes: [{ id: 'ev1', name: 'Event1' }],
       })
 
       const response = await app.inject({
@@ -768,13 +826,9 @@ describe('Personas API', () => {
       })
 
       // Create 3 annotations
-      await prisma.annotation.createMany({
-        data: [
-          { videoId: video.id, personaId: persona.id, type: 'type', label: 'test1', frames: [] },
-          { videoId: video.id, personaId: persona.id, type: 'type', label: 'test2', frames: [] },
-          { videoId: video.id, personaId: persona.id, type: 'type', label: 'test3', frames: [] }
-        ]
-      })
+      for (const label of ['test1', 'test2', 'test3']) {
+        await seedAnnotation(prisma, { videoId: video.id, personaId: persona.id, type: 'type', label }, testUserId)
+      }
 
       const response = await app.inject({
         method: 'GET',
@@ -845,39 +899,32 @@ describe('Personas API', () => {
       })
 
       // Create world state with assignments
-      await prisma.worldState.create({
-        data: {
-          userId: testUserId,
-          entities: [
-            {
-              id: 'entity-1',
-              typeAssignments: [
-                { personaId: persona.id, entityTypeId: 'type-1' },
-                { personaId: persona.id, entityTypeId: 'type-2' }
-              ]
-            }
-          ],
-          events: [
-            {
-              id: 'event-1',
-              personaInterpretations: [
-                { personaId: persona.id, eventTypeId: 'event-type-1' }
-              ]
-            }
-          ],
-          times: [],
-          entityCollections: [
-            {
-              id: 'collection-1',
-              typeAssignments: [
-                { personaId: persona.id, entityTypeId: 'type-3' }
-              ]
-            }
-          ],
-          eventCollections: [],
-          timeCollections: [],
-          relations: []
-        }
+      await seedWorld(prisma, testUserId, {
+        entities: [
+          {
+            id: 'entity-1',
+            typeAssignments: [
+              { personaId: persona.id, entityTypeId: 'type-1' },
+              { personaId: persona.id, entityTypeId: 'type-2' }
+            ]
+          }
+        ],
+        events: [
+          {
+            id: 'event-1',
+            personaInterpretations: [
+              { personaId: persona.id, eventTypeId: 'event-type-1' }
+            ]
+          }
+        ],
+        entityCollections: [
+          {
+            id: 'collection-1',
+            typeAssignments: [
+              { personaId: persona.id, entityTypeId: 'type-3' }
+            ]
+          }
+        ],
       })
 
       const response = await app.inject({

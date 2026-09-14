@@ -1,9 +1,84 @@
+import { randomUUID } from 'node:crypto'
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest'
 import { buildApp } from '../src/app.js'
 import { hashPassword } from '../src/lib/password.js'
 import { FastifyInstance } from 'fastify'
-import { PrismaClient } from '@prisma/client'
+import { PrismaClient, Prisma, type Persona } from '@prisma/client'
 import { buildDetectionQueryFromPersona, buildPersonaPrompts } from '../src/utils/queryBuilder.js'
+import { writeOntologyAggregate } from '../src/services/layers-bridge/ontology-bridge.js'
+import { writeVideoAnnotation } from '../src/services/layers-bridge/annotation-bridge.js'
+
+/** A minimal empty bounding-box sequence for seeding video annotations. */
+const EMPTY_FRAMES = {
+  boxes: [],
+  interpolationSegments: [],
+  visibilityRanges: [],
+  totalFrames: 0,
+  keyframeCount: 0,
+  interpolatedFrameCount: 0,
+}
+
+/** Coerces a JSON value to an array for an ontology bucket. */
+function asArray(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : []
+}
+
+/**
+ * Creates a persona and seeds its ontology in the layers store. Accepts the
+ * same `{ data: { ..., ontology: { create } } }` shape the legacy nested-create
+ * used, stripping the ontology and materializing it via the layers bridge.
+ */
+async function createPersona(
+  prisma: PrismaClient,
+  args: { data: Prisma.PersonaUncheckedCreateInput & { ontology?: { create: Record<string, unknown> } } },
+): Promise<Persona> {
+  const ontologyCreate = args.data.ontology?.create
+  const personaData = { ...args.data }
+  delete personaData.ontology
+  const persona = await prisma.persona.create({ data: personaData })
+  await writeOntologyAggregate(
+    prisma,
+    persona.id,
+    {
+      entityTypes: asArray(ontologyCreate?.entityTypes),
+      eventTypes: asArray(ontologyCreate?.eventTypes),
+      roleTypes: asArray(ontologyCreate?.roleTypes),
+      relationTypes: asArray(ontologyCreate?.relationTypes),
+    },
+    { name: `${persona.name} ontology`, description: persona.informationNeed, domain: persona.domain },
+    { projectId: persona.projectId, createdByUserId: persona.userId },
+  )
+  return persona
+}
+
+/**
+ * Seeds video annotations in the layers store. Accepts the same
+ * `{ data: [...] }` shape the legacy createMany used; only the semantic
+ * `type`/`label` and the (video, persona) scope round-trip through the store.
+ */
+async function seedAnnotationRows(
+  prisma: PrismaClient,
+  userId: string,
+  args: { data: Array<{ videoId: string; personaId: string; type: string; label: string; [k: string]: unknown }> },
+): Promise<void> {
+  for (const row of args.data) {
+    await writeVideoAnnotation(
+      prisma,
+      {
+        id: randomUUID(),
+        videoId: row.videoId,
+        personaId: row.personaId,
+        type: row.type,
+        label: row.label,
+        linkType: null,
+        frames: EMPTY_FRAMES,
+        confidence: null,
+        source: 'manual',
+      },
+      { userId, projectId: null },
+    )
+  }
+}
 
 /**
  * Unit tests for query builder utilities.
@@ -27,10 +102,15 @@ describe('Query Builder', () => {
     // Clean database in dependency order
     await prisma.apiKey.deleteMany()
     await prisma.session.deleteMany()
-    await prisma.annotation.deleteMany()
+    // Layers-store tables the ontology/annotation seeding writes to.
+    await prisma.layersAnnotation.deleteMany()
+    await prisma.annotationLayer.deleteMany()
+    await prisma.typeDef.deleteMany()
+    await prisma.layersOntology.deleteMany()
+    await prisma.expression.deleteMany()
+    await prisma.media.deleteMany()
     await prisma.videoSummary.deleteMany()
     await prisma.video.deleteMany()
-    await prisma.ontology.deleteMany()
     await prisma.persona.deleteMany()
     await prisma.user.deleteMany()
 
@@ -49,7 +129,7 @@ describe('Query Builder', () => {
 
   describe('buildDetectionQueryFromPersona', () => {
     it('builds structured query with persona context and entity types', async () => {
-      const persona = await prisma.persona.create({
+      const persona = await createPersona(prisma, {
         data: {
           name: 'Baseball Scout',
           role: 'Player Development Analyst',
@@ -78,7 +158,7 @@ describe('Query Builder', () => {
     })
 
     it('includes entity glosses when requested', async () => {
-      const persona = await prisma.persona.create({
+      const persona = await createPersona(prisma, {
         data: {
           name: 'Baseball Scout',
           role: 'Player Development Analyst',
@@ -108,7 +188,7 @@ describe('Query Builder', () => {
     })
 
     it('includes all ontology types when requested', async () => {
-      const persona = await prisma.persona.create({
+      const persona = await createPersona(prisma, {
         data: {
           name: 'Baseball Scout',
           role: 'Player Development Analyst',
@@ -147,7 +227,7 @@ describe('Query Builder', () => {
     })
 
     it('includes glosses for all types when requested', async () => {
-      const persona = await prisma.persona.create({
+      const persona = await createPersona(prisma, {
         data: {
           name: 'Baseball Scout',
           role: 'Player Development Analyst',
@@ -198,7 +278,7 @@ describe('Query Builder', () => {
         ],
       })
 
-      const persona = await prisma.persona.create({
+      const persona = await createPersona(prisma, {
         data: {
           name: 'Baseball Scout',
           role: 'Player Development Analyst',
@@ -218,7 +298,7 @@ describe('Query Builder', () => {
       })
 
       // Create some annotations for this persona
-      await prisma.annotation.createMany({
+      await seedAnnotationRows(prisma, testUserId, {
         data: [
           {
             videoId: 'qb-entity-video-1',
@@ -257,7 +337,7 @@ describe('Query Builder', () => {
         ],
       })
 
-      const persona = await prisma.persona.create({
+      const persona = await createPersona(prisma, {
         data: {
           name: 'Baseball Scout',
           role: 'Player Development Analyst',
@@ -275,7 +355,7 @@ describe('Query Builder', () => {
       })
 
       // Create location annotations
-      await prisma.annotation.createMany({
+      await seedAnnotationRows(prisma, testUserId, {
         data: [
           {
             videoId: 'qb-loc-video-1',
@@ -312,7 +392,7 @@ describe('Query Builder', () => {
         ],
       })
 
-      const persona = await prisma.persona.create({
+      const persona = await createPersona(prisma, {
         data: {
           name: 'Baseball Scout',
           role: 'Player Development Analyst',
@@ -330,7 +410,7 @@ describe('Query Builder', () => {
       })
 
       // Create event and time annotations
-      await prisma.annotation.createMany({
+      await seedAnnotationRows(prisma, testUserId, {
         data: [
           {
             videoId: 'qb-evt-video-1',
@@ -369,7 +449,7 @@ describe('Query Builder', () => {
         ],
       })
 
-      const persona = await prisma.persona.create({
+      const persona = await createPersona(prisma, {
         data: {
           name: 'Test Persona',
           role: 'Analyst',
@@ -387,7 +467,7 @@ describe('Query Builder', () => {
       })
 
       // Create duplicate annotations across different videos
-      await prisma.annotation.createMany({
+      await seedAnnotationRows(prisma, testUserId, {
         data: [
           {
             videoId: 'qb-dup-video-1',
@@ -418,7 +498,7 @@ describe('Query Builder', () => {
     })
 
     it('includes only persona context when no types included', async () => {
-      const persona = await prisma.persona.create({
+      const persona = await createPersona(prisma, {
         data: {
           name: 'Empty Persona',
           role: 'Analyst',
@@ -443,7 +523,7 @@ describe('Query Builder', () => {
     })
 
     it('converts entity type names to lowercase', async () => {
-      const persona = await prisma.persona.create({
+      const persona = await createPersona(prisma, {
         data: {
           name: 'Wildlife Researcher',
           role: 'Biologist',
@@ -475,6 +555,7 @@ describe('Query Builder', () => {
     })
 
     it('throws error for persona without ontology', async () => {
+      // Created without seeding an ontology, so the layers store has none.
       const persona = await prisma.persona.create({
         data: {
           name: 'No Ontology',
@@ -490,7 +571,7 @@ describe('Query Builder', () => {
     })
 
     it('does not exclude entity types without descriptions', async () => {
-      const persona = await prisma.persona.create({
+      const persona = await createPersona(prisma, {
         data: {
           name: 'Test Persona',
           role: 'Analyst',
@@ -518,7 +599,7 @@ describe('Query Builder', () => {
 
   describe('buildPersonaPrompts', () => {
     it('builds persona prompts from role and information need', async () => {
-      const persona = await prisma.persona.create({
+      const persona = await createPersona(prisma, {
         data: {
           name: 'Baseball Scout',
           role: 'Player Development Analyst',
@@ -540,7 +621,7 @@ describe('Query Builder', () => {
     })
 
     it('returns prompts for Automated persona', async () => {
-      const persona = await prisma.persona.create({
+      const persona = await createPersona(prisma, {
         data: {
           name: 'Automated',
           role: 'Analyst',

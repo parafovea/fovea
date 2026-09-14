@@ -505,7 +505,7 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
     // in isolation, fails under --project=A --project=B). Filtering
     // by createdBy / userId keeps each worker's cleanup local to its
     // own rows.
-    const annsRes = await fetch(`http://localhost:3001/api/annotations/${video.id}`, {
+    const annsRes = await fetch(`http://localhost:3001/api/layers/videos/${video.id}/annotations`, {
       headers: { Cookie: `session_token=${workerSessionToken}` },
     })
     if (annsRes.ok) {
@@ -513,7 +513,7 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
       const ownAnns = anns.filter((a) => a.createdBy === testUser.id)
       await Promise.all(
         ownAnns.map((a) =>
-          fetch(`http://localhost:3001/api/annotations/${video.id}/${a.id}`, {
+          fetch(`http://localhost:3001/api/layers/videos/${video.id}/annotations/${a.id}`, {
             method: 'DELETE',
             headers: { Cookie: `session_token=${workerSessionToken}` },
           }),

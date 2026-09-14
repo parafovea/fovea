@@ -3,6 +3,7 @@ import { buildApp } from '../../src/app.js'
 import { FastifyInstance } from 'fastify'
 import { PrismaClient } from '@prisma/client'
 import { seedBaselinePermissions, createRegularTestUser } from '../helpers/rbac-test-setup.js'
+import { readSummaryClaims, readClaimById } from '../../src/services/layers-bridge/claim-bridge.js'
 
 /**
  * A network retry / programmatic resend of a claim-create carrying the same
@@ -27,7 +28,14 @@ describe('Claim creation idempotency', () => {
 
   beforeEach(async () => {
     await prisma.loginAttempt.deleteMany()
-    await prisma.claim.deleteMany()
+    await prisma.graphEdge.deleteMany()
+    await prisma.layersAnnotation.deleteMany()
+    await prisma.annotationLayer.deleteMany()
+    await prisma.expression.deleteMany()
+    await prisma.media.deleteMany()
+    await prisma.graphNode.deleteMany()
+    await prisma.typeDef.deleteMany()
+    await prisma.layersOntology.deleteMany()
     await prisma.videoSummary.deleteMany()
     await prisma.persona.deleteMany()
     await prisma.video.deleteMany()
@@ -60,9 +68,9 @@ describe('Claim creation idempotency', () => {
     expect((await post()).statusCode).toBe(201)
     expect((await post()).statusCode).toBe(201)
 
-    const rows = await prisma.claim.findMany({ where: { summaryId } })
-    expect(rows).toHaveLength(1)
-    expect(rows[0].id).toBe(id)
+    const { claims } = await readSummaryClaims(prisma, summaryId)
+    expect(claims).toHaveLength(1)
+    expect(claims[0].id).toBe(id)
   })
 
   it('the video-persona claim route is likewise idempotent on id', async () => {
@@ -78,7 +86,14 @@ describe('Claim creation idempotency', () => {
     expect((await post()).statusCode).toBe(201)
     expect((await post()).statusCode).toBe(201)
 
-    const rows = await prisma.claim.findMany({ where: { id } })
-    expect(rows).toHaveLength(1)
+    // The claim node's id is the primary key, so a duplicate could not persist;
+    // assert the single row exists and the auto-created summary holds exactly one.
+    const claim = await readClaimById(prisma, id)
+    expect(claim).not.toBeNull()
+    const summary = await prisma.videoSummary.findUnique({
+      where: { videoId_personaId: { videoId, personaId } },
+    })
+    const { claims } = await readSummaryClaims(prisma, summary!.id)
+    expect(claims).toHaveLength(1)
   })
 })

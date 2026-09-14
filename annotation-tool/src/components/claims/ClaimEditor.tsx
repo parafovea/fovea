@@ -29,6 +29,7 @@ import {
 import { Slider } from '@/components/ui/slider'
 import { Textarea } from '@/components/ui/textarea'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { useTourAnchor } from '@/tours/engine/anchorRegistry'
 import { Claim, GlossItem, ClaimerType, ClaimTimeSpan } from '@models/types'
 import { getAnnotationTimeBounds } from '@models/annotation'
 import GlossEditor from '@components/ontology/GlossEditor'
@@ -344,6 +345,8 @@ export function ClaimEditor({
   // Track validation state to log failures only when user attempts to save
   const previousValidationAttemptRef = useRef<boolean>(false)
 
+  const editorAnchor = useTourAnchor('claim-editor')
+
   // Log validation failures when user attempts to save invalid claim
   useEffect(() => {
     if (!isValid && gloss.length > 0 && open) {
@@ -369,7 +372,7 @@ export function ClaimEditor({
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) handleCancel() }}>
-      <DialogContent data-tour-id="claim-editor" className="sm:max-w-lg min-h-[500px]">
+      <DialogContent ref={editorAnchor} className="sm:max-w-lg min-h-[500px]">
         <DialogHeader>
           <DialogTitle>
             {claim ? 'Edit Claim' : parentClaimId ? 'Add Subclaim' : 'Add Manual Claim'}

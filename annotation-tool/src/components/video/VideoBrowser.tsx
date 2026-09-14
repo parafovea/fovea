@@ -55,9 +55,12 @@ import { useVideoUiStore } from '@store/zustand'
 import { VideoSummaryCard } from './VideoSummaryCard'
 import { JobStatusIndicator } from '@components/shared/JobStatusIndicator'
 import { useExternalLinksConfig } from '@hooks/config'
+import { useTourAnchor } from '@/tours/engine/anchorRegistry'
 
 export default function VideoBrowser() {
   const navigate = useNavigate()
+
+  const browserRootAnchorRef = useTourAnchor('video-browser-root')
 
   // TanStack Query for server state
   const { data: videos = [], isLoading } = useVideos()
@@ -404,24 +407,21 @@ export default function VideoBrowser() {
 
   if (isLoading) {
     return (
-      // Mount video-browser-root even during the videos-list fetch
-      // round-trip so the on-ramp tour's step 2 spotlight never races
-      // the data-load. The shelf inside renders a Spinner until the
-      // /api/videos response arrives; the engine and the visitor see
-      // the spotlight land on the shelf either way.
-      <div id="video-browser-root" data-tour-id="video-browser-root" className="flex justify-center items-center h-full">
+      // The browser root mounts during the videos-list fetch so a tour
+      // spotlight on the shelf has a stable target regardless of load
+      // timing. The shelf renders a Spinner until the videos response
+      // arrives.
+      <div ref={browserRootAnchorRef} id="video-browser-root" className="flex justify-center items-center h-full">
         <Spinner className="size-8" />
       </div>
     )
   }
 
   return (
-    // Tour 1 step 2 spotlights the shelf at this top-level container.
-    // It is always mounted on /app, independent of the videos-list
-    // fetch round-trip, so the on-ramp tour never races the fixture
-    // data-load. The deeper card-level anchor still exists for tours
-    // that want to spotlight a specific tile.
-    <div id="video-browser-root" data-tour-id="video-browser-root">
+    // The browser root is the always-mounted shelf container a tour
+    // spotlights to introduce the video list. Individual cards carry
+    // their own anchor for tours that target a specific tile.
+    <div ref={browserRootAnchorRef} id="video-browser-root">
       <div className="mb-6">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
@@ -665,6 +665,8 @@ function VideoCard({
   addVideoSummary,
   summariesLoaded,
 }: VideoCardProps) {
+  const firstCardAnchorRef = useTourAnchor('video-browser-card-first')
+
   const jobKey = activePersonaId ? `${video.id}:${activePersonaId}` : null
   const activeJobId = jobKey ? activeSummaryJobs[jobKey] : null
   const hasSummary = Boolean(activePersonaId && videoSummaries[video.id]?.includes(activePersonaId))
@@ -706,10 +708,10 @@ function VideoCard({
 
   return (
     <Card
-      // First-card anchor for Tour 1 ("First annotation in 90 seconds")
-      // and other tours that want to spotlight a tangible video tile
-      // without depending on which clip is rendered first.
-      data-tour-id={index === 0 ? 'video-browser-card-first' : undefined}
+      // The first tile carries the first-card anchor so a tour can
+      // spotlight a tangible video card without depending on which clip
+      // renders first.
+      ref={index === 0 ? firstCardAnchorRef : undefined}
       className={cn(
         'h-full flex flex-col cursor-pointer',
         selectedVideoIndex === index && 'outline outline-2 outline-primary'

@@ -24,6 +24,7 @@ import {
   SelectItem,
 } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
+import { useTourAnchor } from '@/tours/engine/anchorRegistry'
 import { useMutation } from '@tanstack/react-query'
 import { v4 as uuidv4 } from 'uuid'
 import {
@@ -72,6 +73,10 @@ export function OntologyAugmenter({
   const [maxSuggestions, setMaxSuggestions] = useState(10)
   const [selectedSuggestions, setSelectedSuggestions] = useState<Set<string>>(new Set())
   const [expandedSuggestion, setExpandedSuggestion] = useState<string | null>(null)
+
+  const importTargetAnchor = useTourAnchor('augmenter-import-target')
+  const searchAnchor = useTourAnchor('augmenter-search')
+  const resultsAnchor = useTourAnchor('augmenter-results')
 
   const mutation = useMutation({
     mutationFn: async (params: {
@@ -235,7 +240,7 @@ export function OntologyAugmenter({
               onValueChange={(val) => setCategory(val as OntologyCategory)}
               disabled={mutation.isPending}
             >
-              <SelectTrigger className="w-full" data-tour-id="augmenter-import-target" aria-label="Ontology category">
+              <SelectTrigger ref={importTargetAnchor} className="w-full" aria-label="Ontology category">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -247,7 +252,7 @@ export function OntologyAugmenter({
             </Select>
           </div>
 
-          <div data-tour-id="augmenter-search">
+          <div ref={searchAnchor}>
             <Label className="mb-2">Domain Description</Label>
             <Textarea
               placeholder="E.g., Wildlife research tracking whale pod behavior and migration patterns"
@@ -319,7 +324,7 @@ export function OntologyAugmenter({
         )}
 
         {mutation.isSuccess && mutation.data && (
-          <div className="mt-6" data-tour-id="augmenter-results">
+          <div className="mt-6" ref={resultsAnchor}>
             {mutation.data.reasoning && (
               <Alert className="mb-4">
                 <AlertDescription>{mutation.data.reasoning}</AlertDescription>

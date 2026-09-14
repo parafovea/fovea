@@ -12,7 +12,7 @@
  *
  * Before the v0.4.1 baseline rules:
  *   - POST /api/summaries                           -> 403 'Cannot create this VideoSummary'
- *   - POST /api/annotations                         -> 403 'Cannot create Annotation in this scope'
+ *   - POST /api/layers/videos/:videoId/annotations  -> 403 'Cannot create Annotation in this scope'
  *   - POST /api/summaries/:summaryId/claims         -> 403 'Cannot create this Claim'
  *   - POST /api/personas (already granted via system rolePermission)
  *
@@ -46,12 +46,25 @@ describe('Baseline create permissions for owned resources', () => {
     // -> world state -> persona -> video -> session -> rolePermission ->
     // user; FK cascade handles the rest.
     await prisma.loginAttempt.deleteMany()
-    await prisma.claimRelation.deleteMany()
-    await prisma.claim.deleteMany()
-    await prisma.annotation.deleteMany()
+    // Layers store (reverse-FK order): summaries, annotations, and claims
+    // authored through the routes materialize into these tables, so clear
+    // them before the videos / personas / users they reference are deleted.
+    await prisma.textAnnotationRelation.deleteMany()
+    await prisma.layersAnnotation.deleteMany()
+    await prisma.annotationLayer.deleteMany()
+    await prisma.tokenization.deleteMany()
+    await prisma.segmentation.deleteMany()
+    await prisma.corpusMembership.deleteMany()
+    await prisma.corpus.deleteMany()
+    await prisma.clusterSet.deleteMany()
+    await prisma.alignment.deleteMany()
+    await prisma.graphEdge.deleteMany()
+    await prisma.graphNode.deleteMany()
+    await prisma.typeDef.deleteMany()
+    await prisma.layersOntology.deleteMany()
+    await prisma.expression.deleteMany()
+    await prisma.media.deleteMany()
     await prisma.videoSummary.deleteMany()
-    await prisma.ontology.deleteMany()
-    await prisma.worldState.deleteMany()
     await prisma.persona.deleteMany()
     await prisma.video.deleteMany()
     await prisma.session.deleteMany()
@@ -140,12 +153,12 @@ describe('Baseline create permissions for owned resources', () => {
     expect(row!.createdBy).toBe(u.userId)
   })
 
-  it('POST /api/annotations returns 201 for a fresh user with no project_memberships', async () => {
+  it('POST /api/layers/videos/:videoId/annotations returns 201 for a fresh user with no project_memberships', async () => {
     const u = await seedMinimalUser('annotation-owner')
 
     const res = await app.inject({
       method: 'POST',
-      url: '/api/annotations',
+      url: `/api/layers/videos/${u.videoId}/annotations`,
       cookies: { session_token: u.sessionToken },
       payload: {
         videoId: u.videoId,
@@ -167,7 +180,7 @@ describe('Baseline create permissions for owned resources', () => {
 
     expect(res.statusCode, `body=${res.body.slice(0, 300)}`).toBe(201)
     const body = res.json() as { id: string }
-    const row = await prisma.annotation.findUnique({ where: { id: body.id } })
+    const row = await prisma.layersAnnotation.findUnique({ where: { id: body.id } })
     expect(row).not.toBeNull()
     expect(row!.createdByUserId).toBe(u.userId)
   })
@@ -204,10 +217,13 @@ describe('Baseline create permissions for owned resources', () => {
     expect(claimRes.statusCode, `body=${claimRes.body.slice(0, 300)}`).toBe(201)
     const body = claimRes.json() as { claims: Array<{ id: string }> }
     expect(body.claims).toHaveLength(1)
-    const row = await prisma.claim.findUnique({ where: { id: body.claims[0].id } })
-    expect(row).not.toBeNull()
-    expect(row!.createdBy).toBe(u.userId)
-    expect(row!.summaryId).toBe(summary.id)
+    // The claim lives in the layers store as a claim graph node whose stash
+    // carries the created claim.
+    const node = await prisma.graphNode.findUnique({ where: { id: body.claims[0].id } })
+    expect(node).not.toBeNull()
+    const stash = (node!.properties as { foveaClaim: { object: { createdBy: string; summaryId: string } } }).foveaClaim.object
+    expect(stash.createdBy).toBe(u.userId)
+    expect(stash.summaryId).toBe(summary.id)
   })
 
   it('cross-user creates are still denied: A cannot create a summary as B', async () => {

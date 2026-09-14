@@ -15,6 +15,7 @@ import { Label } from '@/components/ui/label'
 import { Progress } from '@/components/ui/progress'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Separator } from '@/components/ui/separator'
+import { useTourAnchor } from '@/tours/engine/anchorRegistry'
 import { ClaimExtractionConfig, ExtractionStrategy } from '@models/types'
 
 interface ClaimsExtractionDialogProps {
@@ -46,6 +47,8 @@ export function ClaimsExtractionDialog({
   const [maxClaims, setMaxClaims] = useState(50)
   const [minConfidence, setMinConfidence] = useState(0.5)
 
+  const dialogAnchor = useTourAnchor('claims-extraction-dialog')
+
   const handleExtract = () => {
     const config: ClaimExtractionConfig = {
       inputSources: {
@@ -70,7 +73,7 @@ export function ClaimsExtractionDialog({
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) handleCancel() }}>
-      <DialogContent data-tour-id="claims-extraction-dialog" className="sm:max-w-md min-h-[500px]">
+      <DialogContent ref={dialogAnchor} className="sm:max-w-md min-h-[500px]">
         <DialogHeader>
           <DialogTitle>Extract Claims from Summary</DialogTitle>
         </DialogHeader>

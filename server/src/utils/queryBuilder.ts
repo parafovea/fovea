@@ -1,5 +1,8 @@
 import { PrismaClient } from '@prisma/client'
 
+import { readOntologyAggregate } from '../services/layers-bridge/ontology-bridge.js'
+import { readPersonaAnnotationTypesAndLabels } from '../services/layers-bridge/annotation-bridge.js'
+
 /**
  * Ontology type structure from ontology JSON.
  */
@@ -122,14 +125,9 @@ async function fetchWorldStateInstances(
   locations: Instance[]
   times: Instance[]
 }> {
-  // Fetch all annotations for this persona across all videos
-  const annotations = await prisma.annotation.findMany({
-    where: { personaId },
-    select: {
-      type: true,
-      label: true,
-    },
-  })
+  // Fetch all annotations for this persona across all videos (layers store,
+  // with a legacy read-through for annotations not yet materialized).
+  const annotations = await readPersonaAnnotationTypesAndLabels(prisma, personaId)
 
   // Group annotations by type category
   const entities: Instance[] = []
@@ -232,19 +230,16 @@ export async function buildDetectionQueryFromPersona(
 ): Promise<string> {
   const opts = { ...DEFAULT_QUERY_OPTIONS, ...options }
 
-  // Fetch persona with ontology
-  const persona = await prisma.persona.findUnique({
-    where: { id: personaId },
-    include: {
-      ontology: true
-    }
-  })
+  // Fetch persona; its ontology is reconstructed from the layers store (legacy
+  // read-through when no layers rows exist yet).
+  const persona = await prisma.persona.findUnique({ where: { id: personaId } })
 
   if (!persona) {
     throw new Error(`Persona not found: ${personaId}`)
   }
 
-  if (!persona.ontology) {
+  const { aggregate: ontology, exists: ontologyExists } = await readOntologyAggregate(prisma, personaId)
+  if (!ontologyExists) {
     throw new Error(`Persona has no ontology: ${personaId}`)
   }
 
@@ -257,10 +252,10 @@ export async function buildDetectionQueryFromPersona(
   sections.push('') // Blank line separator
 
   // Extract and format ontology types
-  const entityTypes = (persona.ontology.entityTypes as unknown as OntologyType[]) || []
-  const eventTypes = (persona.ontology.eventTypes as unknown as OntologyType[]) || []
-  const roleTypes = (persona.ontology.roleTypes as unknown as OntologyType[]) || []
-  const relationTypes = (persona.ontology.relationTypes as unknown as OntologyType[]) || []
+  const entityTypes = ontology.entityTypes as unknown as OntologyType[]
+  const eventTypes = ontology.eventTypes as unknown as OntologyType[]
+  const roleTypes = ontology.roleTypes as unknown as OntologyType[]
+  const relationTypes = ontology.relationTypes as unknown as OntologyType[]
 
   // Fetch world state instances if any instance options are enabled
   let worldState = { entities: [], events: [], locations: [], times: [] } as {

@@ -4,6 +4,7 @@ import { FastifyInstance } from 'fastify'
 import { PrismaClient } from '@prisma/client'
 import { hashPassword } from '../../src/lib/password.js'
 import { seedBaselinePermissions } from '../helpers/rbac-test-setup.js'
+import { seedOntology, seedWorldState, seedAnnotation } from '../helpers/seed-layers.js'
 
 /**
  * Tests that export routes scope data to the authenticated user.
@@ -35,13 +36,17 @@ describe('Export API - User Scoping', () => {
   })
 
   beforeEach(async () => {
-    // Clean database in dependency order
-    await prisma.claimRelation.deleteMany()
-    await prisma.claim.deleteMany()
-    await prisma.annotation.deleteMany()
+    // Clean database in dependency order (layers store first, then the rest).
+    await prisma.textAnnotationRelation.deleteMany()
+    await prisma.layersAnnotation.deleteMany()
+    await prisma.annotationLayer.deleteMany()
+    await prisma.graphEdge.deleteMany()
+    await prisma.graphNode.deleteMany()
+    await prisma.typeDef.deleteMany()
+    await prisma.layersOntology.deleteMany()
+    await prisma.expression.deleteMany()
+    await prisma.media.deleteMany()
     await prisma.videoSummary.deleteMany()
-    await prisma.ontology.deleteMany()
-    await prisma.worldState.deleteMany()
     await prisma.persona.deleteMany()
     await prisma.video.deleteMany()
     await prisma.session.deleteMany()
@@ -98,7 +103,7 @@ describe('Export API - User Scoping', () => {
     userAPersonaId = personaA.id
 
     // Create ontology for user A's persona
-    await prisma.ontology.create({
+    await seedOntology(prisma, {
       data: {
         personaId: userAPersonaId,
         entityTypes: [{ id: 'e1', name: 'Person', gloss: [] }],
@@ -120,7 +125,7 @@ describe('Export API - User Scoping', () => {
     userBPersonaId = personaB.id
 
     // Create ontology for user B's persona
-    await prisma.ontology.create({
+    await seedOntology(prisma, {
       data: {
         personaId: userBPersonaId,
         entityTypes: [{ id: 'e2', name: 'Vehicle', gloss: [] }],
@@ -148,7 +153,7 @@ describe('Export API - User Scoping', () => {
     })
 
     // Create world state for both users
-    await prisma.worldState.create({
+    await seedWorldState(prisma, {
       data: {
         userId: userAId,
         entities: [{ id: 'entity-a', name: 'Entity A' }],
@@ -161,7 +166,7 @@ describe('Export API - User Scoping', () => {
       },
     })
 
-    await prisma.worldState.create({
+    await seedWorldState(prisma, {
       data: {
         userId: userBId,
         entities: [{ id: 'entity-b', name: 'Entity B' }],
@@ -175,7 +180,7 @@ describe('Export API - User Scoping', () => {
     })
 
     // Create annotation for user A's persona (type annotation with keyframes)
-    await prisma.annotation.create({
+    await seedAnnotation(prisma, {
       data: {
         videoId: sharedVideoId,
         personaId: userAPersonaId,
@@ -197,7 +202,7 @@ describe('Export API - User Scoping', () => {
     })
 
     // Create annotation for user B's persona (type annotation with keyframes)
-    await prisma.annotation.create({
+    await seedAnnotation(prisma, {
       data: {
         videoId: sharedVideoId,
         personaId: userBPersonaId,
@@ -223,7 +228,7 @@ describe('Export API - User Scoping', () => {
     })
 
     // Create object annotation for user A (null personaId, owned by user A)
-    await prisma.annotation.create({
+    await seedAnnotation(prisma, {
       data: {
         videoId: sharedVideoId,
         personaId: null,
@@ -244,7 +249,7 @@ describe('Export API - User Scoping', () => {
     })
 
     // Create object annotation for user B (null personaId, owned by user B)
-    await prisma.annotation.create({
+    await seedAnnotation(prisma, {
       data: {
         videoId: sharedVideoId,
         personaId: null,

@@ -195,15 +195,21 @@ export const api = {
     return response.data
   },
 
-  // Annotations
+  // Annotations. Persisted through the unified layers store, which converts to
+  // and from the BoundingBoxSequence wire shape server-side. The wire shape and
+  // these signatures are identical to the legacy contract, so the timeline,
+  // drawing, and keyframe UI are unchanged.
   async getAnnotations(videoId: string): Promise<Annotation[]> {
-    const response = await axios.get<BackendAnnotation[]>(`${API_BASE}/annotations/${videoId}`)
+    const response = await axios.get<BackendAnnotation[]>(`${API_BASE}/layers/videos/${videoId}/annotations`)
     return response.data.map(transformBackendToFrontend)
   },
 
   async saveAnnotation(annotation: Annotation): Promise<Annotation> {
     const backendPayload = transformFrontendToBackend(annotation)
-    const response = await axios.post<BackendAnnotation>(`${API_BASE}/annotations`, backendPayload)
+    const response = await axios.post<BackendAnnotation>(
+      `${API_BASE}/layers/videos/${annotation.videoId}/annotations`,
+      backendPayload
+    )
     return transformBackendToFrontend(response.data)
   },
 
@@ -219,12 +225,15 @@ export const api = {
       source: fullPayload.source
     }
 
-    const response = await axios.put<BackendAnnotation>(`${API_BASE}/annotations/${annotation.id}`, backendPayload)
+    const response = await axios.put<BackendAnnotation>(
+      `${API_BASE}/layers/videos/${annotation.videoId}/annotations/${annotation.id}`,
+      backendPayload
+    )
     return transformBackendToFrontend(response.data)
   },
 
   async deleteAnnotation(videoId: string, annotationId: string): Promise<void> {
-    await axios.delete(`${API_BASE}/annotations/${videoId}/${annotationId}`)
+    await axios.delete(`${API_BASE}/layers/videos/${videoId}/annotations/${annotationId}`)
   },
 
   // Export

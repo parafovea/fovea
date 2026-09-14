@@ -1,7 +1,7 @@
 {
   "name": "fovea",
   "private": true,
-  "version": "0.5.11",
+  "version": "0.6.0",
   "description": "FOVEA - Flexible Ontology Visual Event Analyzer",
   "packageManager": "pnpm@10.15.0",
   "engines": {

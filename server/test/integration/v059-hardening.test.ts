@@ -3,6 +3,8 @@ import { buildApp } from '../../src/app.js'
 import { FastifyInstance } from 'fastify'
 import { PrismaClient } from '@prisma/client'
 import { seedBaselinePermissions, createAdminTestUser, createRegularTestUser } from '../helpers/rbac-test-setup.js'
+import { seedClaim } from '../helpers/seed-layers.js'
+import { readSummaryClaims } from '../../src/services/layers-bridge/claim-bridge.js'
 
 /**
  * 0.5.9 backend correctness/security hardening: model-route authentication,
@@ -24,17 +26,20 @@ describe('0.5.9 backend hardening', () => {
 
   beforeEach(async () => {
     await prisma.loginAttempt.deleteMany()
-    await prisma.claimRelation.deleteMany()
-    await prisma.claim.deleteMany()
+    await prisma.graphEdge.deleteMany()
+    await prisma.layersAnnotation.deleteMany()
+    await prisma.annotationLayer.deleteMany()
+    await prisma.expression.deleteMany()
+    await prisma.media.deleteMany()
+    await prisma.graphNode.deleteMany()
+    await prisma.typeDef.deleteMany()
+    await prisma.layersOntology.deleteMany()
     await prisma.resourceShare.deleteMany()
     await prisma.videoSummary.deleteMany()
     await prisma.apiKey.deleteMany()
-    await prisma.worldState.deleteMany()
     await prisma.projectMembership.deleteMany()
     await prisma.project.deleteMany()
-    await prisma.ontology.deleteMany()
     await prisma.persona.deleteMany()
-    await prisma.annotation.deleteMany()
     await prisma.video.deleteMany()
     await prisma.session.deleteMany()
     await prisma.rolePermission.deleteMany()
@@ -101,24 +106,34 @@ describe('0.5.9 backend hardening', () => {
   })
 
   describe('personal world state carries a monotonic version guard', () => {
-    it('increments the version on each guarded write and merges concurrent additions', async () => {
+    it('advances the per-object lock on each guarded write and merges concurrent additions', async () => {
       const user = await createRegularTestUser(prisma, { username: 'wsv', email: 'wsv@example.com' })
       const headers = { cookies: { session_token: user.sessionToken } }
 
-      // Materialize the personal row (version 0).
+      // Materialize the personal world.
       await app.inject({ method: 'GET', url: '/api/world', ...headers })
 
       const put = (entities: Array<{ id: string; name: string }>) =>
         app.inject({ method: 'PUT', url: '/api/world', ...headers, payload: { entities } })
 
+      // Two writes to the same object id, then a third adding a distinct object.
       expect((await put([{ id: 'e1', name: 'E1' }])).statusCode).toBe(200)
+      expect((await put([{ id: 'e1', name: 'E1 renamed' }])).statusCode).toBe(200)
       expect((await put([{ id: 'e2', name: 'E2' }])).statusCode).toBe(200)
 
-      const row = await prisma.worldState.findFirst({ where: { userId: user.id, projectId: null } })
-      expect(row?.version).toBe(2)
       // Merge-by-id keeps both additions; neither write clobbered the other.
-      const ids = (row?.entities as Array<{ id: string }>).map((e) => e.id).sort()
+      const worldRes = await app.inject({ method: 'GET', url: '/api/world', ...headers })
+      const world = worldRes.json() as { entities: Array<{ id: string }> }
+      const ids = world.entities.map((e) => e.id).sort()
       expect(ids).toEqual(['e1', 'e2'])
+
+      // The layers store guards each world object with a monotonic lockVersion
+      // compare-and-swap; the re-written e1 node advanced past its initial 0.
+      const worldNodes = await prisma.graphNode.findMany({ where: { createdByUserId: user.id } })
+      const objectId = (node: (typeof worldNodes)[number]): unknown =>
+        ((node.properties as { foveaWorld?: { object?: { id?: unknown } } } | null)?.foveaWorld?.object?.id)
+      const e1Node = worldNodes.find((node) => objectId(node) === 'e1')
+      expect(e1Node?.lockVersion).toBeGreaterThan(0)
     })
   })
 
@@ -164,10 +179,13 @@ describe('0.5.9 backend hardening', () => {
       const summary = await prisma.videoSummary.create({
         data: { videoId: video.id, personaId: persona.id, createdBy: sharer.id },
       })
-      const parent = await prisma.claim.create({
+      // Seed the claim tree into the layers store (Claim is no longer its own
+      // model). The parent has one child, so the fork must re-point the child's
+      // parent link and the denormalized claimsJson at the fresh ids.
+      const parent = await seedClaim(prisma, {
         data: { summaryId: summary.id, summaryType: 'video', text: 'Parent claim', createdBy: sharer.id },
       })
-      const child = await prisma.claim.create({
+      const child = await seedClaim(prisma, {
         data: {
           summaryId: summary.id,
           summaryType: 'video',
@@ -207,15 +225,15 @@ describe('0.5.9 backend hardening', () => {
       expect(res.statusCode).toBe(201)
       const forkedSummaryId = res.json().resourceId as string
 
-      const forkedClaims = await prisma.claim.findMany({ where: { summaryId: forkedSummaryId } })
+      const { claims: forkedClaims } = await readSummaryClaims(prisma, forkedSummaryId)
       expect(forkedClaims).toHaveLength(2)
       // Fresh ids, not the source ids.
       const forkedIds = forkedClaims.map((c) => c.id)
       expect(forkedIds).not.toContain(parent.id)
       expect(forkedIds).not.toContain(child.id)
       // Parent/child hierarchy preserved, re-pointed at the new parent id.
-      const forkedParent = forkedClaims.find((c) => c.parentClaimId === null)
-      const forkedChild = forkedClaims.find((c) => c.parentClaimId !== null)
+      const forkedParent = forkedClaims.find((c) => (c.parentClaimId ?? null) === null)
+      const forkedChild = forkedClaims.find((c) => (c.parentClaimId ?? null) !== null)
       expect(forkedParent?.text).toBe('Parent claim')
       expect(forkedChild?.text).toBe('Child claim')
       expect(forkedChild?.parentClaimId).toBe(forkedParent?.id)

@@ -24,6 +24,13 @@ import { buildApp } from '../../src/app.js'
 import { hashPassword } from '../../src/lib/password.js'
 import { FastifyInstance } from 'fastify'
 import { PrismaClient } from '@prisma/client'
+import {
+  seedWorldState,
+  seedOntology,
+  seedAnnotation,
+  seedClaim,
+  seedRelation,
+} from '../helpers/seed-layers.js'
 
 interface User {
   userId: string
@@ -47,12 +54,17 @@ describe('Import/export field-level round-trip fidelity', () => {
     await reseedOwnershipBaseline(prisma)
     await prisma.loginAttempt.deleteMany()
     await prisma.importHistory.deleteMany()
-    await prisma.claimRelation.deleteMany()
-    await prisma.claim.deleteMany()
-    await prisma.annotation.deleteMany()
+    // Layers-store tables (import writes here; the fixtures reuse fixed ids).
+    await prisma.textAnnotationRelation.deleteMany()
+    await prisma.layersAnnotation.deleteMany()
+    await prisma.annotationLayer.deleteMany()
+    await prisma.graphEdge.deleteMany()
+    await prisma.graphNode.deleteMany()
+    await prisma.typeDef.deleteMany()
+    await prisma.layersOntology.deleteMany()
+    await prisma.expression.deleteMany()
+    await prisma.media.deleteMany()
     await prisma.videoSummary.deleteMany()
-    await prisma.ontology.deleteMany()
-    await prisma.worldState.deleteMany()
     await prisma.persona.deleteMany()
     await prisma.video.deleteMany()
     await prisma.session.deleteMany()
@@ -259,7 +271,7 @@ describe('Import/export field-level round-trip fidelity', () => {
     const persona = await prisma.persona.create({
       data: { userId: A.userId, name: 'OntPersona', role: 'r', informationNeed: 'i' },
     })
-    await prisma.ontology.create({
+    await seedOntology(prisma, {
       data: {
         personaId: persona.id,
         entityTypes: [
@@ -288,7 +300,7 @@ describe('Import/export field-level round-trip fidelity', () => {
     const persona = await prisma.persona.create({
       data: { userId: A.userId, name: 'P', role: 'r', informationNeed: 'i' },
     })
-    await prisma.worldState.create({
+    await seedWorldState(prisma, {
       data: {
         userId: A.userId,
         entities: [{
@@ -326,7 +338,7 @@ describe('Import/export field-level round-trip fidelity', () => {
     const persona = await prisma.persona.create({
       data: { userId: A.userId, name: 'P', role: 'r', informationNeed: 'i' },
     })
-    await prisma.worldState.create({
+    await seedWorldState(prisma, {
       data: {
         userId: A.userId,
         entities: [],
@@ -352,7 +364,7 @@ describe('Import/export field-level round-trip fidelity', () => {
 
   it('time round-trip preserves type / label / timestamp / metadata (same-user)', async () => {
     const A = await registerAndLogin('userA', 'passA12345')
-    await prisma.worldState.create({
+    await seedWorldState(prisma, {
       data: {
         userId: A.userId,
         entities: [], events: [],
@@ -376,7 +388,7 @@ describe('Import/export field-level round-trip fidelity', () => {
     const persona = await prisma.persona.create({
       data: { userId: A.userId, name: 'P', role: 'r', informationNeed: 'i' },
     })
-    await prisma.worldState.create({
+    await seedWorldState(prisma, {
       data: {
         userId: A.userId,
         entities: [],
@@ -455,7 +467,7 @@ describe('Import/export field-level round-trip fidelity', () => {
     const summary = await prisma.videoSummary.create({
       data: { videoId: 'v-fidelity-2', personaId: persona.id, summary: [{ type: 'text', content: 's' }] },
     })
-    await prisma.claim.create({
+    await seedClaim(prisma, {
       data: {
         summaryId: summary.id,
         summaryType: 'video',
@@ -489,8 +501,6 @@ describe('Import/export field-level round-trip fidelity', () => {
     // the seeded row first; otherwise the import sees an existing row,
     // emits a duplicate-claim conflict resolved as skip-item, and never
     // touches the DB — the round-trip would falsely pass.
-    await prisma.claimRelation.deleteMany()
-    await prisma.claim.deleteMany()
     await importAs(A, beforeBody)
     const after = parseJsonl(await exportAs(A))
     const a = findOne(before, 'claim')!
@@ -509,7 +519,7 @@ describe('Import/export field-level round-trip fidelity', () => {
     const summary = await prisma.videoSummary.create({
       data: { videoId: 'v-fidelity-2b', personaId: persona.id, summary: [{ type: 'text', content: 's' }] },
     })
-    await prisma.claim.create({
+    await seedClaim(prisma, {
       data: {
         summaryId: summary.id,
         createdBy: A.userId,
@@ -543,9 +553,9 @@ describe('Import/export field-level round-trip fidelity', () => {
     const summary = await prisma.videoSummary.create({
       data: { videoId: 'v-fidelity-3', personaId: persona.id, summary: [{ type: 'text', content: 's' }] },
     })
-    const c1 = await prisma.claim.create({ data: { summaryId: summary.id, summaryType: 'video', text: 'c1', gloss: [] } })
-    const c2 = await prisma.claim.create({ data: { summaryId: summary.id, summaryType: 'video', text: 'c2', gloss: [] } })
-    await prisma.claimRelation.create({
+    const c1 = await seedClaim(prisma, { data: { summaryId: summary.id, summaryType: 'video', text: 'c1', gloss: [] } })
+    const c2 = await seedClaim(prisma, { data: { summaryId: summary.id, summaryType: 'video', text: 'c2', gloss: [] } })
+    await seedRelation(prisma, {
       data: {
         sourceClaimId: c1.id,
         targetClaimId: c2.id,
@@ -575,7 +585,7 @@ describe('Import/export field-level round-trip fidelity', () => {
     // exercise it here so the gap surfaces if it exists.
     const A = await registerAndLogin('userA', 'passA12345')
     await prisma.video.create({ data: { id: 'v-coll-1', filename: 'c.mp4', path: '/v/c.mp4', duration: 1 } })
-    await prisma.worldState.create({
+    await seedWorldState(prisma, {
       data: {
         userId: A.userId,
         entities: [{ id: 'e-coll-mem', name: 'Member' }],
@@ -589,7 +599,7 @@ describe('Import/export field-level round-trip fidelity', () => {
     // linkType='collection', so we can only set it via direct insert.
     // The test asserts the round-trip behavior, surfacing whether the
     // collection link survives.
-    await prisma.annotation.create({
+    await seedAnnotation(prisma, {
       data: {
         videoId: 'v-coll-1',
         personaId: null,
@@ -638,7 +648,7 @@ describe('Import/export field-level round-trip fidelity', () => {
         details: 'Multi-line\ndetails 🎯',
       },
     })
-    await prisma.ontology.create({
+    await seedOntology(prisma, {
       data: {
         personaId: persona.id,
         entityTypes: [
@@ -651,7 +661,7 @@ describe('Import/export field-level round-trip fidelity', () => {
     })
 
     // World state — all six list types and a relation
-    await prisma.worldState.create({
+    await seedWorldState(prisma, {
       data: {
         userId: A.userId,
         entities: [{
@@ -703,7 +713,7 @@ describe('Import/export field-level round-trip fidelity', () => {
         createdBy: A.userId,
       },
     })
-    const c1 = await prisma.claim.create({
+    const c1 = await seedClaim(prisma, {
       data: {
         summaryId: summary.id, summaryType: 'video',
         text: 'all-fields claim',
@@ -722,10 +732,10 @@ describe('Import/export field-level round-trip fidelity', () => {
         createdBy: A.userId,
       },
     })
-    const c2 = await prisma.claim.create({
+    const c2 = await seedClaim(prisma, {
       data: { summaryId: summary.id, createdBy: A.userId, summaryType: 'video', text: 'second claim', gloss: [] },
     })
-    await prisma.claimRelation.create({
+    await seedRelation(prisma, {
       data: {
         sourceClaimId: c1.id, targetClaimId: c2.id, relationTypeId: 'relt-all',
         sourceSpans: [{ start: 0, end: 3 }], targetSpans: [{ start: 0, end: 2 }],
@@ -734,7 +744,7 @@ describe('Import/export field-level round-trip fidelity', () => {
     })
 
     // Annotation: type-flavor and entity-linked object-flavor
-    await prisma.annotation.create({
+    await seedAnnotation(prisma, {
       data: {
         videoId: 'v-all',
         userId: A.userId,
@@ -743,7 +753,7 @@ describe('Import/export field-level round-trip fidelity', () => {
         frames: { boxes: [{ x: 0, y: 0, width: 1, height: 1, frameNumber: 0, isKeyframe: true }], interpolationSegments: [], visibilityRanges: [{ startFrame: 0, endFrame: 0, visible: true }], totalFrames: 1, keyframeCount: 1, interpolatedFrameCount: 0 },
       },
     })
-    await prisma.annotation.create({
+    await seedAnnotation(prisma, {
       data: {
         videoId: 'v-all',
         userId: A.userId,
@@ -791,14 +801,14 @@ describe('Import/export field-level round-trip fidelity', () => {
     // The annotation needs its referenced entity type to exist in the
     // persona's ontology, otherwise the import handler classifies it as
     // a missing-dependency conflict and skips it.
-    await prisma.ontology.create({
+    await seedOntology(prisma, {
       data: {
         personaId: persona.id,
         entityTypes: [{ id: 'et-x', name: 'X', gloss: [] }],
         eventTypes: [], roleTypes: [], relationTypes: [],
       },
     })
-    await prisma.annotation.create({
+    await seedAnnotation(prisma, {
       data: {
         videoId: 'v-src-1',
         userId: A.userId,
@@ -816,9 +826,104 @@ describe('Import/export field-level round-trip fidelity', () => {
       },
     })
     const exported = await exportAs(A)
-    await prisma.annotation.deleteMany()
+    // Remove the seeded annotation so the import re-creates it fresh (and
+    // re-tags its source), rather than detecting the id as an existing-row
+    // conflict and skipping it.
+    await prisma.layersAnnotation.deleteMany({})
     await importAs(A, exported)
-    const stored = await prisma.annotation.findFirst({ where: { videoId: 'v-src-1' } })
+    // The imported annotation lives in the layers store; read it back through
+    // the layers route, which reconstructs the `source` from the stashed meta.
+    const annRes = await app.inject({
+      method: 'GET',
+      url: '/api/layers/videos/v-src-1/annotations',
+      cookies: { session_token: A.sessionToken },
+    })
+    expect(annRes.statusCode).toBe(200)
+    const stored = (annRes.json() as Array<{ source: string }>)[0]
     expect(stored?.source, 'imported annotation source must be "import" regardless of original').toBe('import')
+  })
+
+  // === LAYERS-STORE ROUND TRIP =========================================
+
+  /**
+   * Imports a bundle covering a multi-keyframe annotation, the full world
+   * aggregate, an ontology, and a hierarchical claim tree, then re-exports it
+   * and asserts the content survives AND that it is persisted in the layers
+   * store (not the legacy tables).
+   */
+  it('a bundle round-trips through the layers store: import -> export preserves content and lives in layers tables', async () => {
+    const A = await registerAndLogin('rt-user', 'passRT12345')
+    await prisma.video.create({ data: { id: 'v-rt', filename: 'rt.mp4', path: '/v/rt.mp4', duration: 30, frameRate: 30 } })
+
+    // A same-user bundle (persona.userId === importer) so ids are preserved on
+    // an empty workspace. Covers every content shape the re-point touches.
+    const frames = {
+      boxes: [
+        { x: 0.1, y: 0.1, width: 0.2, height: 0.2, frameNumber: 0, isKeyframe: true },
+        { x: 0.3, y: 0.3, width: 0.2, height: 0.2, frameNumber: 30, isKeyframe: true },
+        { x: 0.5, y: 0.5, width: 0.2, height: 0.2, frameNumber: 60, isKeyframe: true },
+      ],
+      interpolationSegments: [{ startFrame: 0, endFrame: 60, type: 'linear' }],
+      visibilityRanges: [{ startFrame: 0, endFrame: 60, visible: true }],
+      totalFrames: 61, keyframeCount: 3, interpolatedFrameCount: 0,
+    }
+    const bundle = [
+      { type: 'metadata', data: { exporterUserId: A.userId, exportVersion: '1.0', exportedAt: new Date().toISOString() } },
+      { type: 'persona', data: { id: 'rt-persona', userId: A.userId, name: 'RT Persona', role: 'Analyst', informationNeed: 'round trip' } },
+      { type: 'ontology', data: { personaId: 'rt-persona', entityTypes: [{ id: 'rt-et', name: 'Vehicle', gloss: [] }], eventTypes: [], roleTypes: [], relationTypes: [] } },
+      { type: 'entity', data: { id: 'rt-ent', name: 'Truck', description: [] } },
+      { type: 'event', data: { id: 'rt-evt', name: 'Departure', description: [] } },
+      { type: 'time', data: { id: 'rt-time', label: 'Noon' } },
+      { type: 'entity_collection', data: { id: 'rt-ec', name: 'Fleet', members: ['rt-ent'] } },
+      { type: 'relation', data: { id: 'rt-rel', sourceType: 'entity', sourceId: 'rt-ent', targetType: 'event', targetId: 'rt-evt', relationTypeId: 'involves' } },
+      { type: 'summary', data: { id: 'rt-summary', videoId: 'v-rt', personaId: 'rt-persona', summary: [{ type: 'text', content: 'A summary' }] } },
+      { type: 'claim', data: { id: 'rt-claim-parent', summaryId: 'rt-summary', summaryType: 'video', text: 'parent claim', gloss: [{ type: 'text', content: 'parent' }] } },
+      { type: 'claim', data: { id: 'rt-claim-child', summaryId: 'rt-summary', summaryType: 'video', parentClaimId: 'rt-claim-parent', text: 'child claim', gloss: [{ type: 'text', content: 'child' }] } },
+      { type: 'annotation', data: { id: 'rt-ann', videoId: 'v-rt', personaId: 'rt-persona', annotationType: 'type', typeId: 'rt-et', typeCategory: 'entity', boundingBoxSequence: frames } },
+    ]
+    const importedBody = bundle.map(l => JSON.stringify(l)).join('\n')
+
+    await importAs(A, importedBody, 'round-trip.jsonl')
+
+    // The data lives in the layers store.
+    expect(await prisma.graphNode.count({ where: { nodeType: 'claim' } }), 'both claims are graph nodes').toBe(2)
+    expect(await prisma.graphNode.count({ where: { nodeType: 'entity' } }), 'world entity is a graph node').toBeGreaterThanOrEqual(1)
+    expect(await prisma.graphNode.count({ where: { nodeType: 'situation' } }), 'world event is a graph node').toBeGreaterThanOrEqual(1)
+    expect(await prisma.typeDef.count(), 'ontology type is a TypeDef').toBeGreaterThanOrEqual(1)
+    expect(
+      await prisma.layersAnnotation.count({ where: { layer: { subkind: { in: ['ontology-type', 'world-object'] } } } }),
+      'annotation is a LayersAnnotation',
+    ).toBeGreaterThanOrEqual(1)
+
+    // Re-export and assert the content survives.
+    const exported = parseJsonl(await exportAs(A))
+
+    // Ontology preserved.
+    const ont = findOne(exported, 'ontology') as { entityTypes: Array<{ id: string; name: string }> }
+    expect(ont.entityTypes).toHaveLength(1)
+    expect(ont.entityTypes[0]).toMatchObject({ id: 'rt-et', name: 'Vehicle' })
+
+    // World aggregate preserved (each object exported under its type line).
+    expect(findOne(exported, 'entity')).toMatchObject({ id: 'rt-ent', name: 'Truck' })
+    expect(findOne(exported, 'event')).toMatchObject({ id: 'rt-evt', name: 'Departure' })
+    expect(findOne(exported, 'time')).toMatchObject({ id: 'rt-time', label: 'Noon' })
+    expect(findOne(exported, 'entity_collection')).toMatchObject({ id: 'rt-ec', members: ['rt-ent'] })
+    expect(findOne(exported, 'relation')).toMatchObject({ id: 'rt-rel', sourceId: 'rt-ent', targetId: 'rt-evt' })
+
+    // Hierarchical claims preserved (parent + child, child references parent).
+    const claimLines = exported.filter(l => l.type === 'claim').map(l => l.data)
+    expect(claimLines).toHaveLength(2)
+    const parent = claimLines.find(c => c.id === 'rt-claim-parent')
+    const child = claimLines.find(c => c.id === 'rt-claim-child')
+    expect(parent, 'parent claim survives').toBeDefined()
+    expect(child, 'child claim survives').toBeDefined()
+    expect(child!.parentClaimId, 'child claim keeps its parent link').toBe('rt-claim-parent')
+    expect(child!.text).toBe('child claim')
+
+    // Multi-keyframe annotation preserved (all three keyframes survive).
+    const ann = findOne(exported, 'annotation') as { id: string; boundingBoxSequence: { boxes: Array<{ frameNumber: number; isKeyframe?: boolean }> } }
+    expect(ann.id).toBe('rt-ann')
+    const keyframes = ann.boundingBoxSequence.boxes.filter(b => b.isKeyframe)
+    expect(keyframes.map(b => b.frameNumber), 'all three keyframes round-trip').toEqual([0, 30, 60])
   })
 })

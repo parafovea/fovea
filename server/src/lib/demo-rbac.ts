@@ -27,20 +27,6 @@ import { Prisma } from '@prisma/client'
 import { isDemoModeEnabled } from './demo-flags.js'
 
 /**
- * Prisma WHERE fragment matching every seeded demo annotation.
- *
- * The demo seeder writes `source: 'demo-fixture:<stableId>'` for every
- * hand-authored or model-service-produced tour annotation, persisting each
- * hand-authored track as its own row. `startsWith` matches the whole family
- * without coupling the read path to the per-track stable IDs. A self-hoster with
- * no demo seed has zero rows whose source starts with `demo-fixture`, so this
- * fragment never widens their results.
- */
-export const DEMO_ANNOTATION_READ_SCOPE: Prisma.AnnotationWhereInput = {
-  source: { startsWith: 'demo-fixture' },
-}
-
-/**
  * Prisma WHERE fragment matching every system-seeded persona.
  *
  * The seeded personas the public tour catalogue exposes are flagged
@@ -49,35 +35,6 @@ export const DEMO_ANNOTATION_READ_SCOPE: Prisma.AnnotationWhereInput = {
  */
 export const DEMO_PERSONA_READ_SCOPE: Prisma.PersonaWhereInput = {
   isSystemGenerated: true,
-}
-
-/**
- * Builds the annotation list WHERE for a single video, widened in demo mode.
- *
- * Demo deployments seed system-generated annotations on the curated tour videos
- * that are not authored by the visitor, so the CASL `accessibleBy` filter alone
- * would hide them. In demo mode the result also surfaces every annotation whose
- * `source` marks it a demo fixture (see {@link DEMO_ANNOTATION_READ_SCOPE}).
- * With demo off, the result is exactly `videoId AND accessibleWhere`, so a
- * self-hoster's per-user RBAC is unchanged.
- *
- * @param videoId - the video whose annotations are being listed
- * @param accessibleWhere - `accessibleBy(ability, 'read').Annotation`
- * @returns the Prisma WHERE clause for `annotation.findMany`
- */
-export function demoAnnotationListWhere(
-  videoId: string,
-  accessibleWhere: Prisma.AnnotationWhereInput
-): Prisma.AnnotationWhereInput {
-  if (isDemoModeEnabled()) {
-    return {
-      videoId,
-      OR: [accessibleWhere, DEMO_ANNOTATION_READ_SCOPE],
-    }
-  }
-  return {
-    AND: [{ videoId }, accessibleWhere],
-  }
 }
 
 /**
@@ -161,6 +118,40 @@ export function demoPermitsSummaryRead(): boolean {
  */
 export function demoPermitsSummaryReclaim(username: string | undefined): boolean {
   return isDemoModeEnabled() && (username?.startsWith('demo-anonymous-') ?? false)
+}
+
+/**
+ * Prisma WHERE fragment matching every LayersAnnotation seeded under a
+ * system-generated persona.
+ *
+ * Curated tour/demo annotations are grouped under an `AnnotationLayer` bound to
+ * a system-seeded persona (`isSystemGenerated: true`). A self-hoster who never
+ * seeds system personas has no layer matching this fragment, so it never widens
+ * their results. LayersAnnotation carries no `source` column, so the grouping
+ * layer's persona is the seam that identifies seeded content.
+ */
+export const DEMO_LAYERS_ANNOTATION_READ_SCOPE: Prisma.LayersAnnotationWhereInput = {
+  layer: { persona: { isSystemGenerated: true } },
+}
+
+/**
+ * Builds the LayersAnnotation read-widening WHERE for demo mode.
+ *
+ * A caller whose CASL ability is scoped to their own data (an anonymous demo
+ * session opening a tour video) matches none of the seed user's annotations
+ * under `accessibleBy(...)`, so the annotation-anchored tour steps would point
+ * at an empty video. In demo mode this returns a fragment the caller ORs into
+ * its read scope to also match annotations grouped under a system persona. With
+ * demo off it returns null and the caller applies its plain `accessibleBy(...)`
+ * filter, leaving a self-hoster's per-user RBAC intact.
+ *
+ * @returns the demo-only annotation read WHERE, or null when demo mode is off
+ */
+export function demoLayersAnnotationReadWhere(): Prisma.LayersAnnotationWhereInput | null {
+  if (isDemoModeEnabled()) {
+    return DEMO_LAYERS_ANNOTATION_READ_SCOPE
+  }
+  return null
 }
 
 /**

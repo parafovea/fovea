@@ -41,6 +41,9 @@ from src.infrastructure.adapters.inbound.fastapi.routes.detection import (
 from src.infrastructure.adapters.inbound.fastapi.routes.diarize import (
     router as diarize_router,
 )
+from src.infrastructure.adapters.inbound.fastapi.routes.layers import (
+    router as layers_router,
+)
 from src.infrastructure.adapters.inbound.fastapi.routes.models import (
     router as models_router,
 )
@@ -66,6 +69,7 @@ router.include_router(detection_router)
 router.include_router(tracking_router)
 router.include_router(ontology_router)
 router.include_router(claims_router)
+router.include_router(layers_router)
 router.include_router(models_router)
 router.include_router(thumbnails_router)
 router.include_router(transcribe_router)

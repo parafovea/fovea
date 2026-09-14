@@ -150,7 +150,7 @@ describe('AnnotationCandidatesList', () => {
     vi.clearAllMocks()
     // Set up MSW handler for annotation creation
     server.use(
-      http.post('/api/annotations', async ({ request }) => {
+      http.post('/api/layers/videos/:videoId/annotations', async ({ request }) => {
         const body = await request.json() as Record<string, unknown>
         return HttpResponse.json({
           id: body.id || 'new-annotation-id',
@@ -388,7 +388,7 @@ describe('AnnotationCandidatesList', () => {
     it('dispatches type annotation when persona and type provided', async () => {
       let savedAnnotation: any = null
       server.use(
-        http.post('/api/annotations', async ({ request }) => {
+        http.post('/api/layers/videos/:videoId/annotations', async ({ request }) => {
           savedAnnotation = await request.json()
           return HttpResponse.json({
             id: savedAnnotation.id || 'new-annotation-id',
@@ -436,7 +436,7 @@ describe('AnnotationCandidatesList', () => {
     it('dispatches object annotation when no persona provided', async () => {
       let savedAnnotation: any = null
       server.use(
-        http.post('/api/annotations', async ({ request }) => {
+        http.post('/api/layers/videos/:videoId/annotations', async ({ request }) => {
           savedAnnotation = await request.json()
           return HttpResponse.json({
             id: savedAnnotation.id || 'new-annotation-id',

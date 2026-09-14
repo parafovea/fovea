@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest'
 import { buildApp } from '../../src/app.js'
 import { hashPassword } from '../../src/lib/password.js'
 import { seedBaselinePermissions } from '../helpers/rbac-test-setup.js'
+import { seedOntology } from '../helpers/seed-layers.js'
 import { FastifyInstance } from 'fastify'
 import { PrismaClient } from '@prisma/client'
 
@@ -65,14 +66,15 @@ describe('Batch lookup endpoints', () => {
         role: 'Analyst',
         informationNeed: 'Analyzing',
         userId,
-        ontology: {
-          create: {
-            entityTypes: [{ id: 'et-1', name: `${name} entity` }],
-            roleTypes: [],
-            eventTypes: [],
-            relationTypes: [],
-          },
-        },
+      },
+    })
+    await seedOntology(prisma, {
+      data: {
+        personaId: persona.id,
+        entityTypes: [{ id: 'et-1', name: `${name} entity` }],
+        roleTypes: [],
+        eventTypes: [],
+        relationTypes: [],
       },
     })
     return persona.id
@@ -81,10 +83,18 @@ describe('Batch lookup endpoints', () => {
   beforeEach(async () => {
     await prisma.apiKey.deleteMany()
     await prisma.session.deleteMany()
-    await prisma.annotation.deleteMany()
+    // Layers store (reverse-FK order): persona ontologies seed the layers
+    // ontology tables, so clear them before the personas they reference.
+    await prisma.layersAnnotation.deleteMany()
+    await prisma.annotationLayer.deleteMany()
+    await prisma.graphEdge.deleteMany()
+    await prisma.graphNode.deleteMany()
+    await prisma.typeDef.deleteMany()
+    await prisma.layersOntology.deleteMany()
+    await prisma.expression.deleteMany()
+    await prisma.media.deleteMany()
     await prisma.videoSummary.deleteMany()
     await prisma.video.deleteMany()
-    await prisma.ontology.deleteMany()
     await prisma.persona.deleteMany()
     await prisma.user.deleteMany()
     await prisma.rolePermission.deleteMany()

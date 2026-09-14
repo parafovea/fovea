@@ -23,6 +23,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Separator } from '@/components/ui/separator'
 import { VideoSummary } from '@api/client'
+import { useTourAnchor } from '@/tours/engine/anchorRegistry'
 import { TranscriptViewer } from './TranscriptViewer'
 import { TranscriptJson } from './types'
 
@@ -71,6 +72,7 @@ export function VideoSummaryCard({
 }: VideoSummaryCardProps) {
   const [internalExpanded, setInternalExpanded] = useState(false)
   const [activeTab, setActiveTab] = useState('summary')
+  const cardAnchorRef = useTourAnchor('video-summary-card')
 
   const isControlled = controlledExpanded !== undefined
   const expanded = isControlled ? controlledExpanded : internalExpanded
@@ -146,7 +148,7 @@ export function VideoSummaryCard({
     : null
 
   return (
-    <Card data-tour-id="video-summary-card">
+    <Card ref={cardAnchorRef}>
       <CardContent>
         <div className="flex items-center mb-4">
           <div className="flex-1">

@@ -307,6 +307,31 @@ export interface TourSummariesAndClaimsContent {
   mockClaimSplitAtoms: TourMockClaimAtom[]
 }
 
+export interface TourDocumentAnnotationContent {
+  personaName: string
+  personaRole: string
+  /**
+   * Fixed UUID for the demo document the tour creates and walks. A client-
+   * supplied id makes the create idempotent (re-running the tour reuses the
+   * same row) and lets every per-document step route to
+   * /app/documents/:documentId without waiting to learn a server-generated id.
+   * Must be a valid UUID; the documents endpoint validates the format.
+   */
+  documentId: string
+  /** Title for the demo document, shown on its browser card and in narration. */
+  documentTitle: string
+  /**
+   * Text tokenized into the demo document. Pick a sentence with clear entity
+   * spans and a plausible relation between two of them so the span-labeling and
+   * relation beats land on something meaningful when the visitor tries them.
+   */
+  documentText: string
+  /** Example ontology type name a visitor labels a span with (narration only). */
+  spanTypeName: string
+  /** Example relation-type name a visitor draws between two spans (narration only). */
+  relationTypeName: string
+}
+
 export interface TourCollaborationContent {
   /** Project name the visitor creates at step 1/2. */
   projectName: string
@@ -378,6 +403,7 @@ export interface TourContentBundle {
   worldLayer: TourWorldLayerContent
   modelInTheLoop: TourModelInTheLoopContent
   summariesAndClaims: TourSummariesAndClaimsContent
+  documentAnnotation: TourDocumentAnnotationContent
   collaboration: TourCollaborationContent
   importExport: TourImportExportContent
   /** Optional pre-seeded world objects (locations, times, entities) that

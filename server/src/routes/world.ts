@@ -2,22 +2,24 @@ import { Type } from '@sinclair/typebox'
 import { FastifyPluginAsync, FastifyRequest } from 'fastify'
 import { optionalAuth, requireAdmin, requireAuth } from '@middleware/auth.js'
 import { buildAbilities } from '../middleware/abilities.js'
-import { WorldStateRepository } from '../repositories/WorldStateRepository.js'
+import { GraphRepository } from '../repositories/GraphRepository.js'
+import { LayersOntologyRepository } from '../repositories/LayersOntologyRepository.js'
 import { WorldStateService, WorldStateUpdateInput } from '../services/world-state-service.js'
 
 /**
  * Fastify plugin for world state routes.
  *
  * Routes perform HTTP concerns only: schema validation, request parsing, and
- * dispatch to a per-request WorldStateService that owns business rules and
- * RBAC. The WorldStateRepository owns all Prisma access.
+ * dispatch to a per-request WorldStateService that reads and writes world
+ * objects as layers GraphNode / GraphEdge rows scoped to the user. The response
+ * and request shapes are unchanged; the store beneath them is the layers graph.
  *
- * WorldState rows are keyed by (userId, projectId); a user owns their personal
- * state (projectId = null) and may access per-project states for projects they
- * belong to. Single-row endpoints load the row first and run an instance-level
- * `ability.can()` check before returning or mutating. If a row exists but the
- * caller cannot read it, a ForbiddenError is thrown; if the row does not exist
- * at all, a NotFoundError is thrown instead (existence privacy).
+ * World objects are keyed by scope (createdByUserId = the user, projectId = null
+ * for personal state); a user only ever sees their own personal objects. Reads
+ * reconstruct the aggregate from the scoped rows, returning an empty aggregate
+ * when none exist. Deletion endpoints load the aggregate, remove the object with
+ * its incident relations and collection memberships, and convert ontology gloss
+ * references to text.
  *
  * Routes:
  * - GET /api/world - Get current user's world state
@@ -28,19 +30,21 @@ import { WorldStateService, WorldStateUpdateInput } from '../services/world-stat
  * - GET/DELETE /api/world/times/:timeId[/deletion-preview]
  */
 const worldRoute: FastifyPluginAsync = async (fastify) => {
-  // Request-independent: one repository for the plugin's lifetime.
-  const repository = new WorldStateRepository(fastify.prisma)
+  // Request-independent: repositories for the plugin's lifetime.
+  const graphRepo = new GraphRepository(fastify.prisma)
+  const ontologyRepo = new LayersOntologyRepository(fastify.prisma)
 
   /**
    * Builds a per-request service from the request-scoped CASL ability and the
-   * authenticated user's id and system role.
+   * authenticated user's id.
    */
   const serviceFor = (request: FastifyRequest): WorldStateService =>
     new WorldStateService(
-      repository,
+      graphRepo,
+      ontologyRepo,
+      fastify.prisma,
       request.ability ?? null,
-      request.user?.id,
-      request.user?.systemRole ?? undefined
+      request.user?.id
     )
 
   /**

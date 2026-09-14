@@ -1,5 +1,8 @@
-import { PrismaClient, Project, ProjectMembership, Persona, WorldState, Prisma } from '@prisma/client'
-import { ConflictError, NotFoundError } from '../lib/errors.js'
+import { PrismaClient, Project, ProjectMembership, Persona, Prisma } from '@prisma/client'
+
+import { mergeById } from '../services/world-state-service.js'
+import { readWorldAggregate, mergeWorldObjects } from '../services/layers-bridge/world-bridge.js'
+import { projectWorldStateId, type WorldStateAggregate } from '../services/world-layers-mapper.js'
 
 /**
  * Project row joined with its members (each carrying the public user
@@ -48,6 +51,38 @@ export type ProjectWithMyMembership = Prisma.ProjectGetPayload<{
 export type AssignableUser = Prisma.UserGetPayload<{
   select: { id: true; username: true; displayName: true; email: true }
 }>
+
+/**
+ * A project-scoped world state reconstructed from the layers store, in the
+ * response-ready view shape: a deterministic id, the seven JSON buckets, and
+ * timestamps. World objects are keyed by scope (createdByUserId = the caller,
+ * projectId = the project) rather than by a single row, so the id is synthetic.
+ */
+export interface ProjectWorldStateView {
+  id: string
+  userId: string
+  projectId: string
+  entities: unknown[]
+  events: unknown[]
+  times: unknown[]
+  entityCollections: unknown[]
+  eventCollections: unknown[]
+  timeCollections: unknown[]
+  relations: unknown[]
+  createdAt: Date
+  updatedAt: Date
+}
+
+/** The buckets of a project world state a partial update may set. */
+export interface ProjectWorldStatePartialUpdate {
+  entities?: unknown[]
+  events?: unknown[]
+  times?: unknown[]
+  entityCollections?: unknown[]
+  eventCollections?: unknown[]
+  timeCollections?: unknown[]
+  relations?: unknown[]
+}
 
 /**
  * Repository for all Project and ProjectMembership database access.
@@ -386,104 +421,93 @@ export class ProjectRepository {
     })
   }
 
-  /**
-   * Finds the caller's world state for a project.
-   *
-   * @param userId - the caller
-   * @param projectId - Project UUID
-   * @returns the world state, or null if none exists yet
-   */
-  async findWorldState(userId: string, projectId: string): Promise<WorldState | null> {
-    return this.prisma.worldState.findUnique({
-      where: { userId_projectId: { userId, projectId } },
-    })
-  }
-
-  /**
-   * Creates a world state for the caller in a project.
-   *
-   * @param data - Prisma world state create input
-   * @returns the created world state
-   */
-  async createWorldState(data: Prisma.WorldStateUncheckedCreateInput): Promise<WorldState> {
-    return this.prisma.worldState.create({ data })
-  }
-
-  /**
-   * Gets-or-creates the caller's empty world state for a project, keyed on the
-   * compound unique (userId, projectId).
-   *
-   * Using upsert (rather than find-then-create) makes concurrent first access
-   * safe: two callers that both miss the row would, with a separate create,
-   * race into the `@@unique([userId, projectId])` constraint (P2002). The
-   * upsert collapses that into a single atomic statement, leaving the existing
-   * row untouched on a hit and creating the empty arrays on a miss.
-   *
-   * @param userId - the caller
-   * @param projectId - Project UUID
-   * @returns the existing or newly-created world state
-   */
-  async upsertEmptyWorldState(userId: string, projectId: string): Promise<WorldState> {
-    return this.prisma.worldState.upsert({
-      where: { userId_projectId: { userId, projectId } },
-      create: {
-        userId,
-        projectId,
-        entities: [],
-        events: [],
-        times: [],
-        entityCollections: [],
-        eventCollections: [],
-        timeCollections: [],
-        relations: [],
-      },
-      update: {},
-    })
-  }
-
-  /**
-   * Applies an optimistic-concurrency update to the caller's project world
-   * state.
-   *
-   * Reads the current (userId, projectId) row, lets `transform` compute the new
-   * column values from it, then writes them guarded by the row's `version`. If
-   * a concurrent writer committed first the version has advanced, the guard
-   * misses (count 0), and we retry against the freshly-read row, so both writes
-   * land instead of one silently clobbering the other. The guard keys on the
-   * monotonic `version` rather than `updatedAt` because two writes landing in
-   * the same millisecond can share an `updatedAt`, which would let the second
-   * silently overwrite the first. Project world state is multi-user (every
-   * member shares the row), which makes this guard essential for the whole-blob
-   * PUT to be a safe per-id merge under concurrent writers (the transform
-   * re-runs on fresh state each attempt).
-   *
-   * @param userId - the caller
-   * @param projectId - Project UUID
-   * @param transform - computes the Prisma update input from the current row
-   * @returns the updated world state
-   * @throws {NotFoundError} when no project row exists
-   * @throws {ConflictError} when the write keeps conflicting after retries
-   */
-  async updateProjectWorldStateOptimistic(
+  /** Builds the response-ready view for a scope's reconstructed aggregate. */
+  private static worldStateView(
     userId: string,
     projectId: string,
-    transform: (current: WorldState) => Prisma.WorldStateUpdateInput,
-  ): Promise<WorldState> {
-    for (let attempt = 0; attempt < 5; attempt++) {
-      const current = await this.prisma.worldState.findUnique({
-        where: { userId_projectId: { userId, projectId } },
-      })
-      if (!current) {
-        throw new NotFoundError('Project world state', `${userId}:${projectId}`)
-      }
-      const result = await this.prisma.worldState.updateMany({
-        where: { userId, projectId, version: current.version },
-        data: { ...transform(current), version: { increment: 1 } },
-      })
-      if (result.count === 1) {
-        return this.prisma.worldState.findUniqueOrThrow({ where: { id: current.id } })
+    aggregate: WorldStateAggregate
+  ): ProjectWorldStateView {
+    const now = new Date()
+    return {
+      id: projectWorldStateId(userId, projectId),
+      userId,
+      projectId,
+      entities: aggregate.entities,
+      events: aggregate.events,
+      times: aggregate.times,
+      entityCollections: aggregate.entityCollections,
+      eventCollections: aggregate.eventCollections,
+      timeCollections: aggregate.timeCollections,
+      relations: aggregate.relations,
+      createdAt: now,
+      updatedAt: now,
+    }
+  }
+
+  /**
+   * Reads the caller's world state for a project from the layers store, keyed by
+   * the (user, project) scope. Returns an empty view when the caller has none.
+   *
+   * @param userId - the caller
+   * @param projectId - Project UUID
+   * @returns the world state view (empty buckets when none exists yet)
+   */
+  async readWorldState(userId: string, projectId: string): Promise<ProjectWorldStateView> {
+    const { aggregate } = await readWorldAggregate(this.prisma, { userId, projectId })
+    return ProjectRepository.worldStateView(userId, projectId, aggregate)
+  }
+
+  /**
+   * Writes a partial update over the caller's project world state in the layers
+   * store. Each provided bucket is merged into the current one by id: an object
+   * with a new id is appended and one with a matching id is overwritten, while
+   * objects the caller did not send are preserved. Omitted buckets are left
+   * untouched.
+   *
+   * Merging by id (rather than replacing the whole bucket) keeps concurrent
+   * additions from clobbering each other; a plain whole-blob PUT would drop any
+   * object a concurrent writer added between this read and write. Removal of a
+   * world object goes through the dedicated delete path, not this merge.
+   *
+   * The merge is written through the version-guarded per-row upsert
+   * ({@link mergeWorldObjects}) inside a transaction: each object is created or
+   * updated under its `lockVersion` and objects the caller did not send are left in
+   * place, so the write neither prunes-and-recreates the scope's world (no total
+   * loss on a mid-write failure) nor drops a concurrent writer's additions. A
+   * same-object compare-and-swap miss rolls the transaction back as a conflict.
+   *
+   * @param userId - the caller
+   * @param projectId - Project UUID
+   * @param data - the world buckets to merge (omitted buckets are preserved)
+   * @returns the resulting world state view
+   * @throws {ConflictError} when a same-object edit lost a concurrent race
+   */
+  async writeWorldState(
+    userId: string,
+    projectId: string,
+    data: ProjectWorldStatePartialUpdate
+  ): Promise<ProjectWorldStateView> {
+    const { aggregate } = await readWorldAggregate(this.prisma, { userId, projectId })
+    const merged: WorldStateAggregate = { ...aggregate }
+    const buckets: (keyof ProjectWorldStatePartialUpdate & keyof WorldStateAggregate)[] = [
+      'entities',
+      'events',
+      'times',
+      'entityCollections',
+      'eventCollections',
+      'timeCollections',
+      'relations',
+    ]
+    for (const bucket of buckets) {
+      const value = data[bucket]
+      if (value !== undefined) {
+        merged[bucket] = mergeById(
+          aggregate[bucket] as unknown as Prisma.JsonValue,
+          Array.isArray(value) ? value : [],
+        ) as unknown as unknown[]
       }
     }
-    throw new ConflictError('Project world state update conflicted after retries')
+    await this.prisma.$transaction((tx) => mergeWorldObjects(tx, { userId, projectId }, merged))
+    return ProjectRepository.worldStateView(userId, projectId, merged)
   }
 }

@@ -18,13 +18,21 @@ interface AnnotationAutocompleteProps {
   personaId?: string | null
   onSelect: (option: AnnotationOption | null) => void
   disabled?: boolean
+  /**
+   * Whether selecting an object writes the link target into the annotation UI
+   * store. Defaults to `true`, preserving the video-annotation behavior. Set to
+   * `false` when reusing the picker on a surface (such as the document span
+   * annotator) that must not mutate video-annotation state.
+   */
+  emitLinkTarget?: boolean
 }
 
 export default function AnnotationAutocomplete({
   mode,
   personaId,
   onSelect,
-  disabled = false
+  disabled = false,
+  emitLinkTarget = true
 }: AnnotationAutocompleteProps) {
   const [value, setValue] = useState<AnnotationOption | null>(null)
   const [inputValue, setInputValue] = useState('')
@@ -172,8 +180,10 @@ export default function AnnotationAutocomplete({
     setOpen(false)
     setInputValue('')
 
-    // Update Zustand state for link target if in object mode
-    if (mode === 'object') {
+    // Update Zustand state for link target if in object mode. Surfaces that own
+    // their own persistence (emitLinkTarget=false) skip this write so they never
+    // mutate the video-annotation link state.
+    if (mode === 'object' && emitLinkTarget) {
       let targetType: 'entity' | 'event' | 'location' | 'entity-collection' | 'event-collection' | null = null
       if (option.type === 'entity-object') targetType = 'entity'
       else if (option.type === 'event-object') targetType = 'event'

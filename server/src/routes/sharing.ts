@@ -12,6 +12,49 @@ import { randomUUID } from 'node:crypto'
 import { Type, Static } from '@sinclair/typebox'
 import { FastifyPluginAsync } from 'fastify'
 import { Prisma, PrismaClient } from '@prisma/client'
+import {
+  annotationExists,
+  annotationOwner,
+  readAnnotationById,
+  writeVideoAnnotation,
+} from '../services/layers-bridge/annotation-bridge.js'
+import {
+  claimExists,
+  claimOwner,
+  readClaimById,
+  readSummaryClaims,
+  writeClaim,
+  type ClaimSummaryContext,
+} from '../services/layers-bridge/claim-bridge.js'
+import {
+  readWorldAggregate,
+  resolvePersonalWorldOwner,
+  writeWorldAggregate,
+} from '../services/layers-bridge/world-bridge.js'
+import {
+  readOntologyAggregate,
+  writeOntologyAggregate,
+} from '../services/layers-bridge/ontology-bridge.js'
+import { emptyOntology } from '../services/ontology-layers-mapper.js'
+import { personalWorldStateId, type WorldStateAggregate } from '../services/world-layers-mapper.js'
+import type { VideoAnnotationInput } from '../services/video-annotation-mapper.js'
+import type { StoredClaim } from '../services/claim-layers-mapper.js'
+import { trace } from '@opentelemetry/api'
+import { requireAuth } from '@middleware/auth.js'
+import { sharingOperationCounter } from '../metrics.js'
+import {
+  buildAbilities,
+  invalidateUserAbilities,
+  invalidateGroupMembers,
+} from '@middleware/abilities.js'
+import {
+  NotFoundError,
+  ValidationError,
+  ForbiddenError,
+  ErrorResponseSchema,
+} from '@lib/errors.js'
+
+const tracer = trace.getTracer('fovea-rbac')
 
 /** Convert a value to Prisma JSON without type assertions. */
 function toJson(value: unknown): Prisma.InputJsonValue {
@@ -20,11 +63,10 @@ function toJson(value: unknown): Prisma.InputJsonValue {
 
 /**
  * Deep-copies a JSON value, replacing any string leaf that is a key in `idMap`
- * with its mapped value. The fork re-points every claim-id reference at the
- * new claim ids in one pass: row ids, `parentClaimId`, and the `$` claim
- * references embedded in gloss arrays. Claim ids are UUIDs, so a non-id string
- * cannot collide with a map key. Returns a fresh structure (the input is not
- * mutated).
+ * with its mapped value. The fork re-points every claim-id reference at the new
+ * claim ids in one pass: row ids, `parentClaimId`, and the claim references
+ * embedded in gloss arrays. Claim ids are UUIDs, so a non-id string cannot
+ * collide with a map key. Returns a fresh structure (the input is not mutated).
  */
 function remapClaimIds(value: unknown, idMap: Map<string, string>): unknown {
   if (typeof value === 'string') {
@@ -43,145 +85,65 @@ function remapClaimIds(value: unknown, idMap: Map<string, string>): unknown {
   return value
 }
 
-/** A claim's nullable JSON field copied through the id remap, or JSON null. */
-function remappedJsonOrNull(
-  value: Prisma.JsonValue | null,
-  idMap: Map<string, string>
-): Prisma.InputJsonValue | typeof Prisma.JsonNull {
-  return value === null || value === undefined
-    ? Prisma.JsonNull
-    : toJson(remapClaimIds(value, idMap))
-}
-
-/**
- * Deep-copies a summary's claim rows under a new summary, re-pointing every
- * claim id (and the references between claims) at fresh ids via `idMap`.
- *
- * Rows are inserted parents-before-children so each `parentClaimId` foreign key
- * resolves at insert time. Every copied claim is stamped with the forker as
- * `createdBy` and left in personal scope (no projectId), matching the forked
- * summary and persona. World-object references (claimEventId/claimTimeId/
- * claimLocationId) are not remapped: world state is not forked, so they keep
- * pointing at the same object ids the source named.
- *
- * @param tx - the Prisma transaction client running the fork
- * @param sourceClaims - the source summary's claim rows (flat list)
- * @param idMap - source claim id to forked claim id
- * @param newSummaryId - id of the forked summary the copies attach to
- * @param ownerUserId - UUID of the user who will own the forked claims
- */
-async function forkClaimRows(
-  tx: Prisma.TransactionClient,
-  sourceClaims: Array<Prisma.ClaimGetPayload<object>>,
-  idMap: Map<string, string>,
-  newSummaryId: string,
-  ownerUserId: string
-): Promise<void> {
-  const byOldId = new Map(sourceClaims.map((c) => [c.id, c]))
-  const inserted = new Set<string>()
-
-  const insert = async (claim: Prisma.ClaimGetPayload<object>): Promise<void> => {
-    if (inserted.has(claim.id)) {
-      return
-    }
-    // Ensure the parent row exists first so the FK resolves. Only intra-summary
-    // parents are remapped; an out-of-summary parent (should not occur) falls
-    // through to null rather than dangling.
-    if (claim.parentClaimId && byOldId.has(claim.parentClaimId)) {
-      await insert(byOldId.get(claim.parentClaimId)!)
-    }
-    await tx.claim.create({
-      data: {
-        id: idMap.get(claim.id)!,
-        summaryId: newSummaryId,
-        summaryType: claim.summaryType,
-        text: claim.text,
-        gloss: toJson(remapClaimIds(claim.gloss, idMap)),
-        parentClaimId: claim.parentClaimId ? idMap.get(claim.parentClaimId) ?? null : null,
-        textSpans: remappedJsonOrNull(claim.textSpans, idMap),
-        timeSpans: remappedJsonOrNull(claim.timeSpans, idMap),
-        claimerType: claim.claimerType,
-        claimerGloss: remappedJsonOrNull(claim.claimerGloss, idMap),
-        claimRelation: remappedJsonOrNull(claim.claimRelation, idMap),
-        claimEventId: claim.claimEventId,
-        claimTimeId: claim.claimTimeId,
-        claimLocationId: claim.claimLocationId,
-        confidence: claim.confidence,
-        modelUsed: claim.modelUsed,
-        extractionStrategy: claim.extractionStrategy,
-        audio: claim.audio === null ? Prisma.JsonNull : toJson(claim.audio),
-        video: claim.video === null ? Prisma.JsonNull : toJson(claim.video),
-        metadata: claim.metadata === null ? Prisma.JsonNull : toJson(claim.metadata),
-        comment: claim.comment,
-        createdBy: ownerUserId,
-      },
-    })
-    inserted.add(claim.id)
-  }
-
-  for (const claim of sourceClaims) {
-    await insert(claim)
-  }
-}
-
 /**
  * Deep-forks a persona (and its ontology) into a new persona owned by
  * `ownerUserId`.
  *
- * The forked persona is a fresh row: it copies the source's name, role,
- * information need, details, and ontology arrays, but is marked
- * non-system-generated and visible. The new persona is what lets summary,
- * claim, and annotation forks land in the forker's own scope instead of
- * pointing back at the sharer's persona (which would either collide on a
- * unique constraint or orphan the forked resource under another user).
+ * The forked persona is a fresh Persona row copying the source's name, role,
+ * information need, details, and domain, marked non-system-generated and
+ * visible; the ontology is copied through the layers store (a fresh
+ * LayersOntology plus its TypeDefs). A new persona is what lets summary, claim,
+ * and annotation forks land in the forker's own scope instead of pointing back
+ * at the sharer's persona, which would collide on a unique constraint or orphan
+ * the forked resource under another user.
  *
- * @param tx - the Prisma transaction client running the fork
+ * @param db - the transaction-scoped Prisma client running the fork
  * @param sourcePersonaId - UUID of the persona to copy
  * @param ownerUserId - UUID of the user who will own the forked persona
  * @returns the id of the newly created persona
  * @throws {NotFoundError} when the source persona does not exist
  */
 async function forkPersona(
-  tx: Prisma.TransactionClient,
+  db: PrismaClient,
   sourcePersonaId: string,
-  ownerUserId: string
+  ownerUserId: string,
 ): Promise<{ id: string }> {
-  const source = await tx.persona.findUnique({
-    where: { id: sourcePersonaId },
-    include: { ontology: true },
-  })
+  const source = await db.persona.findUnique({ where: { id: sourcePersonaId } })
   if (!source) {
     throw new NotFoundError('Persona', sourcePersonaId)
   }
-  return tx.persona.create({
+  const forked = await db.persona.create({
     data: {
       userId: ownerUserId,
       name: source.name,
       role: source.role,
       informationNeed: source.informationNeed,
       details: source.details,
+      domain: source.domain,
       isSystemGenerated: false,
       hidden: false,
-      ontology: source.ontology
-        ? {
-            create: {
-              entityTypes: toJson(source.ontology.entityTypes),
-              eventTypes: toJson(source.ontology.eventTypes),
-              roleTypes: toJson(source.ontology.roleTypes),
-              relationTypes: toJson(source.ontology.relationTypes),
-            },
-          }
-        : {
-            create: {
-              entityTypes: [],
-              eventTypes: [],
-              roleTypes: [],
-              relationTypes: [],
-            },
-          },
     },
     select: { id: true },
   })
+  const { aggregate, exists } = await readOntologyAggregate(db, sourcePersonaId)
+  await writeOntologyAggregate(
+    db,
+    forked.id,
+    exists ? aggregate : emptyOntology(),
+    {
+      name: `${source.name} ontology`,
+      description: source.informationNeed,
+      domain: source.domain,
+    },
+    { projectId: null, createdByUserId: ownerUserId },
+  )
+  return forked
+}
+
+/** The result of forking a summary: the new summary id and the claim id remap. */
+interface ForkedSummary {
+  id: string
+  claimIdMap: Map<string, string>
 }
 
 /**
@@ -189,47 +151,40 @@ async function forkPersona(
  *
  * The source summary's persona belongs to the sharer, and VideoSummary carries
  * a unique constraint on (videoId, personaId). Reusing the source's personaId
- * would therefore collide with the source row. This helper forks the persona
- * first (a new persona owned by `ownerUserId`) and then creates the forked
- * summary against the NEW personaId, keeping the same videoId; the new
- * (videoId, personaId) pair is unique, so no collision occurs. The schema
- * requires personaId, so a summary always has a persona to fork.
+ * would collide with the source row, so the persona is forked first and the
+ * forked summary is created against the NEW personaId, keeping the same videoId.
+ * The summary's claims live in the layers store; each is deep-copied under a
+ * fresh id via `writeClaim`, and both the copied claim nodes and the
+ * denormalized `claimsJson` are re-pointed at the new ids so the fork reads
+ * identically to the source.
  *
- * @param tx - the Prisma transaction client running the fork
+ * @param db - the transaction-scoped Prisma client running the fork
  * @param sourceSummaryId - UUID of the summary to copy
  * @param ownerUserId - UUID of the user who will own the forked summary
- * @returns the id of the newly created summary
+ * @returns the new summary id and the source-to-forked claim id map
  * @throws {NotFoundError} when the source summary does not exist
  */
 async function forkSummary(
-  tx: Prisma.TransactionClient,
+  db: PrismaClient,
   sourceSummaryId: string,
-  ownerUserId: string
-): Promise<{ id: string }> {
-  const source = await tx.videoSummary.findUnique({
-    where: { id: sourceSummaryId },
-  })
+  ownerUserId: string,
+): Promise<ForkedSummary> {
+  const source = await db.videoSummary.findUnique({ where: { id: sourceSummaryId } })
   if (!source) {
     throw new NotFoundError('VideoSummary', sourceSummaryId)
   }
 
-  // A summary's persona belongs to the sharer; fork it so the forked summary
-  // lands in the forker's scope under a NEW personaId, keeping the same videoId.
-  const forkedPersona = await forkPersona(tx, source.personaId, ownerUserId)
+  const forkedPersona = await forkPersona(db, source.personaId, ownerUserId)
 
-  // Build the claim id remap up front, from the source summary's claim rows, so
-  // the copied rows AND the denormalized claimsJson re-point at the same new
-  // ids. Without this the fork drops every extracted claim, leaving the forked
-  // summary's claim view empty.
-  const sourceClaims = await tx.claim.findMany({
-    where: { summaryId: sourceSummaryId, summaryType: 'video' },
-  })
-  const idMap = new Map<string, string>()
+  // Mint a fresh id for every source claim up front so the copied claim nodes
+  // and the denormalized claimsJson re-point at the same new ids.
+  const { claims: sourceClaims } = await readSummaryClaims(db, sourceSummaryId)
+  const claimIdMap = new Map<string, string>()
   for (const claim of sourceClaims) {
-    idMap.set(claim.id, randomUUID())
+    claimIdMap.set(claim.id, randomUUID())
   }
 
-  const forked = await tx.videoSummary.create({
+  const forked = await db.videoSummary.create({
     data: {
       videoId: source.videoId,
       personaId: forkedPersona.id,
@@ -238,9 +193,7 @@ async function forkSummary(
       audioTranscript: source.audioTranscript,
       keyFrames: source.keyFrames ? toJson(source.keyFrames) : Prisma.JsonNull,
       confidence: source.confidence,
-      transcriptJson: source.transcriptJson
-        ? toJson(source.transcriptJson)
-        : Prisma.JsonNull,
+      transcriptJson: source.transcriptJson ? toJson(source.transcriptJson) : Prisma.JsonNull,
       audioLanguage: source.audioLanguage,
       speakerCount: source.speakerCount,
       comment: source.comment,
@@ -249,36 +202,38 @@ async function forkSummary(
       claimsJson:
         source.claimsJson === null
           ? Prisma.JsonNull
-          : toJson(remapClaimIds(source.claimsJson, idMap)),
+          : toJson(remapClaimIds(source.claimsJson, claimIdMap)),
       claimsVersion: source.claimsVersion,
       claimsExtractedAt: source.claimsExtractedAt,
       createdBy: ownerUserId,
     },
-    select: { id: true },
+    select: { id: true, videoId: true },
   })
 
-  // Deep-copy the claim rows themselves under the forked summary, parents first.
-  await forkClaimRows(tx, sourceClaims, idMap, forked.id, ownerUserId)
+  const summaryContext: ClaimSummaryContext = {
+    id: forked.id,
+    videoId: forked.videoId,
+    projectId: null,
+    createdBy: ownerUserId,
+  }
+  const now = new Date().toISOString()
+  for (const claim of sourceClaims) {
+    const remapped = remapClaimIds(claim, claimIdMap) as StoredClaim
+    const forkedClaim: StoredClaim = {
+      ...remapped,
+      id: claimIdMap.get(claim.id)!,
+      summaryId: forked.id,
+      parentClaimId: claim.parentClaimId ? claimIdMap.get(claim.parentClaimId) ?? null : null,
+      createdBy: ownerUserId,
+      projectId: null,
+      createdAt: now,
+      updatedAt: now,
+    }
+    await writeClaim(db, summaryContext, forkedClaim)
+  }
 
-  return forked
+  return { id: forked.id, claimIdMap }
 }
-import { trace } from '@opentelemetry/api'
-import { requireAuth } from '@middleware/auth.js'
-import { sharingOperationCounter } from '../metrics.js'
-import {
-  buildAbilities,
-  invalidateUserAbilities,
-  invalidateGroupMembers,
-} from '@middleware/abilities.js'
-import {
-  NotFoundError,
-  ValidationError,
-  ForbiddenError,
-  ErrorResponseSchema,
-} from '@lib/errors.js'
-import { mergeById } from '../services/world-state-service.js'
-
-const tracer = trace.getTracer('fovea-rbac')
 
 /**
  * Nullable type helpers for fast-json-stringify compatibility.
@@ -292,6 +247,44 @@ const NullableDatetime = Type.Unsafe<string | null>({
   type: ['string', 'null'],
   format: 'date-time',
 })
+
+/**
+ * Merges the world objects of an incoming aggregate into a base aggregate,
+ * appending only objects whose id is not already present in the base bucket.
+ * Used to fork a world into a user who already has a personal world without
+ * clobbering their existing objects.
+ */
+function mergeWorldAggregates(
+  base: WorldStateAggregate,
+  incoming: WorldStateAggregate,
+): WorldStateAggregate {
+  const buckets: (keyof WorldStateAggregate)[] = [
+    'entities',
+    'events',
+    'times',
+    'entityCollections',
+    'eventCollections',
+    'timeCollections',
+    'relations',
+  ]
+  const merged = { ...base } as WorldStateAggregate
+  for (const bucket of buckets) {
+    const baseItems = (base[bucket] as Array<Record<string, unknown>>) ?? []
+    const seen = new Set(
+      baseItems
+        .map((item) => (item && typeof item === 'object' ? item.id : undefined))
+        .filter((id): id is string => typeof id === 'string'),
+    )
+    const result = [...baseItems]
+    for (const item of incoming[bucket] as Array<Record<string, unknown>>) {
+      const id = item && typeof item === 'object' ? item.id : undefined
+      if (typeof id === 'string' && seen.has(id)) continue
+      result.push(item)
+    }
+    merged[bucket] = result
+  }
+  return merged
+}
 
 /** Valid resource types that can be shared. */
 const ResourceTypeEnum = Type.Union([
@@ -385,29 +378,29 @@ async function verifyResourceExists(
   resourceType: string,
   resourceId: string,
 ): Promise<boolean> {
-  let resource = null
+  let exists = false
 
   switch (resourceType) {
     case 'annotation':
-      resource = await prisma.annotation.findUnique({ where: { id: resourceId } })
+      exists = await annotationExists(prisma, resourceId)
       break
     case 'summary':
-      resource = await prisma.videoSummary.findUnique({ where: { id: resourceId } })
+      exists = (await prisma.videoSummary.findUnique({ where: { id: resourceId } })) !== null
       break
     case 'claim':
-      resource = await prisma.claim.findUnique({ where: { id: resourceId } })
+      exists = await claimExists(prisma, resourceId)
       break
     case 'persona':
-      resource = await prisma.persona.findUnique({ where: { id: resourceId } })
+      exists = (await prisma.persona.findUnique({ where: { id: resourceId } })) !== null
       break
     case 'world_state':
-      resource = await prisma.worldState.findUnique({ where: { id: resourceId } })
+      exists = (await resolvePersonalWorldOwner(prisma, resourceId)) !== null
       break
     default:
       throw new ValidationError(`Unknown resource type: ${resourceType}`)
   }
 
-  if (!resource) {
+  if (!exists) {
     throw new NotFoundError(resourceType, resourceId)
   }
 
@@ -461,8 +454,7 @@ async function verifySharePermission(
 
   switch (resourceType) {
     case 'annotation': {
-      const annotation = await prisma.annotation.findUnique({ where: { id: resourceId } })
-      isOwner = annotation?.createdByUserId === userId
+      isOwner = (await annotationOwner(prisma, resourceId)) === userId
       break
     }
     case 'summary': {
@@ -471,8 +463,7 @@ async function verifySharePermission(
       break
     }
     case 'claim': {
-      const claim = await prisma.claim.findUnique({ where: { id: resourceId } })
-      isOwner = claim?.createdBy === userId
+      isOwner = (await claimOwner(prisma, resourceId)) === userId
       break
     }
     case 'persona': {
@@ -481,8 +472,7 @@ async function verifySharePermission(
       break
     }
     case 'world_state': {
-      const worldState = await prisma.worldState.findUnique({ where: { id: resourceId } })
-      isOwner = worldState?.userId === userId
+      isOwner = (await resolvePersonalWorldOwner(prisma, resourceId)) === userId
       break
     }
   }
@@ -940,13 +930,15 @@ const sharingRoute: FastifyPluginAsync = async (fastify) => {
         throw new ForbiddenError('You are not a recipient of this share')
       }
 
-      // Fork the resource within a transaction
+      // Fork the resource within a transaction. Annotations, claims, and world
+      // objects are forked in the layers store via the bridge; summaries and
+      // personas remain their own models (a forked persona's ontology is written
+      // to the layers store).
       const forkedResource = await fastify.prisma.$transaction(async (tx) => {
+        const db = tx as unknown as PrismaClient
         switch (share.resourceType) {
           case 'annotation': {
-            const source = await tx.annotation.findUnique({
-              where: { id: share.resourceId },
-            })
+            const source = await readAnnotationById(db, share.resourceId)
             if (!source) {
               throw new NotFoundError('Annotation', share.resourceId)
             }
@@ -955,33 +947,32 @@ const sharingRoute: FastifyPluginAsync = async (fastify) => {
             // annotations are persona-agnostic (personaId null); keep them null
             // and just re-own them under the forker.
             const forkedPersonaId = source.personaId
-              ? (await forkPersona(tx, source.personaId, userId)).id
+              ? (await forkPersona(db, source.personaId, userId)).id
               : null
-            return tx.annotation.create({
-              data: {
-                videoId: source.videoId,
-                personaId: forkedPersonaId,
-                type: source.type,
-                label: source.label,
-                linkType: source.linkType,
-                frames: toJson(source.frames),
-                confidence: source.confidence,
-                source: source.source,
-                createdByUserId: userId,
-              },
-            })
+            const newId = randomUUID()
+            const input: VideoAnnotationInput = {
+              id: newId,
+              videoId: source.videoId,
+              personaId: forkedPersonaId,
+              type: source.type,
+              label: source.label,
+              linkType: source.linkType,
+              frames: source.frames,
+              confidence: source.confidence,
+              source: source.source,
+            }
+            await writeVideoAnnotation(db, input, { userId, projectId: null })
+            const created = await readAnnotationById(db, newId)
+            return created ?? { id: newId }
           }
 
           case 'summary': {
-            // Deep-fork: fork the source summary's persona into the forker's
-            // scope, then create the forked summary against the NEW personaId.
-            // Reusing the source's (videoId, personaId) would collide on the
-            // VideoSummary unique constraint, so the persona must be new.
-            const { id: forkedSummaryId } = await forkSummary(
-              tx,
-              share.resourceId,
-              userId
-            )
+            // Deep-fork: forkSummary forks the source summary's persona into the
+            // forker's scope, creates the forked summary against the NEW
+            // personaId (reusing the source's (videoId, personaId) would collide
+            // on the VideoSummary unique constraint), and deep-copies the claim
+            // tree in the layers store.
+            const { id: forkedSummaryId } = await forkSummary(db, share.resourceId, userId)
             const forked = await tx.videoSummary.findUnique({
               where: { id: forkedSummaryId },
             })
@@ -992,145 +983,61 @@ const sharingRoute: FastifyPluginAsync = async (fastify) => {
           }
 
           case 'claim': {
-            const source = await tx.claim.findUnique({
-              where: { id: share.resourceId },
-            })
+            const source = await readClaimById(db, share.resourceId)
             if (!source) {
               throw new NotFoundError('Claim', share.resourceId)
             }
-
-            // Deep-fork: fork the source claim's parent summary into the
-            // forker's scope (which forks its persona), then create the forked
-            // claim under the NEW summaryId. Reusing the sharer's summaryId
-            // would orphan the claim under another user's summary, so it would
-            // never appear in the forker's tree.
-            const { id: forkedSummaryId } = await forkSummary(
-              tx,
-              source.summaryId,
-              userId
-            )
-
-            const forkedClaim = await tx.claim.create({
-              data: {
-                summaryId: forkedSummaryId,
-                summaryType: source.summaryType,
-                text: source.text,
-                gloss: toJson(source.gloss),
-                textSpans: source.textSpans
-                  ? toJson(source.textSpans)
-                  : Prisma.JsonNull,
-                claimerType: source.claimerType,
-                claimerGloss: source.claimerGloss
-                  ? toJson(source.claimerGloss)
-                  : Prisma.JsonNull,
-                claimRelation: source.claimRelation
-                  ? toJson(source.claimRelation)
-                  : Prisma.JsonNull,
-                claimEventId: source.claimEventId,
-                claimTimeId: source.claimTimeId,
-                claimLocationId: source.claimLocationId,
-                confidence: source.confidence,
-                extractionStrategy: source.extractionStrategy,
-                audio: source.audio
-                  ? toJson(source.audio)
-                  : Prisma.JsonNull,
-                video: source.video
-                  ? toJson(source.video)
-                  : Prisma.JsonNull,
-                metadata: source.metadata
-                  ? (toJson(source.metadata))
-                  : Prisma.JsonNull,
-                comment: source.comment,
-                createdBy: userId,
-              },
-            })
-
-            // Rebuild the forked summary's denormalized claimsJson so the
-            // forked claim is visible in the forker's tree. This version forks
-            // a single root claim (no subclaims), so the tree holds exactly one
-            // root with an empty subclaim list, mirroring the shape produced by
-            // ClaimService.updateSummaryClaimsJson.
-            const treeNode = { ...forkedClaim, subclaims: [] }
-            const claimsJson = {
-              version: '1.0',
-              claims: [treeNode],
-              metadata: {
-                extractedAt: new Date().toISOString(),
-                totalClaims: 1,
-                totalSubclaims: 0,
-                maxDepth: 0,
-              },
+            // Deep-fork the parent summary into the forker's scope (which forks
+            // the persona, the summary, and the whole claim tree in the layers
+            // store), then return the forked copy of the shared claim under its
+            // fresh id. Reusing the sharer's summaryId would orphan the claim
+            // under another user's summary, so it would never appear in the
+            // forker's tree.
+            const { claimIdMap } = await forkSummary(db, source.summaryId, userId)
+            const forkedClaimId = claimIdMap.get(source.id)
+            if (!forkedClaimId) {
+              throw new NotFoundError('Claim', source.id)
             }
-            await tx.videoSummary.update({
-              where: { id: forkedSummaryId },
-              data: {
-                claimsJson: toJson(claimsJson),
-                claimsExtractedAt: new Date(),
-              },
-            })
-
+            const forkedClaim = await readClaimById(db, forkedClaimId)
+            if (!forkedClaim) {
+              throw new NotFoundError('Claim', forkedClaimId)
+            }
             return forkedClaim
           }
 
           case 'persona': {
-            // Reuse the shared persona-copy helper so the copy logic lives in
-            // one place, then load the forked persona with its ontology to
-            // return the full resource.
-            const { id: forkedPersonaId } = await forkPersona(
-              tx,
-              share.resourceId,
-              userId
-            )
-            const forked = await tx.persona.findUnique({
-              where: { id: forkedPersonaId },
-              include: { ontology: true },
-            })
+            // forkPersona copies the persona row and its ontology (layers store);
+            // load the forked persona and attach its reconstructed ontology
+            // aggregate to return the full resource.
+            const { id: forkedPersonaId } = await forkPersona(db, share.resourceId, userId)
+            const forked = await tx.persona.findUnique({ where: { id: forkedPersonaId } })
             if (!forked) {
               throw new NotFoundError('Persona', forkedPersonaId)
             }
-            return forked
+            const { aggregate } = await readOntologyAggregate(db, forkedPersonaId)
+            return { ...forked, ontology: aggregate }
           }
 
           case 'world_state': {
-            const source = await tx.worldState.findUnique({
-              where: { id: share.resourceId },
-            })
-            if (!source) {
+            const owner = await resolvePersonalWorldOwner(db, share.resourceId)
+            if (!owner) {
               throw new NotFoundError('WorldState', share.resourceId)
             }
             // A user has exactly one personal world state (projectId NULL), so a
-            // fork cannot mint a second one — it would collide on the personal
-            // partial unique index. Merge the shared content into the forker's
-            // existing personal row by id (additive); create it only if absent.
-            const existing = await tx.worldState.findFirst({
-              where: { userId, projectId: null },
+            // fork cannot mint a second one. Merge the shared world's objects
+            // into the forker's existing personal aggregate by id (additive),
+            // then write it back through the layers store.
+            const { aggregate: sourceWorld } = await readWorldAggregate(db, {
+              userId: owner,
+              projectId: null,
             })
-            if (existing) {
-              return tx.worldState.update({
-                where: { id: existing.id },
-                data: {
-                  entities: mergeById(existing.entities, source.entities as unknown[]),
-                  events: mergeById(existing.events, source.events as unknown[]),
-                  times: mergeById(existing.times, source.times as unknown[]),
-                  entityCollections: mergeById(existing.entityCollections, source.entityCollections as unknown[]),
-                  eventCollections: mergeById(existing.eventCollections, source.eventCollections as unknown[]),
-                  timeCollections: mergeById(existing.timeCollections, source.timeCollections as unknown[]),
-                  relations: mergeById(existing.relations, source.relations as unknown[]),
-                },
-              })
-            }
-            return tx.worldState.create({
-              data: {
-                userId,
-                entities: toJson(source.entities),
-                events: toJson(source.events),
-                times: toJson(source.times),
-                entityCollections: toJson(source.entityCollections),
-                eventCollections: toJson(source.eventCollections),
-                timeCollections: toJson(source.timeCollections),
-                relations: toJson(source.relations),
-              },
+            const { aggregate: existing } = await readWorldAggregate(db, {
+              userId,
+              projectId: null,
             })
+            const merged = mergeWorldAggregates(existing, sourceWorld)
+            await writeWorldAggregate(db, { userId, projectId: null }, merged)
+            return { id: personalWorldStateId(userId), userId, ...merged }
           }
 
           default:

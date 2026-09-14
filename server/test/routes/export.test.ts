@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest'
 import { buildApp } from '../../src/app.js'
 import { hashPassword } from '../../src/lib/password.js'
 import { seedBaselinePermissions } from '../helpers/rbac-test-setup.js'
+import { seedOntology, seedAnnotation, seedAnnotations, seedClaim } from '../helpers/seed-layers.js'
 import { FastifyInstance } from 'fastify'
 import { PrismaClient } from '@prisma/client'
 
@@ -27,12 +28,17 @@ describe('Export API', () => {
   })
 
   beforeEach(async () => {
-    // Clean database in dependency order
-    await prisma.claimRelation.deleteMany()
-    await prisma.claim.deleteMany()
-    await prisma.annotation.deleteMany()
+    // Clean database in dependency order (layers store first, then the rest).
+    await prisma.textAnnotationRelation.deleteMany()
+    await prisma.layersAnnotation.deleteMany()
+    await prisma.annotationLayer.deleteMany()
+    await prisma.graphEdge.deleteMany()
+    await prisma.graphNode.deleteMany()
+    await prisma.typeDef.deleteMany()
+    await prisma.layersOntology.deleteMany()
+    await prisma.expression.deleteMany()
+    await prisma.media.deleteMany()
     await prisma.videoSummary.deleteMany()
-    await prisma.ontology.deleteMany()
     await prisma.persona.deleteMany()
     await prisma.video.deleteMany()
     await prisma.session.deleteMany()
@@ -76,7 +82,7 @@ describe('Export API', () => {
     testPersonaId = persona.id
 
     // Create test ontology
-    await prisma.ontology.create({
+    await seedOntology(prisma, {
       data: {
         personaId: testPersonaId,
         entityTypes: [
@@ -118,7 +124,7 @@ describe('Export API', () => {
 
     it('exports annotations with correct format', async () => {
       // Create annotation
-      await prisma.annotation.create({
+      await seedAnnotation(prisma, {
         data: {
           videoId: testVideoId,
           personaId: testPersonaId,
@@ -156,7 +162,7 @@ describe('Export API', () => {
 
     it('exports multiple annotations in JSONL format', async () => {
       // Create multiple annotations
-      await prisma.annotation.createMany({
+      await seedAnnotations(prisma, {
         data: [
           {
             videoId: testVideoId,
@@ -221,7 +227,7 @@ describe('Export API', () => {
       })
 
       // Create annotations for different personas
-      await prisma.annotation.create({
+      await seedAnnotation(prisma, {
         data: {
           videoId: testVideoId,
           personaId: testPersonaId,
@@ -231,7 +237,7 @@ describe('Export API', () => {
         }
       })
 
-      await prisma.annotation.create({
+      await seedAnnotation(prisma, {
         data: {
           videoId: testVideoId,
           personaId: persona2.id,
@@ -268,7 +274,7 @@ describe('Export API', () => {
       })
 
       // Create annotations for different videos
-      await prisma.annotation.create({
+      await seedAnnotation(prisma, {
         data: {
           videoId: testVideoId,
           personaId: testPersonaId,
@@ -278,7 +284,7 @@ describe('Export API', () => {
         }
       })
 
-      await prisma.annotation.create({
+      await seedAnnotation(prisma, {
         data: {
           videoId: video2.id,
           personaId: testPersonaId,
@@ -344,7 +350,7 @@ describe('Export API', () => {
 
     it('returns correct stats with annotations', async () => {
       // Create annotation with keyframes
-      await prisma.annotation.create({
+      await seedAnnotation(prisma, {
         data: {
           videoId: testVideoId,
           personaId: testPersonaId,
@@ -462,7 +468,7 @@ describe('Export API', () => {
         }
       })
 
-      await prisma.claim.create({
+      await seedClaim(prisma, {
         data: {
           summaryId: summary.id,
           summaryType: 'video',
@@ -510,7 +516,7 @@ describe('Export API', () => {
       })
 
       // Create claim
-      await prisma.claim.create({
+      await seedClaim(prisma, {
         data: {
           summaryId: summary.id,
           summaryType: 'video',
@@ -520,7 +526,7 @@ describe('Export API', () => {
       })
 
       // Create annotation
-      await prisma.annotation.create({
+      await seedAnnotation(prisma, {
         data: {
           videoId: testVideoId,
           personaId: testPersonaId,
@@ -559,7 +565,7 @@ describe('Export API', () => {
         }
       })
 
-      await prisma.claim.create({
+      await seedClaim(prisma, {
         data: {
           summaryId: summary.id,
           summaryType: 'video',
@@ -594,7 +600,7 @@ describe('Export API', () => {
   describe('GET /api/export - invalid annotation handling', () => {
     it('skips annotations with invalid sequences and sets X-Export-Skipped header', async () => {
       // Create a valid annotation
-      await prisma.annotation.create({
+      await seedAnnotation(prisma, {
         data: {
           videoId: testVideoId,
           personaId: testPersonaId,
@@ -612,7 +618,7 @@ describe('Export API', () => {
       })
 
       // Create an invalid annotation (negative dimensions)
-      await prisma.annotation.create({
+      await seedAnnotation(prisma, {
         data: {
           videoId: testVideoId,
           personaId: testPersonaId,
@@ -648,7 +654,7 @@ describe('Export API', () => {
     })
 
     it('does not set X-Export-Skipped header when all annotations are valid', async () => {
-      await prisma.annotation.create({
+      await seedAnnotation(prisma, {
         data: {
           videoId: testVideoId,
           personaId: testPersonaId,
@@ -687,7 +693,7 @@ describe('Export API', () => {
         }
       })
 
-      await prisma.annotation.create({
+      await seedAnnotation(prisma, {
         data: {
           videoId: testVideoId,
           personaId: testPersonaId,

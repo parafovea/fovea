@@ -9,6 +9,7 @@ import React, { useRef, useEffect, useState, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { BezierControlPoint } from '@models/types'
+import { useTourAnchor } from '@/tours/engine/anchorRegistry'
 
 /**
  * Props for BezierCurveEditor component.
@@ -31,6 +32,7 @@ export const BezierCurveEditor: React.FC<BezierCurveEditorProps> = ({
   onChange,
 }) => {
   const canvasRef = useRef<SVGSVGElement>(null)
+  const editorAnchor = useTourAnchor('bezier-curve-editor')
   const [controlPoints, setControlPoints] = useState<BezierControlPoint[]>(
     initialControlPoints || [
       { x: 0.42, y: 0 },
@@ -128,7 +130,7 @@ export const BezierCurveEditor: React.FC<BezierCurveEditorProps> = ({
   }
 
   return (
-    <div data-tour-id="bezier-curve-editor">
+    <div ref={editorAnchor}>
       {/* Property Tabs */}
       <Tabs value={selectedTab} onValueChange={setSelectedTab}>
         <TabsList>
