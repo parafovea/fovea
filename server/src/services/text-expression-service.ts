@@ -2,9 +2,17 @@ import { createHash, randomUUID } from 'node:crypto'
 import { Prisma, type Expression as PrismaExpression } from '@prisma/client'
 import { subject } from '@casl/ability'
 import { accessibleBy } from '@casl/prisma'
+import camelcaseKeys from 'camelcase-keys'
 import type { Token } from '@fovea/layers-schema'
 import type { AppAbility } from '../lib/abilities.js'
-import { ForbiddenError, NotFoundError, UnauthorizedError } from '../lib/errors.js'
+import { config } from '../config.js'
+import { AppError, ForbiddenError, NotFoundError, UnauthorizedError } from '../lib/errors.js'
+import {
+  fetchModelService,
+  MODEL_SERVICE_TIMEOUTS,
+  ModelServiceTimeoutError,
+  ModelServiceUnreachableError,
+} from '../lib/fetchModelService.js'
 import { prisma } from '../lib/prisma.js'
 import { secToMs, to1000 } from './layers-conversion-service.js'
 import { VideoAccessService } from './video-access-service.js'
@@ -144,30 +152,25 @@ function asVideoTextMetadata(value: Prisma.JsonValue | null): VideoTextMetadata 
 }
 
 /**
- * Tokenizes text on whitespace into layers {@link Token}s, recording UTF-8 byte
- * offsets (and character offsets) into the source string so annotation spans can
- * index back into the expression text.
+ * The model-service `/api/tokenize` response after `camelcaseKeys(deep)`. The
+ * wire is snake_case; these are the camelCased fields the server reads. Byte
+ * offsets are authoritative UTF-8 offsets into the expression text; character
+ * offsets are UTF-16 code units (JS-compatible), so both index the text
+ * directly without re-encoding on the client.
  */
-function whitespaceTokens(text: string): Token[] {
-  const tokens: Token[] = []
-  const re = /\S+/g
-  let match: RegExpExecArray | null
-  let index = 0
-  while ((match = re.exec(text)) !== null) {
-    const charStart = match.index
-    const charEnd = match.index + match[0].length
-    tokens.push({
-      tokenIndex: index++,
-      text: match[0],
-      textSpan: {
-        byteStart: Buffer.byteLength(text.slice(0, charStart), 'utf8'),
-        byteEnd: Buffer.byteLength(text.slice(0, charEnd), 'utf8'),
-        charStart,
-        charEnd,
-      },
-    })
-  }
-  return tokens
+interface TokenizeServiceResponse {
+  tokens: Array<{
+    tokenIndex: number
+    text: string
+    byteStart: number
+    byteEnd: number
+    charStart: number
+    charEnd: number
+  }>
+  language: string
+  languageConfidence: number
+  tokenizationKind: string
+  modelUsed: string
 }
 
 /**
@@ -316,15 +319,19 @@ export class TextExpressionService {
     const meta = asVideoTextMetadata(video.metadata)
     const metaText = (meta.description ?? meta.title ?? '').trim()
     if (metaText.length > 0) {
-      const languages = meta.language ? [meta.language] : []
+      // Tokenize the metadata text through the model-service, forwarding any
+      // declared metadata language as the override that skips language ID. The
+      // resolved language and model tokens are stored with the expression.
+      const { tokens, language } = await this.tokenizeViaModelService(metaText, meta.language)
       const metaExpr = await this.upsertMaterialized({
         videoId,
         userId,
         sourceKind: 'video-metadata-text',
         kind: 'social-media',
         text: metaText,
-        languages,
-        buildTokens: false,
+        languages: [language],
+        buildTokens: true,
+        tokens,
       })
       results.push(metaExpr)
     }
@@ -518,13 +525,74 @@ export class TextExpressionService {
   }
 
   /**
+   * Tokenizes text through the model-service `/api/tokenize` endpoint,
+   * returning layers {@link Token}s (with authoritative UTF-8 byte offsets and
+   * JS-compatible UTF-16 character offsets) plus the resolved language. A
+   * `languageHint` is forwarded as the language override that skips the model
+   * service's language identification; omit it to let the service detect.
+   *
+   * A hung, unreachable, or erroring model-service hard-fails the caller with a
+   * 5xx (504 timeout, 502 unreachable/upstream error) — there is deliberately
+   * no whitespace fallback, so a persisted document is never tokenized
+   * inconsistently with the annotation pipeline that indexes its spans.
+   *
+   * @param text - the expression text to tokenize
+   * @param languageHint - optional language override that skips language ID
+   * @returns the token stream and the resolved (detected or overridden) language
+   * @throws {AppError} 502/504 when the model-service fails or times out
+   */
+  private async tokenizeViaModelService(
+    text: string,
+    languageHint?: string
+  ): Promise<{ tokens: Token[]; language: string }> {
+    const url = `${config.modelService.url}/api/tokenize`
+
+    let response: Response
+    try {
+      response = await fetchModelService(url, {
+        method: 'POST',
+        timeoutMs: MODEL_SERVICE_TIMEOUTS.tokenize,
+        body: { text, language: languageHint ?? null },
+      })
+    } catch (error) {
+      if (error instanceof ModelServiceTimeoutError) {
+        throw new AppError(504, 'MODEL_SERVICE_TIMEOUT', error.message)
+      }
+      if (error instanceof ModelServiceUnreachableError) {
+        throw new AppError(502, 'MODEL_SERVICE_UNREACHABLE', error.message)
+      }
+      throw error
+    }
+
+    if (!response.ok) {
+      const detail = await response.text()
+      throw new AppError(502, 'MODEL_SERVICE_ERROR', `Model service tokenize error: ${detail}`)
+    }
+
+    const raw = (await response.json()) as Record<string, unknown>
+    const parsed = camelcaseKeys(raw, { deep: true }) as unknown as TokenizeServiceResponse
+    const tokens: Token[] = parsed.tokens.map((token) => ({
+      tokenIndex: token.tokenIndex,
+      text: token.text,
+      textSpan: {
+        byteStart: token.byteStart,
+        byteEnd: token.byteEnd,
+        charStart: token.charStart,
+        charEnd: token.charEnd,
+      },
+    }))
+    return { tokens, language: parsed.language }
+  }
+
+  /**
    * Creates a standalone document expression from pasted text plus a canonical
-   * whitespace tokenization, or returns the existing row when a client-supplied
-   * id already exists (idempotent create-by-client-uuid).
+   * model-service tokenization, or returns the existing row when a
+   * client-supplied id already exists (idempotent create-by-client-uuid).
    *
    * @param input - the document text and optional scope/metadata
    * @returns the created (or existing) document with its token decomposition
    * @throws {ForbiddenError} when create/update access is denied
+   * @throws {AppError} 502/504 when the model-service tokenization fails
    */
   async createDocument(input: CreateDocumentInput): Promise<Record<string, Json>> {
     const userId = this.requireUserId()
@@ -567,6 +635,13 @@ export class TextExpressionService {
     // provenance column is reserved for true annotationMetadata.
     const features = this.documentFeatures(input)
 
+    // Tokenize through the model-service before any write, so a model-service
+    // outage hard-fails the create (502/504) rather than persisting an
+    // untokenized document. A caller-declared language is forwarded as the
+    // override that skips language ID; the resolved language becomes the
+    // expression's single language.
+    const { tokens, language } = await this.tokenizeViaModelService(text, input.languages?.[0])
+
     try {
       await this.repository.createExpression({
         id,
@@ -575,7 +650,7 @@ export class TextExpressionService {
         text,
         sourceDigest: digest,
         sourceKind: 'document',
-        languages: input.languages ?? [],
+        languages: [language],
         features: features !== undefined ? toJson(features) : undefined,
         createdByUserId: userId,
         projectId,
@@ -605,9 +680,9 @@ export class TextExpressionService {
     await this.repository.createTokenization({
       segmentationId: segmentation.id,
       expressionId: id,
-      kind: 'whitespace',
+      kind: 'custom',
       isCanonical: true,
-      tokens: toJson(whitespaceTokens(text)),
+      tokens: toJson(tokens),
     })
 
     const reloaded = await this.repository.findExpressionWithTokens(id)

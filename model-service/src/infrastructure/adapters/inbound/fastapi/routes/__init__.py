@@ -23,6 +23,8 @@ transcribe
     Audio transcription endpoints (/api/transcribe).
 diarize
     Speaker diarization endpoints (/api/diarize).
+tokenize
+    Text tokenization endpoints (/api/tokenize).
 admin
     Operational/admin endpoints.
 """
@@ -56,6 +58,9 @@ from src.infrastructure.adapters.inbound.fastapi.routes.summarization import (
 from src.infrastructure.adapters.inbound.fastapi.routes.thumbnails import (
     router as thumbnails_router,
 )
+from src.infrastructure.adapters.inbound.fastapi.routes.tokenize import (
+    router as tokenize_router,
+)
 from src.infrastructure.adapters.inbound.fastapi.routes.tracking import (
     router as tracking_router,
 )
@@ -74,6 +79,7 @@ router.include_router(models_router)
 router.include_router(thumbnails_router)
 router.include_router(transcribe_router)
 router.include_router(diarize_router)
+router.include_router(tokenize_router)
 router.include_router(admin_router)
 
 __all__ = ["router"]

@@ -55,6 +55,7 @@ from src.domain.entities.architectures import (
     AudioArchitecture,
     DetectionArchitecture,
     LLMArchitecture,
+    TokenizerArchitecture,
     TrackingArchitecture,
     VLMArchitecture,
 )
@@ -69,6 +70,7 @@ from src.infrastructure.adapters.outbound.models.detection.loader import (
     detection_pytorch_registry,
 )
 from src.infrastructure.adapters.outbound.models.llm.loader import llm_registry
+from src.infrastructure.adapters.outbound.models.text.loader import tokenizer_registry
 from src.infrastructure.adapters.outbound.models.tracking.loader import tracking_registry
 from src.infrastructure.adapters.outbound.models.vlm.loader import vlm_registry
 
@@ -157,6 +159,7 @@ _TRACKING_KIND_TO_CLASS = _kind_to_class(TrackingArchitecture)
 _AUDIO_KIND_TO_CLASS = _kind_to_class(AudioArchitecture)
 _VLM_KIND_TO_CLASS = _kind_to_class(VLMArchitecture)
 _LLM_KIND_TO_CLASS = _kind_to_class(LLMArchitecture)
+_TOKENIZER_KIND_TO_CLASS = _kind_to_class(TokenizerArchitecture)
 
 # Mapping from a catalog task-section name to the (kind -> class) table and the
 # registries that may satisfy an architecture-keyed option in that section.
@@ -169,6 +172,7 @@ _TASK_DISPATCH: dict[str, tuple[dict[str, type[dx.Model]], tuple[_RegistryView, 
     ),
     "video_tracking": (_TRACKING_KIND_TO_CLASS, (tracking_registry,)),
     "audio_transcription": (_AUDIO_KIND_TO_CLASS, (audio_registry,)),
+    "text_tokenization": (_TOKENIZER_KIND_TO_CLASS, (tokenizer_registry,)),
     "video_summarization": (_VLM_KIND_TO_CLASS, (vlm_registry,)),
     "ontology_augmentation": (_LLM_KIND_TO_CLASS, (llm_registry,)),
     "claim_extraction": (_LLM_KIND_TO_CLASS, (llm_registry,)),
@@ -180,6 +184,7 @@ _ALL_REGISTRIES: tuple[_RegistryView, ...] = (
     detection_onnx_registry,
     tracking_registry,
     audio_registry,
+    tokenizer_registry,
     vlm_registry,
     llm_registry,
 )
@@ -190,6 +195,7 @@ _ALL_UNION_MEMBERS: set[type[dx.Model]] = (
     _union_members(DetectionArchitecture)
     | _union_members(TrackingArchitecture)
     | _union_members(AudioArchitecture)
+    | _union_members(TokenizerArchitecture)
     | _union_members(VLMArchitecture)
     | _union_members(LLMArchitecture)
 )

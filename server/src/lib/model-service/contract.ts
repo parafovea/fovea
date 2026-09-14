@@ -89,6 +89,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/tokenize": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Tokenize text into tokens with byte and character offsets. */
+        post: operations["post_/api/tokenize"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -981,6 +998,85 @@ export interface components {
              */
             total_tokens?: number | null;
         };
+        /**
+         * TokenizeRequest
+         * @description Request body for the text tokenization endpoint.
+         */
+        TokenizeRequest: {
+            /**
+             * Text
+             * @description Text to tokenize
+             */
+            text: string;
+            /**
+             * Language
+             * @description Optional language override that skips language identification
+             * @default null
+             */
+            language?: string | null;
+        };
+        /**
+         * TokenizeResponse
+         * @description Response body for the text tokenization endpoint.
+         */
+        TokenizeResponse: {
+            /**
+             * Tokens
+             * @description Ordered tokens with byte and character offsets
+             */
+            tokens?: {
+                /**
+                 * Token Index
+                 * @description Position of this token in the tokenization (0-based)
+                 */
+                token_index: number;
+                /**
+                 * Text
+                 * @description Surface form of the token
+                 */
+                text: string;
+                /**
+                 * Byte Start
+                 * @description Inclusive start UTF-8 byte offset
+                 */
+                byte_start: number;
+                /**
+                 * Byte End
+                 * @description Exclusive end UTF-8 byte offset
+                 */
+                byte_end: number;
+                /**
+                 * Char Start
+                 * @description Inclusive start UTF-16 code-unit offset
+                 */
+                char_start: number;
+                /**
+                 * Char End
+                 * @description Exclusive end UTF-16 code-unit offset
+                 */
+                char_end: number;
+            }[];
+            /**
+             * Language
+             * @description Detected (or overridden) language code
+             */
+            language: string;
+            /**
+             * Language Confidence
+             * @description Confidence of the language identification
+             */
+            language_confidence: number;
+            /**
+             * Tokenization Kind
+             * @description Tokenization kind slug (e.g. "custom")
+             */
+            tokenization_kind: string;
+            /**
+             * Model Used
+             * @description Engine used for tokenization (e.g. "spacy/blank:en" or "stanza:zh")
+             */
+            model_used: string;
+        };
     };
     responses: never;
     parameters: never;
@@ -1106,6 +1202,30 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SummarySynthesisResponse"];
+                };
+            };
+        };
+    };
+    "post_/api/tokenize": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TokenizeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful response. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TokenizeResponse"];
                 };
             };
         };

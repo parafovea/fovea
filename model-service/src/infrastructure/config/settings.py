@@ -126,6 +126,10 @@ class Settings(DxSettings):
     transformers_cache : Path
         HuggingFace hub cache directory. Defaults to
         ``~/.cache/huggingface/hub``. Overridable via ``TRANSFORMERS_CACHE``.
+    stanza_resources_dir : Path
+        Directory holding the baked Stanza tokenize models the text-tokenizer
+        loader reads offline. Defaults to ``/models/stanza``. Overridable via
+        ``STANZA_RESOURCES_DIR``.
     model_service_admin_token : str | None
         Shared secret for the admin reconfigure endpoint. Read from
         ``MODEL_SERVICE_ADMIN_TOKEN``.
@@ -153,6 +157,10 @@ class Settings(DxSettings):
     )
     transformers_cache: Path = dx.field(
         default_factory=_default_transformers_cache,
+        converter=_to_path,
+    )
+    stanza_resources_dir: Path = dx.field(
+        default=Path("/models/stanza"),
         converter=_to_path,
     )
     model_service_admin_token: str | None = None

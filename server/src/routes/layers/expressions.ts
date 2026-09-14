@@ -71,8 +71,9 @@ export default async function expressionsRoutes(fastify: FastifyInstance): Promi
 
   /**
    * Create a standalone document expression from pasted text plus a canonical
-   * whitespace tokenization. Idempotent create-by-client-uuid: when a supplied
-   * id already exists, the existing document is returned instead of a duplicate.
+   * model-service tokenization. Idempotent create-by-client-uuid: when a
+   * supplied id already exists, the existing document is returned instead of a
+   * duplicate. A model-service outage hard-fails the create with a 502/504.
    */
   fastify.post('/documents', {
     schema: {

@@ -16,6 +16,7 @@ TaskType = Literal[
     "audio_transcription",
     "speaker_diarization",
     "voice_activity_detection",
+    "text_tokenization",
     "claim_extraction",
     "claim_synthesis",
 ]
@@ -30,6 +31,8 @@ InferenceFramework = Literal[
     "whisper",
     "faster_whisper",
     "pyannote",
+    "spacy",
+    "stanza",
     "onnx",
     "openvino",
     "llama_cpp",

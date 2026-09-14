@@ -36,6 +36,39 @@ describe('Layers authorization regressions', () => {
   const passwordA = 'passA-regression'
   const passwordB = 'passB-regression'
 
+  // materializeVideoTextExpressions (and createDocument) now tokenize text
+  // synchronously through the model-service /api/tokenize endpoint. Stub the
+  // global fetch so this integration test needs no live model-service: the
+  // stub tokenizes on whitespace with correct UTF-8 byte and UTF-16 char
+  // offsets (the E2E stack instead runs test-utils/mock-model-service.js).
+  const originalFetch = globalThis.fetch
+
+  function tokenizeStub(text: string, language: string): unknown {
+    const tokens: Array<Record<string, unknown>> = []
+    const re = /\S+/gu
+    let match: RegExpExecArray | null
+    let index = 0
+    while ((match = re.exec(text)) !== null) {
+      const charStart = match.index
+      const charEnd = match.index + match[0].length
+      tokens.push({
+        token_index: index++,
+        text: match[0],
+        byte_start: Buffer.byteLength(text.slice(0, charStart), 'utf8'),
+        byte_end: Buffer.byteLength(text.slice(0, charEnd), 'utf8'),
+        char_start: charStart,
+        char_end: charEnd,
+      })
+    }
+    return {
+      tokens,
+      language,
+      language_confidence: 1,
+      tokenization_kind: 'custom',
+      model_used: `spacy/blank:${language}`,
+    }
+  }
+
   async function createUser(username: string, password: string, isAdmin = false): Promise<string> {
     const passwordHash = await hashPassword(password)
     const user = await prisma.user.create({
@@ -50,12 +83,25 @@ describe('Layers authorization regressions', () => {
   }
 
   beforeAll(async () => {
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input.toString()
+      if (url.endsWith('/api/tokenize')) {
+        const body = init?.body ? (JSON.parse(init.body as string) as { text?: string; language?: string | null }) : {}
+        const payload = tokenizeStub(body.text ?? '', body.language ?? 'en')
+        return new Response(JSON.stringify(payload), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      }
+      return originalFetch(input, init)
+    }) as typeof globalThis.fetch
     app = await buildApp()
     prisma = app.prisma
   })
 
   afterAll(async () => {
     await app.close()
+    globalThis.fetch = originalFetch
   })
 
   beforeEach(async () => {

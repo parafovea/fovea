@@ -65,6 +65,15 @@ dependencies = [
     "tenacity>=8.5.0",
     "aiohttp>=3.9.0",
     "aiofiles>=23.2.0",
+    # Text tokenization for the text_tokenization task. py3langid identifies
+    # the language; spaCy blank pipelines tokenize whitespace-delimited
+    # scripts; Stanza tokenizes the no-whitespace scripts (zh, ja, th). spaCy
+    # imports `click` at runtime for its CLI entry points, so it is pinned
+    # explicitly rather than left transitive. All resolve as cp314 wheels.
+    "spacy>=3.8.0",
+    "py3langid>=0.3.0",
+    "click>=8.1.0",
+    "stanza>=1.10.0",
 ]
 
 [project.optional-dependencies]
@@ -287,11 +296,20 @@ ignore_missing_imports = true
 module = ["aiohttp", "aiohttp.*", "aiofiles", "aiofiles.*", "yaml", "yaml.*"]
 ignore_missing_imports = true
 
+[[tool.mypy.overrides]]
+module = [
+    "spacy", "spacy.*",
+    "stanza", "stanza.*",
+    "py3langid", "py3langid.*",
+]
+ignore_missing_imports = true
+
 # Loader and adapter modules with heavy use of dynamic imports and Any types
 [[tool.mypy.overrides]]
 module = [
     "src.infrastructure.adapters.outbound.models.onnx.*",
     "src.infrastructure.adapters.outbound.models.llama_cpp.*",
+    "src.infrastructure.adapters.outbound.models.text.*",
     "src.infrastructure.adapters.outbound.video.processor",
 ]
 disallow_any_unimported = false

@@ -243,6 +243,11 @@ RUN mkdir -p /models /videos
 ENV PYTHONUNBUFFERED=1
 ENV TRANSFORMERS_CACHE=/models
 ENV HF_HOME=/models
+# Stanza reads its baked tokenize models (zh, ja, th) from here. The preload
+# step below downloads them into this directory at build time so the runtime
+# tokenizer pipeline loads them offline.
+ENV STANZA_RESOURCES_DIR=/models/stanza
+RUN mkdir -p /models/stanza
 # Create symlink to active model config based on DEVICE; override at runtime via env var
 RUN if [ "$DEVICE" = "cpu" ]; then \
         ln -sf /app/config/models-cpu.yaml /app/config/active-models.yaml; \

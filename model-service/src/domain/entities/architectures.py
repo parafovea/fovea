@@ -553,6 +553,47 @@ AudioArchitecture = (
 """Type alias for every audio family the service can load."""
 
 
+# ---------------------------------------------------------------------------
+# Text-tokenization architectures
+#
+# Two tokenizer families back the text_tokenization task. spaCy blank
+# pipelines tokenize whitespace-delimited scripts; Stanza pipelines tokenize
+# the no-whitespace scripts (Chinese, Japanese, Thai). Each variant declares
+# the language codes it is responsible for as a field so the loader can
+# pre-warm the right engines at boot and route a detected language to the
+# right pipeline. py3langid handles language identification inside the
+# loader; it needs no architecture of its own.
+# ---------------------------------------------------------------------------
+
+
+class SpacyTokenizer(Architecture):
+    """spaCy blank-pipeline tokenizer for whitespace-delimited scripts.
+
+    The ``languages`` field lists the ISO-639-1 codes that get a dedicated
+    ``spacy.blank(<lang>)`` pipeline; any detected language outside the list
+    (and outside the no-whitespace set) falls back to ``spacy.blank('xx')``,
+    spaCy's multilingual tokenizer.
+    """
+
+    kind: Literal["spacy-tokenizer"] = "spacy-tokenizer"
+    languages: tuple[str, ...] = dx.field(default_factory=tuple)
+
+
+class StanzaTokenizer(Architecture):
+    """Stanza tokenizer for no-whitespace scripts (zh, ja, th).
+
+    The ``languages`` field lists the ISO-639-1 codes whose Stanza
+    ``tokenize`` pipelines this loader drives.
+    """
+
+    kind: Literal["stanza-tokenizer"] = "stanza-tokenizer"
+    languages: tuple[str, ...] = dx.field(default_factory=tuple)
+
+
+TokenizerArchitecture = SpacyTokenizer | StanzaTokenizer
+"""Type alias for every text-tokenizer family the service can load."""
+
+
 __all__ = [
     "GLM4",
     "RFDETR",
@@ -598,7 +639,10 @@ __all__ = [
     "SAM2Long",
     "SAM3Tracking",
     "SmolVLM",
+    "SpacyTokenizer",
+    "StanzaTokenizer",
     "Tarsier2",
+    "TokenizerArchitecture",
     "TrackingArchitecture",
     "VLMArchitecture",
     "Whisper",
