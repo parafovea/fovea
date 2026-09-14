@@ -358,53 +358,66 @@ export default function AnnotationAutocomplete({
         {Object.keys(filteredGrouped).length === 0 && !canCreateType && !canCreateObject && (
           <p className="text-sm text-muted-foreground text-center py-4">No results found</p>
         )}
-        {canCreateType && (
-          <button
-            data-testid="picker-create-type"
-            className="flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-sm text-primary hover:bg-accent hover:text-accent-foreground cursor-pointer"
-            onClick={handleCreateType}
+        {(canCreateType || canCreateObject) && (
+          <div
+            className={
+              Object.keys(filteredGrouped).length > 0 ? 'mt-1 border-t pt-1' : undefined
+            }
           >
-            <Plus className="size-4 shrink-0" />
-            <span className="truncate">
-              Create type &ldquo;{trimmed}&rdquo;
-            </span>
-          </button>
-        )}
-        {canCreateType && (
-          <button
-            data-testid="picker-wikidata-type"
-            className="flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-sm text-primary hover:bg-accent hover:text-accent-foreground cursor-pointer"
-            onClick={() => setWikidataTarget({ query: trimmed, kind: 'type' })}
-          >
-            <Globe className="size-4 shrink-0" />
-            <span className="truncate">
-              Search Wikidata for type &ldquo;{trimmed}&rdquo;
-            </span>
-          </button>
-        )}
-        {canCreateObject && (
-          <button
-            data-testid="picker-create-object"
-            className="flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-sm text-primary hover:bg-accent hover:text-accent-foreground cursor-pointer"
-            onClick={handleCreateObject}
-          >
-            <Plus className="size-4 shrink-0" />
-            <span className="truncate">
-              Create world object &ldquo;{trimmed}&rdquo;
-            </span>
-          </button>
-        )}
-        {canCreateObject && (
-          <button
-            data-testid="picker-wikidata-object"
-            className="flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-sm text-primary hover:bg-accent hover:text-accent-foreground cursor-pointer"
-            onClick={() => setWikidataTarget({ query: trimmed, kind: 'object' })}
-          >
-            <Globe className="size-4 shrink-0" />
-            <span className="truncate">
-              Search Wikidata for object &ldquo;{trimmed}&rdquo;
-            </span>
-          </button>
+            {/* One "create new" section: the typed term shown once, with a row per
+                target (ontology type / world object) that pairs a blank create with
+                a Wikidata-backed create, so the create-vs-import and type-vs-object
+                axes read as a grid rather than four repeated rows. */}
+            <div className="px-3 py-1.5 text-xs font-medium text-muted-foreground">
+              Create <span className="text-foreground">&ldquo;{trimmed}&rdquo;</span> as
+            </div>
+            {canCreateType && (
+              <div className="flex items-center gap-1 px-1">
+                <button
+                  data-testid="picker-create-type"
+                  aria-label={`Create the ontology type “${trimmed}”`}
+                  className="flex flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground cursor-pointer"
+                  onClick={handleCreateType}
+                >
+                  <Plus className="size-4 shrink-0 text-muted-foreground" />
+                  <span className="truncate">Ontology type</span>
+                </button>
+                <button
+                  data-testid="picker-wikidata-type"
+                  aria-label={`Search Wikidata for the ontology type “${trimmed}”`}
+                  title="Search Wikidata"
+                  className="flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1.5 text-xs text-muted-foreground hover:bg-accent hover:text-accent-foreground cursor-pointer"
+                  onClick={() => setWikidataTarget({ query: trimmed, kind: 'type' })}
+                >
+                  <Globe className="size-4 shrink-0" />
+                  Wikidata
+                </button>
+              </div>
+            )}
+            {canCreateObject && (
+              <div className="flex items-center gap-1 px-1">
+                <button
+                  data-testid="picker-create-object"
+                  aria-label={`Create the world object “${trimmed}”`}
+                  className="flex flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground cursor-pointer"
+                  onClick={handleCreateObject}
+                >
+                  <Plus className="size-4 shrink-0 text-muted-foreground" />
+                  <span className="truncate">World object</span>
+                </button>
+                <button
+                  data-testid="picker-wikidata-object"
+                  aria-label={`Search Wikidata for the world object “${trimmed}”`}
+                  title="Search Wikidata"
+                  className="flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1.5 text-xs text-muted-foreground hover:bg-accent hover:text-accent-foreground cursor-pointer"
+                  onClick={() => setWikidataTarget({ query: trimmed, kind: 'object' })}
+                >
+                  <Globe className="size-4 shrink-0" />
+                  Wikidata
+                </button>
+              </div>
+            )}
+          </div>
         )}
       </div>
     </>
