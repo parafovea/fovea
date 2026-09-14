@@ -325,6 +325,7 @@ export default function AnnotationAutocomplete({
         <div className="flex items-center gap-2 px-2 pb-2 border-b">
           <Search className="size-4 text-muted-foreground" />
           <input
+            data-testid="picker-search"
             className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
             placeholder={placeholder}
             value={inputValue}
@@ -342,6 +343,9 @@ export default function AnnotationAutocomplete({
             {opts.map((option) => (
               <button
                 key={option.id}
+                data-testid="picker-option"
+                data-option-kind={option.type}
+                data-option-label={option.label}
                 className="flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground cursor-pointer"
                 onClick={() => handleSelect(option)}
               >
@@ -356,6 +360,7 @@ export default function AnnotationAutocomplete({
         )}
         {canCreateType && (
           <button
+            data-testid="picker-create-type"
             className="flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-sm text-primary hover:bg-accent hover:text-accent-foreground cursor-pointer"
             onClick={handleCreateType}
           >
@@ -367,6 +372,7 @@ export default function AnnotationAutocomplete({
         )}
         {canCreateType && (
           <button
+            data-testid="picker-wikidata-type"
             className="flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-sm text-primary hover:bg-accent hover:text-accent-foreground cursor-pointer"
             onClick={() => setWikidataTarget({ query: trimmed, kind: 'type' })}
           >
@@ -378,6 +384,7 @@ export default function AnnotationAutocomplete({
         )}
         {canCreateObject && (
           <button
+            data-testid="picker-create-object"
             className="flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-sm text-primary hover:bg-accent hover:text-accent-foreground cursor-pointer"
             onClick={handleCreateObject}
           >
@@ -389,6 +396,7 @@ export default function AnnotationAutocomplete({
         )}
         {canCreateObject && (
           <button
+            data-testid="picker-wikidata-object"
             className="flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-sm text-primary hover:bg-accent hover:text-accent-foreground cursor-pointer"
             onClick={() => setWikidataTarget({ query: trimmed, kind: 'object' })}
           >
@@ -407,6 +415,7 @@ export default function AnnotationAutocomplete({
   const wikidataView = wikidataTarget && (
     <div className="p-2">
       <button
+        data-testid="picker-wikidata-back"
         className="mb-2 flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
         onClick={() => setWikidataTarget(null)}
       >
@@ -420,6 +429,8 @@ export default function AnnotationAutocomplete({
             <button
               key={k}
               type="button"
+              data-testid={`picker-kind-${k}`}
+              aria-pressed={wikidataObjectKind === k}
               onClick={() => setWikidataObjectKind(k)}
               className={`flex items-center gap-1 rounded px-2 py-1 text-xs ${
                 wikidataObjectKind === k

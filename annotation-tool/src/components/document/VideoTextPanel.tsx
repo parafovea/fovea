@@ -89,11 +89,15 @@ export function VideoTextPanel({ videoId, personaId, readOnly }: VideoTextPanelP
   const active = activeId ?? expressions[0].id
 
   return (
-    <div ref={panelAnchorRef}>
+    <div ref={panelAnchorRef} data-testid="video-text-panel">
       <Tabs value={active} onValueChange={setActiveId} className="w-full">
         <TabsList>
           {expressions.map((expression) => (
-            <TabsTrigger key={expression.id} value={expression.id}>
+            <TabsTrigger
+              key={expression.id}
+              value={expression.id}
+              data-testid={`video-text-tab-${expressionLabel(expression).toLowerCase().replace(/\s+/g, '-')}`}
+            >
               {expressionLabel(expression)}
             </TabsTrigger>
           ))}
