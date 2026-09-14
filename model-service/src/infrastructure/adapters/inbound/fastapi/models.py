@@ -20,7 +20,7 @@ from annotated_types import Ge, Gt, Le, MinLen
 # JSON-shaped recursive payload for free-form fields (RLE masks, gloss items,
 # annotation blobs, provider metadata). didactic classifies this as an opaque
 # JSON fixpoint; Pydantic accepts the recursive alias natively.
-type JsonValue = str | int | float | bool | None | list["JsonValue"] | dict[str, "JsonValue"]
+type JsonValue = str | int | float | bool | list["JsonValue"] | dict[str, "JsonValue"] | None
 
 # Reusable constrained scalars.
 ConfidenceScore = Annotated[float, Ge(0.0), Le(1.0)]
