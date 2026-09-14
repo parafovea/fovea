@@ -21304,8 +21304,68 @@
                     "format": "uuid",
                     "type": "string"
                   },
-                  "source": {},
-                  "target": {},
+                  "source": {
+                    "type": "object",
+                    "properties": {
+                      "knowledgeRef": {},
+                      "localId": {
+                        "type": "object",
+                        "required": [
+                          "value"
+                        ],
+                        "properties": {
+                          "value": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "objectId": {
+                        "type": "object",
+                        "required": [
+                          "value"
+                        ],
+                        "properties": {
+                          "value": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "recordRef": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "target": {
+                    "type": "object",
+                    "properties": {
+                      "knowledgeRef": {},
+                      "localId": {
+                        "type": "object",
+                        "required": [
+                          "value"
+                        ],
+                        "properties": {
+                          "value": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "objectId": {
+                        "type": "object",
+                        "required": [
+                          "value"
+                        ],
+                        "properties": {
+                          "value": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "recordRef": {
+                        "type": "string"
+                      }
+                    }
+                  },
                   "edgeType": {
                     "type": "string"
                   },
@@ -21769,8 +21829,68 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "source": {},
-                  "target": {},
+                  "source": {
+                    "type": "object",
+                    "properties": {
+                      "knowledgeRef": {},
+                      "localId": {
+                        "type": "object",
+                        "required": [
+                          "value"
+                        ],
+                        "properties": {
+                          "value": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "objectId": {
+                        "type": "object",
+                        "required": [
+                          "value"
+                        ],
+                        "properties": {
+                          "value": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "recordRef": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "target": {
+                    "type": "object",
+                    "properties": {
+                      "knowledgeRef": {},
+                      "localId": {
+                        "type": "object",
+                        "required": [
+                          "value"
+                        ],
+                        "properties": {
+                          "value": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "objectId": {
+                        "type": "object",
+                        "required": [
+                          "value"
+                        ],
+                        "properties": {
+                          "value": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "recordRef": {
+                        "type": "string"
+                      }
+                    }
+                  },
                   "edgeType": {
                     "type": "string"
                   },

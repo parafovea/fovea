@@ -8902,8 +8902,26 @@ export interface paths {
                     "application/json": {
                         /** Format: uuid */
                         id?: string;
-                        source: unknown;
-                        target: unknown;
+                        source: {
+                            knowledgeRef?: unknown;
+                            localId?: {
+                                value: string;
+                            };
+                            objectId?: {
+                                value: string;
+                            };
+                            recordRef?: string;
+                        };
+                        target: {
+                            knowledgeRef?: unknown;
+                            localId?: {
+                                value: string;
+                            };
+                            objectId?: {
+                                value: string;
+                            };
+                            recordRef?: string;
+                        };
                         edgeType: string;
                         label?: null | string;
                         ordinal?: null | number;
@@ -9035,8 +9053,26 @@ export interface paths {
             requestBody: {
                 content: {
                     "application/json": {
-                        source?: unknown;
-                        target?: unknown;
+                        source?: {
+                            knowledgeRef?: unknown;
+                            localId?: {
+                                value: string;
+                            };
+                            objectId?: {
+                                value: string;
+                            };
+                            recordRef?: string;
+                        };
+                        target?: {
+                            knowledgeRef?: unknown;
+                            localId?: {
+                                value: string;
+                            };
+                            objectId?: {
+                                value: string;
+                            };
+                            recordRef?: string;
+                        };
                         edgeType?: string;
                         label?: null | string;
                         ordinal?: null | number;
