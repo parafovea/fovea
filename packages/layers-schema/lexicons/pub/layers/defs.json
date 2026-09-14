@@ -1466,6 +1466,77 @@
           "maxLength": 64
         }
       }
+    },
+
+    "accessCondition": {
+      "type": "object",
+      "description": "How the referenced bytes may actually be obtained. 0.8.0 carries licensing but no gate: it can say a corpus is LDC-User-Agreement licensed but not that obtaining it requires a signed agreement with a named body. Layers DECLARES access conditions and cannot ENFORCE them, because every record it indexes lives in someone else's PDS; the block exists so a consumer knows where the gate is before wasting a request.",
+      "required": ["mode"],
+      "properties": {
+        "modeUri": { "type": "string", "format": "at-uri", "description": "AT-URI of the access mode definition node (typeDef of access-condition at layers-core.ontology.layers.pub)." },
+        "mode": { "type": "string", "description": "Access mode slug (fallback when modeUri unavailable).", "knownValues": ["open", "registration-required", "agreement-required", "restricted", "embargoed", "closed"], "maxLength": 64 },
+        "gatekeeperRef": { "type": "ref", "ref": "pub.layers.defs#knowledgeRef", "description": "The body that grants access, grounded via ror or wikidata (an archive, a data access committee, a consortium)." },
+        "applicationUri": { "type": "string", "format": "uri", "description": "URL of the access application or registration form.", "maxLength": 2048 },
+        "agreementUri": { "type": "string", "format": "uri", "description": "The data use agreement or end-user licence that must be signed.", "maxLength": 2048 },
+        "embargoedUntil": { "type": "string", "format": "datetime", "description": "When an embargo lifts, when mode is embargoed." },
+        "permittedUseUri": { "type": "string", "format": "at-uri", "description": "AT-URI of the permitted-use definition node." },
+        "permittedUse": { "type": "string", "description": "What the access grant permits (fallback when the Uri is unavailable). Distinct from the licence: some agreements permit analysis but forbid redistribution or model training regardless of licence.", "knownValues": ["any", "research-only", "non-commercial", "no-redistribution", "no-model-training", "custom"], "maxLength": 128 },
+        "notes": { "type": "string", "description": "Free-text access detail the typed fields do not capture.", "maxLength": 4096 }
+      }
+    },
+
+    "deviceInfo": {
+      "type": "object",
+      "description": "An instrument used in acquisition. Manufacturer, product and software are GROUNDED through defs#knowledgeRef rather than enumerated: an organization is a citable entity reachable via ror and wikidata, a package via rrid, and enumerating vendors in a released lexicon makes a rebrand a lexicon version bump. BIDS Manufacturer, ManufacturersModelName, DeviceSerialNumber, SoftwareVersions, SoftwareRRID; NWB Device.",
+      "required": ["kind"],
+      "properties": {
+        "kindUri": {
+          "type": "string",
+          "format": "at-uri",
+          "description": "AT-URI of the device kind definition node (typeDef of `device-kind`). MUST resolve into the same `modality` node set as recordingMethod.methodUri where the two overlap, so an instrument named in a protocol and the same instrument named in a session join."
+        },
+        "kind": {
+          "type": "string",
+          "description": "Device kind slug (fallback when kindUri unavailable).",
+          "knownValues": ["microphone", "camera", "scanner", "eeg-amplifier", "electrode-cap", "meg-scanner", "mri-scanner", "fnirs-system", "electrode-array", "eye-tracker", "motion-capture-system", "articulograph", "ultrasound-system", "button-box", "keyboard", "mouse", "touchscreen", "response-glove", "custom"],
+          "maxLength": 128
+        },
+        "manufacturerRef": {
+          "type": "ref",
+          "ref": "pub.layers.defs#knowledgeRef",
+          "description": "Manufacturer, grounded via source ror or wikidata. Replaces a free-text vendor name: MEGIN, Elekta and Elekta/MEGIN are one organization and must facet as one."
+        },
+        "manufacturerName": {
+          "type": "string",
+          "description": "Display name when no identifier exists. Advisory; manufacturerRef wins.",
+          "maxLength": 256
+        },
+        "productRef": {
+          "type": "ref",
+          "ref": "pub.layers.defs#knowledgeRef",
+          "description": "The product, grounded via rrid where one exists."
+        },
+        "model": {
+          "type": "string",
+          "description": "BIDS ManufacturersModelName, as printed on the device.",
+          "maxLength": 256
+        },
+        "serialNumber": {
+          "type": "string",
+          "description": "BIDS DeviceSerialNumber. A serial number can be a de-anonymizing quasi-identifier in a single-site study; omit it when the participant's identifiability is anonymous.",
+          "maxLength": 256
+        },
+        "software": {
+          "type": "ref",
+          "ref": "pub.layers.defs#reproducibilityInfo",
+          "description": "Acquisition or presentation software, reusing the shared reproducibility block rather than re-declaring softwareName, softwareVersion, codeUri and operatingSystem. BIDS SoftwareVersions and GeneratedBy."
+        },
+        "features": {
+          "type": "ref",
+          "ref": "pub.layers.defs#featureMap",
+          "description": "Open-ended device features not captured by the typed fields."
+        }
+      }
     }
-  }
+}
 }

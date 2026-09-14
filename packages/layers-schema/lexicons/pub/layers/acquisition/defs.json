@@ -63,22 +63,7 @@
       }
     },
 
-    "accessCondition": {
-      "type": "object",
-      "description": "How the referenced bytes may actually be obtained. 0.8.0 carries licensing but no gate: it can say a corpus is LDC-User-Agreement licensed but not that obtaining it requires a signed agreement with a named body. Layers DECLARES access conditions and cannot ENFORCE them, because every record it indexes lives in someone else's PDS; the block exists so a consumer knows where the gate is before wasting a request.",
-      "required": ["mode"],
-      "properties": {
-        "modeUri": { "type": "string", "format": "at-uri", "description": "AT-URI of the access mode definition node (typeDef of access-condition at layers-core.ontology.layers.pub)." },
-        "mode": { "type": "string", "description": "Access mode slug (fallback when modeUri unavailable).", "knownValues": ["open", "registration-required", "agreement-required", "restricted", "embargoed", "closed"], "maxLength": 64 },
-        "gatekeeperRef": { "type": "ref", "ref": "pub.layers.defs#knowledgeRef", "description": "The body that grants access, grounded via ror or wikidata (an archive, a data access committee, a consortium)." },
-        "applicationUri": { "type": "string", "format": "uri", "description": "URL of the access application or registration form.", "maxLength": 2048 },
-        "agreementUri": { "type": "string", "format": "uri", "description": "The data use agreement or end-user licence that must be signed.", "maxLength": 2048 },
-        "embargoedUntil": { "type": "string", "format": "datetime", "description": "When an embargo lifts, when mode is embargoed." },
-        "permittedUseUri": { "type": "string", "format": "at-uri", "description": "AT-URI of the permitted-use definition node." },
-        "permittedUse": { "type": "string", "description": "What the access grant permits (fallback when the Uri is unavailable). Distinct from the licence: some agreements permit analysis but forbid redistribution or model training regardless of licence.", "knownValues": ["any", "research-only", "non-commercial", "no-redistribution", "no-model-training", "custom"], "maxLength": 128 },
-        "notes": { "type": "string", "description": "Free-text access detail the typed fields do not capture.", "maxLength": 4096 }
-      }
-    },
+
 
     "languageCompetence": {
       "type": "object",

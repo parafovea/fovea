@@ -165,7 +165,7 @@
           },
           "access": {
             "type": "ref",
-            "ref": "pub.layers.acquisition.defs#accessCondition",
+            "ref": "pub.layers.defs#accessCondition",
             "description": "Conditions under which the bytes may be obtained. Distinct from licensing, which governs what may be done with them, and from consent, which governs the person they came from. All three must hold."
           },
           "knowledgeRefs": {

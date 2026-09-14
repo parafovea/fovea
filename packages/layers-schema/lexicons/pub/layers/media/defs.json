@@ -296,7 +296,7 @@
         },
         "device": {
           "type": "ref",
-          "ref": "#deviceInfo",
+          "ref": "pub.layers.defs#deviceInfo",
           "description": "Acquisition hardware. BIDS Manufacturer / ManufacturersModelName / DeviceSerialNumber / SoftwareVersions; NWB Device."
         },
         "eventChannel": {
@@ -903,7 +903,7 @@
         },
         "device": {
           "type": "ref",
-          "ref": "#deviceInfo",
+          "ref": "pub.layers.defs#deviceInfo",
           "description": "Eye-tracking hardware."
         }
       }
@@ -956,7 +956,7 @@
         },
         "captureDevice": {
           "type": "ref",
-          "ref": "#deviceInfo",
+          "ref": "pub.layers.defs#deviceInfo",
           "description": "Camera or scanner, structured rather than concatenated into a format string."
         }
       }
@@ -1026,7 +1026,7 @@
         },
         "device": {
           "type": "ref",
-          "ref": "#deviceInfo",
+          "ref": "pub.layers.defs#deviceInfo",
           "description": "Motion-capture hardware."
         }
       }
@@ -1131,64 +1131,12 @@
         },
         "device": {
           "type": "ref",
-          "ref": "#deviceInfo",
+          "ref": "pub.layers.defs#deviceInfo",
           "description": "Scanner hardware."
         }
       }
     },
-    "deviceInfo": {
-      "type": "object",
-      "description": "An instrument used in acquisition. Manufacturer, product and software are GROUNDED through defs#knowledgeRef rather than enumerated: an organization is a citable entity reachable via ror and wikidata, a package via rrid, and enumerating vendors in a released lexicon makes a rebrand a lexicon version bump. BIDS Manufacturer, ManufacturersModelName, DeviceSerialNumber, SoftwareVersions, SoftwareRRID; NWB Device.",
-      "required": ["kind"],
-      "properties": {
-        "kindUri": {
-          "type": "string",
-          "format": "at-uri",
-          "description": "AT-URI of the device kind definition node (typeDef of `device-kind`). MUST resolve into the same `modality` node set as recordingMethod.methodUri where the two overlap, so an instrument named in a protocol and the same instrument named in a session join."
-        },
-        "kind": {
-          "type": "string",
-          "description": "Device kind slug (fallback when kindUri unavailable).",
-          "knownValues": ["microphone", "camera", "scanner", "eeg-amplifier", "electrode-cap", "meg-scanner", "mri-scanner", "fnirs-system", "electrode-array", "eye-tracker", "motion-capture-system", "articulograph", "ultrasound-system", "button-box", "keyboard", "mouse", "touchscreen", "response-glove", "custom"],
-          "maxLength": 128
-        },
-        "manufacturerRef": {
-          "type": "ref",
-          "ref": "pub.layers.defs#knowledgeRef",
-          "description": "Manufacturer, grounded via source ror or wikidata. Replaces a free-text vendor name: MEGIN, Elekta and Elekta/MEGIN are one organization and must facet as one."
-        },
-        "manufacturerName": {
-          "type": "string",
-          "description": "Display name when no identifier exists. Advisory; manufacturerRef wins.",
-          "maxLength": 256
-        },
-        "productRef": {
-          "type": "ref",
-          "ref": "pub.layers.defs#knowledgeRef",
-          "description": "The product, grounded via rrid where one exists."
-        },
-        "model": {
-          "type": "string",
-          "description": "BIDS ManufacturersModelName, as printed on the device.",
-          "maxLength": 256
-        },
-        "serialNumber": {
-          "type": "string",
-          "description": "BIDS DeviceSerialNumber. A serial number can be a de-anonymizing quasi-identifier in a single-site study; omit it when the participant's identifiability is anonymous.",
-          "maxLength": 256
-        },
-        "software": {
-          "type": "ref",
-          "ref": "pub.layers.defs#reproducibilityInfo",
-          "description": "Acquisition or presentation software, reusing the shared reproducibility block rather than re-declaring softwareName, softwareVersion, codeUri and operatingSystem. BIDS SoftwareVersions and GeneratedBy."
-        },
-        "features": {
-          "type": "ref",
-          "ref": "pub.layers.defs#featureMap",
-          "description": "Open-ended device features not captured by the typed fields."
-        }
-      }
-    },
+
     "syncInfo": {
       "type": "object",
       "description": "How one media stream aligns to a session's shared time base. This is what makes multimodal Layers possible: the 0.8.0 chain is annotationLayer.expression (single, REQUIRED) to expression.mediaRef (single), so a session of two cameras, a lapel microphone, an EEG cap and an eye tracker is unrepresentable, and parentMediaRef with startOffsetMs expresses excerpt-of, a different relation.",

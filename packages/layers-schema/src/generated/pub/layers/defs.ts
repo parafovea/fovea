@@ -4,6 +4,48 @@
 // Shared definitions for the Layers lexicons. Provides abstract anchoring primitives, W3C Web Annotation-compatible selectors (for at.margin/Semble interoperability), alignment links, and universal metadata types.
 
 /**
+* How the referenced bytes may actually be obtained. 0.8.0 carries licensing but no gate: it can say a corpus is LDC-User-Agreement licensed but not that obtaining it requires a signed agreement with a named body. Layers DECLARES access conditions and cannot ENFORCE them, because every record it indexes lives in someone else's PDS; the block exists so a consumer knows where the gate is before wasting a request.
+*/
+export interface AccessCondition {
+  /**
+  * The data use agreement or end-user licence that must be signed.
+  */
+  agreementUri?: string;
+  /**
+  * URL of the access application or registration form.
+  */
+  applicationUri?: string;
+  /**
+  * When an embargo lifts, when mode is embargoed.
+  */
+  embargoedUntil?: string;
+  /**
+  * The body that grants access, grounded via ror or wikidata (an archive, a data access committee, a consortium).
+  */
+  gatekeeperRef?: KnowledgeRef;
+  /**
+  * Access mode slug (fallback when modeUri unavailable).
+  */
+  mode: AccessConditionMode;
+  /**
+  * AT-URI of the access mode definition node (typeDef of access-condition at layers-core.ontology.layers.pub).
+  */
+  modeUri?: string;
+  /**
+  * Free-text access detail the typed fields do not capture.
+  */
+  notes?: string;
+  /**
+  * What the access grant permits (fallback when the Uri is unavailable). Distinct from the licence: some agreements permit analysis but forbid redistribution or model training regardless of licence.
+  */
+  permittedUse?: AccessConditionPermittedUse;
+  /**
+  * AT-URI of the permitted-use definition node.
+  */
+  permittedUseUri?: string;
+}
+
+/**
 * A composable reference to any agent (human annotator, ML model, crowd worker, expert panel, etc.) that produced data. Separates the identity of the producer from the interpretive framework (persona) and the software used (tool). Consumers dispatch on which field(s) are populated: did for ATProto-native agents, id for anonymized or platform-specific identifiers, knowledgeRef for externally grounded agents (ORCID, HuggingFace model card, Wikidata).
 */
 export interface AgentRef {
@@ -235,6 +277,48 @@ export interface ContentDigest {
   * The digest as lowercase hexadecimal.
   */
   value: string;
+}
+
+/**
+* An instrument used in acquisition. Manufacturer, product and software are GROUNDED through defs#knowledgeRef rather than enumerated: an organization is a citable entity reachable via ror and wikidata, a package via rrid, and enumerating vendors in a released lexicon makes a rebrand a lexicon version bump. BIDS Manufacturer, ManufacturersModelName, DeviceSerialNumber, SoftwareVersions, SoftwareRRID; NWB Device.
+*/
+export interface DeviceInfo {
+  /**
+  * Open-ended device features not captured by the typed fields.
+  */
+  features?: FeatureMap;
+  /**
+  * Device kind slug (fallback when kindUri unavailable).
+  */
+  kind: DeviceInfoKind;
+  /**
+  * AT-URI of the device kind definition node (typeDef of `device-kind`). MUST resolve into the same `modality` node set as recordingMethod.methodUri where the two overlap, so an instrument named in a protocol and the same instrument named in a session join.
+  */
+  kindUri?: string;
+  /**
+  * Display name when no identifier exists. Advisory; manufacturerRef wins.
+  */
+  manufacturerName?: string;
+  /**
+  * Manufacturer, grounded via source ror or wikidata. Replaces a free-text vendor name: MEGIN, Elekta and Elekta/MEGIN are one organization and must facet as one.
+  */
+  manufacturerRef?: KnowledgeRef;
+  /**
+  * BIDS ManufacturersModelName, as printed on the device.
+  */
+  model?: string;
+  /**
+  * The product, grounded via rrid where one exists.
+  */
+  productRef?: KnowledgeRef;
+  /**
+  * BIDS DeviceSerialNumber. A serial number can be a de-anonymizing quasi-identifier in a single-site study; omit it when the participant's identifiability is anonymous.
+  */
+  serialNumber?: string;
+  /**
+  * Acquisition or presentation software, reusing the shared reproducibility block rather than re-declaring softwareName, softwareVersion, codeUri and operatingSystem. BIDS SoftwareVersions and GeneratedBy.
+  */
+  software?: ReproducibilityInfo;
 }
 
 /**
@@ -1099,6 +1183,10 @@ export interface Uuid {
   value: string;
 }
 
+export type AccessConditionMode = "open" | "registration-required" | "agreement-required" | "restricted" | "embargoed" | "closed" | string & {};
+
+export type AccessConditionPermittedUse = "any" | "research-only" | "non-commercial" | "no-redistribution" | "no-model-training" | "custom" | string & {};
+
 export type BoundingBoxUnit = "pixel" | "per-mille-normalized" | string & {};
 
 export type ConstraintExpressionFormat = "python-expr" | "json-logic" | "regex" | "sparql-filter" | "type-ref" | "custom" | string & {};
@@ -1106,6 +1194,8 @@ export type ConstraintExpressionFormat = "python-expr" | "json-logic" | "regex" 
 export type ConstraintScope = "slot" | "template" | "cross-template" | "global" | string & {};
 
 export type ContentDigestAlgorithm = "sha256" | "sha512" | "blake3" | "md5" | "custom" | string & {};
+
+export type DeviceInfoKind = "microphone" | "camera" | "scanner" | "eeg-amplifier" | "electrode-cap" | "meg-scanner" | "mri-scanner" | "fnirs-system" | "electrode-array" | "eye-tracker" | "motion-capture-system" | "articulograph" | "ultrasound-system" | "button-box" | "keyboard" | "mouse" | "touchscreen" | "response-glove" | "custom" | string & {};
 
 export type ExternalTargetSelector = {
   $type: "pub.layers.defs#textQuoteSelector";

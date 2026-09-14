@@ -72,6 +72,10 @@ export interface Judgment {
   */
   item: ObjectRef;
   /**
+  * Per-region reading-time or response measurements for this judgment, one per region of the presented stimulus (self-paced reading, eye-tracking region analysis).
+  */
+  regionResponses?: RegionResponse[];
+  /**
   * Response time in milliseconds.
   */
   responseTimeMs?: number;

@@ -41,7 +41,7 @@ export * from './generated/pub/layers/resource/template'
 export * from './generated/pub/layers/resource/template_composition'
 export type { Entry as ResourceEntry } from './generated/pub/layers/resource/entry'
 
-// The 0.9.0 catalog and acquisition namespaces. `catalog` collides with the flat
+// The catalog and acquisition namespaces. `catalog` collides with the flat
 // surface on Collection/Membership/Citation/CollectionKind (resource, corpus,
 // eprint), so both namespaces are exposed as namespace objects — `catalog.Collection`,
 // `acquisition.Session` — rather than flattened.
