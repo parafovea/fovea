@@ -9,12 +9,25 @@
  * would pull the persona ontology) stays closed.
  */
 
+import type { ReactElement } from 'react'
+
 import { describe, it, expect } from 'vitest'
-import { render, screen, fireEvent, within } from '@testing-library/react'
+import { render as rtlRender, screen, fireEvent, within } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 
 import type { SpanRelation, TextSpan, TokenizedElement } from '@/lib/spans'
 
 import { SpanAnnotator } from '../SpanAnnotator'
+
+// The annotator owns its span store, but the relation-type picker pulls the
+// persona mutation hooks, so a query client must be in scope when a relation
+// reaches the label phase. Wrap every render in a fresh client.
+function render(ui: ReactElement): ReturnType<typeof rtlRender> {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  })
+  return rtlRender(<QueryClientProvider client={client}>{ui}</QueryClientProvider>)
+}
 
 const TEXT = 'The quick brown fox'
 

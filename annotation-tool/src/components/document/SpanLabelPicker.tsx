@@ -1,26 +1,30 @@
 /**
  * Label picker for a committed token selection.
  *
- * Anchors a popover at the selection's bounding box and offers a type/object
- * mode toggle plus the shared `AnnotationAutocomplete`. Choosing a type writes
- * an ontology-type-referencing span; choosing an object writes a
- * world-node-referencing span. The picker reuses the autocomplete with
- * `emitLinkTarget={false}` so it never mutates the video-annotation link state.
+ * Anchors a popover at the selection's bounding box and renders the shared
+ * `AnnotationAutocomplete` inline in unified `'both'` mode, so typing surfaces
+ * the persona's ontology types and the world's objects in one list. The chosen
+ * option's kind decides the write: a type writes an ontology-type-referencing
+ * span, an object a world-node-referencing span. The picker reuses the
+ * autocomplete with `emitLinkTarget={false}` so it never mutates the
+ * video-annotation link state.
  *
  * @module
  */
 
-import { useState } from 'react'
+import { useEffect, useRef } from 'react'
 
 import AnnotationAutocomplete from '@components/annotation/AnnotationAutocomplete'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { useTourAnchor } from '@/tours/engine/anchorRegistry'
 
 import type { PendingLabelSpanDraft } from '@store/zustand/createSpanAnnotatorStore'
 
 /** The label-picker mode: assign an ontology type or link a world object. */
 export type SpanLabelMode = 'type' | 'object'
+
+/** The option kinds that denote an ontology type rather than a world object. */
+const TYPE_OPTION_KINDS = ['entity', 'role', 'event']
 
 /** The structural shape of a chosen option from the autocomplete. */
 export interface SpanLabelOption {
@@ -60,15 +64,25 @@ export function SpanLabelPicker({
   onSelect,
   onCancel,
 }: SpanLabelPickerProps): JSX.Element {
-  const [mode, setMode] = useState<SpanLabelMode>('type')
   const anchorRef = useTourAnchor('span-label-picker')
   const bbox = draft.bbox
+
+  // When opened by a click (the edit-label control), the same click's
+  // outside-press would dismiss the picker before it paints. Ignore any close
+  // for a beat after mount so it stays up.
+  const canDismiss = useRef(false)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      canDismiss.current = true
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [])
 
   return (
     <Popover
       open
       onOpenChange={(open) => {
-        if (!open) onCancel()
+        if (!open && canDismiss.current) onCancel()
       }}
     >
       <PopoverTrigger
@@ -88,28 +102,20 @@ export function SpanLabelPicker({
           />
         }
       />
-      <PopoverContent align="start" side="bottom" sideOffset={6} className="w-[420px] gap-3">
-        <div className="flex items-center justify-between">
-          <span className="text-sm font-medium">Label span</span>
-          <ToggleGroup
-            value={[mode]}
-            onValueChange={(value) => {
-              const next = value[value.length - 1]
-              if (next === 'type' || next === 'object') setMode(next)
-            }}
-            variant="outline"
-            size="sm"
-          >
-            <ToggleGroupItem value="type">Type</ToggleGroupItem>
-            <ToggleGroupItem value="object">Object</ToggleGroupItem>
-          </ToggleGroup>
-        </div>
+      <PopoverContent align="start" side="bottom" sideOffset={6} className="w-[420px] gap-2">
+        <span className="text-sm font-medium">Label span</span>
+        {/* One unified search: typing surfaces the persona's types and the
+            world's objects together, so the user picks either without a mode
+            toggle. The chosen option's kind decides how it is written. */}
         <AnnotationAutocomplete
-          mode={mode}
+          mode="both"
           personaId={personaId}
           emitLinkTarget={false}
+          inline
           onSelect={(option) => {
-            if (option) onSelect(mode, option)
+            if (!option) return
+            const mode: SpanLabelMode = TYPE_OPTION_KINDS.includes(option.type) ? 'type' : 'object'
+            onSelect(mode, option)
           }}
         />
       </PopoverContent>

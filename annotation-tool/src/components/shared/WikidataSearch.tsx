@@ -143,10 +143,12 @@ interface WikidataSearchProps {
   entityType: 'type' | 'object' | 'time'
   objectSubtype?: 'entity' | 'event' | 'location'
   importType?: 'entity-type' | 'role-type' | 'event-type' | 'relation-type' | 'entity' | 'event' | 'location' | 'time'
+  /** Seeds the search box (e.g. the query the user already typed elsewhere). */
+  initialQuery?: string
 }
 
-export default function WikidataSearch({ onImport, entityType, objectSubtype = 'entity', importType }: WikidataSearchProps) {
-  const [query, setQuery] = useState('')
+export default function WikidataSearch({ onImport, entityType, objectSubtype = 'entity', importType, initialQuery = '' }: WikidataSearchProps) {
+  const [query, setQuery] = useState(initialQuery)
   const [options, setOptions] = useState<WikidataSearchResult[]>([])
   const [loading, setLoading] = useState(false)
   // eslint-disable-next-line @typescript-eslint/no-unused-vars

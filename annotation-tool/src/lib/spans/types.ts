@@ -51,6 +51,24 @@ export interface SpanSegment {
 }
 
 /**
+ * One denotation carried by a span: an ontology type (scoped to a persona) or a
+ * world object. A span's token range can bear several of these at once — many
+ * types across personas plus an object — each a distinct backing annotation.
+ */
+export interface SpanLabelDetail {
+  /** Id of the backing annotation row, used to remove just this label. */
+  annotationId: string
+  /** Whether this label denotes an ontology type or a world object. */
+  kind: 'type' | 'object'
+  /** The denotation ref id (ontology type ref id, or world node id). */
+  refId?: string
+  /** Display name for the denotation. */
+  name: string
+  /** Persona this label belongs to, or `null` for a persona-free object label. */
+  personaId?: string | null
+}
+
+/**
  * A labeled span over one or more elements. The union of all segments' indexes
  * is the span's token set; discontiguity (gaps within a segment or coverage
  * across multiple elements) is expected and preserved.
@@ -66,6 +84,11 @@ export interface TextSpan {
   label?: unknown
   /** Optional span-type slug (entity, event, etc.). */
   spanType?: string
+  /**
+   * Every denotation on this span's token range, aggregated across the persona
+   * and object layers. Empty while the span is still unlabeled.
+   */
+  labels?: SpanLabelDetail[]
 }
 
 /**

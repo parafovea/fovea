@@ -22,9 +22,12 @@ import {
   MessageSquare,
   ExternalLink,
   Sparkles,
+  PackagePlus,
+  PackageOpen,
 } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
+import { useDialog } from '@store/zustand/dialogStore'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -61,6 +64,8 @@ export default function VideoBrowser() {
   const navigate = useNavigate()
 
   const browserRootAnchorRef = useTourAnchor('video-browser-root')
+  const importCorpusDialog = useDialog('importCorpus')
+  const exportLayersDialog = useDialog('exportLayers')
 
   // TanStack Query for server state
   const { data: videos = [], isLoading } = useVideos()
@@ -422,6 +427,19 @@ export default function VideoBrowser() {
     // spotlights to introduce the video list. Individual cards carry
     // their own anchor for tours that target a specific tile.
     <div ref={browserRootAnchorRef} id="video-browser-root">
+      <div className="mb-6 flex items-center justify-between gap-4">
+        <h2 className="text-xl font-semibold">Videos</h2>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={importCorpusDialog.openDialog}>
+            <PackagePlus className="mr-2 size-4" />
+            Import corpus
+          </Button>
+          <Button variant="outline" onClick={exportLayersDialog.openDialog}>
+            <PackageOpen className="mr-2 size-4" />
+            Export corpus
+          </Button>
+        </div>
+      </div>
       <div className="mb-6">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />

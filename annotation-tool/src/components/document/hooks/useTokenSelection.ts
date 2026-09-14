@@ -15,7 +15,13 @@
 
 import { useCallback, useEffect, useRef } from 'react'
 
-import { selectionToSegments, tokenKey, type Rect, type TokenSelection } from '@/lib/spans'
+import {
+  selectionToSegments,
+  tokenKey,
+  type Rect,
+  type SpanSegment,
+  type TokenSelection,
+} from '@/lib/spans'
 
 import { useSpanAnnotatorStoreApi } from '../spanAnnotatorStoreContext'
 
@@ -113,6 +119,7 @@ function selectionBBox(container: HTMLElement, selection: Selection): Rect | nul
  */
 export function useTokenSelection(
   containerRef: React.RefObject<HTMLElement>,
+  onCommit?: (spanId: string, segments: SpanSegment[]) => void,
 ): TokenSelectionHandlers {
   const storeApi = useSpanAnnotatorStoreApi()
 
@@ -240,9 +247,14 @@ export function useTokenSelection(
 
       const segments = selectionToSegments(flatten(selection))
       const bbox = container ? selectionBBox(container, selection) : null
-      store.openLabelDraft({ segments, bbox })
+      // Persist the span the moment the drag ends, so a released highlight
+      // "stays" without waiting for a label. The picker then opens over this
+      // same span id, and choosing a type or object updates it in place.
+      const spanId = crypto.randomUUID()
+      onCommit?.(spanId, segments)
+      store.openLabelDraft({ spanId, segments, bbox })
     },
-    [containerRef, storeApi, processMove],
+    [containerRef, storeApi, processMove, onCommit],
   )
 
   return { onPointerDown, onPointerMove, onPointerUp }

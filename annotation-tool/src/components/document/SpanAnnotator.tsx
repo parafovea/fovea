@@ -43,14 +43,20 @@ import { useSpanPositions } from './hooks/useSpanPositions'
 import { useSpanRelationMachine } from './hooks/useSpanRelationMachine'
 import { tokenFromNode, useTokenSelection } from './hooks/useTokenSelection'
 
-/** A span create intent: the selection's segments plus the chosen label. */
+/**
+ * A span create-or-label intent. On release the span is created unlabeled with
+ * `id` and no `option`; choosing a type or object later re-submits the same `id`
+ * with `mode`/`option` to update it in place.
+ */
 export interface SpanDraft {
+  /** The span's client id: minted on release, reused when labeling. */
+  id: string
   /** One segment per element the selection covers. */
   segments: SpanSegment[]
-  /** Whether the label is an ontology type or a world object. */
-  mode: SpanLabelMode
-  /** The chosen option. */
-  option: SpanLabelOption
+  /** Whether the label is an ontology type or a world object; absent = unlabeled. */
+  mode?: SpanLabelMode
+  /** The chosen option, or absent for an unlabeled span. */
+  option?: SpanLabelOption
 }
 
 /** A relation create intent from the completed relation builder. */
@@ -101,6 +107,12 @@ export interface SpanAnnotatorProps {
   onCreateSpan?: (draft: SpanDraft) => void
   /** Called with a span id to delete. */
   onDeleteSpan?: (spanId: string) => void
+  /** Called with a backing annotation id to delete one denotation on a span. */
+  onDeleteLabel?: (annotationId: string) => void
+  /** Whether all personas' type labels are shown (vs just the active persona's). */
+  showAllPersonas?: boolean
+  /** Toggles whether all personas' type labels are shown. */
+  onToggleAllPersonas?: (next: boolean) => void
   /** Called with a relation create intent. */
   onCreateRelation?: (commit: RelationDraftCommit) => void
   /** Called with a relation id to delete. */
@@ -131,6 +143,9 @@ function SpanAnnotatorInner({
   spanKindResolver = defaultSpanKinds,
   onCreateSpan,
   onDeleteSpan,
+  onDeleteLabel,
+  showAllPersonas = false,
+  onToggleAllPersonas,
   onCreateRelation,
   onDeleteRelation,
   config = {},
@@ -144,6 +159,12 @@ function SpanAnnotatorInner({
 
   const selection = useSpanAnnotatorStore((state) => state.committedSelection)
   const pendingDraft = useSpanAnnotatorStore((state) => state.pendingLabelSpanDraft)
+  // A quick-create (new type or world object) awaits a network write before its
+  // selection callback fires; during that await the draft can close and unmount
+  // the picker, leaving the live `pendingDraft` null when the callback lands. Keep
+  // the last open draft in a ref so the association still writes against its span.
+  const labelDraftRef = useRef(pendingDraft)
+  if (pendingDraft) labelDraftRef.current = pendingDraft
   const activeSpanId = useSpanAnnotatorStore((state) => state.activeSpanId)
   const hoveredRelationId = useSpanAnnotatorStore((state) => state.hoveredRelationId)
   const relationPhase = useSpanAnnotatorStore((state) => state.relationPhase)
@@ -153,7 +174,13 @@ function SpanAnnotatorInner({
   const colorMap = useMemo(() => assignSpanColors(spans), [spans])
   const tokenSpanMap = useMemo(() => computeTokenSpanMap(spans), [spans])
 
-  const selectionHandlers = useTokenSelection(contentRef)
+  // Create the span the moment the selection is released, so it persists as an
+  // unlabeled span rather than vanishing until a label is chosen.
+  const handleSpanCommit = useCallback(
+    (spanId: string, segments: SpanSegment[]) => onCreateSpan?.({ id: spanId, segments }),
+    [onCreateSpan],
+  )
+  const selectionHandlers = useTokenSelection(contentRef, handleSpanCommit)
   const positions = useSpanPositions(contentRef, spans)
 
   const machine = useSpanRelationMachine((commit) => onCreateRelation?.(commit))
@@ -193,10 +220,13 @@ function SpanAnnotatorInner({
 
   const handleSpanLabelSelect = useCallback(
     (mode: SpanLabelMode, option: SpanLabelOption) => {
-      if (pendingDraft) onCreateSpan?.({ segments: pendingDraft.segments, mode, option })
+      const draft = labelDraftRef.current
+      if (draft) {
+        onCreateSpan?.({ id: draft.spanId, segments: draft.segments, mode, option })
+      }
       storeApi.getState().closeLabelDraft()
     },
-    [onCreateSpan, pendingDraft, storeApi],
+    [onCreateSpan, storeApi],
   )
 
   const handleSelectSpan = useCallback(
@@ -232,7 +262,12 @@ function SpanAnnotatorInner({
       const state = storeApi.getState()
       const option = quickLabels[digit - 1]
       if (state.pendingLabelSpanDraft && option) {
-        onCreateSpan?.({ segments: state.pendingLabelSpanDraft.segments, mode: 'type', option })
+        onCreateSpan?.({
+          id: state.pendingLabelSpanDraft.spanId,
+          segments: state.pendingLabelSpanDraft.segments,
+          mode: 'type',
+          option,
+        })
         state.closeLabelDraft()
       }
     },
@@ -250,6 +285,36 @@ function SpanAnnotatorInner({
   }, [spans, relationTargetId, spanKindResolver])
 
   const relationAnchor = relationTargetId ? positions.get(relationTargetId) ?? null : null
+
+  // Reopen the label picker over an existing span so it can be (re)labeled after
+  // it was created on release. The picker updates the same span id in place.
+  const handleEditSpan = useCallback(
+    (spanId: string) => {
+      const span = spans.find((s) => s.id === spanId)
+      if (!span) return
+      storeApi.getState().openLabelDraft({
+        spanId,
+        segments: span.segments,
+        bbox: positions.get(spanId) ?? null,
+      })
+    },
+    [spans, positions, storeApi],
+  )
+
+  // The text a span covers, joined from its tokens, shown for unlabeled spans.
+  const spanText = useCallback(
+    (span: TextSpan): string => {
+      const parts: string[] = []
+      for (const segment of span.segments) {
+        for (const index of segment.tokenIndexes) {
+          const token = tokenization.tokens[index]
+          if (token) parts.push(token.text)
+        }
+      }
+      return parts.join(' ')
+    },
+    [tokenization],
+  )
 
   return (
     <div ref={annotatorAnchorRef} className={cn('flex gap-4', className)} data-testid="span-annotator">
@@ -296,6 +361,7 @@ function SpanAnnotatorInner({
                 relationTypes={relationTypes}
                 sourceKinds={relationSourceKinds}
                 targetKinds={relationTargetKinds}
+                personaId={personaId}
                 bbox={relationAnchor}
                 onSelect={(rt) => machine.commitLabel(rt.id, rt.name)}
                 onCancel={() => machine.cancel()}
@@ -328,16 +394,22 @@ function SpanAnnotatorInner({
             colorMap={colorMap}
             activeSpanId={activeSpanId}
             onSelectSpan={handleSelectSpan}
+            spanText={spanText}
+            onEditSpan={readOnly ? undefined : handleEditSpan}
             onDeleteSpan={(id) => onDeleteSpan?.(id)}
+            onDeleteLabel={onDeleteLabel}
             onStartRelation={() => machine.start()}
             relationPhase={relationPhase}
             relationSourceId={relationSourceId}
+            showAllPersonas={showAllPersonas}
+            onToggleAllPersonas={onToggleAllPersonas}
             readOnly={readOnly}
           />
           {showRelations && (
             <RelationSidePanel
               relations={relations}
               spans={spans}
+              spanText={spanText}
               resolveLabel={relationLabel}
               hoveredRelationId={hoveredRelationId}
               onHoverRelation={(id) => storeApi.getState().setHoveredRelationId(id)}

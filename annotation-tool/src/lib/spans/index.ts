@@ -10,6 +10,7 @@
 
 export type {
   Rect,
+  SpanLabelDetail,
   SpanRelation,
   SpanSegment,
   SpanToken,

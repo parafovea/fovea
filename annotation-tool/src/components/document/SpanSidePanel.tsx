@@ -1,23 +1,24 @@
 /**
  * Side panel listing a document's spans.
  *
- * Each row shows the span's color swatch, its resolved label, its kind badge,
- * and a delete control; clicking a row makes the span active. A header button
- * starts the relation builder and reflects its current phase. While the builder
- * awaits a source or target, every span row acts as an endpoint picker, so an
- * overlapping (non-primary) span can be chosen as a relation endpoint even
- * though the text only surfaces its primary span on a token click.
+ * Each row shows the span's color swatch, the text it covers, and a chip per
+ * denotation on its token range — one per ontology type (across personas) plus
+ * any world object — each chip removable on its own. A header toggle switches
+ * between the active persona's type labels and every persona's. Clicking a row
+ * makes the span active; a header button starts the relation builder. While the
+ * builder awaits a source or target, every span row acts as an endpoint picker,
+ * so an overlapping span can be chosen even though the text only surfaces its
+ * primary span on a token click.
  *
  * @module
  */
 
-import { GitBranch, Trash2 } from 'lucide-react'
+import { GitBranch, Tag, Trash2, Users, X } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import type { TextSpan } from '@/lib/spans'
+import type { SpanLabelDetail, TextSpan } from '@/lib/spans'
 import type { RelationPhase } from '@store/zustand/createSpanAnnotatorStore'
 
 /**
@@ -36,14 +37,24 @@ export interface SpanSidePanelProps {
    * overlapping span can be an endpoint.
    */
   onSelectSpan: (spanId: string) => void
-  /** Called when a span's delete control is clicked. */
+  /** Resolves a span's covered text, shown as the row's primary line. */
+  spanText?: (span: TextSpan) => string
+  /** Called to (re)open the label picker to add a denotation to a span. */
+  onEditSpan?: (spanId: string) => void
+  /** Called when a span's delete control is clicked (removes the whole span). */
   onDeleteSpan: (spanId: string) => void
+  /** Called to remove a single denotation by its backing annotation id. */
+  onDeleteLabel?: (annotationId: string) => void
   /** Called to begin building a relation. */
   onStartRelation: () => void
   /** The relation builder's current phase, reflected on the start button. */
   relationPhase: RelationPhase
   /** The span already chosen as the relation source, or `null`. */
   relationSourceId?: string | null
+  /** Whether every persona's type labels are shown (vs the active persona's). */
+  showAllPersonas?: boolean
+  /** Toggles whether every persona's type labels are shown. */
+  onToggleAllPersonas?: (next: boolean) => void
   /**
    * When `true`, hides the delete controls and the start-relation button, so a
    * read-only viewer cannot mutate spans or draw relations. Defaults to `false`.
@@ -59,10 +70,58 @@ const RELATION_PROMPT: Record<RelationPhase, string> = {
   WAITING_LABEL: 'Choose a relation type',
 }
 
-/** Reads a span's display label, falling back to a shortened id. */
-function labelOf(span: TextSpan): string {
-  if (typeof span.label === 'string' && span.label.length > 0) return span.label
-  return span.id.slice(0, 8)
+/**
+ * A span's covered text and whether it carries any denotation yet. The text it
+ * covers is always the row's primary line so the span is recognizable; its
+ * denotations render as chips beneath.
+ */
+function spanDisplay(
+  span: TextSpan,
+  spanText?: (span: TextSpan) => string,
+): { text: string; unlabeled: boolean } {
+  const text = spanText?.(span)?.trim()
+  return {
+    text: text && text.length > 0 ? text : 'Unlabeled span',
+    unlabeled: !(span.labels && span.labels.length > 0),
+  }
+}
+
+/** Renders one removable denotation chip on a span row. */
+function LabelChip({
+  label,
+  readOnly,
+  onDelete,
+}: {
+  label: SpanLabelDetail
+  readOnly: boolean
+  onDelete?: (annotationId: string) => void
+}): JSX.Element {
+  return (
+    <span
+      className={cn(
+        'inline-flex max-w-full items-center gap-1 rounded px-1.5 py-0.5 text-[0.7rem]',
+        label.kind === 'object'
+          ? 'bg-primary/10 text-primary ring-1 ring-primary/20'
+          : 'bg-muted text-foreground ring-1 ring-border',
+      )}
+      title={`${label.name} (${label.kind})`}
+    >
+      <span className="truncate">{label.name}</span>
+      {!readOnly && onDelete && (
+        <button
+          type="button"
+          aria-label={`Remove ${label.name}`}
+          className="shrink-0 opacity-60 transition-opacity hover:opacity-100"
+          onClick={(event) => {
+            event.stopPropagation()
+            onDelete(label.annotationId)
+          }}
+        >
+          <X className="h-3 w-3" />
+        </button>
+      )}
+    </span>
+  )
 }
 
 /**
@@ -76,10 +135,15 @@ export function SpanSidePanel({
   colorMap,
   activeSpanId,
   onSelectSpan,
+  spanText,
+  onEditSpan,
   onDeleteSpan,
+  onDeleteLabel,
   onStartRelation,
   relationPhase,
   relationSourceId = null,
+  showAllPersonas = false,
+  onToggleAllPersonas,
   readOnly = false,
 }: SpanSidePanelProps): JSX.Element {
   const picking = relationPhase === 'WAITING_SOURCE' || relationPhase === 'WAITING_TARGET'
@@ -101,6 +165,20 @@ export function SpanSidePanel({
         )}
       </div>
 
+      {onToggleAllPersonas && (
+        <Button
+          variant={showAllPersonas ? 'secondary' : 'ghost'}
+          size="sm"
+          className="w-fit"
+          onClick={() => onToggleAllPersonas(!showAllPersonas)}
+          data-testid="toggle-all-personas"
+          aria-pressed={showAllPersonas}
+        >
+          <Users className="mr-1.5 h-3.5 w-3.5" />
+          {showAllPersonas ? 'All personas' : 'This persona'}
+        </Button>
+      )}
+
       <ScrollArea className="flex-1">
         {spans.length === 0 ? (
           <p className="py-6 text-center text-sm text-muted-foreground">
@@ -116,6 +194,8 @@ export function SpanSidePanel({
                 : relationPhase === 'WAITING_SOURCE'
                   ? 'Click to set as source'
                   : 'Click to set as target'
+              const display = spanDisplay(span, spanText)
+              const labels = span.labels ?? []
               return (
                 <li key={span.id}>
                   <div
@@ -126,47 +206,81 @@ export function SpanSidePanel({
                       if (event.key === 'Enter' || event.key === ' ') onSelectSpan(span.id)
                     }}
                     data-span-row={span.id}
-                    aria-label={picking ? `${labelOf(span)}: ${pickHint}` : undefined}
+                    aria-label={picking ? `${display.text}: ${pickHint}` : undefined}
                     className={cn(
-                      'flex cursor-pointer items-center gap-2 rounded-md border border-transparent px-2 py-1.5 transition-colors hover:bg-accent',
+                      'flex cursor-pointer items-start gap-2 rounded-md border border-transparent px-2 py-1.5 transition-colors hover:bg-accent',
                       activeSpanId === span.id && 'border-primary bg-primary/5',
                       isSource && 'border-primary bg-primary/10',
                       isEndpointTarget && 'hover:border-primary',
                     )}
                   >
                     <span
-                      className="size-3 shrink-0 rounded-sm ring-1 ring-foreground/10"
+                      className="mt-0.5 size-3 shrink-0 rounded-sm ring-1 ring-foreground/10"
                       style={{ background: colorMap.get(span.id) ?? 'transparent' }}
                     />
-                    <span className="flex-1 truncate text-sm">{labelOf(span)}</span>
+                    <div className="flex min-w-0 flex-1 flex-col gap-1">
+                      <span
+                        className={cn(
+                          'truncate text-sm',
+                          display.unlabeled && 'italic text-muted-foreground',
+                        )}
+                      >
+                        {display.text}
+                      </span>
+                      {!picking && labels.length > 0 && (
+                        <div className="flex flex-wrap gap-1">
+                          {labels.map((label) => (
+                            <LabelChip
+                              key={label.annotationId}
+                              label={label}
+                              readOnly={readOnly}
+                              onDelete={onDeleteLabel}
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </div>
                     {picking ? (
                       <span
                         className={cn(
-                          'shrink-0 text-[0.7rem]',
+                          'mt-0.5 shrink-0 text-[0.7rem]',
                           isSource ? 'font-medium text-primary' : 'text-muted-foreground',
                         )}
                       >
                         {pickHint}
                       </span>
                     ) : (
-                      span.spanType && (
-                        <Badge variant="outline" className="text-[0.7rem]">
-                          {span.spanType}
-                        </Badge>
-                      )
-                    )}
-                    {!readOnly && !picking && (
-                      <Button
-                        variant="ghost"
-                        size="icon-xs"
-                        aria-label="Delete span"
-                        onClick={(event) => {
-                          event.stopPropagation()
-                          onDeleteSpan(span.id)
-                        }}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      <>
+                        {!readOnly && onEditSpan && (
+                          <Button
+                            variant="ghost"
+                            size="icon-xs"
+                            className="shrink-0"
+                            aria-label={display.unlabeled ? 'Label span' : 'Add label'}
+                            title={display.unlabeled ? 'Label span' : 'Add label'}
+                            onClick={(event) => {
+                              event.stopPropagation()
+                              onEditSpan(span.id)
+                            }}
+                          >
+                            <Tag className="h-4 w-4" />
+                          </Button>
+                        )}
+                        {!readOnly && (
+                          <Button
+                            variant="ghost"
+                            size="icon-xs"
+                            className="shrink-0"
+                            aria-label="Delete span"
+                            onClick={(event) => {
+                              event.stopPropagation()
+                              onDeleteSpan(span.id)
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </>
                     )}
                   </div>
                 </li>

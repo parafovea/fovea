@@ -27,6 +27,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@store/queries', () => ({
   useLayersAnnotations: () => ({ data: mocks.state.detail, isLoading: false, isError: false }),
   usePersonaOntology: () => ({ data: mocks.state.ontology }),
+  useWorld: () => ({ data: null }),
   useUpsertLayer: () => ({ mutateAsync: mocks.upsertLayerMutateAsync }),
   useUpsertLayersAnnotation: () => ({ mutate: mocks.upsertAnnotationMutate }),
   useDeleteLayersAnnotation: () => ({ mutate: vi.fn() }),
@@ -41,7 +42,7 @@ vi.mock('@/lib/ability', () => ({
 vi.mock('../tokenization', () => ({
   pickPrimaryTokenization: (toks: Array<{ id: string }>) => toks?.[0] ?? null,
   toTokenizedElement: () => ({ name: 'text', tokens: [] }),
-  rowsToSpans: () => [],
+  rowsToSpanGroups: () => [],
   rowsToRelations: () => [],
 }))
 

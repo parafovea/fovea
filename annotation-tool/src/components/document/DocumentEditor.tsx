@@ -8,6 +8,8 @@
  * @module
  */
 
+import { useState } from 'react'
+
 import { Spinner } from '@/components/ui/spinner'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 
@@ -41,7 +43,8 @@ export function DocumentEditor({
   personaId,
   readOnly,
 }: DocumentEditorProps): JSX.Element {
-  const controller = useLayersSpanAnnotator(expressionUri, personaId)
+  const [showAllPersonas, setShowAllPersonas] = useState(false)
+  const controller = useLayersSpanAnnotator(expressionUri, personaId, showAllPersonas)
 
   if (controller.status === 'loading') {
     return (
@@ -54,7 +57,7 @@ export function DocumentEditor({
   if (controller.status === 'error') {
     return (
       <Alert variant="destructive">
-        <AlertDescription>Failed to load this document.</AlertDescription>
+        <AlertDescription>Failed to load this text.</AlertDescription>
       </Alert>
     )
   }
@@ -62,7 +65,7 @@ export function DocumentEditor({
   if (controller.status === 'empty' || !controller.element) {
     return (
       <Alert>
-        <AlertDescription>This document has no tokenized text to annotate.</AlertDescription>
+        <AlertDescription>This text has no tokenized content to annotate yet.</AlertDescription>
       </Alert>
     )
   }
@@ -80,8 +83,11 @@ export function DocumentEditor({
       quickLabels={controller.quickLabels}
       onCreateSpan={controller.onCreateSpan}
       onDeleteSpan={controller.onDeleteSpan}
+      onDeleteLabel={controller.onDeleteLabel}
       onCreateRelation={controller.onCreateRelation}
       onDeleteRelation={controller.onDeleteRelation}
+      showAllPersonas={showAllPersonas}
+      onToggleAllPersonas={setShowAllPersonas}
       config={{ readOnly: effectiveReadOnly }}
     />
   )

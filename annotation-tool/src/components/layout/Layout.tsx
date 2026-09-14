@@ -11,8 +11,6 @@ import {
   Save,
   Download,
   Upload,
-  PackagePlus,
-  PackageOpen,
   Keyboard,
   X,
 } from 'lucide-react'
@@ -74,9 +72,9 @@ import { useTourAnchor } from '@/tours/engine/anchorRegistry'
 
 const menuItems = [
   { text: 'Video Browser', icon: Video, path: '/', shortcut: 'Cmd/Ctrl+1' },
+  { text: 'Documents', icon: FileText, path: '/documents', shortcut: 'Cmd/Ctrl+4' },
   { text: 'Persona Builder', icon: Fingerprint, path: '/ontology', shortcut: 'Cmd/Ctrl+2' },
   { text: 'World Builder', icon: Globe, path: '/objects', shortcut: 'Cmd/Ctrl+3' },
-  { text: 'Documents', icon: FileText, path: '/documents', shortcut: 'Cmd/Ctrl+4' },
 ]
 
 const collaborationItems = [
@@ -161,6 +159,7 @@ export default function Layout() {
   // Track the path we came from when toggling to each builder (separate refs for independent toggles)
   const ontologyReturnPathRef = useRef<string | null>(null)
   const objectsReturnPathRef = useRef<string | null>(null)
+  const documentsReturnPathRef = useRef<string | null>(null)
   const lastVideoPathRef = useRef<string | null>(null)
 
   // Track the last active video annotation path
@@ -262,6 +261,20 @@ export default function Layout() {
     'navigate.toggleVideo': () => {
       if (lastVideoPathRef.current) {
         navigate(lastVideoPathRef.current)
+      }
+    },
+    'navigate.toggleDocuments': () => {
+      const currentPath = window.location.pathname
+      // If we're in the document workspace, go back to where we came from
+      if (currentPath.startsWith('/documents')) {
+        const returnPath = documentsReturnPathRef.current || '/'
+        documentsReturnPathRef.current = null
+        navigate(returnPath)
+      }
+      // Otherwise, store current path and go to the document browser
+      else {
+        documentsReturnPathRef.current = currentPath
+        navigate('/documents')
       }
     },
     'file.save': () => {
@@ -435,40 +448,6 @@ export default function Layout() {
                 Import
               </TooltipTrigger>
               <TooltipContent>Import Data</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8"
-                    onClick={importCorpusDialog.openDialog}
-                    aria-label="Import Corpus"
-                    data-tour-id="import-corpus-trigger"
-                  />
-                }
-              >
-                <PackagePlus className="h-4 w-4" />
-              </TooltipTrigger>
-              <TooltipContent>Import Corpus</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8"
-                    onClick={exportLayersDialog.openDialog}
-                    aria-label="Export Corpus"
-                    data-tour-id="export-layers-trigger"
-                  />
-                }
-              >
-                <PackageOpen className="h-4 w-4" />
-              </TooltipTrigger>
-              <TooltipContent>Export Corpus</TooltipContent>
             </Tooltip>
             <Separator orientation="vertical" className="mx-1 h-4" />
             <Tooltip>

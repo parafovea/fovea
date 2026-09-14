@@ -22,6 +22,7 @@ import {
   useUpsertLayer,
   useUpsertLayersAnnotation,
   usePersonaOntology,
+  useWorld,
 } from '@store/queries'
 import type { LayersAnnotationLayerRow } from '@store/queries'
 import type { SpanRelation, TextSpan, TokenizedElement } from '@/lib/spans'
@@ -33,9 +34,10 @@ import type { SpanLabelOption } from '../SpanLabelPicker'
 import {
   pickPrimaryTokenization,
   rowsToRelations,
-  rowsToSpans,
+  rowsToSpanGroups,
   toTokenizedElement,
   type SpanLabelResolvers,
+  type TaggedSpanLayer,
 } from '../tokenization'
 
 /** The span annotator's data and handlers, sourced from the layers store. */
@@ -62,42 +64,35 @@ export interface LayersSpanAnnotatorController {
   canEdit: boolean
   /** Create a span from a label picker choice. */
   onCreateSpan: (draft: SpanDraft) => void
-  /** Delete a span by id. */
+  /** Delete a span and every denotation on its token range. */
   onDeleteSpan: (spanId: string) => void
+  /** Delete a single denotation on a span by its backing annotation id. */
+  onDeleteLabel: (annotationId: string) => void
   /** Create a relation from the relation builder. */
   onCreateRelation: (commit: RelationDraftCommit) => void
   /** Delete a relation by id. */
   onDeleteRelation: (relationId: string) => void
 }
 
-/** Finds the span layer for a persona, or the first span layer, in a detail graph. */
-function findSpanLayer(
-  layers: LayersAnnotationLayerRow[],
-  personaId?: string | null,
-): LayersAnnotationLayerRow | undefined {
-  const spanLayers = layers.filter((layer) => layer.kind === 'span')
-  if (personaId) {
-    return spanLayers.find((layer) => layer.personaId === personaId) ?? spanLayers[0]
-  }
-  return spanLayers[0]
-}
-
 /**
- * Returns every span layer whose annotations belong to a persona, so spans are
- * read from all of them rather than only the first. This tolerates the rare case
- * of more than one matching span layer for a scope, keeping every span visible
- * and deletable.
+ * Selects the span layers to read spans from and tags each with its persona.
+ *
+ * By default this reads the active persona's type layer plus the persona-free
+ * base layer (which carries span identity and world-object labels), so a span
+ * shows its own persona's types and its objects. With `showAllPersonas`, every
+ * persona's type layer is included so the same token range surfaces the types
+ * assigned across personas.
  */
-function matchingSpanLayers(
+function readableSpanLayers(
   layers: LayersAnnotationLayerRow[],
-  personaId?: string | null,
-): LayersAnnotationLayerRow[] {
+  personaId: string | null,
+  showAllPersonas: boolean,
+): TaggedSpanLayer[] {
   const spanLayers = layers.filter((layer) => layer.kind === 'span')
-  if (personaId) {
-    const forPersona = spanLayers.filter((layer) => layer.personaId === personaId)
-    return forPersona.length > 0 ? forPersona : spanLayers
-  }
-  return spanLayers
+  const selected = showAllPersonas
+    ? spanLayers
+    : spanLayers.filter((layer) => layer.personaId == null || layer.personaId === personaId)
+  return selected.map((layer) => ({ personaId: layer.personaId ?? null, rows: layer.annotations }))
 }
 
 /** Returns a stable client-minted layer id for a scope key, creating one once. */
@@ -127,14 +122,17 @@ function findRelationLayer(
  *
  * @param expressionUri - the expression id/uri to annotate; disables the hook when absent
  * @param personaId - the active persona, scoping layers and backing type labels
+ * @param showAllPersonas - when `true`, read every persona's type labels, not just the active one's
  * @returns the annotator's data, load status, and persistence handlers
  */
 export function useLayersSpanAnnotator(
   expressionUri: string | undefined,
   personaId?: string | null,
+  showAllPersonas = false,
 ): LayersSpanAnnotatorController {
   const { data: detail, isLoading, isError } = useLayersAnnotations(expressionUri)
   const { data: ontology } = usePersonaOntology(personaId)
+  const { data: world } = useWorld()
   const ability = useAbility()
 
   const upsertLayer = useUpsertLayer()
@@ -143,7 +141,8 @@ export function useLayersSpanAnnotator(
   const createRelation = useCreateLayersRelation()
   const deleteRelation = useDeleteLayersRelation()
 
-  const spanLayerPromiseRef = useRef<Promise<string> | null>(null)
+  const personaLayerPromiseRef = useRef<Promise<string> | null>(null)
+  const baseLayerPromiseRef = useRef<Promise<string> | null>(null)
   const relationLayerPromiseRef = useRef<Promise<string> | null>(null)
   const spanLayerIdRef = useRef<Map<string, string>>(new Map())
   const relationLayerIdRef = useRef<Map<string, string>>(new Map())
@@ -160,22 +159,56 @@ export function useLayersSpanAnnotator(
   )
 
   const resolvers = useMemo<SpanLabelResolvers>(() => {
-    const names = new Map<string, string>()
-    for (const type of ontology?.entities ?? []) names.set(type.id, type.name)
-    for (const type of ontology?.roles ?? []) names.set(type.id, type.name)
-    for (const type of ontology?.events ?? []) names.set(type.id, type.name)
-    return { typeName: (id) => names.get(id) }
-  }, [ontology])
+    const typeNames = new Map<string, string>()
+    for (const type of ontology?.entities ?? []) typeNames.set(type.id, type.name)
+    for (const type of ontology?.roles ?? []) typeNames.set(type.id, type.name)
+    for (const type of ontology?.events ?? []) typeNames.set(type.id, type.name)
+    const objectNames = new Map<string, string>()
+    for (const entity of world?.entities ?? []) objectNames.set(entity.id, entity.name)
+    for (const event of world?.events ?? []) objectNames.set(event.id, event.name)
+    for (const time of world?.times ?? []) if (time.label) objectNames.set(time.id, time.label)
+    return { typeName: (id) => typeNames.get(id), objectName: (id) => objectNames.get(id) }
+  }, [ontology, world])
 
   const layers = useMemo(() => detail?.annotationLayers ?? [], [detail])
-  const spanLayer = findSpanLayer(layers, personaId)
   const relationLayer = findRelationLayer(layers, personaId)
-  const spanLayers = useMemo(() => matchingSpanLayers(layers, personaId), [layers, personaId])
+
+  // The persona's own type layer, and the persona-free base layer holding span
+  // identity plus world-object labels: types route to the former, objects to the
+  // latter (a persona-scoped layer would drop the object's world-node ref).
+  const personaSpanLayer = useMemo(
+    () => (personaId ? layers.find((l) => l.kind === 'span' && l.personaId === personaId) : undefined),
+    [layers, personaId],
+  )
+  const baseSpanLayer = useMemo(
+    () => layers.find((l) => l.kind === 'span' && l.personaId == null),
+    [layers],
+  )
+  const spanLayer = personaSpanLayer ?? baseSpanLayer
+
+  const spanLayerRows = useMemo<TaggedSpanLayer[]>(
+    () => readableSpanLayers(layers, personaId ?? null, showAllPersonas),
+    [layers, personaId, showAllPersonas],
+  )
 
   const spans = useMemo<TextSpan[]>(() => {
     if (!tokenizationId) return []
-    return spanLayers.flatMap((layer) => rowsToSpans(layer.annotations, tokenizationId, resolvers))
-  }, [spanLayers, tokenizationId, resolvers])
+    return rowsToSpanGroups(spanLayerRows, tokenizationId, resolvers)
+  }, [spanLayerRows, tokenizationId, resolvers])
+
+  // Every backing annotation id per span group, so deleting a span removes its
+  // base placeholder and all of its type/object denotations at once. Held in a
+  // ref so the delete callback stays stable across renders.
+  const annotationIdsBySpanRef = useRef<Map<string, string[]>>(new Map())
+  annotationIdsBySpanRef.current = useMemo(() => {
+    const map = new Map<string, string[]>()
+    for (const span of spans) {
+      const ids = new Set<string>([span.id])
+      for (const label of span.labels ?? []) ids.add(label.annotationId)
+      map.set(span.id, [...ids])
+    }
+    return map
+  }, [spans])
 
   const symmetricByTypeId = useMemo(() => {
     const map = new Map<string, boolean>()
@@ -217,12 +250,13 @@ export function useLayersSpanAnnotator(
     [ontology],
   )
 
-  const ensureSpanLayerId = useCallback(async (): Promise<string> => {
-    if (spanLayer) return spanLayer.id
+  const ensurePersonaSpanLayerId = useCallback(async (): Promise<string> => {
+    if (!personaId) throw new Error('A type label needs an active persona')
+    if (personaSpanLayer) return personaSpanLayer.id
     if (!expressionUri || !detail) throw new Error('Expression not loaded')
-    if (!spanLayerPromiseRef.current) {
-      const clientId = stableLayerId(spanLayerIdRef.current, `${expressionUri}::${personaId ?? ''}`)
-      spanLayerPromiseRef.current = upsertLayer
+    if (!personaLayerPromiseRef.current) {
+      const clientId = stableLayerId(spanLayerIdRef.current, `${expressionUri}::${personaId}`)
+      personaLayerPromiseRef.current = upsertLayer
         .mutateAsync({
           expressionUri,
           input: {
@@ -231,16 +265,41 @@ export function useLayersSpanAnnotator(
             kind: 'span',
             sourceMethod: 'manual',
             tokenizationId,
-            personaId: personaId ?? null,
+            personaId,
           },
         })
         .then((row) => row.id)
         .finally(() => {
-          spanLayerPromiseRef.current = null
+          personaLayerPromiseRef.current = null
         })
     }
-    return spanLayerPromiseRef.current
-  }, [spanLayer, expressionUri, detail, upsertLayer, tokenizationId, personaId])
+    return personaLayerPromiseRef.current
+  }, [personaId, personaSpanLayer, expressionUri, detail, upsertLayer, tokenizationId])
+
+  const ensureBaseSpanLayerId = useCallback(async (): Promise<string> => {
+    if (baseSpanLayer) return baseSpanLayer.id
+    if (!expressionUri || !detail) throw new Error('Expression not loaded')
+    if (!baseLayerPromiseRef.current) {
+      const clientId = stableLayerId(spanLayerIdRef.current, `${expressionUri}::base`)
+      baseLayerPromiseRef.current = upsertLayer
+        .mutateAsync({
+          expressionUri,
+          input: {
+            id: clientId,
+            expressionId: detail.id,
+            kind: 'span',
+            sourceMethod: 'manual',
+            tokenizationId,
+            personaId: null,
+          },
+        })
+        .then((row) => row.id)
+        .finally(() => {
+          baseLayerPromiseRef.current = null
+        })
+    }
+    return baseLayerPromiseRef.current
+  }, [baseSpanLayer, expressionUri, detail, upsertLayer, tokenizationId])
 
   const ensureRelationLayerId = useCallback(async (): Promise<string> => {
     if (relationLayer) return relationLayer.id
@@ -277,29 +336,59 @@ export function useLayersSpanAnnotator(
         (a, b) => a - b,
       )
       if (indexes.length === 0) return
-      void ensureSpanLayerId().then((layerId) => {
+      const anchor = {
+        tokenRefSequence: { tokenIndexes: indexes, tokenizationId: { value: tokenizationId } },
+      }
+      // Labeling adds a denotation over the span's range as its own annotation,
+      // so a span can carry several types (one per persona) plus a world object.
+      // A type routes to the active persona's layer; an object routes to the
+      // persona-free base layer, which keeps its world-node ref. A release with
+      // no choice persists the bare span (the base placeholder) under its draft
+      // id, so the token range stays visible and stable until it is labeled.
+      if (draft.option && draft.mode) {
+        const isObject = draft.mode === 'object'
+        const ensureLayerId = isObject ? ensureBaseSpanLayerId : ensurePersonaSpanLayerId
+        void ensureLayerId().then((layerId) => {
+          upsertAnnotation.mutate({
+            expressionUri,
+            input: {
+              id: crypto.randomUUID(),
+              layerId,
+              tokenizationId,
+              anchor,
+              label: draft.option?.label,
+              ontologyTypeRefId: isObject ? undefined : draft.option?.id,
+              denotesNodeId: isObject ? draft.option?.id : undefined,
+            },
+          })
+        })
+        return
+      }
+      void ensureBaseSpanLayerId().then((layerId) => {
         upsertAnnotation.mutate({
           expressionUri,
-          input: {
-            layerId,
-            tokenizationId,
-            anchor: {
-              tokenRefSequence: { tokenIndexes: indexes, tokenizationId: { value: tokenizationId } },
-            },
-            label: draft.option.label,
-            ontologyTypeRefId: draft.mode === 'type' ? draft.option.id : undefined,
-            denotesNodeId: draft.mode === 'object' ? draft.option.id : undefined,
-          },
+          input: { id: draft.id, layerId, tokenizationId, anchor },
         })
       })
     },
-    [expressionUri, tokenizationId, ensureSpanLayerId, upsertAnnotation],
+    [expressionUri, tokenizationId, ensureBaseSpanLayerId, ensurePersonaSpanLayerId, upsertAnnotation],
   )
 
   const onDeleteSpan = useCallback(
     (spanId: string) => {
       if (!expressionUri) return
-      deleteAnnotation.mutate({ expressionUri, annotationId: spanId })
+      const ids = annotationIdsBySpanRef.current.get(spanId) ?? [spanId]
+      for (const annotationId of ids) {
+        deleteAnnotation.mutate({ expressionUri, annotationId })
+      }
+    },
+    [expressionUri, deleteAnnotation],
+  )
+
+  const onDeleteLabel = useCallback(
+    (annotationId: string) => {
+      if (!expressionUri) return
+      deleteAnnotation.mutate({ expressionUri, annotationId })
     },
     [expressionUri, deleteAnnotation],
   )
@@ -350,6 +439,7 @@ export function useLayersSpanAnnotator(
     canEdit,
     onCreateSpan,
     onDeleteSpan,
+    onDeleteLabel,
     onCreateRelation,
     onDeleteRelation,
   }

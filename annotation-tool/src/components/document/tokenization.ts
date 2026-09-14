@@ -11,7 +11,14 @@
  */
 
 import type { LayersAnnotationRow, TextAnnotationRelationRow } from '@store/queries'
-import { fromAnnotation, type SpanRelation, type SpanToken, type TextSpan, type TokenizedElement } from '@/lib/spans'
+import {
+  fromAnnotation,
+  type SpanLabelDetail,
+  type SpanRelation,
+  type SpanToken,
+  type TextSpan,
+  type TokenizedElement,
+} from '@/lib/spans'
 
 /** One token in a wire tokenization row (a layers `Token` projection). */
 interface WireToken {
@@ -125,7 +132,10 @@ function spanLabelFor(
     const name = resolvers.typeName?.(row.ontologyTypeRefId)
     return { label: row.label ?? name ?? row.ontologyTypeRefId.slice(0, 8), kind: 'type' }
   }
-  return { label: row.label ?? row.id.slice(0, 8), kind: 'type' }
+  // An unlabeled span carries no type or object ref and no text label; leave the
+  // label empty so the UI can show its covered text and an "unlabeled" hint
+  // rather than a meaningless id fragment.
+  return { label: row.label ?? '', kind: 'type' }
 }
 
 /**
@@ -159,6 +169,112 @@ export function rowsToSpans(
     const span: TextSpan = { ...base, label, spanType: kind }
     return span
   })
+}
+
+/** A span layer's annotation rows tagged with the layer's persona scope. */
+export interface TaggedSpanLayer {
+  /** The layer's persona id, or `null` for a persona-free (object) layer. */
+  personaId: string | null
+  /** The layer's annotation rows. */
+  rows: LayersAnnotationRow[]
+}
+
+/** Keys an annotation by its anchor token range, so co-located rows collapse. */
+function anchorKey(row: LayersAnnotationRow): string {
+  const indexes = row.anchor?.tokenRefSequence?.tokenIndexes
+  if (!Array.isArray(indexes) || indexes.length === 0) return `id:${row.id}`
+  return [...indexes].sort((a, b) => a - b).join(',')
+}
+
+/** Resolves one annotation row to a span label detail, or `null` if unlabeled. */
+function labelDetailFor(
+  row: LayersAnnotationRow,
+  layerPersonaId: string | null,
+  resolvers: SpanLabelResolvers,
+): SpanLabelDetail | null {
+  if (row.denotesNodeId) {
+    return {
+      annotationId: row.id,
+      kind: 'object',
+      refId: row.denotesNodeId,
+      name: resolvers.objectName?.(row.denotesNodeId) ?? row.label ?? row.denotesNodeId.slice(0, 8),
+      personaId: null,
+    }
+  }
+  if (row.ontologyTypeRefId) {
+    return {
+      annotationId: row.id,
+      kind: 'type',
+      refId: row.ontologyTypeRefId,
+      name:
+        resolvers.typeName?.(row.ontologyTypeRefId) ?? row.label ?? row.ontologyTypeRefId.slice(0, 8),
+      personaId: layerPersonaId,
+    }
+  }
+  return null
+}
+
+/**
+ * Aggregates annotation rows from several span layers into grouped spans.
+ *
+ * Rows sharing a token range collapse to one {@link TextSpan}: its `labels`
+ * carries every denotation on that range — ontology types (each tagged with its
+ * persona) and any world object — while a persona-free base row supplies the
+ * span's identity when present. Objects sort ahead of types so the primary label
+ * favors a concrete world entity. A range with no denotation yields an unlabeled
+ * span so the user can still see and label it.
+ *
+ * @param layers - the span layers to merge, each tagged with its persona scope
+ * @param tokenizationId - the tokenization UUID used as the segment element name
+ * @param resolvers - optional label resolvers for typed and world-object spans
+ * @returns one span per distinct token range, ordered by first appearance
+ */
+export function rowsToSpanGroups(
+  layers: TaggedSpanLayer[],
+  tokenizationId: string,
+  resolvers: SpanLabelResolvers = {},
+): TextSpan[] {
+  const groups = new Map<string, { rows: Array<{ row: LayersAnnotationRow; personaId: string | null }> }>()
+  for (const { personaId, rows } of layers) {
+    for (const row of rows) {
+      const key = anchorKey(row)
+      let group = groups.get(key)
+      if (!group) {
+        group = { rows: [] }
+        groups.set(key, group)
+      }
+      group.rows.push({ row, personaId })
+    }
+  }
+
+  const spans: TextSpan[] = []
+  for (const group of groups.values()) {
+    // The representative fixes the span's stable id and segments: prefer a
+    // persona-free base row (created on token release, no denotation), else the
+    // lexicographically smallest id so the choice does not shift between renders.
+    const base =
+      group.rows.find(({ row }) => !row.denotesNodeId && !row.ontologyTypeRefId) ??
+      [...group.rows].sort((a, b) => (a.row.id < b.row.id ? -1 : 1))[0]
+    const segmentSpan = fromAnnotation(
+      { uuid: { value: base.row.id }, anchor: base.row.anchor ?? undefined },
+      tokenizationId,
+    )
+    const labels = group.rows
+      .map(({ row, personaId }) => labelDetailFor(row, personaId, resolvers))
+      .filter((detail): detail is SpanLabelDetail => detail !== null)
+      .sort((a, b) => {
+        if (a.kind !== b.kind) return a.kind === 'object' ? -1 : 1
+        return a.name.localeCompare(b.name)
+      })
+    const primary = labels[0]
+    spans.push({
+      ...segmentSpan,
+      label: primary?.name ?? '',
+      spanType: primary?.kind,
+      labels,
+    })
+  }
+  return spans
 }
 
 /** Reads a relation-type ref id out of a wire relation's `relationTypeRef`. */

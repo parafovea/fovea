@@ -32,6 +32,12 @@ export type RelationPhase = 'IDLE' | 'WAITING_SOURCE' | 'WAITING_TARGET' | 'WAIT
  * can anchor to it.
  */
 export interface PendingLabelSpanDraft {
+  /**
+   * The id of the span created on release. The span persists immediately as an
+   * unlabeled span; choosing a type or object in the picker updates this same
+   * annotation in place rather than creating a second one.
+   */
+  spanId: string
   /** One segment per element the selection touches. */
   segments: SpanSegment[]
   /** The selection's bounding rectangle in content space, or `null` if unknown. */

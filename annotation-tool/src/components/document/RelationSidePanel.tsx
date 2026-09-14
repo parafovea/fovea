@@ -26,6 +26,8 @@ export interface RelationSidePanelProps {
   relations: SpanRelation[]
   /** All spans, used to resolve source and target labels. */
   spans: TextSpan[]
+  /** Resolves a span's covered text, shown when an endpoint span has no label. */
+  spanText?: (span: TextSpan) => string
   /** Resolves a relation's display label. */
   resolveLabel: (relation: SpanRelation) => string
   /** The hovered relation id. */
@@ -38,11 +40,17 @@ export interface RelationSidePanelProps {
   readOnly?: boolean
 }
 
-/** Reads a span's display label by id, falling back to a shortened id. */
-function spanLabel(spans: TextSpan[], spanId: string): string {
+/** Reads a span's display label by id: its label, else its covered text. */
+function spanLabel(
+  spans: TextSpan[],
+  spanId: string,
+  spanText?: (span: TextSpan) => string,
+): string {
   const span = spans.find((s) => s.id === spanId)
-  if (span && typeof span.label === 'string' && span.label.length > 0) return span.label
-  return spanId.slice(0, 8)
+  if (!span) return spanId.slice(0, 8)
+  if (typeof span.label === 'string' && span.label.length > 0) return span.label
+  const text = spanText?.(span)?.trim()
+  return text && text.length > 0 ? text : 'Unlabeled span'
 }
 
 /**
@@ -54,6 +62,7 @@ function spanLabel(spans: TextSpan[], spanId: string): string {
 export function RelationSidePanel({
   relations,
   spans,
+  spanText,
   resolveLabel,
   hoveredRelationId,
   onHoverRelation,
@@ -72,8 +81,8 @@ export function RelationSidePanel({
         ) : (
           <ul className="flex flex-col gap-1 pr-2">
             {relations.map((relation) => {
-              const source = spanLabel(spans, relation.sourceSpanId)
-              const target = spanLabel(spans, relation.targetSpanId)
+              const source = spanLabel(spans, relation.sourceSpanId, spanText)
+              const target = spanLabel(spans, relation.targetSpanId, spanText)
               return (
                 <li key={relation.id}>
                   <div

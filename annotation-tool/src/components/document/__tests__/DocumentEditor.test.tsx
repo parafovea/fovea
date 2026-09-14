@@ -32,7 +32,13 @@ function makeController(canEdit: boolean): LayersSpanAnnotatorController {
     element,
     text: 'Ada',
     spans: [
-      { id: 's1', segments: [{ elementName: 'tok', tokenIndexes: [0] }], label: 'PER', spanType: 'type' },
+      {
+        id: 's1',
+        segments: [{ elementName: 'tok', tokenIndexes: [0] }],
+        label: 'PER',
+        spanType: 'type',
+        labels: [{ annotationId: 's1', kind: 'type', refId: 'type-1', name: 'PER', personaId: 'p-1' }],
+      },
     ],
     relations: [],
     relationTypes: [],
@@ -40,6 +46,7 @@ function makeController(canEdit: boolean): LayersSpanAnnotatorController {
     canEdit,
     onCreateSpan: vi.fn(),
     onDeleteSpan: vi.fn(),
+    onDeleteLabel: vi.fn(),
     onCreateRelation: vi.fn(),
     onDeleteRelation: vi.fn(),
   }
