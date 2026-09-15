@@ -60,9 +60,11 @@ test.describe('Document span label picker quick-add', () => {
 
     await doc.selectToken(5)
     await doc.expectPickerOpen()
-    // Gate on the option list hydrating (the ontology + world queries refetch
-    // from scratch after a reload) before asserting membership, so the
-    // assertion does not race those post-reload loads.
+    // Clear the seeded span text so the full list (not the similarity-ranked
+    // subset for this token) is shown, then gate on the option list hydrating
+    // (the ontology + world queries refetch from scratch after a reload) before
+    // asserting membership, so the assertion does not race those post-reload loads.
+    await doc.clearSearch()
     await expect
       .poll(async () => (await doc.optionLabels()).length, { timeout: 20000 })
       .toBeGreaterThan(0)
