@@ -50,6 +50,12 @@ export interface SpanLabelPickerProps {
   onSelect: (mode: SpanLabelMode, option: SpanLabelOption) => void
   /** Called when the picker is dismissed without a choice. */
   onCancel: () => void
+  /**
+   * The highlighted span's concatenated text, seeded into the search box so the
+   * ranked list surfaces the closest existing types/objects and a quick-create
+   * is pre-named after the span.
+   */
+  initialQuery?: string
 }
 
 /**
@@ -63,6 +69,7 @@ export function SpanLabelPicker({
   personaId,
   onSelect,
   onCancel,
+  initialQuery,
 }: SpanLabelPickerProps): JSX.Element {
   const anchorRef = useTourAnchor('span-label-picker')
   const bbox = draft.bbox
@@ -112,6 +119,7 @@ export function SpanLabelPicker({
           personaId={personaId}
           emitLinkTarget={false}
           inline
+          initialQuery={initialQuery}
           onSelect={(option) => {
             if (!option) return
             const mode: SpanLabelMode = TYPE_OPTION_KINDS.includes(option.type) ? 'type' : 'object'

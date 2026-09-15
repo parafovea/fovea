@@ -23,11 +23,16 @@ test.describe('Document span label picker', () => {
     await doc.goto(testDocument.id)
     await doc.selectPersona(testPersona.name)
 
-    // Select the first token -> the label picker opens over the selection.
+    // Select the first token -> the label picker opens over the selection,
+    // pre-seeded with that token's text.
+    const firstTokenText = await doc.tokenText(0)
     await doc.selectToken(0)
     await doc.expectPickerOpen()
+    expect(await doc.searchValue()).toBe(firstTokenText)
 
-    // The unified list surfaces the persona's ontology entity type.
+    // Clearing the seeded query shows the full unified list, which surfaces the
+    // persona's ontology entity type.
+    await doc.clearSearch()
     expect(await doc.optionKinds()).toContain('entity')
     expect(await doc.optionLabels()).toContain(testEntityType.name)
 
@@ -66,14 +71,51 @@ test.describe('Document span label picker', () => {
     await doc.expectPickerClosed()
     await doc.expectLabelChip('Metropolis')
 
-    // A fresh selection now shows BOTH an ontology type and a world object.
+    // A fresh selection now shows BOTH an ontology type and a world object
+    // (clear the seeded span text so the full unified list is visible).
     await doc.selectToken(3)
     await doc.expectPickerOpen()
+    await doc.clearSearch()
     await expect
       .poll(async () => await doc.optionKinds(), { timeout: 10000 })
       .toEqual(expect.arrayContaining(['entity', 'entity-object']))
     const labels = await doc.optionLabels()
     expect(labels).toContain(testEntityType.name)
     expect(labels).toContain('Metropolis')
+  })
+
+  test('pre-fills the span text and ranks the closest existing type to the top', async ({
+    page,
+    db,
+    testDocument,
+    testPersona,
+  }) => {
+    // Seed an exact match, a substring match, and an unrelated type so both
+    // ranking (exact above substring) and pruning (unrelated dropped) show.
+    await db.createEntityType(testPersona.id, { name: 'Storm', definition: 'exact' })
+    await db.createEntityType(testPersona.id, { name: 'Storm System', definition: 'substring' })
+    await db.createEntityType(testPersona.id, { name: 'Person', definition: 'unrelated' })
+
+    const doc = new DocumentAnnotationPage(page)
+    await doc.goto(testDocument.id)
+    await doc.selectPersona(testPersona.name)
+
+    // "The dust storm rolled ..." -> token index 2 is "storm".
+    const stormIdx = 2
+    expect((await doc.tokenText(stormIdx)).toLowerCase()).toContain('storm')
+    await doc.selectToken(stormIdx)
+    await doc.expectPickerOpen()
+
+    // The search is seeded with the highlighted span's text...
+    expect((await doc.searchValue()).toLowerCase()).toContain('storm')
+
+    // ...and each section is ranked by similarity: the exact match ranks first,
+    // the substring match is present, and the unrelated type is pruned out.
+    await expect
+      .poll(async () => await doc.optionLabels(), { timeout: 10000 })
+      .toEqual(expect.arrayContaining(['Storm', 'Storm System']))
+    const labels = await doc.optionLabels()
+    expect(labels[0]).toBe('Storm')
+    expect(labels).not.toContain('Person')
   })
 })

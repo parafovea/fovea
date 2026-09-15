@@ -118,11 +118,29 @@ export class DocumentAnnotationPage extends BasePage {
     await expect(this.pickerAnchor).toBeHidden({ timeout: 5000 })
   }
 
-  /** Type into the picker's search input. */
+  /** Type into the picker's search input (replaces any existing value). */
   async search(text: string): Promise<void> {
     const input = this.page.locator('[data-testid="picker-search"]')
     await expect(input).toBeVisible({ timeout: 5000 })
     await input.fill(text)
+  }
+
+  /** Clear the picker's search input (shows the full unranked list). */
+  async clearSearch(): Promise<void> {
+    await this.search('')
+  }
+
+  /** The picker search input's current value (seeded with the span text on open). */
+  async searchValue(): Promise<string> {
+    const input = this.page.locator('[data-testid="picker-search"]')
+    await expect(input).toBeVisible({ timeout: 5000 })
+    return input.inputValue()
+  }
+
+  /** The trimmed text content of a token by index. */
+  async tokenText(index: number): Promise<string> {
+    const raw = await this.tokens.nth(index).textContent()
+    return (raw ?? '').trim()
   }
 
   /** The distinct option kinds (`data-option-kind`) currently listed in the picker. */

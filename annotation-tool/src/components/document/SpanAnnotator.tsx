@@ -302,10 +302,13 @@ function SpanAnnotatorInner({
   )
 
   // The text a span covers, joined from its tokens, shown for unlabeled spans.
-  const spanText = useCallback(
-    (span: TextSpan): string => {
+  // The concatenated text of a set of span segments, used both to render a
+  // span's words and to seed the label picker's search with the highlighted
+  // span's text.
+  const segmentsText = useCallback(
+    (segments: SpanSegment[]): string => {
       const parts: string[] = []
-      for (const segment of span.segments) {
+      for (const segment of segments) {
         for (const index of segment.tokenIndexes) {
           const token = tokenization.tokens[index]
           if (token) parts.push(token.text)
@@ -314,6 +317,10 @@ function SpanAnnotatorInner({
       return parts.join(' ')
     },
     [tokenization],
+  )
+  const spanText = useCallback(
+    (span: TextSpan): string => segmentsText(span.segments),
+    [segmentsText],
   )
 
   return (
@@ -352,6 +359,7 @@ function SpanAnnotatorInner({
               <SpanLabelPicker
                 draft={pendingDraft}
                 personaId={personaId}
+                initialQuery={segmentsText(pendingDraft.segments)}
                 onSelect={handleSpanLabelSelect}
                 onCancel={() => storeApi.getState().closeLabelDraft()}
               />

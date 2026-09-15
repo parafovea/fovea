@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Tag, GitBranch, CalendarDays, User, MapPin, Folder, Search, Plus, Globe, ArrowLeft, Clock } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
@@ -38,6 +38,61 @@ function isTypeOption(kind: OptionKind): boolean {
   return TYPE_KINDS.includes(kind)
 }
 
+/**
+ * Dice coefficient over character bigrams: a cheap 0..1 fuzzy string similarity
+ * that rewards shared adjacent-character pairs, so near-spellings and shared
+ * word fragments score without an edit-distance pass.
+ */
+function bigramDice(a: string, b: string): number {
+  if (a.length < 2 || b.length < 2) return a === b ? 1 : 0
+  const bigrams = (s: string): string[] => {
+    const out: string[] = []
+    for (let i = 0; i < s.length - 1; i++) out.push(s.slice(i, i + 2))
+    return out
+  }
+  const A = bigrams(a)
+  const B = bigrams(b)
+  const counts = new Map<string, number>()
+  for (const g of B) counts.set(g, (counts.get(g) ?? 0) + 1)
+  let intersection = 0
+  for (const g of A) {
+    const c = counts.get(g) ?? 0
+    if (c > 0) {
+      intersection++
+      counts.set(g, c - 1)
+    }
+  }
+  return (2 * intersection) / (A.length + B.length)
+}
+
+/**
+ * Relevance of an option label to the search query; higher is more similar.
+ * Exact and substring matches (either direction, so "poles" finds "pole" and a
+ * "Las Vegas Valley" span finds "Las Vegas") rank highest, then shared
+ * whole/partial words, then a bigram-similarity fuzzy match above a floor so
+ * unrelated labels — which share only incidental letter pairs — score 0 and drop
+ * out. Returns 0 when nothing meaningful matches, so the caller ranks and prunes
+ * with the one number.
+ */
+function scoreLabel(label: string, query: string): number {
+  const l = label.toLowerCase()
+  const q = query.toLowerCase().trim()
+  if (!q) return 0
+  if (l === q) return 1000
+  if (l.includes(q)) return 700 + Math.round((q.length / l.length) * 100)
+  if (q.includes(l)) return 500 + Math.round((l.length / q.length) * 100)
+  const qTokens = q.split(/\s+/).filter(Boolean)
+  const lTokens = l.split(/\s+/).filter(Boolean)
+  let shared = 0
+  for (const t of qTokens) {
+    if (lTokens.some((x) => x === t || x.includes(t) || t.includes(x))) shared++
+  }
+  const tokenScore = qTokens.length ? (shared / qTokens.length) * 300 : 0
+  const dice = bigramDice(l, q)
+  const diceScore = dice >= 0.3 ? dice * 200 : 0
+  return Math.round(tokenScore + diceScore)
+}
+
 interface AnnotationAutocompleteProps {
   /**
    * Which denotations to offer: ontology types, world objects, or `'both'` in a
@@ -63,6 +118,13 @@ interface AnnotationAutocompleteProps {
    * host surface opens. Use inside another popover (the span label picker).
    */
   inline?: boolean
+  /**
+   * Seeds the search box on mount and re-seeds when it changes. The span label
+   * picker passes the highlighted span's concatenated text, so the ranked list
+   * surfaces the most similar existing types/objects at once and a quick-create
+   * is pre-named after the span — no retyping.
+   */
+  initialQuery?: string
 }
 
 export default function AnnotationAutocomplete({
@@ -73,9 +135,10 @@ export default function AnnotationAutocomplete({
   emitLinkTarget = true,
   autoOpen = false,
   inline = false,
+  initialQuery,
 }: AnnotationAutocompleteProps) {
   const [value, setValue] = useState<AnnotationOption | null>(null)
-  const [inputValue, setInputValue] = useState('')
+  const [inputValue, setInputValue] = useState(initialQuery ?? '')
   const [open, setOpen] = useState(autoOpen)
   // When set, the picker shows a Wikidata search (seeded with the query) whose
   // import creates a linked ontology type or world object and assigns it. `null`
@@ -87,6 +150,13 @@ export default function AnnotationAutocomplete({
 
   // Zustand for link target state
   const setLinkTarget = useAnnotationUiStore((state) => state.setLinkTarget)
+
+  // Re-seed the search box when the host passes a fresh initial query (a newly
+  // highlighted span). Depending only on `initialQuery` leaves later typing
+  // untouched, since the prop is stable across the picker's own re-renders.
+  useEffect(() => {
+    if (initialQuery !== undefined) setInputValue(initialQuery)
+  }, [initialQuery])
 
   // Inline creation of a new ontology type or world object (name only), so a
   // fresh workspace with no types/objects is not a dead end. The quick-created
@@ -222,13 +292,21 @@ export default function AnnotationAutocomplete({
   }, [options])
 
   // Filter options by search input
+  // Rank each section by similarity to the query so the closest existing types
+  // and objects surface at the top of their section (the span picker seeds the
+  // query with the highlighted span's text). Options with no meaningful match
+  // drop out; an empty query keeps the natural order.
   const filteredGrouped = React.useMemo(() => {
-    if (!inputValue) return groupedOptions
-    const lowerInput = inputValue.toLowerCase()
+    const q = inputValue.trim()
+    if (!q) return groupedOptions
     const result: Record<string, AnnotationOption[]> = {}
     for (const [category, opts] of Object.entries(groupedOptions)) {
-      const filtered = opts.filter((o) => o.label.toLowerCase().includes(lowerInput))
-      if (filtered.length > 0) result[category] = filtered
+      const ranked = opts
+        .map((o) => ({ option: o, score: scoreLabel(o.label, q) }))
+        .filter((x) => x.score > 0)
+        .sort((a, b) => b.score - a.score)
+        .map((x) => x.option)
+      if (ranked.length > 0) result[category] = ranked
     }
     return result
   }, [groupedOptions, inputValue])
