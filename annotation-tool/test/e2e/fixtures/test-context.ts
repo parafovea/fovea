@@ -121,6 +121,7 @@ type TestFixtures = {
   testPersona: Persona
   testPersonaPersistent: Persona
   testVideo: Video
+  testDocument: { id: string; text: string }
   testEntityType: EntityType
   testEntityTypePersistent: EntityType
   testEventType: EventType
@@ -505,7 +506,7 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
     // in isolation, fails under --project=A --project=B). Filtering
     // by createdBy / userId keeps each worker's cleanup local to its
     // own rows.
-    const annsRes = await fetch(`http://localhost:3001/api/annotations/${video.id}`, {
+    const annsRes = await fetch(`http://localhost:3001/api/layers/videos/${video.id}/annotations`, {
       headers: { Cookie: `session_token=${workerSessionToken}` },
     })
     if (annsRes.ok) {
@@ -513,7 +514,7 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
       const ownAnns = anns.filter((a) => a.createdBy === testUser.id)
       await Promise.all(
         ownAnns.map((a) =>
-          fetch(`http://localhost:3001/api/annotations/${video.id}/${a.id}`, {
+          fetch(`http://localhost:3001/api/layers/videos/${video.id}/annotations/${a.id}`, {
             method: 'DELETE',
             headers: { Cookie: `session_token=${workerSessionToken}` },
           }),
@@ -547,6 +548,25 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
       duration: video.duration,
       fps: video.fps || 30
     })
+  },
+
+  /**
+   * Test document fixture.
+   *
+   * Creates a standalone layers document expression whose text the mock
+   * model-service tokenizes on whitespace, so the span annotator has tokens to
+   * select. Yields the document's id and text. No teardown: the worker user's
+   * documents are torn down with the user at end of worker lifecycle.
+   */
+  // @ts-expect-error - testUser parameter establishes the auth-cookie dependency but is not used in the body
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  testDocument: async ({ db, testUser, workerSessionToken }, use) => {
+    const doc = await db.createDocument(
+      'The dust storm rolled across the desert highway near Phoenix.',
+      { title: 'E2E Doc' },
+      workerSessionToken,
+    )
+    await use({ id: doc.id, text: doc.text })
   },
 
   /**

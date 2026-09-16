@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 
 import { cn } from '@/lib/utils'
+import { useTourAnchor } from '@/tours/engine/anchorRegistry'
 import { ClaimSpan } from '@models/types'
 
 interface ClaimSpanHighlighterProps {
@@ -14,6 +15,8 @@ export function ClaimSpanHighlighter({
   highlightedSpans,
   selectedClaimId: _selectedClaimId
 }: ClaimSpanHighlighterProps) {
+  const highlighterAnchor = useTourAnchor('claim-span-highlighter')
+
   // Split text into segments with highlighted regions
   const segments = useMemo(() => {
     if (!highlightedSpans || highlightedSpans.length === 0) {
@@ -54,7 +57,7 @@ export function ClaimSpanHighlighter({
   }, [text, highlightedSpans])
 
   return (
-    <div data-tour-id="claim-span-highlighter">
+    <div ref={highlighterAnchor}>
       {segments.map((segment, idx) => (
         <span
           key={idx}

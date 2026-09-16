@@ -125,4 +125,16 @@ export const MODEL_SERVICE_TIMEOUTS = Object.freeze({
   get transcribe(): number {
     return config.modelService.timeoutMs('transcribe')
   },
+  /** Tokenizing document / metadata text into layers tokens (langid + spaCy/Stanza). */
+  get tokenize(): number {
+    return config.modelService.timeoutMs('tokenize')
+  },
+  /** Normalizing an interchange payload into layers records on import. */
+  get layersImport(): number {
+    return config.modelService.timeoutMs('layersImport')
+  },
+  /** Serializing persisted layers records into an interchange artifact. */
+  get layersExport(): number {
+    return config.modelService.timeoutMs('layersExport')
+  },
 })

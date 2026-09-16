@@ -19,6 +19,7 @@ import { Clock, RefreshCw, Film, Plus, Trash2 } from 'lucide-react'
 import { Time, TimeInstant, TimeInterval } from '@models/types'
 import { generateId } from '@utils/uuid'
 import { useAddTime } from '@store/queries'
+import { useTourAnchor } from '@/tours/engine/anchorRegistry'
 
 /** Vagueness type options */
 type VaguenessType = 'approximate' | 'bounded' | 'fuzzy'
@@ -55,6 +56,7 @@ export default function TemporalAnnotator({
   existingTime,
 }: TemporalAnnotatorProps) {
   const { mutate: addTime } = useAddTime()
+  const temporalAnnotatorAnchor = useTourAnchor('temporal-annotator')
   const [timeType, setTimeType] = useState<'instant' | 'interval'>(
     existingTime?.type || 'instant'
   )
@@ -248,7 +250,7 @@ export default function TemporalAnnotator({
   }
 
   return (
-    <div data-tour-id="temporal-annotator" className="rounded-lg ring-1 ring-foreground/10 bg-card p-6 shadow-sm">
+    <div ref={temporalAnnotatorAnchor} className="rounded-lg ring-1 ring-foreground/10 bg-card p-6 shadow-sm">
       <h3 className="text-lg font-semibold flex items-center gap-2 mb-4">
         <Clock className="size-5" />
         Temporal Annotation

@@ -217,10 +217,8 @@ describe('AnnotationWorkspace - Slide-out Timeline', () => {
         return HttpResponse.json(testVideo)
       }),
       // Annotations endpoint
-      http.get('/api/annotations', ({ request }) => {
-        const url = new URL(request.url)
-        const videoId = url.searchParams.get('videoId')
-        if (videoId === 'test-video-id') {
+      http.get('/api/layers/videos/:videoId/annotations', ({ params }) => {
+        if (params.videoId === 'test-video-id') {
           return HttpResponse.json([testAnnotation])
         }
         return HttpResponse.json([])
@@ -337,7 +335,7 @@ describe('AnnotationWorkspace - Slide-out Timeline', () => {
     it('shows timeline toggle when no annotation is selected', async () => {
       // Override MSW handler to return empty annotations
       server.use(
-        http.get('/api/annotations', () => {
+        http.get('/api/layers/videos/:videoId/annotations', () => {
           return HttpResponse.json([])
         })
       )
@@ -642,7 +640,7 @@ describe('AnnotationWorkspace - Slide-out Timeline', () => {
 
       // Override MSW handler to return multiple annotations
       server.use(
-        http.get('/api/annotations', () => {
+        http.get('/api/layers/videos/:videoId/annotations', () => {
           return HttpResponse.json([testAnnotation, annotation2])
         })
       )
@@ -700,7 +698,7 @@ describe('AnnotationWorkspace - Slide-out Timeline', () => {
 
       // Override MSW handler to return no annotations
       server.use(
-        http.get('/api/annotations', () => {
+        http.get('/api/layers/videos/:videoId/annotations', () => {
           return HttpResponse.json([])
         })
       )
@@ -782,7 +780,7 @@ describe('AnnotationWorkspace - Slide-out Timeline', () => {
 
       // Override MSW handler to return annotation with many keyframes
       server.use(
-        http.get('/api/annotations', () => {
+        http.get('/api/layers/videos/:videoId/annotations', () => {
           return HttpResponse.json([manyKeyframesAnnotation])
         })
       )

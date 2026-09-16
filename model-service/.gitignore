@@ -1,0 +1,3 @@
+
+# focused codec test env (py3.14, no torch)
+.venv-codec/

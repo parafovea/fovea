@@ -31,11 +31,13 @@ test.describe('Export/Import Flow', () => {
         await menuButton.click()
       }
 
-      // Find and click export button/link
-      const exportButton = page.getByRole('button', { name: /export/i }).or(
-        page.getByRole('menuitem', { name: /export/i })
+      // Find and click the classic ontology/world export trigger. Match the
+      // exact "Export" name so the locator does not also resolve the adjacent
+      // "Export Corpus" (layers) button that shares this toolbar.
+      const exportButton = page.getByRole('button', { name: 'Export', exact: true }).or(
+        page.getByRole('menuitem', { name: 'Export', exact: true })
       ).or(
-        page.getByRole('link', { name: /export/i })
+        page.getByRole('link', { name: 'Export', exact: true })
       )
 
       if (await exportButton.isVisible()) {
@@ -90,8 +92,8 @@ test.describe('Export/Import Flow', () => {
         await menuButton.click()
       }
 
-      const exportButton = page.getByRole('button', { name: /export/i }).or(
-        page.getByRole('menuitem', { name: /export/i })
+      const exportButton = page.getByRole('button', { name: 'Export', exact: true }).or(
+        page.getByRole('menuitem', { name: 'Export', exact: true })
       )
 
       if (await exportButton.isVisible()) {
@@ -147,8 +149,8 @@ test.describe('Export/Import Flow', () => {
         await menuButton.click()
       }
 
-      const importButton = page.getByRole('button', { name: /import/i }).or(
-        page.getByRole('menuitem', { name: /import/i })
+      const importButton = page.getByRole('button', { name: 'Import', exact: true }).or(
+        page.getByRole('menuitem', { name: 'Import', exact: true })
       )
 
       if (await importButton.isVisible()) {
@@ -184,8 +186,8 @@ test.describe('Export/Import Flow', () => {
         await menuButton.click()
       }
 
-      const importButton = page.getByRole('button', { name: /import/i }).or(
-        page.getByRole('menuitem', { name: /import/i })
+      const importButton = page.getByRole('button', { name: 'Import', exact: true }).or(
+        page.getByRole('menuitem', { name: 'Import', exact: true })
       )
 
       if (await importButton.isVisible()) {
@@ -230,8 +232,8 @@ test.describe('Export/Import Flow', () => {
         await menuButton.click()
       }
 
-      const importButton = page.getByRole('button', { name: /import/i }).or(
-        page.getByRole('menuitem', { name: /import/i })
+      const importButton = page.getByRole('button', { name: 'Import', exact: true }).or(
+        page.getByRole('menuitem', { name: 'Import', exact: true })
       )
 
       if (await importButton.isVisible()) {

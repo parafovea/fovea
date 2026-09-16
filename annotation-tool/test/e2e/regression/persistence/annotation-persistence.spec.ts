@@ -202,8 +202,9 @@ test.describe('Annotation Auto-Save Persistence', () => {
     await annotationWorkspace.selectPersona(testPersona.name)
     await annotationWorkspace.selectFirstType()
 
-    // Each drawBoundingBox triggers one POST /api/annotations save. Listen
-    // for 3 saves to land before asserting persistence on reload.
+    // Each drawBoundingBox triggers one POST to the layers annotations
+    // endpoint. Listen for 3 saves to land before asserting persistence on
+    // reload.
     const savePromises: Promise<import('@playwright/test').Response>[] = []
     for (let i = 0; i < 3; i++) {
       const p = annotationWorkspace.createAnnotationSavePromise(20000)

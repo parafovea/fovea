@@ -27,9 +27,7 @@ describe('Database Connection', () => {
     // Clean up database before each test to avoid unique constraint violations
     await app.prisma.apiKey.deleteMany()
     await app.prisma.session.deleteMany()
-    await app.prisma.annotation.deleteMany()
     await app.prisma.videoSummary.deleteMany()
-    await app.prisma.ontology.deleteMany()
     await app.prisma.video.deleteMany()
     await app.prisma.persona.deleteMany()
     await app.prisma.user.deleteMany()
@@ -82,10 +80,13 @@ describe('Database Connection', () => {
 
     const tableNames = tables.map(t => t.tablename)
     expect(tableNames).toContain('personas')
-    expect(tableNames).toContain('ontologies')
     expect(tableNames).toContain('videos')
     expect(tableNames).toContain('video_summaries')
-    expect(tableNames).toContain('annotations')
+    // Annotations, ontologies, world state, and claims live in the unified
+    // layers store.
+    expect(tableNames).toContain('layers_annotations')
+    expect(tableNames).toContain('layers_ontologies')
+    expect(tableNames).toContain('graph_nodes')
   })
 
   describe('Persona Model', () => {
@@ -202,69 +203,6 @@ describe('Database Connection', () => {
     })
   })
 
-  describe('Ontology Model', () => {
-    it('should create an ontology for a persona', async () => {
-      const persona = await app.prisma.persona.create({
-        data: {
-          name: 'Ontology Test',
-          role: 'Analyst',
-          informationNeed: 'Test',
-          userId: testUserId
-        }
-      })
-
-      const ontology = await app.prisma.ontology.create({
-        data: {
-          personaId: persona.id,
-          entityTypes: [
-            { id: '1', name: 'Person', description: 'Human entity' }
-          ],
-          eventTypes: [
-            { id: '1', name: 'Meeting', description: 'Gathering of people' }
-          ],
-          roleTypes: [],
-          relationTypes: []
-        }
-      })
-
-      expect(ontology.id).toBeDefined()
-      expect(ontology.personaId).toBe(persona.id)
-      expect(Array.isArray(ontology.entityTypes)).toBe(true)
-    })
-
-    it('should cascade delete ontology when persona is deleted', async () => {
-      const persona = await app.prisma.persona.create({
-        data: {
-          name: 'Cascade Test',
-          role: 'Test',
-          informationNeed: 'Test',
-          userId: testUserId,
-          ontology: {
-            create: {
-              entityTypes: [],
-              eventTypes: [],
-              roleTypes: [],
-              relationTypes: []
-            }
-          }
-        },
-        include: { ontology: true }
-      })
-
-      const ontologyId = persona.ontology!.id
-
-      await app.prisma.persona.delete({
-        where: { id: persona.id }
-      })
-
-      const ontology = await app.prisma.ontology.findUnique({
-        where: { id: ontologyId }
-      })
-
-      expect(ontology).toBeNull()
-    })
-  })
-
   describe('VideoSummary Model', () => {
     it('should create a video summary with persona relation', async () => {
       const persona = await app.prisma.persona.create({
@@ -331,50 +269,6 @@ describe('Database Connection', () => {
           }
         })
       ).rejects.toThrow()
-    })
-  })
-
-  describe('Annotation Model', () => {
-    it('should create an annotation', async () => {
-      const persona = await app.prisma.persona.create({
-        data: {
-          name: 'Annotation Test',
-          role: 'Analyst',
-          informationNeed: 'Test',
-          userId: testUserId
-        }
-      })
-
-      const video = await app.prisma.video.create({
-        data: {
-          filename: 'db-annotation-test.mp4',
-          path: '/data/videos/db-annotation-test.mp4'
-        }
-      })
-
-      const annotation = await app.prisma.annotation.create({
-        data: {
-          videoId: video.id,
-          personaId: persona.id,
-          type: 'entity',
-          label: 'Person',
-          frames: {
-            start: 0,
-            end: 100,
-            boxes: [
-              { x: 100, y: 100, width: 50, height: 50 }
-            ]
-          },
-          confidence: 0.89,
-          source: 'ai-assisted'
-        }
-      })
-
-      expect(annotation.id).toBeDefined()
-      expect(annotation.type).toBe('entity')
-      expect(annotation.label).toBe('Person')
-      expect(annotation.source).toBe('ai-assisted')
-      expect(typeof annotation.frames).toBe('object')
     })
   })
 

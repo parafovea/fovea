@@ -136,6 +136,8 @@ docs/planning/
 notes/
 /tutorial/
 .claude/
+.agents/
+.codex/
 .venv/
 model-service/uv.lock
 .demo-local/

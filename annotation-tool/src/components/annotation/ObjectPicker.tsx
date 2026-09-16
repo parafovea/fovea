@@ -16,6 +16,7 @@ import { Search, X, Clock, User, CalendarDays, MapPin, Folder } from 'lucide-rea
 import { WikidataChip } from '../shared/WikidataChip'
 import { useWorld, usePersonas } from '@store/queries'
 import { GlossItem, LocationPoint } from '@models/types'
+import { useTourAnchor } from '@/tours/engine/anchorRegistry'
 
 /**
  * Supported object type identifiers.
@@ -61,6 +62,7 @@ export default function ObjectPicker({
   allowedTypes = ['entity', 'event', 'location', 'collection'],
   recentIds = [],
 }: ObjectPickerProps) {
+  const objectPickerAnchor = useTourAnchor('object-picker-popover')
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedTab, setSelectedTab] = useState('entities')
   const [selectedObject, setSelectedObject] = useState<any>(null)
@@ -258,7 +260,7 @@ export default function ObjectPicker({
   return (
     <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) handleClose() }}>
       <DialogContent
-        data-tour-id="object-picker-popover"
+        ref={objectPickerAnchor}
         className="sm:max-w-2xl h-[80vh] flex flex-col"
       >
         <DialogHeader>

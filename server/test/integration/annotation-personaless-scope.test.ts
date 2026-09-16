@@ -37,7 +37,10 @@ describe('Personaless annotation project scope', () => {
 
   beforeEach(async () => {
     await prisma.loginAttempt.deleteMany()
-    await prisma.annotation.deleteMany()
+    await prisma.layersAnnotation.deleteMany()
+    await prisma.annotationLayer.deleteMany()
+    await prisma.expression.deleteMany()
+    await prisma.media.deleteMany()
     await prisma.projectVideoAssignment.deleteMany()
     await prisma.projectMembership.deleteMany()
     await prisma.project.deleteMany()
@@ -58,9 +61,15 @@ describe('Personaless annotation project scope', () => {
   const postObjectAnnotation = () =>
     app.inject({
       method: 'POST',
-      url: '/api/annotations',
+      url: `/api/layers/videos/${videoId}/annotations`,
       cookies: { session_token: session },
-      payload: { videoId, type: 'object', label: 'box', frames },
+      payload: { type: 'object', label: 'box', frames },
+    })
+
+  /** Reads the caller's object annotation for the video from the layers store. */
+  const findObjectAnnotation = () =>
+    prisma.layersAnnotation.findFirst({
+      where: { createdByUserId: userId, layer: { expression: { videoId } } },
     })
 
   it('inherits the project when the caller is a member of the one project the video is assigned to', async () => {
@@ -68,7 +77,7 @@ describe('Personaless annotation project scope', () => {
     await prisma.projectMembership.create({ data: { userId, projectId, role: 'annotator' } })
 
     expect((await postObjectAnnotation()).statusCode).toBe(201)
-    const ann = await prisma.annotation.findFirst({ where: { videoId, createdByUserId: userId } })
+    const ann = await findObjectAnnotation()
     expect(ann?.projectId).toBe(projectId)
   })
 
@@ -77,7 +86,7 @@ describe('Personaless annotation project scope', () => {
     // No membership for the caller in that project.
 
     expect((await postObjectAnnotation()).statusCode).toBe(201)
-    const ann = await prisma.annotation.findFirst({ where: { videoId, createdByUserId: userId } })
+    const ann = await findObjectAnnotation()
     expect(ann?.projectId).toBeNull()
   })
 })

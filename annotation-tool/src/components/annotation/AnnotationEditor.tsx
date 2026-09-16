@@ -22,6 +22,7 @@ import {
 } from '@/components/ui/select'
 import { User, CalendarDays, MapPin, Folder, X } from 'lucide-react'
 import { usePersonas, usePersonaOntology, useWorld, useUpdateAnnotation } from '@store/queries'
+import { useTourAnchor } from '@/tours/engine/anchorRegistry'
 import type { Annotation, ObjectAnnotation, TypeAnnotation, BoundingBoxSequence, BoundingBox, InterpolationSegment } from '@models/types'
 import { getAnnotationTimeBounds } from '@models/types'
 import ObjectPicker from './ObjectPicker'
@@ -40,6 +41,7 @@ export default function AnnotationEditor({
   videoFps = 30
 }: AnnotationEditorProps) {
   const { mutate: updateAnnotationMutation } = useUpdateAnnotation()
+  const worldReferenceAnchor = useTourAnchor('annotation-world-reference')
   const [objectPickerOpen, setObjectPickerOpen] = useState(false)
   const [objectPickerType, setObjectPickerType] = useState<'entity' | 'event' | 'location' | 'collection'>('entity')
 
@@ -250,7 +252,7 @@ export default function AnnotationEditor({
 
           {/* Show linked object if present */}
           {(formData.linkedEntityId || formData.linkedEventId || formData.linkedLocationId || formData.linkedCollectionId) && (
-            <Alert className="mb-4" data-tour-id="annotation-world-reference">
+            <Alert ref={worldReferenceAnchor} className="mb-4">
               <AlertDescription>
                 <div className="flex flex-col gap-2">
                   <p className="text-sm">Linked Object:</p>

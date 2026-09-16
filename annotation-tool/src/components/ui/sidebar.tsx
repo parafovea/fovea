@@ -52,7 +52,14 @@ function useSidebar() {
   return context
 }
 
-function SidebarProvider({
+const SidebarProvider = React.forwardRef<
+  HTMLDivElement,
+  React.ComponentProps<"div"> & {
+    defaultOpen?: boolean
+    open?: boolean
+    onOpenChange?: (open: boolean) => void
+  }
+>(function SidebarProvider({
   defaultOpen = true,
   open: openProp,
   onOpenChange: setOpenProp,
@@ -60,11 +67,7 @@ function SidebarProvider({
   style,
   children,
   ...props
-}: React.ComponentProps<"div"> & {
-  defaultOpen?: boolean
-  open?: boolean
-  onOpenChange?: (open: boolean) => void
-}) {
+}, ref) {
   const isMobile = useIsMobile()
   const [openMobile, setOpenMobile] = React.useState(false)
 
@@ -128,6 +131,7 @@ function SidebarProvider({
   return (
     <SidebarContext.Provider value={contextValue}>
       <div
+        ref={ref}
         data-slot="sidebar-wrapper"
         style={
           {
@@ -146,9 +150,16 @@ function SidebarProvider({
       </div>
     </SidebarContext.Provider>
   )
-}
+})
 
-function Sidebar({
+const Sidebar = React.forwardRef<
+  HTMLDivElement,
+  React.ComponentProps<"div"> & {
+    side?: "left" | "right"
+    variant?: "sidebar" | "floating" | "inset"
+    collapsible?: "offcanvas" | "icon" | "none"
+  }
+>(function Sidebar({
   side = "left",
   variant = "sidebar",
   collapsible = "offcanvas",
@@ -156,16 +167,13 @@ function Sidebar({
   children,
   dir,
   ...props
-}: React.ComponentProps<"div"> & {
-  side?: "left" | "right"
-  variant?: "sidebar" | "floating" | "inset"
-  collapsible?: "offcanvas" | "icon" | "none"
-}) {
+}, ref) {
   const { isMobile, state, openMobile, setOpenMobile } = useSidebar()
 
   if (collapsible === "none") {
     return (
       <div
+        ref={ref}
         data-slot="sidebar"
         className={cn(
           "flex h-full w-(--sidebar-width) flex-col bg-sidebar text-sidebar-foreground",
@@ -226,6 +234,7 @@ function Sidebar({
         )}
       />
       <div
+        ref={ref}
         data-slot="sidebar-container"
         data-side={side}
         className={cn(
@@ -248,7 +257,7 @@ function Sidebar({
       </div>
     </div>
   )
-}
+})
 
 function SidebarTrigger({
   className,

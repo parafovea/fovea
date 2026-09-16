@@ -9,21 +9,10 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
-from pydantic import TypeAdapter
-
 from src.domain.entities.architectures import Architecture
 
 if TYPE_CHECKING:
     from src.domain.types import DeviceType
-
-# Module-level Pydantic adapter that parses the discriminated
-# Architecture union from a plain dict (the shape every YAML config
-# emits) into the right subclass. Cached as a module-level constant
-# because TypeAdapter compilation is non-trivial and the parsed shape
-# is read on every model load. The annotation is lifted from the
-# Annotated[Union[...], Field(discriminator)] alias on Architecture;
-# Pyright's variance check on Annotated forces a `type: ignore`.
-_ARCHITECTURE_ADAPTER = TypeAdapter[Architecture](Architecture)  # type: ignore[misc]
 
 
 @dataclass
@@ -161,7 +150,7 @@ class ModelConfig:
         # discriminator) fails loudly here at config load rather than
         # silently selecting a default at dispatch time. The discriminated
         # union in src.domain.entities.architectures parses the dict into
-        # the right Pydantic subclass.
+        # the right variant subclass.
         try:
             arch_payload = data["architecture"]
         except KeyError as exc:
@@ -170,7 +159,7 @@ class ModelConfig:
                 "every model option in models.yaml / models-cpu.yaml must "
                 f"declare its architecture kind. Got payload keys: {sorted(data.keys())!r}"
             ) from exc
-        architecture = _ARCHITECTURE_ADAPTER.validate_python(arch_payload)
+        architecture = Architecture.model_validate(arch_payload)
 
         return cls(
             model_id=data["model_id"],

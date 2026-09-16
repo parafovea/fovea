@@ -24,9 +24,11 @@ import { readFile } from 'node:fs/promises'
 import { resolve, join } from 'node:path'
 import { timingSafeEqual } from 'node:crypto'
 import type { FastifyInstance, FastifyPluginAsync } from 'fastify'
+import type { PrismaClient } from '@prisma/client'
 import { config } from '../config.js'
 import { prisma } from '../lib/prisma.js'
 import { getSeedToken, isDemoModeEnabled } from './config.js'
+import { writeOntologyAggregate } from '../services/layers-bridge/ontology-bridge.js'
 import {
   validateSeedBundle,
   type SeedBundle,
@@ -208,8 +210,8 @@ const seedPlugin: FastifyPluginAsync = async (app: FastifyInstance) => {
 
       type Tx = Parameters<Parameters<typeof prisma.$transaction>[0]>[0]
       const seeded = await prisma.$transaction(async (tx: Tx) => {
-        // Wipe the user's personas; cascade removes ontologies / world /
-        // annotations / claims / summaries / persona preferences.
+        // Wipe the user's personas; cascade removes their layers ontologies,
+        // annotation layers, summaries, and persona preferences.
         await tx.persona.deleteMany({ where: { userId: sessionUserId } })
 
         const createdPersonas: Array<{ id: string; index: number }> = []
@@ -228,17 +230,26 @@ const seedPlugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         }
 
         if (bundle.ontology) {
-          const target = createdPersonas[bundle.ontology.personaIndex]
-          if (target) {
-            await tx.ontology.create({
-              data: {
-                personaId: target.id,
+          const personaIndex = bundle.ontology.personaIndex
+          const target = createdPersonas[personaIndex]
+          const targetPersona = bundle.personas[personaIndex]
+          if (target && targetPersona) {
+            await writeOntologyAggregate(
+              tx as PrismaClient,
+              target.id,
+              {
                 entityTypes: toJsonOntologyTypes(bundle.ontology.entityTypes),
                 eventTypes: toJsonOntologyTypes(bundle.ontology.eventTypes),
                 roleTypes: toJsonOntologyTypes(bundle.ontology.roles),
                 relationTypes: toJsonOntologyTypes(bundle.ontology.relationTypes),
               },
-            })
+              {
+                name: `${targetPersona.name} ontology`,
+                description: targetPersona.informationNeed ?? null,
+                domain: null,
+              },
+              { projectId: null, createdByUserId: sessionUserId },
+            )
           }
         }
 

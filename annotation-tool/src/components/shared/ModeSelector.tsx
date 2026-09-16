@@ -5,6 +5,7 @@
 import { Copy, Globe, Pencil } from 'lucide-react'
 
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { useTourAnchor } from '@/tours/engine/anchorRegistry'
 
 interface ModeSelectorProps {
   mode: 'manual' | 'copy' | 'wikidata'
@@ -14,6 +15,10 @@ interface ModeSelectorProps {
 }
 
 export function ModeSelector({ mode, onChange, showCopy = true, disabled = false }: ModeSelectorProps): JSX.Element {
+  const manualAnchor = useTourAnchor('type-editor-mode-manual')
+  const copyAnchor = useTourAnchor('type-editor-mode-copy')
+  const wikidataAnchor = useTourAnchor('type-editor-mode-wikidata')
+
   return (
     <ToggleGroup
       value={[mode]}
@@ -26,30 +31,30 @@ export function ModeSelector({ mode, onChange, showCopy = true, disabled = false
       disabled={disabled}
     >
       <ToggleGroupItem
+        ref={manualAnchor}
         value="manual"
         className="flex-1 gap-2"
         aria-label="Manual Entry"
-        data-tour-id="type-editor-mode-manual"
       >
         <Pencil className="size-4" />
         <span className="text-sm">Manual Entry</span>
       </ToggleGroupItem>
       {showCopy && (
         <ToggleGroupItem
+          ref={copyAnchor}
           value="copy"
           className="flex-1 gap-2"
           aria-label="Copy from Existing"
-          data-tour-id="type-editor-mode-copy"
         >
           <Copy className="size-4" />
           <span className="text-sm">Copy from Existing</span>
         </ToggleGroupItem>
       )}
       <ToggleGroupItem
+        ref={wikidataAnchor}
         value="wikidata"
         className="flex-1 gap-2"
         aria-label="Import from Wikidata"
-        data-tour-id="type-editor-mode-wikidata"
       >
         <Globe className="size-4" />
         <span className="text-sm">Import from Wikidata</span>

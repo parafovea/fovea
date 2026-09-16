@@ -1,37 +1,235 @@
-import React, { useState } from 'react'
-import { Tag, GitBranch, CalendarDays, User, MapPin, Folder, Search } from 'lucide-react'
+import React, { useState, useEffect } from 'react'
+import { Tag, GitBranch, CalendarDays, User, MapPin, Folder, Search, Plus, Globe, ArrowLeft, Clock } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
-import { usePersonaOntology, useWorld } from '@store/queries'
+import { usePersonaOntology, useWorld, useAddEntityToPersona, useAddEntity } from '@store/queries'
 import { useAnnotationUiStore } from '@store/zustand'
+import { generateId } from '@utils/uuid'
+import type { EntityType } from '@models/ontology'
+import WikidataSearch, { type WikidataImportCallbackData } from '@components/shared/WikidataSearch'
+import { useWikidataImport } from '@hooks/wikidata'
+
+type OptionKind =
+  | 'entity'
+  | 'role'
+  | 'event'
+  | 'entity-object'
+  | 'event-object'
+  | 'location-object'
+  | 'time-object'
+  | 'collection'
+
+/** The world-object kinds a Wikidata import can be filed under. */
+type WorldObjectKind = 'entity' | 'location' | 'event' | 'time'
 
 interface AnnotationOption {
   id: string
   label: string
   category: string
-  type: 'entity' | 'role' | 'event' | 'entity-object' | 'event-object' | 'location-object' | 'collection'
+  type: OptionKind
   icon: React.ReactNode
 }
 
+/** The kinds that denote an ontology type rather than a world object. */
+const TYPE_KINDS: OptionKind[] = ['entity', 'role', 'event']
+
+/** Whether an option denotes an ontology type (vs a world object). */
+function isTypeOption(kind: OptionKind): boolean {
+  return TYPE_KINDS.includes(kind)
+}
+
+/**
+ * Dice coefficient over character bigrams: a cheap 0..1 fuzzy string similarity
+ * that rewards shared adjacent-character pairs, so near-spellings and shared
+ * word fragments score without an edit-distance pass.
+ */
+function bigramDice(a: string, b: string): number {
+  if (a.length < 2 || b.length < 2) return a === b ? 1 : 0
+  const bigrams = (s: string): string[] => {
+    const out: string[] = []
+    for (let i = 0; i < s.length - 1; i++) out.push(s.slice(i, i + 2))
+    return out
+  }
+  const A = bigrams(a)
+  const B = bigrams(b)
+  const counts = new Map<string, number>()
+  for (const g of B) counts.set(g, (counts.get(g) ?? 0) + 1)
+  let intersection = 0
+  for (const g of A) {
+    const c = counts.get(g) ?? 0
+    if (c > 0) {
+      intersection++
+      counts.set(g, c - 1)
+    }
+  }
+  return (2 * intersection) / (A.length + B.length)
+}
+
+/**
+ * Relevance of an option label to the search query; higher is more similar.
+ * Exact and substring matches (either direction, so "poles" finds "pole" and a
+ * "Las Vegas Valley" span finds "Las Vegas") rank highest, then shared
+ * whole/partial words, then a bigram-similarity fuzzy match above a floor so
+ * unrelated labels — which share only incidental letter pairs — score 0 and drop
+ * out. Returns 0 when nothing meaningful matches, so the caller ranks and prunes
+ * with the one number.
+ */
+function scoreLabel(label: string, query: string): number {
+  const l = label.toLowerCase()
+  const q = query.toLowerCase().trim()
+  if (!q) return 0
+  if (l === q) return 1000
+  if (l.includes(q)) return 700 + Math.round((q.length / l.length) * 100)
+  if (q.includes(l)) return 500 + Math.round((l.length / q.length) * 100)
+  const qTokens = q.split(/\s+/).filter(Boolean)
+  const lTokens = l.split(/\s+/).filter(Boolean)
+  let shared = 0
+  for (const t of qTokens) {
+    if (lTokens.some((x) => x === t || x.includes(t) || t.includes(x))) shared++
+  }
+  const tokenScore = qTokens.length ? (shared / qTokens.length) * 300 : 0
+  const dice = bigramDice(l, q)
+  const diceScore = dice >= 0.3 ? dice * 200 : 0
+  return Math.round(tokenScore + diceScore)
+}
+
 interface AnnotationAutocompleteProps {
-  mode: 'type' | 'object'
+  /**
+   * Which denotations to offer: ontology types, world objects, or `'both'` in a
+   * single unified list (the span label picker uses `'both'` so the user types
+   * once and picks either).
+   */
+  mode: 'type' | 'object' | 'both'
   personaId?: string | null
   onSelect: (option: AnnotationOption | null) => void
   disabled?: boolean
+  /**
+   * Whether selecting an object writes the link target into the annotation UI
+   * store. Defaults to `true`, preserving the video-annotation behavior. Set to
+   * `false` when reusing the picker on a surface (such as the document span
+   * annotator) that must not mutate video-annotation state.
+   */
+  emitLinkTarget?: boolean
+  /** When `true`, opens the search dropdown immediately so the user can type at once. */
+  autoOpen?: boolean
+  /**
+   * When `true`, renders the search input and results directly (no trigger
+   * button or nested popover), autofocused, so the user types the moment the
+   * host surface opens. Use inside another popover (the span label picker).
+   */
+  inline?: boolean
+  /**
+   * Seeds the search box on mount and re-seeds when it changes. The span label
+   * picker passes the highlighted span's concatenated text, so the ranked list
+   * surfaces the most similar existing types/objects at once and a quick-create
+   * is pre-named after the span — no retyping.
+   */
+  initialQuery?: string
 }
 
 export default function AnnotationAutocomplete({
   mode,
   personaId,
   onSelect,
-  disabled = false
+  disabled = false,
+  emitLinkTarget = true,
+  autoOpen = false,
+  inline = false,
+  initialQuery,
 }: AnnotationAutocompleteProps) {
   const [value, setValue] = useState<AnnotationOption | null>(null)
-  const [inputValue, setInputValue] = useState('')
-  const [open, setOpen] = useState(false)
+  const [inputValue, setInputValue] = useState(initialQuery ?? '')
+  const [open, setOpen] = useState(autoOpen)
+  // When set, the picker shows a Wikidata search (seeded with the query) whose
+  // import creates a linked ontology type or world object and assigns it. `null`
+  // hides it.
+  const [wikidataTarget, setWikidataTarget] = useState<{ query: string; kind: 'type' | 'object' } | null>(null)
+  // Which world-object kind a Wikidata object import files under (entity /
+  // location / event / time), chosen in the Wikidata sub-view.
+  const [wikidataObjectKind, setWikidataObjectKind] = useState<WorldObjectKind>('entity')
 
   // Zustand for link target state
   const setLinkTarget = useAnnotationUiStore((state) => state.setLinkTarget)
+
+  // Re-seed the search box when the host passes a fresh initial query (a newly
+  // highlighted span). Depending only on `initialQuery` leaves later typing
+  // untouched, since the prop is stable across the picker's own re-renders.
+  useEffect(() => {
+    if (initialQuery !== undefined) setInputValue(initialQuery)
+  }, [initialQuery])
+
+  // Inline creation of a new ontology type or world object (name only), so a
+  // fresh workspace with no types/objects is not a dead end. The quick-created
+  // item is fully editable afterward in the persona or world builder.
+  const addEntityType = useAddEntityToPersona()
+  const addWorldEntity = useAddEntity()
+  // Wikidata-backed creation: importing a picked Wikidata item mints a linked
+  // world object (or ontology entity type) and returns its new id so it can be
+  // assigned like any other. All hooks are declared unconditionally; which one
+  // runs is chosen by the Wikidata sub-view's kind (ontology type vs the four
+  // world-object kinds).
+  const { importItem: importWikidataType } = useWikidataImport('entity-type', personaId ?? undefined)
+  const { importItem: importWikidataEntity } = useWikidataImport('entity', personaId ?? undefined)
+  const { importItem: importWikidataLocation } = useWikidataImport('location', personaId ?? undefined)
+  const { importItem: importWikidataEvent } = useWikidataImport('event', personaId ?? undefined)
+  const { importItem: importWikidataTime } = useWikidataImport('time', personaId ?? undefined)
+
+  // Per-world-object-kind Wikidata wiring: the importItem to call, the
+  // WikidataSearch filters, and how the imported result renders as a chosen
+  // option. Keyed by WorldObjectKind so the sub-view's kind selector drives it.
+  const wikidataObjectKinds: Record<
+    WorldObjectKind,
+    {
+      label: string
+      entityType: 'object' | 'time'
+      objectSubtype?: 'entity' | 'event' | 'location'
+      importType: 'entity' | 'event' | 'location' | 'time'
+      importItem: (data: WikidataImportCallbackData) => Promise<string>
+      category: string
+      optionType: OptionKind
+      icon: React.ReactNode
+    }
+  > = {
+    entity: {
+      label: 'Entity',
+      entityType: 'object',
+      objectSubtype: 'entity',
+      importType: 'entity',
+      importItem: importWikidataEntity,
+      category: 'Entities',
+      optionType: 'entity-object',
+      icon: <User className="size-4" />,
+    },
+    location: {
+      label: 'Location',
+      entityType: 'object',
+      objectSubtype: 'location',
+      importType: 'location',
+      importItem: importWikidataLocation,
+      category: 'Locations',
+      optionType: 'location-object',
+      icon: <MapPin className="size-4" />,
+    },
+    event: {
+      label: 'Event',
+      entityType: 'object',
+      objectSubtype: 'event',
+      importType: 'event',
+      importItem: importWikidataEvent,
+      category: 'Events',
+      optionType: 'event-object',
+      icon: <CalendarDays className="size-4" />,
+    },
+    time: {
+      label: 'Time',
+      entityType: 'time',
+      importType: 'time',
+      importItem: importWikidataTime,
+      category: 'Times',
+      optionType: 'time-object',
+      icon: <Clock className="size-4" />,
+    },
+  }
 
   // TanStack Query for persona ontology (type mode)
   const { data: personaOntology } = usePersonaOntology(personaId)
@@ -43,125 +241,72 @@ export default function AnnotationAutocomplete({
   const entityCollections = React.useMemo(() => worldData?.entityCollections ?? [], [worldData?.entityCollections])
   const eventCollections = React.useMemo(() => worldData?.eventCollections ?? [], [worldData?.eventCollections])
 
-  // Build options based on mode
+  const wantsTypes = mode === 'type' || mode === 'both'
+  const wantsObjects = mode === 'object' || mode === 'both'
+
+  // Build options for the requested mode(s)
   const options: AnnotationOption[] = React.useMemo(() => {
     const opts: AnnotationOption[] = []
 
-    if (mode === 'type' && personaOntology) {
-      // Add entity types
-      personaOntology.entities.forEach(e => {
-        opts.push({
-          id: e.id,
-          label: e.name,
-          category: 'Entity Types',
-          type: 'entity',
-          icon: <Tag className="size-4" />
-        })
+    if (wantsTypes && personaOntology) {
+      personaOntology.entities.forEach((e) => {
+        opts.push({ id: e.id, label: e.name, category: 'Entity Types', type: 'entity', icon: <Tag className="size-4" /> })
       })
+      personaOntology.roles.forEach((r) => {
+        opts.push({ id: r.id, label: r.name, category: 'Role Types', type: 'role', icon: <GitBranch className="size-4" /> })
+      })
+      personaOntology.events.forEach((e) => {
+        opts.push({ id: e.id, label: e.name, category: 'Event Types', type: 'event', icon: <CalendarDays className="size-4" /> })
+      })
+    }
 
-      // Add role types
-      personaOntology.roles.forEach(r => {
-        opts.push({
-          id: r.id,
-          label: r.name,
-          category: 'Role Types',
-          type: 'role',
-          icon: <GitBranch className="size-4" />
-        })
+    if (wantsObjects) {
+      entities.filter((e) => !('locationType' in e)).forEach((e) => {
+        opts.push({ id: e.id, label: e.name, category: 'Entities', type: 'entity-object', icon: <User className="size-4" /> })
       })
-
-      // Add event types
-      personaOntology.events.forEach(e => {
-        opts.push({
-          id: e.id,
-          label: e.name,
-          category: 'Event Types',
-          type: 'event',
-          icon: <CalendarDays className="size-4" />
-        })
+      entities.filter((e) => 'locationType' in e).forEach((l) => {
+        opts.push({ id: l.id, label: l.name, category: 'Locations', type: 'location-object', icon: <MapPin className="size-4" /> })
       })
-    } else if (mode === 'object') {
-      // Add entity objects (excluding locations)
-      entities.filter(e => !('locationType' in e)).forEach(e => {
-        opts.push({
-          id: e.id,
-          label: e.name,
-          category: 'Entities',
-          type: 'entity-object',
-          icon: <User className="size-4" />
-        })
+      events.forEach((e) => {
+        opts.push({ id: e.id, label: e.name, category: 'Events', type: 'event-object', icon: <CalendarDays className="size-4" /> })
       })
-
-      // Add location objects
-      entities.filter(e => 'locationType' in e).forEach(l => {
-        opts.push({
-          id: l.id,
-          label: l.name,
-          category: 'Locations',
-          type: 'location-object',
-          icon: <MapPin className="size-4" />
-        })
+      entityCollections.forEach((c) => {
+        opts.push({ id: c.id, label: c.name, category: 'Entity Collections', type: 'collection', icon: <Folder className="size-4" /> })
       })
-
-      // Add event objects
-      events.forEach(e => {
-        opts.push({
-          id: e.id,
-          label: e.name,
-          category: 'Events',
-          type: 'event-object',
-          icon: <CalendarDays className="size-4" />
-        })
-      })
-
-      // Add entity collections
-      entityCollections.forEach(c => {
-        opts.push({
-          id: c.id,
-          label: c.name,
-          category: 'Entity Collections',
-          type: 'collection',
-          icon: <Folder className="size-4" />
-        })
-      })
-
-      // Add event collections
-      eventCollections.forEach(c => {
-        opts.push({
-          id: c.id,
-          label: c.name,
-          category: 'Event Collections',
-          type: 'collection',
-          icon: <Folder className="size-4" />
-        })
+      eventCollections.forEach((c) => {
+        opts.push({ id: c.id, label: c.name, category: 'Event Collections', type: 'collection', icon: <Folder className="size-4" /> })
       })
     }
 
     return opts
-  }, [mode, personaOntology, entities, events, entityCollections, eventCollections])
+  }, [wantsTypes, wantsObjects, personaOntology, entities, events, entityCollections, eventCollections])
 
   // Group options by category
   const groupedOptions = React.useMemo(() => {
     const grouped: Record<string, AnnotationOption[]> = {}
-    options.forEach(opt => {
-      if (!grouped[opt.category]) {
-        grouped[opt.category] = []
-      }
+    options.forEach((opt) => {
+      if (!grouped[opt.category]) grouped[opt.category] = []
       grouped[opt.category].push(opt)
     })
     return grouped
   }, [options])
 
   // Filter options by search input
+  // Rank each section by similarity to the query so the closest existing types
+  // and objects surface at the top of their section (the span picker seeds the
+  // query with the highlighted span's text). Options with no meaningful match
+  // drop out; an empty query keeps the natural order.
   const filteredGrouped = React.useMemo(() => {
-    if (!inputValue) return groupedOptions
-    const lowerInput = inputValue.toLowerCase()
+    const q = inputValue.trim()
+    if (!q) return groupedOptions
     const result: Record<string, AnnotationOption[]> = {}
     for (const [category, opts] of Object.entries(groupedOptions)) {
-      const filtered = opts.filter(o => o.label.toLowerCase().includes(lowerInput))
-      if (filtered.length > 0) {
-        result[category] = filtered
-      }
+      const ranked = opts
+        .map((o) => ({ option: o, score: scoreLabel(o.label, q) }))
+        .filter((x) => x.score > 0)
+        .sort((a, b) => b.score - a.score)
+        .map((x) => x.option)
+      if (ranked.length > 0) result[category] = ranked
     }
     return result
   }, [groupedOptions, inputValue])
@@ -172,23 +317,65 @@ export default function AnnotationAutocomplete({
     setOpen(false)
     setInputValue('')
 
-    // Update Zustand state for link target if in object mode
-    if (mode === 'object') {
+    // Update Zustand link-target state when an object is chosen. Surfaces that
+    // own their own persistence (emitLinkTarget=false) skip this write so they
+    // never mutate the video-annotation link state.
+    if (!isTypeOption(option.type) && emitLinkTarget) {
       let targetType: 'entity' | 'event' | 'location' | 'entity-collection' | 'event-collection' | null = null
       if (option.type === 'entity-object') targetType = 'entity'
       else if (option.type === 'event-object') targetType = 'event'
       else if (option.type === 'location-object') targetType = 'location'
       else if (option.type === 'collection') {
-        // Determine if it's entity or event collection
-        const isEntityCollection = entityCollections.some(c => c.id === option.id)
+        const isEntityCollection = entityCollections.some((c) => c.id === option.id)
         targetType = isEntityCollection ? 'entity-collection' : 'event-collection'
       }
-
       setLinkTarget(option.id, targetType)
     }
   }
 
-  // Generate label with counts for type mode
+  // Offer quick-create when the query names nothing that already exists. A type
+  // needs an active persona; a world object can always be minted. The created
+  // item is selected immediately (so it lands on the span) and stays editable in
+  // its workspace. The create awaits the write so the id exists before a span
+  // annotation references it.
+  const trimmed = inputValue.trim()
+  const lower = trimmed.toLowerCase()
+  const hasTypeMatch = options.some((o) => isTypeOption(o.type) && o.label.toLowerCase() === lower)
+  const hasObjectMatch = options.some((o) => !isTypeOption(o.type) && o.label.toLowerCase() === lower)
+  const canCreateType = wantsTypes && trimmed.length > 0 && !hasTypeMatch && Boolean(personaId)
+  const canCreateObject = wantsObjects && trimmed.length > 0 && !hasObjectMatch
+
+  const handleCreateType = async () => {
+    if (!personaId || !trimmed) return
+    const id = generateId()
+    const now = new Date().toISOString()
+    const entity: EntityType = { id, name: trimmed, gloss: [], createdAt: now, updatedAt: now }
+    await addEntityType.mutateAsync({ personaId, entity })
+    handleSelect({ id, label: trimmed, category: 'Entity Types', type: 'entity', icon: <Tag className="size-4" /> })
+  }
+
+  const handleCreateObject = async () => {
+    if (!trimmed) return
+    const id = generateId()
+    await addWorldEntity.mutateAsync({ id, name: trimmed, description: [], typeAssignments: [], metadata: {} })
+    handleSelect({ id, label: trimmed, category: 'Entities', type: 'entity-object', icon: <User className="size-4" /> })
+  }
+
+  const handleWikidataImport = async (data: WikidataImportCallbackData) => {
+    const kind = wikidataTarget?.kind ?? 'object'
+    if (kind === 'type') {
+      const id = await importWikidataType(data)
+      setWikidataTarget(null)
+      handleSelect({ id, label: data.name, category: 'Entity Types', type: 'entity', icon: <Tag className="size-4" /> })
+      return
+    }
+    const cfg = wikidataObjectKinds[wikidataObjectKind]
+    const id = await cfg.importItem(data)
+    setWikidataTarget(null)
+    handleSelect({ id, label: data.name, category: cfg.category, type: cfg.optionType, icon: cfg.icon })
+  }
+
+  // Generate label with counts for the trigger button (non-inline)
   const getTypeLabel = () => {
     if (mode === 'type' && personaOntology && !value) {
       const entityCount = personaOntology.entities.length
@@ -196,15 +383,181 @@ export default function AnnotationAutocomplete({
       const eventCount = personaOntology.events.length
       return `Select Type (${entityCount} entities, ${roleCount} roles, ${eventCount} events)`
     }
+    if (mode === 'both') return 'Search types and world objects'
     return mode === 'type' ? 'Select Type' : 'Select Object'
   }
 
   const isDisabled = disabled || (mode === 'type' && !personaId)
-  const placeholder = mode === 'type' && !personaId
-    ? 'Please select a persona first'
-    : mode === 'type'
-      ? 'Search for entity, role, or event type...'
-      : 'Search for world object...'
+  const placeholder =
+    mode === 'type' && !personaId
+      ? 'Please select a persona first'
+      : mode === 'both'
+        ? 'Search or create a type or world object...'
+        : mode === 'type'
+          ? 'Search for entity, role, or event type...'
+          : 'Search for world object...'
+
+  const body = (
+    <>
+      <div className="p-2">
+        <div className="flex items-center gap-2 px-2 pb-2 border-b">
+          <Search className="size-4 text-muted-foreground" />
+          <input
+            data-testid="picker-search"
+            className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+            placeholder={placeholder}
+            value={inputValue}
+            onChange={(e) => setInputValue(e.target.value)}
+            autoFocus
+          />
+        </div>
+      </div>
+      <div className="max-h-[300px] overflow-y-auto p-1">
+        {Object.entries(filteredGrouped).map(([category, opts]) => (
+          <div key={category}>
+            <div className="px-3 py-1.5 text-xs font-medium text-muted-foreground bg-muted/50">
+              {category} ({opts.length})
+            </div>
+            {opts.map((option) => (
+              <button
+                key={option.id}
+                data-testid="picker-option"
+                data-option-kind={option.type}
+                data-option-label={option.label}
+                className="flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground cursor-pointer"
+                onClick={() => handleSelect(option)}
+              >
+                {option.icon}
+                <span>{option.label}</span>
+              </button>
+            ))}
+          </div>
+        ))}
+        {Object.keys(filteredGrouped).length === 0 && !canCreateType && !canCreateObject && (
+          <p className="text-sm text-muted-foreground text-center py-4">No results found</p>
+        )}
+        {(canCreateType || canCreateObject) && (
+          <div
+            className={
+              Object.keys(filteredGrouped).length > 0 ? 'mt-1 border-t pt-1' : undefined
+            }
+          >
+            {/* One "create new" section: the typed term shown once, with a row per
+                target (ontology type / world object) that pairs a blank create with
+                a Wikidata-backed create, so the create-vs-import and type-vs-object
+                axes read as a grid rather than four repeated rows. */}
+            <div className="px-3 py-1.5 text-xs font-medium text-muted-foreground">
+              Create <span className="text-foreground">&ldquo;{trimmed}&rdquo;</span> as
+            </div>
+            {canCreateType && (
+              <div className="flex items-center gap-1 px-1">
+                <button
+                  data-testid="picker-create-type"
+                  aria-label={`Create the ontology type “${trimmed}”`}
+                  className="flex flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground cursor-pointer"
+                  onClick={handleCreateType}
+                >
+                  <Plus className="size-4 shrink-0 text-muted-foreground" />
+                  <span className="truncate">Ontology type</span>
+                </button>
+                <button
+                  data-testid="picker-wikidata-type"
+                  aria-label={`Search Wikidata for the ontology type “${trimmed}”`}
+                  title="Search Wikidata"
+                  className="flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1.5 text-xs text-muted-foreground hover:bg-accent hover:text-accent-foreground cursor-pointer"
+                  onClick={() => setWikidataTarget({ query: trimmed, kind: 'type' })}
+                >
+                  <Globe className="size-4 shrink-0" />
+                  Wikidata
+                </button>
+              </div>
+            )}
+            {canCreateObject && (
+              <div className="flex items-center gap-1 px-1">
+                <button
+                  data-testid="picker-create-object"
+                  aria-label={`Create the world object “${trimmed}”`}
+                  className="flex flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground cursor-pointer"
+                  onClick={handleCreateObject}
+                >
+                  <Plus className="size-4 shrink-0 text-muted-foreground" />
+                  <span className="truncate">World object</span>
+                </button>
+                <button
+                  data-testid="picker-wikidata-object"
+                  aria-label={`Search Wikidata for the world object “${trimmed}”`}
+                  title="Search Wikidata"
+                  className="flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1.5 text-xs text-muted-foreground hover:bg-accent hover:text-accent-foreground cursor-pointer"
+                  onClick={() => setWikidataTarget({ query: trimmed, kind: 'object' })}
+                >
+                  <Globe className="size-4 shrink-0" />
+                  Wikidata
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </>
+  )
+
+  // The Wikidata search sub-view: picking a result imports the linked ontology
+  // type or world object and assigns it. A back control returns to the list.
+  const wikidataView = wikidataTarget && (
+    <div className="p-2">
+      <button
+        data-testid="picker-wikidata-back"
+        className="mb-2 flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+        onClick={() => setWikidataTarget(null)}
+      >
+        <ArrowLeft className="size-4" />
+        Back to types and objects
+      </button>
+      {wikidataTarget.kind === 'object' && (
+        <div className="mb-2 flex flex-wrap items-center gap-1">
+          <span className="mr-1 text-xs text-muted-foreground">Import as:</span>
+          {(Object.keys(wikidataObjectKinds) as WorldObjectKind[]).map((k) => (
+            <button
+              key={k}
+              type="button"
+              data-testid={`picker-kind-${k}`}
+              aria-pressed={wikidataObjectKind === k}
+              onClick={() => setWikidataObjectKind(k)}
+              className={`flex items-center gap-1 rounded px-2 py-1 text-xs ${
+                wikidataObjectKind === k
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-muted text-foreground hover:bg-accent'
+              }`}
+            >
+              {wikidataObjectKinds[k].icon}
+              {wikidataObjectKinds[k].label}
+            </button>
+          ))}
+        </div>
+      )}
+      <WikidataSearch
+        initialQuery={wikidataTarget.query}
+        entityType={
+          wikidataTarget.kind === 'type' ? 'type' : wikidataObjectKinds[wikidataObjectKind].entityType
+        }
+        objectSubtype={
+          wikidataTarget.kind === 'object' ? wikidataObjectKinds[wikidataObjectKind].objectSubtype : undefined
+        }
+        importType={
+          wikidataTarget.kind === 'type' ? 'entity-type' : wikidataObjectKinds[wikidataObjectKind].importType
+        }
+        onImport={handleWikidataImport}
+      />
+    </div>
+  )
+
+  const content = wikidataTarget !== null ? wikidataView : body
+
+  // Inline: render the search and results directly (no trigger), so the user
+  // types the instant the host popup opens.
+  if (inline) {
+    return <div className="rounded-md border bg-popover text-popover-foreground">{content}</div>
+  }
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -230,42 +583,7 @@ export default function AnnotationAutocomplete({
         )}
       </PopoverTrigger>
       <PopoverContent className="w-[400px] p-0" align="start">
-        <div className="p-2">
-          <div className="flex items-center gap-2 px-2 pb-2 border-b">
-            <Search className="size-4 text-muted-foreground" />
-            <input
-              className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
-              placeholder={placeholder}
-              value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
-              autoFocus
-            />
-          </div>
-        </div>
-        <div className="max-h-[300px] overflow-y-auto p-1">
-          {Object.entries(filteredGrouped).map(([category, opts]) => (
-            <div key={category}>
-              <div className="px-3 py-1.5 text-xs font-medium text-muted-foreground bg-muted/50">
-                {category} ({opts.length})
-              </div>
-              {opts.map((option) => (
-                <button
-                  key={option.id}
-                  className="flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground cursor-pointer"
-                  onClick={() => handleSelect(option)}
-                >
-                  {option.icon}
-                  <span>{option.label}</span>
-                </button>
-              ))}
-            </div>
-          ))}
-          {Object.keys(filteredGrouped).length === 0 && (
-            <p className="text-sm text-muted-foreground text-center py-4">
-              No results found
-            </p>
-          )}
-        </div>
+        {content}
       </PopoverContent>
     </Popover>
   )
