@@ -1,6 +1,6 @@
 /**
  * The FOVEA claim surface as a pair of `@panproto/core` lenses — one per
- * direction — plus a multi-record composition and a record<->row adapter.
+ * direction â plus a multi-record composition and a record↔row adapter.
  *
  * A FOVEA claim projects onto several layers records: a claim identity
  * `pub.layers.graph.graphNode`, a primary span `pub.layers.annotation` (the
@@ -200,7 +200,7 @@ function localRef(id: string): ObjectRef {
  * Serializes an object's flat, opaque open-extension scalars — the fields with no
  * dedicated native column — into the layers featureMap-native shape: a list of
  * `{ key, value }` whose value is the field's JSON string. This runs once at the
- * ingress boundary that constructs the claim view-model, so the fovea<->layers lens
+ * ingress boundary that constructs the claim view-model, so the fovea↔layers lens
  * carries the resulting `featureEntries` as a lossless passthrough (both round-trip
  * laws hold over it). A null value serializes to the JSON literal `null`; an
  * `undefined` value is skipped.
@@ -1148,7 +1148,7 @@ export function composeRelationRecords(source: RelationSource, core: RelationCor
 }
 
 // --------------------------------------------------------------------------
-// Record <-> Prisma-row adapter
+// Record ↔ Prisma-row adapter
 // --------------------------------------------------------------------------
 
 /** Distributes a claim annotation object to its `LayersAnnotation` row. */

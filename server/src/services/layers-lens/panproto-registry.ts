@@ -7,7 +7,7 @@ import type { BuiltSchema } from '@panproto/core'
 import { z } from 'zod'
 
 /**
- * Loads the schemas the FOVEA<->layers lenses map between: the `pub.layers.*`
+ * Loads the schemas the FOVEA↔layers lenses map between: the `pub.layers.*`
  * records as their vendored ATProto lexicons, and each FOVEA view-model as a
  * JSON Schema emitted from its Zod definition. Both sides parse into panproto
  * `BuiltSchema`s over one graph format, so a lens is a schema morphism between

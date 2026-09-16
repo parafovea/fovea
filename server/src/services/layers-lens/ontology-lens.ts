@@ -1,6 +1,6 @@
 /**
  * The FOVEA persona-ontology surface as a bidirectional `@panproto/core` lens
- * plus a multi-record composition and a record<->row adapter.
+ * plus a multi-record composition and a record↔row adapter.
  *
  * A persona ontology projects onto a `pub.layers.ontology.ontology` record, one
  * `pub.layers.ontology.typeDef` per declared type, and — for every type whose
@@ -925,7 +925,7 @@ export function composeOntologyRecords(
 }
 
 // --------------------------------------------------------------------------
-// Record <-> Prisma-row adapter (forward)
+// Record ↔ Prisma-row adapter (forward)
 // --------------------------------------------------------------------------
 
 /** A gloss stand-off flattened to its component Prisma rows. */

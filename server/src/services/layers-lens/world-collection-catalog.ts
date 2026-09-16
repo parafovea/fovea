@@ -12,7 +12,7 @@
  * The member-id -> `memberRef` regroup is a native, lawful `@panproto/core` lens
  * ({@link CATALOG_MEMBER_LENS_DOC}); {@link worldCollectionsToCatalog} owns the
  * multi-record framing (one collection plus its per-member memberships) and the
- * cross-record wiring by deterministic id, and a thin record<->row adapter maps
+ * cross-record wiring by deterministic id, and a thin record↔row adapter maps
  * each record onto the `catalog_collections` / `catalog_memberships` tables.
  *
  * @module

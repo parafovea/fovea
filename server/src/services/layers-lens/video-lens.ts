@@ -1,6 +1,6 @@
 /**
  * The FOVEA video-annotation surface as a `@panproto/core` lens plus a
- * multi-record composition and a record<->row adapter.
+ * multi-record composition and a record↔row adapter.
  *
  * A FOVEA video annotation projects onto three layers records: a
  * `pub.layers.annotation.annotationLayer` grouping whose `annotations[]` holds
@@ -649,7 +649,7 @@ export function composeVideoRecords(
 }
 
 // --------------------------------------------------------------------------
-// Record <-> Prisma-row adapter
+// Record ↔ Prisma-row adapter
 // --------------------------------------------------------------------------
 
 /** The world-object graph node an object or world-instance annotation denotes. */

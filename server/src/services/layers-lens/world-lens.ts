@@ -1,6 +1,6 @@
 /**
  * The FOVEA world surface as bidirectional `@panproto/core` lenses plus a
- * multi-record composition and a record<->row adapter.
+ * multi-record composition and a record↔row adapter.
  *
  * A WorldState aggregate splits into many layers records: a
  * `pub.layers.graph.graphNode` per entity/location/situation/time, a

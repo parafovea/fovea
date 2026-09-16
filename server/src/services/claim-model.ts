@@ -292,7 +292,7 @@ function applyOpenExtension(
   }
 }
 
-// --- gloss: GlossItem[] <-> role-tagged argumentRefs ------------------------
+// --- gloss: GlossItem[] ↔ role-tagged argumentRefs ------------------------
 
 /** Reconstructs a gloss's segments from the argumentRefs carrying its role prefix. */
 function argumentsToGloss(argumentsValue: unknown, rolePrefix: string): GlossItem[] {

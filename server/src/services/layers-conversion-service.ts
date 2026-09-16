@@ -98,7 +98,7 @@ export interface BoundingBoxSequence {
   interpolatedFrameCount: number
 }
 
-/** Options controlling the frame-number <-> millisecond mapping. */
+/** Options controlling the frame-number ↔ millisecond mapping. */
 export interface FrameRateOptions {
   /** Video frame rate in frames per second. */
   frameRate: number

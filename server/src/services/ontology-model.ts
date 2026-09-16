@@ -346,7 +346,7 @@ export type TypeDefRow = Pick<
   'id' | 'name' | 'typeKind' | 'gloss' | 'parentTypeId' | 'allowedRoles' | 'allowedValues' | 'knowledgeRefs' | 'features'
 >
 
-// --- OntologyRelation <-> GraphEdge -----------------------------------------
+// --- OntologyRelation ↔ GraphEdge -----------------------------------------
 
 /** A FOVEA ontology-relation instance between two ontology-level objects. */
 export interface StoredOntologyRelation {
