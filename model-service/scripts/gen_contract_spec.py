@@ -83,6 +83,8 @@ SummarizeRequest = as_request(_wire.SummarizeRequest)
 SummarizeResponse = as_request(_wire.SummarizeResponse)
 SummarySynthesisRequest = as_request(_wire.SummarySynthesisRequest)
 SummarySynthesisResponse = as_request(_wire.SummarySynthesisResponse)
+TokenizeRequest = as_request(_wire.TokenizeRequest)
+TokenizeResponse = as_request(_wire.TokenizeResponse)
 
 # The committed spec lives at model-service/openapi.json (one directory up from
 # this scripts/ folder).
@@ -126,6 +128,7 @@ class Operation(NamedTuple):
 #   - POST /api/extract-claims     server/src/queues/setup.ts
 #   - POST /api/synthesize-summary server/src/queues/setup.ts
 #   - POST /api/summarize          server/src/queues/setup.ts
+#   - POST /api/tokenize           server/src/services/text-expression-service.ts
 OPERATIONS: list[Operation] = [
     Operation(
         method="post",
@@ -161,6 +164,13 @@ OPERATIONS: list[Operation] = [
         summary="Summarize a video for a persona.",
         request_model=SummarizeRequest,
         response_model=SummarizeResponse,
+    ),
+    Operation(
+        method="post",
+        path="/api/tokenize",
+        summary="Tokenize text into tokens with byte and UTF-16 offsets.",
+        request_model=TokenizeRequest,
+        response_model=TokenizeResponse,
     ),
 ]
 

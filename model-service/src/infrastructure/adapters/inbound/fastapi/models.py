@@ -20,7 +20,7 @@ from annotated_types import Ge, Gt, Le, MinLen
 # JSON-shaped recursive payload for free-form fields (RLE masks, gloss items,
 # annotation blobs, provider metadata). didactic classifies this as an opaque
 # JSON fixpoint; Pydantic accepts the recursive alias natively.
-type JsonValue = str | int | float | bool | None | list["JsonValue"] | dict[str, "JsonValue"]
+type JsonValue = str | int | float | bool | list["JsonValue"] | dict[str, "JsonValue"] | None
 
 # Reusable constrained scalars.
 ConfidenceScore = Annotated[float, Ge(0.0), Le(1.0)]
@@ -528,6 +528,40 @@ class SummarySynthesisResponse(dx.Model):
     )
 
 
+class TokenizeRequest(dx.Model):
+    """Request schema for the tokenization endpoint."""
+
+    text: str = dx.field(description="The text to tokenize.")
+    language: str | None = dx.field(
+        default=None,
+        description=(
+            "Optional ISO-639-1 language override (e.g. 'en', 'zh'). When supplied, "
+            "language identification is skipped and this code drives engine selection."
+        ),
+    )
+
+
+class TokenResponse(dx.Model):
+    """One token with UTF-8 byte offsets and UTF-16 code-unit offsets."""
+
+    token_index: int
+    text: str
+    byte_start: int
+    byte_end: int
+    char_start: int
+    char_end: int
+
+
+class TokenizeResponse(dx.Model):
+    """Response schema for the tokenization endpoint."""
+
+    tokens: tuple[TokenResponse, ...] = dx.field(default_factory=tuple)
+    language: str = ""
+    language_confidence: float = 0.0
+    tokenization_kind: str = "custom"
+    model_used: str = ""
+
+
 __all__ = [
     "AudioOverrides",
     "AugmentRequest",
@@ -555,6 +589,9 @@ __all__ = [
     "ThinkingTrace",
     "ThumbnailGenerateRequest",
     "ThumbnailGenerateResponse",
+    "TokenResponse",
+    "TokenizeRequest",
+    "TokenizeResponse",
     "TrackingFrameResult",
     "TrackingMaskData",
     "TrackingRequest",

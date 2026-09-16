@@ -1560,6 +1560,107 @@
         },
         "title": "ThinkingTrace",
         "type": "object"
+      },
+      "TokenResponse": {
+        "description": "One token with UTF-8 byte offsets and UTF-16 code-unit offsets.",
+        "properties": {
+          "byte_end": {
+            "title": "Byte End",
+            "type": "integer"
+          },
+          "byte_start": {
+            "title": "Byte Start",
+            "type": "integer"
+          },
+          "char_end": {
+            "title": "Char End",
+            "type": "integer"
+          },
+          "char_start": {
+            "title": "Char Start",
+            "type": "integer"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "token_index": {
+            "title": "Token Index",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "token_index",
+          "text",
+          "byte_start",
+          "byte_end",
+          "char_start",
+          "char_end"
+        ],
+        "title": "TokenResponse",
+        "type": "object"
+      },
+      "TokenizeRequest": {
+        "description": "Request schema for the tokenization endpoint.",
+        "properties": {
+          "language": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Optional ISO-639-1 language override (e.g. 'en', 'zh'). When supplied, language identification is skipped and this code drives engine selection.",
+            "title": "Language"
+          },
+          "text": {
+            "description": "The text to tokenize.",
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "TokenizeRequest",
+        "type": "object"
+      },
+      "TokenizeResponse": {
+        "description": "Response schema for the tokenization endpoint.",
+        "properties": {
+          "language": {
+            "default": "",
+            "title": "Language",
+            "type": "string"
+          },
+          "language_confidence": {
+            "default": 0.0,
+            "title": "Language Confidence",
+            "type": "number"
+          },
+          "model_used": {
+            "default": "",
+            "title": "Model Used",
+            "type": "string"
+          },
+          "tokenization_kind": {
+            "default": "custom",
+            "title": "Tokenization Kind",
+            "type": "string"
+          },
+          "tokens": {
+            "items": {
+              "$ref": "#/components/schemas/TokenResponse"
+            },
+            "title": "Tokens",
+            "type": "array"
+          }
+        },
+        "title": "TokenizeResponse",
+        "type": "object"
       }
     }
   },
@@ -1708,6 +1809,34 @@
           }
         },
         "summary": "Synthesize a summary gloss from claim sources."
+      }
+    },
+    "/api/tokenize": {
+      "post": {
+        "operationId": "post_/api/tokenize",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TokenizeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenizeResponse"
+                }
+              }
+            },
+            "description": "Successful response."
+          }
+        },
+        "summary": "Tokenize text into tokens with byte and UTF-16 offsets."
       }
     }
   }

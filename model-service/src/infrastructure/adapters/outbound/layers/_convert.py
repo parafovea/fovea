@@ -28,7 +28,7 @@ if TYPE_CHECKING:
     import didactic.api as dx
 
 # A plain JSON value: what a lens complement and a serialized record are made of.
-type JsonValue = str | int | float | bool | None | list["JsonValue"] | dict[str, "JsonValue"]
+type JsonValue = str | int | float | bool | list["JsonValue"] | dict[str, "JsonValue"] | None
 
 # --- integer scales (layers puts no floats on the wire) ---------------------
 

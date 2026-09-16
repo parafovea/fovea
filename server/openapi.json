@@ -21304,8 +21304,68 @@
                     "format": "uuid",
                     "type": "string"
                   },
-                  "source": {},
-                  "target": {},
+                  "source": {
+                    "type": "object",
+                    "properties": {
+                      "knowledgeRef": {},
+                      "localId": {
+                        "type": "object",
+                        "required": [
+                          "value"
+                        ],
+                        "properties": {
+                          "value": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "objectId": {
+                        "type": "object",
+                        "required": [
+                          "value"
+                        ],
+                        "properties": {
+                          "value": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "recordRef": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "target": {
+                    "type": "object",
+                    "properties": {
+                      "knowledgeRef": {},
+                      "localId": {
+                        "type": "object",
+                        "required": [
+                          "value"
+                        ],
+                        "properties": {
+                          "value": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "objectId": {
+                        "type": "object",
+                        "required": [
+                          "value"
+                        ],
+                        "properties": {
+                          "value": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "recordRef": {
+                        "type": "string"
+                      }
+                    }
+                  },
                   "edgeType": {
                     "type": "string"
                   },
@@ -21769,8 +21829,68 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "source": {},
-                  "target": {},
+                  "source": {
+                    "type": "object",
+                    "properties": {
+                      "knowledgeRef": {},
+                      "localId": {
+                        "type": "object",
+                        "required": [
+                          "value"
+                        ],
+                        "properties": {
+                          "value": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "objectId": {
+                        "type": "object",
+                        "required": [
+                          "value"
+                        ],
+                        "properties": {
+                          "value": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "recordRef": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "target": {
+                    "type": "object",
+                    "properties": {
+                      "knowledgeRef": {},
+                      "localId": {
+                        "type": "object",
+                        "required": [
+                          "value"
+                        ],
+                        "properties": {
+                          "value": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "objectId": {
+                        "type": "object",
+                        "required": [
+                          "value"
+                        ],
+                        "properties": {
+                          "value": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "recordRef": {
+                        "type": "string"
+                      }
+                    }
+                  },
                   "edgeType": {
                     "type": "string"
                   },
@@ -23580,7 +23700,12 @@
                       "domain",
                       "ontologyRefs",
                       "languages",
-                      "metadata",
+                      "annotationDesign",
+                      "expressionCount",
+                      "licensing",
+                      "eprintRefs",
+                      "reproducibility",
+                      "features",
                       "projectId",
                       "createdByUserId",
                       "layersUri",
@@ -23631,7 +23756,12 @@
                           "type": "string"
                         }
                       },
-                      "metadata": {},
+                      "annotationDesign": {},
+                      "expressionCount": {},
+                      "licensing": {},
+                      "eprintRefs": {},
+                      "reproducibility": {},
+                      "features": {},
                       "projectId": {
                         "anyOf": [
                           {
@@ -23740,7 +23870,19 @@
                       "type": "string"
                     }
                   },
-                  "metadata": {},
+                  "annotationDesign": {},
+                  "expressionCount": {
+                    "type": "number"
+                  },
+                  "licensing": {},
+                  "eprintRefs": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "reproducibility": {},
+                  "features": {},
                   "projectId": {
                     "anyOf": [
                       {
@@ -23781,7 +23923,12 @@
                     "domain",
                     "ontologyRefs",
                     "languages",
-                    "metadata",
+                    "annotationDesign",
+                    "expressionCount",
+                    "licensing",
+                    "eprintRefs",
+                    "reproducibility",
+                    "features",
                     "projectId",
                     "createdByUserId",
                     "layersUri",
@@ -23832,7 +23979,12 @@
                         "type": "string"
                       }
                     },
-                    "metadata": {},
+                    "annotationDesign": {},
+                    "expressionCount": {},
+                    "licensing": {},
+                    "eprintRefs": {},
+                    "reproducibility": {},
+                    "features": {},
                     "projectId": {
                       "anyOf": [
                         {
@@ -23888,7 +24040,12 @@
                     "domain",
                     "ontologyRefs",
                     "languages",
-                    "metadata",
+                    "annotationDesign",
+                    "expressionCount",
+                    "licensing",
+                    "eprintRefs",
+                    "reproducibility",
+                    "features",
                     "projectId",
                     "createdByUserId",
                     "layersUri",
@@ -23939,7 +24096,12 @@
                         "type": "string"
                       }
                     },
-                    "metadata": {},
+                    "annotationDesign": {},
+                    "expressionCount": {},
+                    "licensing": {},
+                    "eprintRefs": {},
+                    "reproducibility": {},
+                    "features": {},
                     "projectId": {
                       "anyOf": [
                         {
@@ -24015,7 +24177,12 @@
                     "domain",
                     "ontologyRefs",
                     "languages",
-                    "metadata",
+                    "annotationDesign",
+                    "expressionCount",
+                    "licensing",
+                    "eprintRefs",
+                    "reproducibility",
+                    "features",
                     "projectId",
                     "createdByUserId",
                     "layersUri",
@@ -24066,7 +24233,12 @@
                         "type": "string"
                       }
                     },
-                    "metadata": {},
+                    "annotationDesign": {},
+                    "expressionCount": {},
+                    "licensing": {},
+                    "eprintRefs": {},
+                    "reproducibility": {},
+                    "features": {},
                     "projectId": {
                       "anyOf": [
                         {
@@ -24167,7 +24339,19 @@
                       "type": "string"
                     }
                   },
-                  "metadata": {},
+                  "annotationDesign": {},
+                  "expressionCount": {
+                    "type": "number"
+                  },
+                  "licensing": {},
+                  "eprintRefs": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "reproducibility": {},
+                  "features": {},
                   "layersUri": {
                     "anyOf": [
                       {
@@ -24208,7 +24392,12 @@
                     "domain",
                     "ontologyRefs",
                     "languages",
-                    "metadata",
+                    "annotationDesign",
+                    "expressionCount",
+                    "licensing",
+                    "eprintRefs",
+                    "reproducibility",
+                    "features",
                     "projectId",
                     "createdByUserId",
                     "layersUri",
@@ -24259,7 +24448,12 @@
                         "type": "string"
                       }
                     },
-                    "metadata": {},
+                    "annotationDesign": {},
+                    "expressionCount": {},
+                    "licensing": {},
+                    "eprintRefs": {},
+                    "reproducibility": {},
+                    "features": {},
                     "projectId": {
                       "anyOf": [
                         {
@@ -24357,6 +24551,7 @@
                       "split",
                       "ordinal",
                       "metadata",
+                      "features",
                       "createdAt",
                       "updatedAt"
                     ],
@@ -24391,6 +24586,7 @@
                         ]
                       },
                       "metadata": {},
+                      "features": {},
                       "createdAt": {
                         "type": "string"
                       },
@@ -24447,7 +24643,8 @@
                       }
                     ]
                   },
-                  "metadata": {}
+                  "metadata": {},
+                  "features": {}
                 }
               }
             }
@@ -24477,6 +24674,7 @@
                     "split",
                     "ordinal",
                     "metadata",
+                    "features",
                     "createdAt",
                     "updatedAt"
                   ],
@@ -24511,6 +24709,7 @@
                       ]
                     },
                     "metadata": {},
+                    "features": {},
                     "createdAt": {
                       "type": "string"
                     },
@@ -24535,6 +24734,7 @@
                     "split",
                     "ordinal",
                     "metadata",
+                    "features",
                     "createdAt",
                     "updatedAt"
                   ],
@@ -24569,6 +24769,7 @@
                       ]
                     },
                     "metadata": {},
+                    "features": {},
                     "createdAt": {
                       "type": "string"
                     },

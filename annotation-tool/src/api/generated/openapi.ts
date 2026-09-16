@@ -8902,8 +8902,26 @@ export interface paths {
                     "application/json": {
                         /** Format: uuid */
                         id?: string;
-                        source: unknown;
-                        target: unknown;
+                        source: {
+                            knowledgeRef?: unknown;
+                            localId?: {
+                                value: string;
+                            };
+                            objectId?: {
+                                value: string;
+                            };
+                            recordRef?: string;
+                        };
+                        target: {
+                            knowledgeRef?: unknown;
+                            localId?: {
+                                value: string;
+                            };
+                            objectId?: {
+                                value: string;
+                            };
+                            recordRef?: string;
+                        };
                         edgeType: string;
                         label?: null | string;
                         ordinal?: null | number;
@@ -9035,8 +9053,26 @@ export interface paths {
             requestBody: {
                 content: {
                     "application/json": {
-                        source?: unknown;
-                        target?: unknown;
+                        source?: {
+                            knowledgeRef?: unknown;
+                            localId?: {
+                                value: string;
+                            };
+                            objectId?: {
+                                value: string;
+                            };
+                            recordRef?: string;
+                        };
+                        target?: {
+                            knowledgeRef?: unknown;
+                            localId?: {
+                                value: string;
+                            };
+                            objectId?: {
+                                value: string;
+                            };
+                            recordRef?: string;
+                        };
                         edgeType?: string;
                         label?: null | string;
                         ordinal?: null | number;
@@ -9672,7 +9708,12 @@ export interface paths {
                             domain: null | string;
                             ontologyRefs: unknown;
                             languages: string[];
-                            metadata: unknown;
+                            annotationDesign: unknown;
+                            expressionCount: unknown;
+                            licensing: unknown;
+                            eprintRefs: unknown;
+                            reproducibility: unknown;
+                            features: unknown;
                             projectId: null | string;
                             createdByUserId: null | string;
                             layersUri: null | string;
@@ -9703,7 +9744,12 @@ export interface paths {
                         domain?: null | string;
                         ontologyRefs?: string[];
                         languages?: string[];
-                        metadata?: unknown;
+                        annotationDesign?: unknown;
+                        expressionCount?: number;
+                        licensing?: unknown;
+                        eprintRefs?: string[];
+                        reproducibility?: unknown;
+                        features?: unknown;
                         projectId?: null | string;
                         layersUri?: null | string;
                     };
@@ -9724,7 +9770,12 @@ export interface paths {
                             domain: null | string;
                             ontologyRefs: unknown;
                             languages: string[];
-                            metadata: unknown;
+                            annotationDesign: unknown;
+                            expressionCount: unknown;
+                            licensing: unknown;
+                            eprintRefs: unknown;
+                            reproducibility: unknown;
+                            features: unknown;
                             projectId: null | string;
                             createdByUserId: null | string;
                             layersUri: null | string;
@@ -9747,7 +9798,12 @@ export interface paths {
                             domain: null | string;
                             ontologyRefs: unknown;
                             languages: string[];
-                            metadata: unknown;
+                            annotationDesign: unknown;
+                            expressionCount: unknown;
+                            licensing: unknown;
+                            eprintRefs: unknown;
+                            reproducibility: unknown;
+                            features: unknown;
                             projectId: null | string;
                             createdByUserId: null | string;
                             layersUri: null | string;
@@ -9797,7 +9853,12 @@ export interface paths {
                             domain: null | string;
                             ontologyRefs: unknown;
                             languages: string[];
-                            metadata: unknown;
+                            annotationDesign: unknown;
+                            expressionCount: unknown;
+                            licensing: unknown;
+                            eprintRefs: unknown;
+                            reproducibility: unknown;
+                            features: unknown;
                             projectId: null | string;
                             createdByUserId: null | string;
                             layersUri: null | string;
@@ -9827,7 +9888,12 @@ export interface paths {
                         domain?: null | string;
                         ontologyRefs?: string[];
                         languages?: string[];
-                        metadata?: unknown;
+                        annotationDesign?: unknown;
+                        expressionCount?: number;
+                        licensing?: unknown;
+                        eprintRefs?: string[];
+                        reproducibility?: unknown;
+                        features?: unknown;
                         layersUri?: null | string;
                     };
                 };
@@ -9847,7 +9913,12 @@ export interface paths {
                             domain: null | string;
                             ontologyRefs: unknown;
                             languages: string[];
-                            metadata: unknown;
+                            annotationDesign: unknown;
+                            expressionCount: unknown;
+                            licensing: unknown;
+                            eprintRefs: unknown;
+                            reproducibility: unknown;
+                            features: unknown;
                             projectId: null | string;
                             createdByUserId: null | string;
                             layersUri: null | string;
@@ -9917,6 +9988,7 @@ export interface paths {
                             split: null | string;
                             ordinal: null | number;
                             metadata: unknown;
+                            features: unknown;
                             createdAt: string;
                             updatedAt: string;
                         }[];
@@ -9944,6 +10016,7 @@ export interface paths {
                         split?: null | string;
                         ordinal?: null | number;
                         metadata?: unknown;
+                        features?: unknown;
                     };
                 };
             };
@@ -9961,6 +10034,7 @@ export interface paths {
                             split: null | string;
                             ordinal: null | number;
                             metadata: unknown;
+                            features: unknown;
                             createdAt: string;
                             updatedAt: string;
                         };
@@ -9979,6 +10053,7 @@ export interface paths {
                             split: null | string;
                             ordinal: null | number;
                             metadata: unknown;
+                            features: unknown;
                             createdAt: string;
                             updatedAt: string;
                         };

@@ -18,11 +18,11 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, cast
 
-import didactic.api as dx
 from fastapi import APIRouter, HTTPException
 
 from src.application.dto.tokenization import TokenizeRequest as TokenizeRequestDTO
 from src.application.use_cases.tokenize_text import TokenizeTextUseCase
+from src.infrastructure.adapters.inbound.fastapi import models
 from src.infrastructure.adapters.inbound.fastapi.dependencies import ModelManagerDep  # noqa: TC001
 from src.infrastructure.adapters.inbound.fastapi.dx_bodies import (
     as_request,
@@ -38,51 +38,18 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
-class TokenizeRequest(dx.Model):
-    """Request schema for the tokenization endpoint."""
-
-    text: str = dx.field(description="The text to tokenize.")
-    language: str | None = dx.field(
-        default=None,
-        description=(
-            "Optional ISO-639-1 language override (e.g. 'en', 'zh'). When supplied, "
-            "language identification is skipped and this code drives engine selection."
-        ),
-    )
-
-
-class TokenResponse(dx.Model):
-    """One token with UTF-8 byte offsets and UTF-16 code-unit offsets."""
-
-    token_index: int
-    text: str
-    byte_start: int
-    byte_end: int
-    char_start: int
-    char_end: int
-
-
-class TokenizeResponse(dx.Model):
-    """Response schema for the tokenization endpoint."""
-
-    tokens: tuple[TokenResponse, ...] = dx.field(default_factory=tuple)
-    language: str = ""
-    language_confidence: float = 0.0
-    tokenization_kind: str = "custom"
-    model_used: str = ""
-
-
 if TYPE_CHECKING:
     # Handlers type-check against the source wire model; at runtime the body is
-    # the Pydantic mirror FastAPI validates against (the ``else`` branch).
-    _TokenizeRequestBody = TokenizeRequest
+    # the mirror FastAPI validates against (the ``else`` branch). The wire models
+    # live in ``models`` (the single ML-free source the contract generator reads).
+    _TokenizeRequestBody = models.TokenizeRequest
 else:
-    _TokenizeRequestBody = as_request(TokenizeRequest)
+    _TokenizeRequestBody = as_request(models.TokenizeRequest)
 
 
 @router.post(
     "/tokenize",
-    response_model=as_response(TokenizeResponse),
+    response_model=as_response(models.TokenizeResponse),
     summary="Tokenize text into tokens with byte and UTF-16 offsets.",
 )
 async def tokenize(
@@ -121,9 +88,9 @@ async def tokenize(
         raise HTTPException(status_code=500, detail=f"Tokenization failed: {exc}") from exc
 
     return dump(
-        TokenizeResponse(
+        models.TokenizeResponse(
             tokens=tuple(
-                TokenResponse(
+                models.TokenResponse(
                     token_index=token.token_index,
                     text=token.text,
                     byte_start=token.byte_start,

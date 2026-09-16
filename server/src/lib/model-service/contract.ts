@@ -98,7 +98,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Tokenize text into tokens with byte and character offsets. */
+        /** Tokenize text into tokens with byte and UTF-16 offsets. */
         post: operations["post_/api/tokenize"];
         delete?: never;
         options?: never;
@@ -999,83 +999,67 @@ export interface components {
             total_tokens?: number | null;
         };
         /**
+         * TokenResponse
+         * @description One token with UTF-8 byte offsets and UTF-16 code-unit offsets.
+         */
+        TokenResponse: {
+            /** Byte End */
+            byte_end: number;
+            /** Byte Start */
+            byte_start: number;
+            /** Char End */
+            char_end: number;
+            /** Char Start */
+            char_start: number;
+            /** Text */
+            text: string;
+            /** Token Index */
+            token_index: number;
+        };
+        /**
          * TokenizeRequest
-         * @description Request body for the text tokenization endpoint.
+         * @description Request schema for the tokenization endpoint.
          */
         TokenizeRequest: {
             /**
-             * Text
-             * @description Text to tokenize
-             */
-            text: string;
-            /**
              * Language
-             * @description Optional language override that skips language identification
+             * @description Optional ISO-639-1 language override (e.g. 'en', 'zh'). When supplied, language identification is skipped and this code drives engine selection.
              * @default null
              */
             language?: string | null;
+            /**
+             * Text
+             * @description The text to tokenize.
+             */
+            text: string;
         };
         /**
          * TokenizeResponse
-         * @description Response body for the text tokenization endpoint.
+         * @description Response schema for the tokenization endpoint.
          */
         TokenizeResponse: {
             /**
-             * Tokens
-             * @description Ordered tokens with byte and character offsets
-             */
-            tokens?: {
-                /**
-                 * Token Index
-                 * @description Position of this token in the tokenization (0-based)
-                 */
-                token_index: number;
-                /**
-                 * Text
-                 * @description Surface form of the token
-                 */
-                text: string;
-                /**
-                 * Byte Start
-                 * @description Inclusive start UTF-8 byte offset
-                 */
-                byte_start: number;
-                /**
-                 * Byte End
-                 * @description Exclusive end UTF-8 byte offset
-                 */
-                byte_end: number;
-                /**
-                 * Char Start
-                 * @description Inclusive start UTF-16 code-unit offset
-                 */
-                char_start: number;
-                /**
-                 * Char End
-                 * @description Exclusive end UTF-16 code-unit offset
-                 */
-                char_end: number;
-            }[];
-            /**
              * Language
-             * @description Detected (or overridden) language code
+             * @default
              */
-            language: string;
+            language?: string;
             /**
              * Language Confidence
-             * @description Confidence of the language identification
+             * @default 0
              */
-            language_confidence: number;
-            /**
-             * Tokenization Kind
-             * @description Tokenization kind slug (e.g. "custom")
-             */
-            tokenization_kind: string;
+            language_confidence?: number;
             /**
              * Model Used
-             * @description Engine used for tokenization (e.g. "spacy/blank:en" or "stanza:zh")
+             * @default
              */
-            model_used: string;
+            model_used?: string;
+            /**
+             * Tokenization Kind
+             * @default custom
+             */
+            tokenization_kind?: string;
+            /** Tokens */
+            tokens?: components["schemas"]["TokenResponse"][];
         };
     };
     responses: never;
