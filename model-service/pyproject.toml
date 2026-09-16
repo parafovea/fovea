@@ -71,7 +71,10 @@ dependencies = [
     # imports `click` at runtime for its CLI entry points, so it is pinned
     # explicitly rather than left transitive. All resolve as cp314 wheels.
     "spacy>=3.8.0",
-    "py3langid>=0.3.0",
+    # Pinned below 0.4: py3langid 0.4.0 removed LanguageIdentifier.from_pickled_model
+    # and changed default-model loading, breaking language identification. 0.3.x has
+    # the stable API the loader builds the normalized-probability identifier against.
+    "py3langid>=0.3.0,<0.4",
     "click>=8.1.0",
     "stanza>=1.10.0",
 ]
