@@ -173,6 +173,12 @@ export async function runBackfill(
   return report
 }
 
+/**
+ * Alias for {@link runBackfill}: the whole 0.5->0.6 copy in dependency order.
+ * The admin CLI imports this name.
+ */
+export const runFullMigration = runBackfill
+
 /** Parses the CLI arguments into backfill options. */
 function parseArgs(argv: string[]): BackfillOptions {
   const options: BackfillOptions = {}
