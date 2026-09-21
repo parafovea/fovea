@@ -45,6 +45,8 @@ model User {
   // Per-user inference preferences (1:1, created on-demand)
   preferences       UserPreferences?
   systemConfigEdits SystemConfig[]   @relation("SystemConfigUpdatedBy")
+  worldStates       WorldState[]
+  annotations       Annotation[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -168,6 +170,8 @@ model Persona {
 
   // Per-persona inference preferences (1:1, created on-demand)
   preferences PersonaPreferences?
+  ontology    Ontology?
+  annotations Annotation[]
 
   @@index([projectId])
   @@map("personas")
@@ -243,6 +247,7 @@ model Video {
   // Layers annotation store back-relations
   mediaRecords Media[]
   expressions  Expression[]
+  annotations  Annotation[]
 
   @@map("videos")
 }
@@ -322,6 +327,8 @@ model VideoSummary {
   @@index([createdAt])
   @@index([videoId, personaId])
   @@index([projectId])
+  claims Claim[]
+
   @@map("video_summaries")
 }
 
@@ -339,6 +346,224 @@ model ImportHistory {
 
   @@map("import_history")
 }
+
+// =============================================================================
+// LEGACY 0.5.x annotation models — RETAINED THROUGH 0.6.0 for the one-time
+// 0.5→0.6 data migration (server/prisma/migrate-0.6). No application code reads
+// these; the migrate-0.6 backfill copies their rows into the layers store. The
+// tables are dropped in 0.6.1 by the guarded drop migration once an admin has
+// migrated and verified. Do NOT wire new code to these models.
+// =============================================================================
+
+model Ontology {
+  id        String  @id @default(uuid())
+  personaId String  @unique
+  persona   Persona @relation(fields: [personaId], references: [id], onDelete: Cascade)
+
+  /// JSON structure: EntityType[]
+  entityTypes   Json @default("[]")
+  /// JSON structure: EventType[]
+  eventTypes    Json @default("[]")
+  /// JSON structure: RoleType[]
+  roleTypes     Json @default("[]")
+  /// JSON structure: RelationType[]
+  relationTypes Json @default("[]")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("ontologies")
+}
+
+model WorldState {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// JSON structure: Entity[]
+  entities          Json @default("[]")
+  /// JSON structure: Event[]
+  events            Json @default("[]")
+  /// JSON structure: Time[]
+  times             Json @default("[]")
+  /// JSON structure: EntityCollection[]
+  entityCollections Json @default("[]")
+  /// JSON structure: EventCollection[]
+  eventCollections  Json @default("[]")
+  /// JSON structure: TimeCollection[]
+  timeCollections   Json @default("[]")
+  /// JSON structure: OntologyRelation[]
+  relations         Json @default("[]")
+
+  projectId String?
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, projectId])
+  @@index([projectId])
+  @@map("world_state")
+}
+
+model Annotation {
+  id        String   @id @default(uuid())
+  videoId   String
+  video     Video    @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  personaId String?
+  persona   Persona? @relation(fields: [personaId], references: [id], onDelete: Cascade)
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  type       String
+  label      String
+  /// For object annotations, the kind of world object the `label` references:
+  /// 'entity' | 'event' | 'time' | 'location'. NULL for type annotations and
+  /// for legacy object annotations created before this column was added (in
+  /// which case the frontend treats them as entity-linked, matching the
+  /// previous behavior). Required to round-trip event/time/location-linked
+  /// annotations through export+import — without it the backend cannot
+  /// distinguish which `linked*Id` field the export should emit.
+  linkType   String?
+  /// JSON structure for frame-level data (bounding boxes, timestamps, etc.)
+  frames     Json
+  confidence Float?
+  /// Source of annotation: manual, ai-assisted, automatic
+  source     String  @default("manual")
+
+  createdByUserId String?
+  projectId       String?
+  project         Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([videoId])
+  @@index([personaId])
+  @@index([videoId, personaId])
+  @@index([userId])
+  @@index([createdAt])
+  @@index([projectId])
+  @@index([createdByUserId])
+  @@map("annotations")
+}
+
+model Claim {
+  id String @id @default(uuid())
+
+  // Association with summary
+  summaryId   String
+  summaryType String // "video" or "collection"
+
+  // Relation to VideoSummary (currently only video summaries supported)
+  videoSummary VideoSummary @relation(fields: [summaryId], references: [id], onDelete: Cascade)
+
+  // Claim content
+  text  String @db.Text
+  /// JSON structure: GlossItem[] with #/@/^/$ references (types/objects/annotations/claims)
+  gloss Json   @default("[]")
+
+  // Hierarchical structure (parent/child decomposition)
+  parentClaimId String?
+  parentClaim   Claim?  @relation("ClaimHierarchy", fields: [parentClaimId], references: [id], onDelete: Cascade)
+  subclaims     Claim[] @relation("ClaimHierarchy")
+
+  // Text span mapping - support discontiguous spans
+  /// JSON structure: Array of {sentenceIndex?: number, charStart: number, charEnd: number}
+  textSpans Json?
+
+  // Video time spans (seconds) the claim is grounded in - supports discontiguous spans
+  /// JSON structure: Array of {start: number, end: number, source: "scrub" | "annotation", annotationIds?: string[]}
+  timeSpans Json?
+
+  // Claim source/claimer (who makes this claim)
+  /// null = standalone claim for reference only (not asserted by anyone)
+  /// "author" = video creator explicitly asserts this claim
+  /// other = specified entity/type asserts this claim
+  claimerType  String? // null, "entity", "entity_type", "author", "mixed"
+  /// JSON structure: GlossItem[] - mixed text and #/@/^/$ references for claimer
+  claimerGloss Json?
+
+  // Relation between claimer and claim (how claimer relates to claim)
+  /// JSON structure: GlossItem[] - mixed text and references (e.g., "says", "#claims", "denied that")
+  claimRelation Json?
+
+  // Context of the claiming event itself (when/where claim was made)
+  /// Reference to world state event object
+  claimEventId    String?
+  /// Reference to world state time object
+  claimTimeId     String?
+  /// Reference to world state location object
+  claimLocationId String?
+
+  // Metadata
+  confidence         Float? // Model confidence in claim extraction (0.0-1.0)
+  modelUsed          String? // Model that generated this claim (e.g., "llama-4-scout")
+  extractionStrategy String? // "sentence-based", "semantic-units", "hierarchical", "manual"
+
+  // Modality metadata - indicates what sources support the claim
+  /// JSON structure: Array of "speech" and/or "non-speech" - claim is based at least in part on audio
+  audio    Json? // null or ["speech"], ["non-speech"], or ["speech", "non-speech"]
+  /// JSON structure: Array of "text" and/or "non-text" - claim is based at least in part on non-audio video information
+  video    Json? // null or ["text"], ["non-text"], or ["text", "non-text"]
+  /// JSON structure: Array of "text" and/or "non-text" - claim is based on metadata (text = caption metadata, non-text = other metadata like location from .info.json)
+  metadata Json? // null or ["text"], ["non-text"], or ["text", "non-text"]
+
+  // Comment/notes field for annotator notes
+  comment String? @db.Text
+
+  // Audit fields
+  createdBy String? // User ID who created/approved this claim
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  projectId String?
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  // Relations to other claims (this claim as source or target)
+  sourceClaimRelations ClaimRelation[] @relation("SourceClaim")
+  targetClaimRelations ClaimRelation[] @relation("TargetClaim")
+
+  @@index([summaryId, summaryType])
+  @@index([parentClaimId])
+  @@index([projectId])
+  @@map("claims")
+}
+
+model ClaimRelation {
+  id String @id @default(uuid())
+
+  sourceClaimId String
+  sourceClaim   Claim  @relation("SourceClaim", fields: [sourceClaimId], references: [id], onDelete: Cascade)
+
+  targetClaimId String
+  targetClaim   Claim  @relation("TargetClaim", fields: [targetClaimId], references: [id], onDelete: Cascade)
+
+  /// Reference to ontology relation type (e.g., "conflicts", "supports", "denies")
+  relationTypeId String
+
+  // Optional span specification (if null, relation applies to entire claim)
+  /// JSON structure: Array of {charStart: number, charEnd: number}
+  /// Specifies discontiguous spans within source claim
+  sourceSpans Json?
+  /// JSON structure: Array of {charStart: number, charEnd: number}
+  /// Specifies discontiguous spans within target claim
+  targetSpans Json?
+
+  // Optional metadata
+  confidence Float?
+  notes      String? @db.Text
+
+  createdBy String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([sourceClaimId])
+  @@index([targetClaimId])
+  @@index([relationTypeId])
+  @@map("claim_relations")
+}
+
 
 // =============================================================================
 // RBAC Models (Role-Based Access Control)
@@ -416,6 +641,9 @@ model Project {
   alignments              Alignment[]
   catalogCollections      CatalogCollection[]
   catalogMemberships      CatalogMembership[]
+  worldStates             WorldState[]
+  annotations             Annotation[]
+  claims                  Claim[]
 
   @@map("projects")
 }

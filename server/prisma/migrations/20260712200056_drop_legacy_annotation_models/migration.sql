@@ -1,60 +1,10 @@
-/*
-  Warnings:
-
-  - You are about to drop the `annotations` table. If the table is not empty, all the data it contains will be lost.
-  - You are about to drop the `claim_relations` table. If the table is not empty, all the data it contains will be lost.
-  - You are about to drop the `claims` table. If the table is not empty, all the data it contains will be lost.
-  - You are about to drop the `ontologies` table. If the table is not empty, all the data it contains will be lost.
-  - You are about to drop the `world_state` table. If the table is not empty, all the data it contains will be lost.
-
-*/
--- DropForeignKey
-ALTER TABLE "annotations" DROP CONSTRAINT "annotations_personaId_fkey";
-
--- DropForeignKey
-ALTER TABLE "annotations" DROP CONSTRAINT "annotations_projectId_fkey";
-
--- DropForeignKey
-ALTER TABLE "annotations" DROP CONSTRAINT "annotations_userId_fkey";
-
--- DropForeignKey
-ALTER TABLE "annotations" DROP CONSTRAINT "annotations_videoId_fkey";
-
--- DropForeignKey
-ALTER TABLE "claim_relations" DROP CONSTRAINT "claim_relations_sourceClaimId_fkey";
-
--- DropForeignKey
-ALTER TABLE "claim_relations" DROP CONSTRAINT "claim_relations_targetClaimId_fkey";
-
--- DropForeignKey
-ALTER TABLE "claims" DROP CONSTRAINT "claims_parentClaimId_fkey";
-
--- DropForeignKey
-ALTER TABLE "claims" DROP CONSTRAINT "claims_projectId_fkey";
-
--- DropForeignKey
-ALTER TABLE "claims" DROP CONSTRAINT "claims_summaryId_fkey";
-
--- DropForeignKey
-ALTER TABLE "ontologies" DROP CONSTRAINT "ontologies_personaId_fkey";
-
--- DropForeignKey
-ALTER TABLE "world_state" DROP CONSTRAINT "world_state_projectId_fkey";
-
--- DropForeignKey
-ALTER TABLE "world_state" DROP CONSTRAINT "world_state_userId_fkey";
-
--- DropTable
-DROP TABLE "annotations";
-
--- DropTable
-DROP TABLE "claim_relations";
-
--- DropTable
-DROP TABLE "claims";
-
--- DropTable
-DROP TABLE "ontologies";
-
--- DropTable
-DROP TABLE "world_state";
+-- 0.6.0 expand/migrate/contract: the destructive DROP of the legacy annotation
+-- models is intentionally deferred out of 0.6.0. The legacy tables
+-- (annotations, claims, claim_relations, ontologies, world_state) are RETAINED
+-- through 0.6.0 so the one-time 0.5->0.6 data migration (server/prisma/migrate-0.6)
+-- can copy their rows into the layers store while both schemas coexist. The drop
+-- runs in 0.6.1 via the guarded migration, which refuses unless the migration
+-- tool has recorded a passing verify in _layers_migration_state.
+--
+-- This migration is intentionally a no-op. Do not add DROP statements here.
+SELECT 1;
