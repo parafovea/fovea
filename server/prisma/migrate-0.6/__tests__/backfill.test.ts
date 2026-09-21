@@ -162,6 +162,9 @@ describe('layers backfill', () => {
     const verifyReport = await runVerify(prisma, { since })
     expect(verifyReport.mismatches).toEqual([])
     expect(verifyReport.roundTripped).toBe(1)
+    // Content fidelity ran over the world objects, the four ontology types, and
+    // both claims (not just count parity).
+    expect(verifyReport.contentChecked).toBeGreaterThanOrEqual(8)
     expect(verifyReport.counts.annotations).toBe(1)
     expect(verifyReport.counts.ontologyTypes).toBe(4)
     expect(verifyReport.counts.worldObjects).toBe(2)

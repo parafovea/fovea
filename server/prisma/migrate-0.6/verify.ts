@@ -10,6 +10,14 @@
  * ontology type yields one TypeDef, every world object and every Claim yields one
  * GraphNode, and every Video yields one video Media and one video Expression.
  *
+ * Beyond count parity, the verifier checks *content* fidelity for world objects,
+ * ontology types, and claims by reconstructing each through the application's own
+ * backward read path (`readWorldAggregate`, `readOntologyAggregate`,
+ * `readSummaryClaims`) and comparing the reconstruction to the legacy source with
+ * {@link reconMatchesSource}: every field the layers view-model preserves must
+ * match its source, so a copy that routes the wrong legacy column into a
+ * view-model field is caught here rather than at the irreversible 0.6.1 drop.
+ *
  * Run as a CLI; it exits non-zero on any mismatch so it can gate a deploy.
  *
  * ```bash
@@ -30,7 +38,9 @@ import {
   spatioTemporalAnchorToBoundingBoxSequence,
   type BoundingBoxSequence,
 } from '../../src/services/layers-conversion-service.js'
-import { typeDefRowId } from '../../src/services/layers-bridge/ontology-bridge.js'
+import { readWorldAggregate, type WorldScope } from '../../src/services/layers-bridge/world-bridge.js'
+import { readOntologyAggregate, typeDefRowId } from '../../src/services/layers-bridge/ontology-bridge.js'
+import { readSummaryClaims } from '../../src/services/layers-bridge/claim-bridge.js'
 import {
   expressionVideoId,
   layersOntologyForPersonaId,
@@ -55,6 +65,11 @@ const DEFAULT_EPSILON = 1e-9
 export interface VerifyReport {
   /** Number of annotations whose frames round-tripped bit-exactly. */
   roundTripped: number
+  /**
+   * Number of non-annotation objects (world objects, ontology types, claims, and
+   * claim relations) whose content the backward read reproduced faithfully.
+   */
+  contentChecked: number
   /** Human-readable mismatch descriptions; empty means the gate passes. */
   mismatches: string[]
   /** Per-check counts, for reporting. */
@@ -107,6 +122,51 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 }
 
 /**
+ * Asymmetric fidelity check: every field the reconstruction *carries* must equal
+ * the legacy source's value for that field (numbers within `epsilon`). Keys the
+ * source has but the reconstruction omits are ignored, because the layers
+ * view-model deliberately drops some legacy columns and imposes that same drop on
+ * any 0.6-native ingest. What this catches is a *mis-mapped* field: a copy that
+ * routes the wrong legacy column into a view-model field surfaces as the
+ * reconstructed field disagreeing with its source. Recursion carries the same
+ * recon-keyed semantics into nested objects; arrays compare element-wise.
+ *
+ * @param recon - the value reconstructed from the layers store via a backward read
+ * @param source - the legacy source value the copy read from
+ * @param epsilon - numeric tolerance for float fields
+ * @returns whether every reconstructed field matches its source
+ */
+export function reconMatchesSource(recon: unknown, source: unknown, epsilon = DEFAULT_EPSILON): boolean {
+  if (recon === source) return true
+  if (typeof recon === 'number' && typeof source === 'number') {
+    return Math.abs(recon - source) <= epsilon
+  }
+  // A reconstruction serializes timestamps to ISO strings; the raw Prisma row
+  // hands them back as Date objects. Treat a Date and its ISO string as equal so
+  // a faithful copy is not flagged over a representation the store never keeps.
+  if (recon instanceof Date || source instanceof Date) {
+    const reconIso = recon instanceof Date ? recon.toISOString() : recon
+    const sourceIso = source instanceof Date ? source.toISOString() : source
+    return reconIso === sourceIso
+  }
+  if (Array.isArray(recon) && Array.isArray(source)) {
+    if (recon.length !== source.length) return false
+    return recon.every((item, index) => reconMatchesSource(item, source[index], epsilon))
+  }
+  if (isPlainObject(recon) && isPlainObject(source)) {
+    return Object.keys(recon).every((key) => reconMatchesSource(recon[key], source[key], epsilon))
+  }
+  return false
+}
+
+/** Indexes a list of `{ id }` objects by id for id-matched fidelity comparison. */
+function byId(objects: ReadonlyArray<{ id: string }>): Map<string, Record<string, unknown>> {
+  const map = new Map<string, Record<string, unknown>>()
+  for (const object of objects) map.set(object.id, object as Record<string, unknown>)
+  return map
+}
+
+/**
  * Verifies the backfill and returns a report. Never throws for a data mismatch;
  * mismatches are collected so the caller can print all of them and exit.
  *
@@ -122,6 +182,7 @@ export async function runVerify(
   const sinceFilter = options.since ? { updatedAt: { gte: options.since } } : {}
   const mismatches: string[] = []
   let roundTripped = 0
+  let contentChecked = 0
 
   // --- Annotations: round-trip + 1:1 count parity --------------------------
   const annotations = await prisma.annotation.findMany({ where: sinceFilter })
@@ -177,7 +238,7 @@ export async function runVerify(
     }
   }
 
-  // --- Ontology types -> TypeDef count parity ------------------------------
+  // --- Ontology types -> TypeDef count parity + content fidelity ------------
   let ontologyTypeCount = 0
   const ontologies = await prisma.ontology.findMany({ where: sinceFilter })
   for (const ontology of ontologies) {
@@ -187,41 +248,118 @@ export async function runVerify(
     if ((await prisma.layersOntology.count({ where: { id: layersOntologyId } })) === 0) {
       mismatches.push(`Ontology ${ontology.id} has no LayersOntology for persona ${ontology.personaId}`)
     }
+    // One backward read reconstructs the persona's four type buckets; index each
+    // by id to check every legacy type against the type the lens rebuilt.
+    const { aggregate: reconOntology } = await readOntologyAggregate(prisma, ontology.personaId)
+    const reconOntologyRecord = reconOntology as unknown as Record<string, unknown>
     for (const [bucket, typeKind] of ONTOLOGY_BUCKETS) {
       const types = Array.isArray(record[bucket]) ? (record[bucket] as Array<{ id: string }>) : []
+      const reconBucket = Array.isArray(reconOntologyRecord[bucket])
+        ? byId(reconOntologyRecord[bucket] as Array<{ id: string }>)
+        : new Map<string, Record<string, unknown>>()
       for (const type of types) {
         ontologyTypeCount += 1
         // The bridge keys a TypeDef by a derived id, not the raw type id.
         const typeDefId = typeDefRowId(layersOntologyId, typeKind, type.id)
         if ((await prisma.typeDef.count({ where: { id: typeDefId } })) === 0) {
           mismatches.push(`Ontology type ${type.id} has no TypeDef (count parity)`)
+          continue
+        }
+        const recon = reconBucket.get(type.id)
+        if (!recon) {
+          mismatches.push(`Ontology ${bucket} ${type.id} did not reconstruct from the layers store`)
+        } else if (!reconMatchesSource(recon, type, epsilon)) {
+          mismatches.push(
+            `Ontology ${bucket} ${type.id} content did not round-trip: ` +
+              `source ${JSON.stringify(type)} reconstructed ${JSON.stringify(recon)}`,
+          )
+        } else {
+          contentChecked += 1
         }
       }
     }
   }
 
-  // --- World objects -> GraphNode count parity -----------------------------
+  // --- World objects -> GraphNode count parity + content fidelity -----------
+  // The three primary buckets become GraphNodes (checked for count parity by
+  // their derived node id); the collection buckets and relations persist as
+  // other row kinds, so their existence is proven by the content reconstruction
+  // rather than a node count. Content fidelity covers every bucket the aggregate
+  // carries.
+  const WORLD_NODE_BUCKETS = ['entities', 'events', 'times'] as const
+  const WORLD_BUCKETS = [
+    ...WORLD_NODE_BUCKETS,
+    'entityCollections',
+    'eventCollections',
+    'timeCollections',
+    'relations',
+  ] as const
+  const WORLD_NODE_BUCKET_SET = new Set<string>(WORLD_NODE_BUCKETS)
   let worldObjectCount = 0
   const worldStates = await prisma.worldState.findMany({ where: sinceFilter })
   for (const worldState of worldStates) {
     const record = worldState as unknown as Record<string, unknown>
-    for (const bucket of ['entities', 'events', 'times', 'locations']) {
+    const scope: WorldScope = { userId: worldState.userId, projectId: worldState.projectId }
+    // One backward read reconstructs the whole scope; index each bucket by id so
+    // a legacy object is checked against the object the lens rebuilt for it.
+    const { aggregate: reconWorld } = await readWorldAggregate(prisma, scope)
+    const reconWorldRecord = reconWorld as unknown as Record<string, unknown>
+    for (const bucket of WORLD_BUCKETS) {
       const objects = Array.isArray(record[bucket]) ? (record[bucket] as Array<{ id: string }>) : []
+      const reconBucket = Array.isArray(reconWorldRecord[bucket])
+        ? byId(reconWorldRecord[bucket] as Array<{ id: string }>)
+        : new Map<string, Record<string, unknown>>()
       for (const object of objects) {
-        worldObjectCount += 1
-        if ((await prisma.graphNode.count({ where: { id: reuseWorldObjectNodeId(object.id) } })) === 0) {
-          mismatches.push(`World object ${object.id} has no GraphNode (count parity)`)
+        if (WORLD_NODE_BUCKET_SET.has(bucket)) {
+          worldObjectCount += 1
+          if ((await prisma.graphNode.count({ where: { id: reuseWorldObjectNodeId(object.id) } })) === 0) {
+            mismatches.push(`World object ${object.id} has no GraphNode (count parity)`)
+            continue
+          }
+        }
+        const recon = reconBucket.get(object.id)
+        if (!recon) {
+          mismatches.push(`World ${bucket} ${object.id} did not reconstruct from the layers store`)
+        } else if (!reconMatchesSource(recon, object, epsilon)) {
+          mismatches.push(
+            `World ${bucket} ${object.id} content did not round-trip: ` +
+              `source ${JSON.stringify(object)} reconstructed ${JSON.stringify(recon)}`,
+          )
+        } else {
+          contentChecked += 1
         }
       }
     }
   }
 
-  // --- Claims -> claim GraphNode count parity ------------------------------
+  // --- Claims -> claim GraphNode count parity + content fidelity ------------
+  // Content is checked against the raw legacy row (not the copy's own mapping),
+  // so a mis-mapped column surfaces here rather than hiding behind a shared
+  // transform. One backward read per summary reconstructs all its claims.
   const claims = await prisma.claim.findMany({ where: sinceFilter })
+  const summaryReconCache = new Map<string, Map<string, Record<string, unknown>>>()
   for (const claim of claims) {
     const node = await prisma.graphNode.findUnique({ where: { id: reuseClaimNodeId(claim.id) } })
     if (!node || node.nodeType !== 'claim') {
       mismatches.push(`Claim ${claim.id} has no claim GraphNode (count parity)`)
+      continue
+    }
+    let reconClaims = summaryReconCache.get(claim.summaryId)
+    if (!reconClaims) {
+      const read = await readSummaryClaims(prisma, claim.summaryId)
+      reconClaims = byId(read.claims as ReadonlyArray<{ id: string }>)
+      summaryReconCache.set(claim.summaryId, reconClaims)
+    }
+    const recon = reconClaims.get(claim.id)
+    if (!recon) {
+      mismatches.push(`Claim ${claim.id} did not reconstruct from the layers store`)
+    } else if (!reconMatchesSource(recon, claim as unknown as Record<string, unknown>, epsilon)) {
+      mismatches.push(
+        `Claim ${claim.id} content did not round-trip: ` +
+          `source ${JSON.stringify(claim)} reconstructed ${JSON.stringify(recon)}`,
+      )
+    } else {
+      contentChecked += 1
     }
   }
 
@@ -238,6 +376,7 @@ export async function runVerify(
 
   return {
     roundTripped,
+    contentChecked,
     mismatches,
     counts: {
       annotations: annotations.length,
