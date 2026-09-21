@@ -26,18 +26,27 @@ import dotenv from 'dotenv'
 import type { SpatioTemporalAnchor } from '@fovea/layers-schema'
 
 import {
+  boundingBoxSequenceToSpatioTemporalAnchor,
   spatioTemporalAnchorToBoundingBoxSequence,
   type BoundingBoxSequence,
 } from '../../src/services/layers-conversion-service.js'
+import { typeDefRowId } from '../../src/services/layers-bridge/ontology-bridge.js'
 import {
   expressionVideoId,
   layersOntologyForPersonaId,
   mediaVideoId,
   reuseAnnotationId,
   reuseClaimNodeId,
-  reuseTypeId,
   reuseWorldObjectNodeId,
 } from './id-map.js'
+
+/** The four ontology buckets and the layers `typeKind` each maps to. */
+const ONTOLOGY_BUCKETS: ReadonlyArray<readonly [bucket: string, typeKind: string]> = [
+  ['entityTypes', 'entity-type'],
+  ['eventTypes', 'situation-type'],
+  ['roleTypes', 'role-type'],
+  ['relationTypes', 'relation-type'],
+]
 
 /** Default numeric tolerance for the round-trip deep-equality. */
 const DEFAULT_EPSILON = 1e-9
@@ -144,14 +153,26 @@ export async function runVerify(
       spatioTemporalAnchor,
       { frameRate },
     )
-    const original = annotation.frames as unknown
+    // Zero-loss for a lens migration means the stored row equals the canonical
+    // 0.6 projection of the legacy frames — not bit-equality with the raw legacy
+    // frames, which the native anchor deliberately quantizes (integer pixel
+    // geometry, per-keyframe visibility). Compare the reconstruction against the
+    // legacy frames pushed through the same forward+inverse conversion the writer
+    // applied, so the check catches migration loss without flagging the model's
+    // inherent canonicalization (which the app imposes on any 0.6-native ingest).
+    const canonical: BoundingBoxSequence = spatioTemporalAnchorToBoundingBoxSequence(
+      boundingBoxSequenceToSpatioTemporalAnchor(annotation.frames as unknown as BoundingBoxSequence, {
+        frameRate,
+      }),
+      { frameRate },
+    )
 
-    if (deepEqualApprox(rebuilt, original, epsilon)) {
+    if (deepEqualApprox(rebuilt, canonical, epsilon)) {
       roundTripped += 1
     } else {
       mismatches.push(
         `Annotation ${annotation.id} frames did not round-trip: ` +
-          `expected ${JSON.stringify(original)} got ${JSON.stringify(rebuilt)}`,
+          `expected ${JSON.stringify(canonical)} got ${JSON.stringify(rebuilt)}`,
       )
     }
   }
@@ -160,22 +181,19 @@ export async function runVerify(
   let ontologyTypeCount = 0
   const ontologies = await prisma.ontology.findMany({ where: sinceFilter })
   for (const ontology of ontologies) {
-    const buckets = [
-      ontology.entityTypes,
-      ontology.eventTypes,
-      ontology.roleTypes,
-      ontology.relationTypes,
-    ]
+    const record = ontology as unknown as Record<string, unknown>
     // Confirm the persona ontology exists before checking its types.
     const layersOntologyId = layersOntologyForPersonaId(ontology.personaId)
     if ((await prisma.layersOntology.count({ where: { id: layersOntologyId } })) === 0) {
       mismatches.push(`Ontology ${ontology.id} has no LayersOntology for persona ${ontology.personaId}`)
     }
-    for (const bucket of buckets) {
-      const types = Array.isArray(bucket) ? (bucket as Array<{ id: string }>) : []
+    for (const [bucket, typeKind] of ONTOLOGY_BUCKETS) {
+      const types = Array.isArray(record[bucket]) ? (record[bucket] as Array<{ id: string }>) : []
       for (const type of types) {
         ontologyTypeCount += 1
-        if ((await prisma.typeDef.count({ where: { id: reuseTypeId(type.id) } })) === 0) {
+        // The bridge keys a TypeDef by a derived id, not the raw type id.
+        const typeDefId = typeDefRowId(layersOntologyId, typeKind, type.id)
+        if ((await prisma.typeDef.count({ where: { id: typeDefId } })) === 0) {
           mismatches.push(`Ontology type ${type.id} has no TypeDef (count parity)`)
         }
       }

@@ -24,6 +24,7 @@ import type {
 } from '../../src/services/layers-lens/video-lens.js'
 import type { BoundingBoxSequence } from '../../src/services/layers-conversion-service.js'
 
+import { reuseAnnotationId } from './id-map.js'
 import type { StepStats } from './helpers.js'
 
 const LINK_TYPES: readonly string[] = ['entity', 'event', 'time', 'location']
@@ -61,8 +62,10 @@ export async function backfillAnnotations(
       userId: row.createdByUserId ?? row.userId ?? null,
       projectId: row.projectId,
     }
+    const existed =
+      (await prisma.layersAnnotation.count({ where: { id: reuseAnnotationId(row.id) } })) > 0
     await writeVideoAnnotation(prisma, input, scope)
-    stats.created += 1
+    existed ? (stats.updated += 1) : (stats.created += 1)
   }
   return stats
 }

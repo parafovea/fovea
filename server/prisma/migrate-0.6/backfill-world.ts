@@ -1,23 +1,23 @@
 /**
  * Copies each legacy `world_state` row into the native layers world graph
- * through the SAME lens + bridge the application uses — no row construction here.
+ * through the SAME bridge the application uses — no row construction here.
  *
  * The legacy `WorldState` columns (entities / events / times / the three
  * collection buckets / relations) ARE the `WorldStateAggregate` the world lens
  * consumes, so the copy is: read the legacy row -> assemble the aggregate ->
- * `worldStateToLayers(aggregate, scope)` (the panproto world lens) ->
- * `createWorldProjection(prisma, projection)` (the world bridge writer). The
- * writer derives every layers id deterministically, so a re-run upserts the same
- * rows (idempotent).
+ * `mergeWorldObjects(prisma, scope, aggregate)` (the world bridge's in-place,
+ * lockVersion-guarded upsert). The bridge derives every layers id
+ * deterministically and upserts each object by its own id, so a re-run refreshes
+ * the same rows without colliding (idempotent and resumable).
  *
  * @module
  */
 
 import type { PrismaClient, WorldState } from '@prisma/client'
 
-import { worldStateToLayersViaLens } from '../../src/services/layers-lens/world-lens.js'
-import type { WorldStateAggregate, WorldLayersScope } from '../../src/services/world-model.js'
-import { createWorldProjection } from '../../src/services/layers-bridge/world-store.js'
+import { mergeWorldObjects, type WorldScope } from '../../src/services/layers-bridge/world-bridge.js'
+import { worldScaffoldLayerId } from '../../src/services/layers-id-map.js'
+import type { WorldStateAggregate } from '../../src/services/world-model.js'
 
 import type { StepStats } from './helpers.js'
 
@@ -39,7 +39,8 @@ function aggregateOf(row: WorldState): WorldStateAggregate {
  *
  * @param prisma - the Prisma client
  * @param rows - the legacy WorldState rows
- * @returns the created/updated tally (one aggregate written per row)
+ * @returns the created/updated tally (one aggregate written per row, counted as
+ *   an update when the scope's world scaffold already existed)
  */
 export async function backfillWorldStates(
   prisma: PrismaClient,
@@ -47,10 +48,11 @@ export async function backfillWorldStates(
 ): Promise<StepStats> {
   const stats: StepStats = { created: 0, updated: 0 }
   for (const row of rows) {
-    const scope: WorldLayersScope = { projectId: row.projectId, createdByUserId: row.userId }
-    const projection = await worldStateToLayersViaLens(aggregateOf(row), scope)
-    await createWorldProjection(prisma, projection)
-    stats.created += 1
+    const scope: WorldScope = { userId: row.userId, projectId: row.projectId }
+    const scaffoldId = worldScaffoldLayerId(row.userId, row.projectId)
+    const existed = (await prisma.annotationLayer.count({ where: { id: scaffoldId } })) > 0
+    await mergeWorldObjects(prisma, scope, aggregateOf(row))
+    existed ? (stats.updated += 1) : (stats.created += 1)
   }
   return stats
 }

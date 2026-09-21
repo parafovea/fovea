@@ -12,6 +12,7 @@
 
 import type { PrismaClient, Video } from '@prisma/client'
 
+import { expressionVideoId } from '../../src/services/layers-id-map.js'
 import { getOrCreateVideoExpression } from '../../src/services/video-expression-service.js'
 
 import type { StepStats } from './helpers.js'
@@ -27,8 +28,9 @@ import type { StepStats } from './helpers.js'
 export async function backfillVideos(prisma: PrismaClient, rows: Video[]): Promise<StepStats> {
   const stats: StepStats = { created: 0, updated: 0 }
   for (const row of rows) {
+    const existed = (await prisma.expression.count({ where: { id: expressionVideoId(row.id) } })) > 0
     await getOrCreateVideoExpression(prisma, row.id)
-    stats.created += 1
+    existed ? (stats.updated += 1) : (stats.created += 1)
   }
   return stats
 }

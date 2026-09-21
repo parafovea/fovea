@@ -105,23 +105,26 @@ export async function backfillClaims(
     // (its denoting annotations and its node) before the non-idempotent
     // bridge writer recreates them under the same deterministic ids.
     const claimNodeId = reuseClaimNodeId(claim.id)
+    const existed = (await prisma.graphNode.count({ where: { id: claimNodeId } })) > 0
     await prisma.layersAnnotation.deleteMany({ where: { denotesNodeId: claimNodeId } })
     await prisma.graphNode.deleteMany({ where: { id: claimNodeId } })
     await writeClaim(prisma, context, storedClaimOf(claim))
-    stats.created += 1
+    existed ? (stats.updated += 1) : (stats.created += 1)
   }
 
   const projectByClaim = new Map(claims.map((c) => [c.id, c.projectId] as const))
   for (const relation of relations) {
     const source = claims.find((c) => c.id === relation.sourceClaimId)
-    await prisma.graphEdge.deleteMany({ where: { id: reuseClaimRelationEdgeId(relation.id) } })
+    const edgeId = reuseClaimRelationEdgeId(relation.id)
+    const existed = (await prisma.graphEdge.count({ where: { id: edgeId } })) > 0
+    await prisma.graphEdge.deleteMany({ where: { id: edgeId } })
     await writeClaimRelation(
       prisma,
       storedRelationOf(relation),
       source?.summaryId ?? '',
       projectByClaim.get(relation.sourceClaimId) ?? null,
     )
-    stats.created += 1
+    existed ? (stats.updated += 1) : (stats.created += 1)
   }
 
   return stats

@@ -22,6 +22,7 @@ import type {
   OntologyLayersScope,
 } from '../../src/services/ontology-model.js'
 import { writeOntologyAggregate } from '../../src/services/layers-bridge/ontology-bridge.js'
+import { layersOntologyForPersonaId } from '../../src/services/layers-id-map.js'
 
 import type { StepStats } from './helpers.js'
 
@@ -55,8 +56,10 @@ export async function backfillOntologies(
       createdByUserId: persona.userId,
     }
     const meta: OntologyMeta = { name: persona.name, description: null, domain: null }
+    const existed =
+      (await prisma.layersOntology.count({ where: { id: layersOntologyForPersonaId(row.personaId) } })) > 0
     await writeOntologyAggregate(prisma, row.personaId, aggregateOf(row), meta, scope)
-    stats.created += 1
+    existed ? (stats.updated += 1) : (stats.created += 1)
   }
   return stats
 }
