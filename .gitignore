@@ -123,6 +123,7 @@ docker-compose.override.yml
 # Database
 *.sql
 !server/prisma/migrations/**/*.sql
+!server/prisma/migrate-0.6/*.sql
 *.sql.gz
 *.rdb
 
