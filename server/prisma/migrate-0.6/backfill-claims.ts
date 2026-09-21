@@ -22,6 +22,7 @@ import {
 import type { StoredClaim, StoredRelation } from '../../src/services/claim-model.js'
 
 import type { StepStats } from './helpers.js'
+import { reuseClaimNodeId, reuseClaimRelationEdgeId } from './id-map.js'
 
 /** Maps a legacy Claim row onto the StoredClaim view-model (dates to ISO). */
 function storedClaimOf(row: Claim): StoredClaim {
@@ -100,6 +101,12 @@ export async function backfillClaims(
       }
       summaryContext.set(claim.summaryId, context)
     }
+    // Idempotency: clear any rows a prior run produced for this claim
+    // (its denoting annotations and its node) before the non-idempotent
+    // bridge writer recreates them under the same deterministic ids.
+    const claimNodeId = reuseClaimNodeId(claim.id)
+    await prisma.layersAnnotation.deleteMany({ where: { denotesNodeId: claimNodeId } })
+    await prisma.graphNode.deleteMany({ where: { id: claimNodeId } })
     await writeClaim(prisma, context, storedClaimOf(claim))
     stats.created += 1
   }
@@ -107,6 +114,7 @@ export async function backfillClaims(
   const projectByClaim = new Map(claims.map((c) => [c.id, c.projectId] as const))
   for (const relation of relations) {
     const source = claims.find((c) => c.id === relation.sourceClaimId)
+    await prisma.graphEdge.deleteMany({ where: { id: reuseClaimRelationEdgeId(relation.id) } })
     await writeClaimRelation(
       prisma,
       storedRelationOf(relation),
