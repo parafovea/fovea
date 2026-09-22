@@ -21,7 +21,11 @@ exporters:
     namespace: fovea
 
   debug:
-    verbosity: detailed
+    # `basic` emits periodic per-signal summary counts. `detailed` dumps every
+    # span and every metric data point to stderr in full, which with an
+    # unbounded json-file log driver fills the host disk (it grew one
+    # collector's log to 70GB and wedged demo.fovea.video). Keep it at `basic`.
+    verbosity: basic
 
 service:
   pipelines:
