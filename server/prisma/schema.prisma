@@ -351,8 +351,8 @@ model ImportHistory {
 // LEGACY 0.5.x annotation models — RETAINED THROUGH 0.6.0 for the one-time
 // 0.5→0.6 data migration (server/prisma/migrate-0.6). No application code reads
 // these; the migrate-0.6 backfill copies their rows into the layers store. The
-// tables are dropped in 0.6.1 by the guarded drop migration once an admin has
-// migrated and verified. Do NOT wire new code to these models.
+// tables are dropped by the guarded drop migration in a later release once an
+// admin has migrated and verified. Do NOT wire new code to these models.
 // =============================================================================
 
 model Ontology {

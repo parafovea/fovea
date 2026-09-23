@@ -5,8 +5,8 @@
  * ontology data in the tables the 0.6.0 schema retains (the expand phase). This
  * CLI copies that data into the native layers tables through the same panproto
  * lenses and bridges the running application uses, verifies the copy is complete
- * and lossless, and records a durable marker so the guarded 0.6.1 migration knows
- * the legacy tables are safe to drop (the contract phase).
+ * and lossless, and records a durable marker so the guarded drop migration in a later release
+ * knows the legacy tables are safe to remove (the contract phase).
  *
  * Every subcommand reads `DATABASE_URL` from the environment. The production
  * image ships this file bundled as `cli.cjs` (run `node prisma/migrate-0.6/cli.cjs
@@ -210,7 +210,7 @@ async function migrate(prisma: PrismaClient, options: CliOptions): Promise<numbe
   const code = reportVerify(verify)
   if (code === 0) {
     await recordVerified(prisma, verify as unknown as Parameters<typeof recordVerified>[1])
-    out('Recorded migration state: verified. The legacy tables are safe for the 0.6.1 drop.')
+    out('Recorded migration state: verified. The legacy tables are safe to drop in the release that removes them.')
   } else {
     out('Migration state left at: backfilled. Fix the mismatches and re-run `migrate` (it is idempotent).')
   }
@@ -235,7 +235,7 @@ async function status(prisma: PrismaClient): Promise<number> {
   const missing = await missingLayersTables(prisma)
   if (missing.length === 0) {
     const counts = await legacyCounts(prisma)
-    out('Legacy row counts (still present until the 0.6.1 contract drop):')
+    out('Legacy row counts (present until the release that removes them):')
     for (const [table, count] of Object.entries(counts)) out(`  ${table.padEnd(16)} ${count}`)
   }
   return 0
@@ -244,7 +244,7 @@ async function status(prisma: PrismaClient): Promise<number> {
 /**
  * `rollback`: clears the migration marker so a re-run starts fresh. It does not
  * delete the copied layers rows (the copy is idempotent, so a re-run refreshes
- * them) and it does not touch the legacy tables (they persist until 0.6.1). For
+ * them) and it does not touch the legacy tables (they persist until the release that removes them). For
  * a full revert, restore the DB from the `export` backup or your own snapshot.
  */
 async function rollback(prisma: PrismaClient): Promise<number> {

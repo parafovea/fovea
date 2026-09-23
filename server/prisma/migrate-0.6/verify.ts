@@ -16,7 +16,7 @@
  * `readSummaryClaims`) and comparing the reconstruction to the legacy source with
  * {@link reconMatchesSource}: every field the layers view-model preserves must
  * match its source, so a copy that routes the wrong legacy column into a
- * view-model field is caught here rather than at the irreversible 0.6.1 drop.
+ * view-model field is caught here rather than at the irreversible legacy-table drop.
  *
  * The admin CLI (`cli.ts`) runs it through the `verify` subcommand, and after
  * the copy in the `migrate` subcommand; either exits non-zero on any mismatch.

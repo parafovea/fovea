@@ -3,10 +3,10 @@
  *
  * A single-row `_layers_migration_state` table records how far the upgrade has
  * progressed: `backfilled` once the copy has run, `verified` once the verifier
- * has passed with zero mismatches. The guarded 0.6.1 contract migration (which
- * drops the legacy tables) reads this row and refuses to run until it reads
- * `verified`, so the legacy data is never dropped before its native copy is
- * proven. The table lives outside the Prisma model set: it is migration
+ * has passed with zero mismatches. The guarded contract migration in a later release
+ * (which drops the legacy tables) reads this row and, while the legacy tables still
+ * hold rows, refuses to run until it reads `verified`, so the legacy data is
+ * never dropped before its native copy is proven. The table lives outside the Prisma model set: it is migration
  * infrastructure, created on demand by the CLI rather than by a schema model.
  *
  * @module

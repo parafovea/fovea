@@ -1,5 +1,5 @@
 /**
- * Exports the legacy 0.5 tables the 0.6.1 contract migration will drop, so an
+ * Exports the legacy 0.5 tables the contract-phase migration will drop, so an
  * admin holds a restorable backup taken with the same client the copy reads.
  *
  * The five dropped tables are the legacy annotation models — `Annotation`,
