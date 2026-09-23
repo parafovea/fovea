@@ -98,7 +98,7 @@ Confirm the 0.6 schema is applied and the legacy tables are
 readable, and see how many rows the copy will move:
 
 ```bash
-docker compose run --rm backend npm run migrate:0.6:preflight
+docker compose run --rm backend node prisma/migrate-0.6/cli.cjs preflight
 ```
 
 Preflight prints the per-table legacy counts and any prior
@@ -112,7 +112,9 @@ to a JSON file. This is a targeted, restorable copy of exactly
 what the 0.6.1 contract phase removes:
 
 ```bash
-docker compose run --rm backend npm run migrate:0.6:export -- --out /data/fovea-legacy-0.5.json
+mkdir -p backups
+docker compose run --rm -v "$PWD/backups:/backups" backend \
+  node prisma/migrate-0.6/cli.cjs export --out /backups/fovea-legacy-0.5.json
 ```
 
 Keep this file until you have upgraded to 0.6.1 and confirmed the
@@ -124,7 +126,7 @@ Run the whole copy inside a transaction that is rolled back, so
 you see exactly what it would write without persisting anything:
 
 ```bash
-docker compose run --rm backend npm run migrate:0.6:dry-run
+docker compose run --rm backend node prisma/migrate-0.6/cli.cjs dry-run
 ```
 
 The dry run prints the created and updated tallies per domain. It
@@ -136,7 +138,7 @@ Run the copy for real. It copies every domain, then verifies the
 result and records the marker:
 
 ```bash
-docker compose run --rm backend npm run migrate:0.6:migrate
+docker compose run --rm backend node prisma/migrate-0.6/cli.cjs migrate
 ```
 
 The command prints a per-domain tally, then a verify report. It
@@ -150,7 +152,7 @@ rows it already wrote and mints nothing new.
 ### 7. Confirm status and spot-check
 
 ```bash
-docker compose run --rm backend npm run migrate:0.6:status
+docker compose run --rm backend node prisma/migrate-0.6/cli.cjs status
 ```
 
 Status prints the recorded phase and the legacy row counts still
@@ -194,23 +196,26 @@ checks more than that rows exist:
 
 Every subcommand reads `DATABASE_URL` from the environment. Run
 them inside the `backend` service so they use the same database
-and client as the application.
+and client as the application. The production image ships the CLI
+as a bundled `prisma/migrate-0.6/cli.cjs`, so the invocation is
+`node prisma/migrate-0.6/cli.cjs <subcommand>`. In a source
+checkout, the same subcommands run as `npm run migrate:0.6:<subcommand>`.
 
-| Command                     | What it does                                                        |
+| Subcommand                  | What it does                                                        |
 | --------------------------- | ------------------------------------------------------------------- |
-| `migrate:0.6:preflight`     | Confirms the 0.6 schema is applied and prints legacy row counts.    |
-| `migrate:0.6:export`        | Writes a JSON backup of the five tables 0.6.1 drops.                |
-| `migrate:0.6:dry-run`       | Runs the whole copy in a rolled-back transaction; persists nothing. |
-| `migrate:0.6:migrate`       | Runs the copy, verifies it, and records the marker.                 |
-| `migrate:0.6:verify`        | Re-runs the verifier without copying.                               |
-| `migrate:0.6:status`        | Prints the recorded phase and current legacy row counts.            |
+| `preflight`                 | Confirms the 0.6 schema is applied and prints legacy row counts.    |
+| `export`                    | Writes a JSON backup of the five tables 0.6.1 drops.                |
+| `dry-run`                   | Runs the whole copy in a rolled-back transaction; persists nothing. |
+| `migrate`                   | Runs the copy, verifies it, and records the marker.                 |
+| `verify`                    | Re-runs the verifier without copying.                               |
+| `status`                    | Prints the recorded phase and current legacy row counts.            |
 
 Two options are shared where they apply: `--since <ISO-8601>`
 restricts the copy or verify to legacy rows updated at or after an
 instant (useful for a catch-up pass), and `--batch-size <n>` sets
 how many rows are read per page.
 
-The bare `migrate:0.6` script also exposes a `rollback`
+The CLI also exposes a `rollback`
 subcommand, which clears the marker so a re-run starts fresh. It
 does not delete copied rows and does not touch the legacy tables.
 
@@ -237,11 +242,11 @@ JSON export from step 4.
   copy.
 - **Migrate exits non-zero with mismatches.** Read the printed
   mismatches. The marker stays at `backfilled`, so the 0.6.1 drop
-  will still refuse. Fix the cause and re-run `migrate:0.6:migrate`;
+  will still refuse. Fix the cause and re-run the `migrate` subcommand;
   it is idempotent.
 - **The 0.6.1 drop refuses with "expected verified".** The copy
   never reached a passing verify on this database. Run
-  `migrate:0.6:migrate` until it reports `VERIFY OK`, then retry
+  the `migrate` subcommand until it reports `VERIFY OK`, then retry
   the 0.6.1 upgrade.
-- **Interrupted copy.** Run `migrate:0.6:migrate` again. A re-run
+- **Interrupted copy.** Run the `migrate` subcommand again. A re-run
   refreshes the rows it already wrote and creates nothing new.

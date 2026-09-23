@@ -8,8 +8,9 @@
  * and lossless, and records a durable marker so the guarded 0.6.1 migration knows
  * the legacy tables are safe to drop (the contract phase).
  *
- * Every subcommand reads `DATABASE_URL` from the environment. Run in dependency
- * order:
+ * Every subcommand reads `DATABASE_URL` from the environment. The production
+ * image ships this file bundled as `cli.cjs` (run `node prisma/migrate-0.6/cli.cjs
+ * <subcommand>`); a source checkout runs it through tsx. Run in dependency order:
  *
  * ```bash
  * tsx prisma/migrate-0.6/cli.ts preflight
@@ -296,7 +297,7 @@ async function main(): Promise<void> {
   const [command, ...rest] = process.argv.slice(2)
   const handler = command ? COMMANDS[command] : undefined
   if (!handler) {
-    out(`Usage: tsx prisma/migrate-0.6/cli.ts <${Object.keys(COMMANDS).join('|')}> [options]`)
+    out(`Usage: ${process.argv[1] ?? 'cli'} <${Object.keys(COMMANDS).join('|')}> [options]`)
     process.exitCode = command ? 1 : 0
     return
   }

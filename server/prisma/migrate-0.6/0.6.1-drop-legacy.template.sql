@@ -34,14 +34,14 @@ BEGIN
 
   IF NOT marker_exists THEN
     RAISE EXCEPTION
-      'Refusing to drop the legacy 0.5 tables: the 0.5-to-0.6 data migration has not run (no _layers_migration_state marker). In the server package, run `npm run migrate:0.6:migrate` and confirm it reports VERIFY OK before upgrading to 0.6.1.';
+      'Refusing to drop the legacy 0.5 tables: the 0.5-to-0.6 data migration has not run (no _layers_migration_state marker). Run `node prisma/migrate-0.6/cli.cjs migrate` in the backend container (`npm run migrate:0.6:migrate` in a source checkout) and confirm it reports VERIFY OK before upgrading to 0.6.1.';
   END IF;
 
   SELECT phase INTO marker_phase FROM "_layers_migration_state" WHERE id = 1;
 
   IF marker_phase IS DISTINCT FROM 'verified' THEN
     RAISE EXCEPTION
-      'Refusing to drop the legacy 0.5 tables: migration phase is "%", expected "verified". Re-run `npm run migrate:0.6:migrate` until the verifier passes with zero mismatches, then upgrade to 0.6.1.',
+      'Refusing to drop the legacy 0.5 tables: migration phase is "%", expected "verified". Re-run `node prisma/migrate-0.6/cli.cjs migrate` until the verifier passes with zero mismatches, then upgrade to 0.6.1.',
       COALESCE(marker_phase, 'not started');
   END IF;
 END $$;

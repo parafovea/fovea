@@ -18,19 +18,13 @@
  * match its source, so a copy that routes the wrong legacy column into a
  * view-model field is caught here rather than at the irreversible 0.6.1 drop.
  *
- * Run as a CLI; it exits non-zero on any mismatch so it can gate a deploy.
- *
- * ```bash
- * tsx server/prisma/backfill/verify.ts --since 2026-01-01T00:00:00Z
- * ```
+ * The admin CLI (`cli.ts`) runs it through the `verify` subcommand, and after
+ * the copy in the `migrate` subcommand; either exits non-zero on any mismatch.
  *
  * @module
  */
 
-import { pathToFileURL } from 'node:url'
-
-import { PrismaClient } from '@prisma/client'
-import dotenv from 'dotenv'
+import type { PrismaClient } from '@prisma/client'
 import type { SpatioTemporalAnchor } from '@fovea/layers-schema'
 
 import {
@@ -386,48 +380,4 @@ export async function runVerify(
       videos: videos.length,
     },
   }
-}
-
-/** Parses the CLI arguments into verify options. */
-function parseArgs(argv: string[]): VerifyOptions {
-  const options: VerifyOptions = {}
-  for (let i = 0; i < argv.length; i += 1) {
-    if (argv[i] === '--since') {
-      const value = argv[i + 1]
-      if (!value) throw new Error('--since requires an ISO-8601 timestamp')
-      const since = new Date(value)
-      if (Number.isNaN(since.getTime())) throw new Error(`invalid --since value: ${value}`)
-      options.since = since
-      i += 1
-    }
-  }
-  return options
-}
-
-/** CLI entry: loads env, verifies, prints the report, exits non-zero on mismatch. */
-async function main(): Promise<void> {
-  dotenv.config()
-  const options = parseArgs(process.argv.slice(2))
-
-  const prisma = new PrismaClient()
-  try {
-    const report = await runVerify(prisma, options)
-    process.stdout.write(`${JSON.stringify(report, null, 2)}\n`)
-    if (report.mismatches.length > 0) {
-      process.stderr.write(`VERIFY FAILED: ${report.mismatches.length} mismatch(es)\n`)
-      process.exitCode = 1
-    } else {
-      process.stdout.write(`VERIFY OK: ${report.roundTripped} annotation(s) round-tripped\n`)
-    }
-  } finally {
-    await prisma.$disconnect()
-  }
-}
-
-const invokedPath = process.argv[1] ? pathToFileURL(process.argv[1]).href : ''
-if (import.meta.url === invokedPath) {
-  main().catch((error: unknown) => {
-    process.stderr.write(`${error instanceof Error ? error.stack ?? error.message : String(error)}\n`)
-    process.exitCode = 1
-  })
 }

@@ -7,20 +7,13 @@
  * whole run is additive and idempotent: re-running mints no duplicates and never
  * mutates a legacy row.
  *
- * Run as a CLI:
- *
- * ```bash
- * tsx server/prisma/backfill/runner.ts --since 2026-01-01T00:00:00Z --batch-size 500
- * ```
+ * The admin CLI (`cli.ts`) drives it through the `dry-run` and `migrate`
+ * subcommands.
  *
  * @module
  */
 
-import { pathToFileURL } from 'node:url'
-
-import { PrismaClient } from '@prisma/client'
-import dotenv from 'dotenv'
-
+import type { PrismaClient } from '@prisma/client'
 import { backfillVideos } from './backfill-videos.js'
 import { backfillOntologies } from './backfill-ontologies.js'
 import { backfillWorldStates } from './backfill-world.js'
@@ -178,51 +171,3 @@ export async function runBackfill(
  * The admin CLI imports this name.
  */
 export const runFullMigration = runBackfill
-
-/** Parses the CLI arguments into backfill options. */
-function parseArgs(argv: string[]): BackfillOptions {
-  const options: BackfillOptions = {}
-  for (let i = 0; i < argv.length; i += 1) {
-    const arg = argv[i]
-    if (arg === '--since') {
-      const value = argv[i + 1]
-      if (!value) throw new Error('--since requires an ISO-8601 timestamp')
-      const since = new Date(value)
-      if (Number.isNaN(since.getTime())) throw new Error(`invalid --since value: ${value}`)
-      options.since = since
-      i += 1
-    } else if (arg === '--batch-size') {
-      const value = argv[i + 1]
-      const size = Number(value)
-      if (!Number.isInteger(size) || size <= 0) {
-        throw new Error(`invalid --batch-size value: ${value}`)
-      }
-      options.batchSize = size
-      i += 1
-    }
-  }
-  return options
-}
-
-/** CLI entry: loads env, runs the backfill, prints the report, exits. */
-async function main(): Promise<void> {
-  dotenv.config()
-  const options = parseArgs(process.argv.slice(2))
-  options.log = (message) => process.stdout.write(`${message}\n`)
-
-  const prisma = new PrismaClient()
-  try {
-    const report = await runBackfill(prisma, options)
-    process.stdout.write(`${JSON.stringify(report, null, 2)}\n`)
-  } finally {
-    await prisma.$disconnect()
-  }
-}
-
-const invokedPath = process.argv[1] ? pathToFileURL(process.argv[1]).href : ''
-if (import.meta.url === invokedPath) {
-  main().catch((error: unknown) => {
-    process.stderr.write(`${error instanceof Error ? error.stack ?? error.message : String(error)}\n`)
-    process.exitCode = 1
-  })
-}

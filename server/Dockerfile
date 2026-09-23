@@ -65,6 +65,18 @@ RUN cd server && pnpm exec esbuild prisma/seed.ts \
       --define:import.meta.url=import_meta_url \
       --outfile=prisma/seed.cjs
 
+# Bundle the 0.5-to-0.6 migration CLI the same way, so an operator runs
+# `node prisma/migrate-0.6/cli.cjs <subcommand>` inside the production image.
+# It pulls the layers bridges from ../../src exactly as the seed does, and its
+# entry guard compares import.meta.url against argv[1], which the banner makes
+# resolve to the bundle's own path.
+RUN cd server && pnpm exec esbuild prisma/migrate-0.6/cli.ts \
+      --bundle --platform=node --format=cjs --target=node22 \
+      --external:@prisma/client --external:bcrypt --external:@panproto/core \
+      --banner:js="const import_meta_url=require('url').pathToFileURL(__filename).href;" \
+      --define:import.meta.url=import_meta_url \
+      --outfile=prisma/migrate-0.6/cli.cjs
+
 # Production dependencies stage
 FROM node:${NODE_VERSION}-alpine AS deps
 
