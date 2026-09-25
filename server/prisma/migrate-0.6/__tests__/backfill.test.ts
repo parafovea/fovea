@@ -93,12 +93,14 @@ async function snapshotCounts(prisma: PrismaClient, fixture: LegacyFixture): Pro
 describe('layers backfill', () => {
   let prisma: PrismaClient
   let fixture: LegacyFixture
-  // Watermark just before seeding so the backfill/verify only touch fixture rows
-  // and leave the dev database's pre-existing videos alone.
-  const since = new Date(Date.now() - 5000)
+  // Watermark taken immediately before seeding, so the backfill and verify touch
+  // only fixture rows and not rows other test files wrote to the shared database
+  // moments earlier. `updatedAt` is stamped by the same Prisma client clock.
+  let since: Date
 
   beforeAll(async () => {
     prisma = new PrismaClient()
+    since = new Date()
     fixture = await seedLegacyFixture(prisma)
   })
 
