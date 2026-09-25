@@ -779,13 +779,20 @@ describe('Import/export field-level round-trip fidelity', () => {
       'entity_collection', 'event_collection', 'time_collection', 'relation',
       'summary', 'claim', 'claim_relation', 'annotation',
     ]
+    // Exports carry no ordering guarantee within a type (the fixture has two
+    // claims and two annotations), so each of A's records is paired with the
+    // B record it differs from least, and must match it exactly.
     for (const t of typesToCheck) {
-      const a = aLines.find(l => l.type === t)?.data
-      const b = bLines.find(l => l.type === t)?.data
-      expect(a, `A's export must contain a ${t} record`).toBeDefined()
-      expect(b, `B's re-export must contain a ${t} record after cross-user import`).toBeDefined()
-      const diffs = diffPreservingIds(a!, b!)
-      expect(diffs, `${t} fields drifted cross-user:\n  ${diffs.join('\n  ')}`).toEqual([])
+      const aRecords = aLines.filter(l => l.type === t).map(l => l.data)
+      const bRecords = bLines.filter(l => l.type === t).map(l => l.data)
+      expect(aRecords.length, `A's export must contain a ${t} record`).toBeGreaterThan(0)
+      expect(bRecords.length, `B's re-export must contain every ${t} record after cross-user import`).toBe(aRecords.length)
+      for (const a of aRecords) {
+        const diffs = bRecords
+          .map(b => diffPreservingIds(a, b))
+          .reduce((best, d) => (d.length < best.length ? d : best))
+        expect(diffs, `${t} fields drifted cross-user:\n  ${diffs.join('\n  ')}`).toEqual([])
+      }
     }
   })
 
