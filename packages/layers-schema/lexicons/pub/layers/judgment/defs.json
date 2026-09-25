@@ -1,0 +1,422 @@
+{
+  "lexicon": 1,
+  "id": "pub.layers.judgment.defs",
+  "description": "Shared object definitions for the judgment namespace.",
+  "defs": {
+    "judgment": {
+      "type": "object",
+      "description": "A single judgment about a linguistic item.",
+      "required": ["item"],
+      "properties": {
+        "item": {
+          "type": "ref",
+          "ref": "pub.layers.defs#objectRef",
+          "description": "Reference to the item being judged. Use recordRef for the communication/annotation record, objectId for a specific object within it, localId for same-record references."
+        },
+        "fillingRef": {
+          "type": "string",
+          "format": "at-uri",
+          "description": "Reference to the pub.layers.resource#filling that generated the item being judged."
+        },
+        "categoricalValue": {
+          "type": "string",
+          "description": "Categorical judgment label.",
+          "maxLength": 512
+        },
+        "scalarValue": {
+          "type": "integer",
+          "description": "Numeric response value (ordinal-scale rating, magnitude estimate, or rank position)."
+        },
+        "textSpan": {
+          "type": "ref",
+          "ref": "pub.layers.defs#span",
+          "description": "Selected text span for span-labeling tasks."
+        },
+        "freeText": {
+          "type": "string",
+          "description": "Free-text response.",
+          "maxLength": 10000
+        },
+        "responseTimeMs": {
+          "type": "integer",
+          "description": "Response time in milliseconds.",
+          "minimum": 0
+        },
+        "confidence": {
+          "type": "integer",
+          "description": "Annotator's stated confidence in this judgment, scaled 0-1000.",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "behavioralData": {
+          "type": "ref",
+          "ref": "pub.layers.defs#featureMap",
+          "description": "Behavioral signals: mouse movements, keystroke patterns, eye tracking data, scroll events, etc."
+        },
+        "regionResponses": {
+          "type": "array",
+          "description": "Per-region reading-time or response measurements for this judgment, one per region of the presented stimulus (self-paced reading, eye-tracking region analysis).",
+          "items": {
+            "type": "ref",
+            "ref": "pub.layers.judgment.defs#regionResponse"
+          }
+        },
+        "features": {
+          "type": "ref",
+          "ref": "pub.layers.defs#featureMap",
+          "description": "Open-ended features carrying judgment detail not covered by the typed fields."
+        }
+      }
+    },
+    "experimentDesign": {
+      "type": "object",
+      "description": "Experiment design parameters for item distribution, ordering, and timing.",
+      "properties": {
+        "listConstraints": {
+          "type": "array",
+          "description": "Constraints on item list construction (Latin square balancing, no-adjacent-same-condition, etc.).",
+          "maxLength": 32,
+          "items": {
+            "type": "ref",
+            "ref": "#listConstraint"
+          }
+        },
+        "distributionStrategyUri": {
+          "type": "string",
+          "format": "at-uri",
+          "description": "AT-URI of the distribution strategy definition node. Community-expandable."
+        },
+        "distributionStrategy": {
+          "type": "string",
+          "description": "How items are distributed to annotators.",
+          "knownValues": ["latin-square", "random", "blocked", "stratified", "custom"],
+          "maxLength": 128
+        },
+        "itemOrderUri": {
+          "type": "string",
+          "format": "at-uri",
+          "description": "AT-URI of the item order definition node. Community-expandable."
+        },
+        "itemOrder": {
+          "type": "string",
+          "description": "How items are ordered within a list.",
+          "knownValues": ["random-order", "fixed-order", "blocked", "adaptive", "custom"],
+          "maxLength": 128
+        },
+        "timingMs": {
+          "type": "integer",
+          "description": "Target timing per item in milliseconds.",
+          "minimum": 0
+        },
+        "features": {
+          "type": "ref",
+          "ref": "pub.layers.defs#featureMap",
+          "description": "Open-ended features carrying experiment-design detail not covered by the typed fields."
+        }
+      }
+    },
+    "listConstraint": {
+      "type": "object",
+      "description": "A constraint on item list construction for an experiment.",
+      "required": ["kind"],
+      "properties": {
+        "kindUri": {
+          "type": "string",
+          "format": "at-uri",
+          "description": "AT-URI of the constraint kind definition node. Community-expandable."
+        },
+        "kind": {
+          "type": "string",
+          "description": "Constraint kind slug.",
+          "knownValues": ["latin-square", "no-adjacent-same-condition", "balanced-frequency", "minimum-distance", "custom"],
+          "maxLength": 128
+        },
+        "targetProperty": {
+          "type": "string",
+          "description": "The item property this constraint operates on (e.g., 'condition', 'templateRef').",
+          "maxLength": 256
+        },
+        "parameters": {
+          "type": "ref",
+          "ref": "pub.layers.defs#featureMap",
+          "description": "Constraint parameters (e.g., minimum distance, number of lists)."
+        },
+        "constraint": {
+          "type": "ref",
+          "ref": "pub.layers.defs#constraint",
+          "description": "Optional formal constraint expression."
+        }
+      }
+    },
+    "presentationSpec": {
+      "type": "object",
+      "description": "How stimuli are displayed to participants.",
+      "properties": {
+        "methodUri": {
+          "type": "string",
+          "format": "at-uri",
+          "description": "AT-URI of the presentation method definition node. Community-expandable via knowledge graph."
+        },
+        "method": {
+          "type": "string",
+          "description": "Presentation method (fallback when methodUri unavailable).",
+          "knownValues": [
+            "rsvp",
+            "self-paced",
+            "whole-sentence",
+            "auditory",
+            "visual-world",
+            "masked-priming",
+            "cross-modal",
+            "naturalistic",
+            "gating",
+            "maze",
+            "boundary",
+            "moving-window",
+            "custom"
+          ],
+          "maxLength": 128
+        },
+        "chunkingUnitUri": {
+          "type": "string",
+          "format": "at-uri",
+          "description": "AT-URI of the chunking unit definition node. Community-expandable via knowledge graph."
+        },
+        "chunkingUnit": {
+          "type": "string",
+          "description": "How text is segmented for incremental presentation (fallback when chunkingUnitUri unavailable).",
+          "knownValues": ["word", "character", "morpheme", "phrase", "clause", "sentence", "region", "sign", "gesture-phrase", "custom"],
+          "maxLength": 128
+        },
+        "timingMs": {
+          "type": "integer",
+          "description": "Per-chunk display duration in milliseconds.",
+          "minimum": 0
+        },
+        "isiMs": {
+          "type": "integer",
+          "description": "Inter-stimulus interval in milliseconds.",
+          "minimum": 0
+        },
+        "cumulative": {
+          "type": "boolean",
+          "description": "Whether previous chunks remain visible during incremental presentation."
+        },
+        "maskChar": {
+          "type": "string",
+          "description": "Masking character for non-cumulative displays (e.g., '-', '#').",
+          "maxLength": 8
+        },
+        "screenWidthPx": {
+          "type": "integer",
+          "description": "Display width in pixels.",
+          "minimum": 0
+        },
+        "screenHeightPx": {
+          "type": "integer",
+          "description": "Display height in pixels.",
+          "minimum": 0
+        },
+        "screenWidthMm": {
+          "type": "integer",
+          "description": "Physical display width in millimeters.",
+          "minimum": 0
+        },
+        "screenHeightMm": {
+          "type": "integer",
+          "description": "Physical display height in millimeters.",
+          "minimum": 0
+        },
+        "viewingDistanceMm": {
+          "type": "integer",
+          "description": "Participant eye-to-screen distance in millimeters.",
+          "minimum": 0
+        },
+        "refreshRateMilliHz": {
+          "type": "integer",
+          "description": "Display refresh rate in millihertz (e.g., 60000 for 60 Hz).",
+          "minimum": 0
+        },
+        "pixelsPerDegree": {
+          "type": "integer",
+          "description": "Pixels subtending one degree of visual angle at the stated viewing distance.",
+          "minimum": 0
+        },
+        "sessionRef": {
+          "type": "string",
+          "format": "at-uri",
+          "description": "AT-URI of the pub.layers.acquisition.session whose clock and setup this presentation was delivered under."
+        },
+        "participantRefs": {
+          "type": "array",
+          "description": "AT-URIs of pub.layers.acquisition.participant records presented under this specification.",
+          "items": {
+            "type": "string",
+            "format": "at-uri"
+          }
+        },
+        "mediaRefs": {
+          "type": "array",
+          "description": "AT-URIs of pub.layers.media.media records delivered as stimuli under this specification.",
+          "items": {
+            "type": "string",
+            "format": "at-uri"
+          }
+        },
+        "features": {
+          "type": "ref",
+          "ref": "pub.layers.defs#featureMap",
+          "description": "Open-ended features carrying presentation detail not covered by the typed fields."
+        }
+      }
+    },
+    "regionResponse": {
+      "type": "object",
+      "description": "A per-region reading-time or response measurement within a judgment, addressing one region of the presented stimulus (e.g., in self-paced reading or eye-tracking region analysis).",
+      "required": ["region"],
+      "properties": {
+        "region": {
+          "type": "ref",
+          "ref": "pub.layers.defs#objectRef",
+          "description": "Reference to the region being measured. Use recordRef for the stimulus record, objectId for a specific region object within it, localId for same-record references."
+        },
+        "regionIndex": {
+          "type": "integer",
+          "description": "Zero-indexed position of this region within the stimulus presentation order.",
+          "minimum": 0
+        },
+        "regionRoleUri": {
+          "type": "string",
+          "format": "at-uri",
+          "description": "AT-URI of the region role definition node. Community-expandable via knowledge graph."
+        },
+        "regionRole": {
+          "type": "string",
+          "description": "Analysis role of this region (fallback when regionRoleUri unavailable).",
+          "knownValues": ["critical", "spillover", "precritical", "pretarget", "target", "posttarget", "filler", "custom"],
+          "maxLength": 128
+        },
+        "readingTimeMs": {
+          "type": "integer",
+          "description": "Total reading time on this region in milliseconds.",
+          "minimum": 0
+        },
+        "firstFixationMs": {
+          "type": "integer",
+          "description": "First-fixation duration on this region in milliseconds.",
+          "minimum": 0
+        },
+        "gazeDurationMs": {
+          "type": "integer",
+          "description": "Gaze (first-pass) duration on this region in milliseconds.",
+          "minimum": 0
+        },
+        "goPastMs": {
+          "type": "integer",
+          "description": "Go-past (regression-path) duration on this region in milliseconds.",
+          "minimum": 0
+        },
+        "totalTimeMs": {
+          "type": "integer",
+          "description": "Total dwell time across all fixations on this region in milliseconds.",
+          "minimum": 0
+        },
+        "regressionsOut": {
+          "type": "integer",
+          "description": "Count of regressions launched out of this region.",
+          "minimum": 0
+        },
+        "regressionsIn": {
+          "type": "integer",
+          "description": "Count of regressions landing in this region.",
+          "minimum": 0
+        },
+        "fixationCount": {
+          "type": "integer",
+          "description": "Number of fixations on this region.",
+          "minimum": 0
+        },
+        "responseTimeMs": {
+          "type": "integer",
+          "description": "Response time in milliseconds for a per-region response task (e.g., maze, grammaticality-at-region).",
+          "minimum": 0
+        },
+        "scalarValue": {
+          "type": "integer",
+          "description": "Numeric per-region response value (e.g., rating at this region)."
+        },
+        "categoricalValue": {
+          "type": "string",
+          "description": "Categorical per-region response label.",
+          "maxLength": 512
+        },
+        "features": {
+          "type": "ref",
+          "ref": "pub.layers.defs#featureMap",
+          "description": "Open key-value map for per-region measures not covered by the named fields."
+        }
+      }
+    },
+    "recordingMethod": {
+      "type": "object",
+      "description": "A data capture instrument used in an experiment.",
+      "required": ["method"],
+      "properties": {
+        "methodUri": {
+          "type": "string",
+          "format": "at-uri",
+          "description": "AT-URI of the recording method definition node. Resolves into the shared modality node set in layers-acquisition.ontology.layers.pub (the same nodes backing media signalInfo.modalityUri and catalog contentSummary.modalityUri). Community-expandable via knowledge graph."
+        },
+        "method": {
+          "type": "string",
+          "description": "Recording method (fallback when methodUri unavailable).",
+          "knownValues": [
+            "button-box",
+            "keyboard",
+            "mouse-click",
+            "touchscreen",
+            "voice",
+            "eeg",
+            "meg",
+            "fmri",
+            "fnirs",
+            "eye-tracking",
+            "pupillometry",
+            "mouse-tracking",
+            "emg",
+            "skin-conductance",
+            "ecog",
+            "custom"
+          ],
+          "maxLength": 128
+        },
+        "sessionRef": {
+          "type": "string",
+          "format": "at-uri",
+          "description": "AT-URI of the pub.layers.acquisition.session whose clock this recording was captured on."
+        },
+        "participantRefs": {
+          "type": "array",
+          "description": "AT-URIs of pub.layers.acquisition.participant records this recording captured.",
+          "items": {
+            "type": "string",
+            "format": "at-uri"
+          }
+        },
+        "mediaRefs": {
+          "type": "array",
+          "description": "AT-URIs of pub.layers.media.media records produced by this recording instrument.",
+          "items": {
+            "type": "string",
+            "format": "at-uri"
+          }
+        },
+        "features": {
+          "type": "ref",
+          "ref": "pub.layers.defs#featureMap",
+          "description": "Open-ended features carrying recording-method detail not covered by the typed fields."
+        }
+      }
+    }
+  }
+}

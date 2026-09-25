@@ -32,6 +32,7 @@ import {
   useDeleteRelationFromPersona,
 } from '@store/queries'
 import { RelationType, GlossItem, OntologyRelation } from '@models/types'
+import { useTourAnchor } from '@/tours/engine/anchorRegistry'
 import GlossEditor from './GlossEditor'
 
 interface RelationTypeEditorProps {
@@ -54,6 +55,8 @@ export default function RelationTypeEditor({
   const { mutateAsync: updateRelationTypeMutation } = useUpdateRelationTypeInPersona()
   const { mutate: addRelationMutation } = useAddRelationToPersona()
   const { mutate: deleteRelationMutation } = useDeleteRelationFromPersona()
+
+  const relationTypeEditorAnchor = useTourAnchor('relation-type-editor')
 
   const [tabValue, setTabValue] = useState('definition')
   const [targetPersonaIds, setTargetPersonaIds] = useState<string[]>([personaId || ''])
@@ -262,7 +265,7 @@ export default function RelationTypeEditor({
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
-      <DialogContent data-tour-id="relation-type-editor" className="sm:max-w-2xl">
+      <DialogContent ref={relationTypeEditorAnchor} className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>
             {relationType ? 'Edit Relation Type' : 'Create Relation Type'}

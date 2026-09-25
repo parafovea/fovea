@@ -12,6 +12,7 @@
     "worldLayer",
     "modelInTheLoop",
     "summariesAndClaims",
+    "documentAnnotation",
     "collaboration",
     "importExport"
   ],
@@ -122,6 +123,24 @@
         "summaryText": { "type": "string", "description": "Summary text the visitor types into the editor." },
         "claimText": { "type": "string" },
         "videoFilename": { "type": "string", "description": "Must be a clip the summaryText actually describes." }
+      }
+    },
+    "documentAnnotation": {
+      "type": "object",
+      "description": "Tour: document annotation. visitor opens a document, selects a token span, labels it, and reads span relations.",
+      "required": [
+        "personaName", "personaRole", "documentId", "documentTitle",
+        "documentText", "spanTypeName", "relationTypeName"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "personaName": { "type": "string" },
+        "personaRole": { "type": "string" },
+        "documentId": { "type": "string", "format": "uuid", "description": "Fixed UUID for the demo document. makes the create idempotent and lets steps route to /app/documents/:documentId directly." },
+        "documentTitle": { "type": "string", "description": "Title shown on the demo document's browser card and in narration." },
+        "documentText": { "type": "string", "description": "Text tokenized into the demo document. Pick a sentence with clear entity spans and a relation between two of them." },
+        "spanTypeName": { "type": "string", "description": "Example ontology type name the narration suggests for a span." },
+        "relationTypeName": { "type": "string", "description": "Example relation-type name the narration suggests between two spans." }
       }
     },
     "collaboration": {

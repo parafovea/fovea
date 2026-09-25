@@ -51,6 +51,14 @@ vi.mock('@components/data-management/ExportDialog', () => ({
   ExportDialog: () => null,
 }))
 
+vi.mock('@components/data-management/ImportCorpusDialog', () => ({
+  ImportCorpusDialog: () => null,
+}))
+
+vi.mock('@components/data-management/ExportLayersDialog', () => ({
+  ExportLayersDialog: () => null,
+}))
+
 vi.mock('@components/auth/UserMenu', () => ({
   UserMenu: () => <div data-testid="user-menu" />,
 }))

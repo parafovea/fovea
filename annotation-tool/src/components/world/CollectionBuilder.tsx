@@ -44,6 +44,7 @@ import {
 } from '@models/types'
 import GlossEditor from '@components/ontology/GlossEditor'
 import { TypeObjectBadge } from '../shared/TypeObjectToggle'
+import { useTourAnchor } from '@/tours/engine/anchorRegistry'
 
 /** Entity collection type options */
 type EntityCollectionType = 'group' | 'kind' | 'functional' | 'stage' | 'portion' | 'variant'
@@ -71,6 +72,7 @@ function EntityCollectionEditor({
   const entities = worldData?.entities ?? []
   const { mutate: addEntityCollection } = useAddEntityCollection()
   const { mutate: updateEntityCollection } = useUpdateEntityCollection()
+  const builderRef = useTourAnchor('collection-builder')
 
   const [name, setName] = useState(collection?.name || '')
   const [description, setDescription] = useState<GlossItem[]>(
@@ -121,7 +123,7 @@ function EntityCollectionEditor({
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) onClose() }}>
-      <DialogContent data-tour-id="collection-builder" className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent ref={builderRef} className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Users className="size-5 text-secondary" />
@@ -419,6 +421,7 @@ export function TimeCollectionEditorDialog({
   const times = worldData?.times ?? []
   const { mutate: addTimeCollection } = useAddTimeCollection()
   const { mutate: updateTimeCollection } = useUpdateTimeCollection()
+  const builderRef = useTourAnchor('time-collection-builder')
 
   const [name, setName] = useState(collection?.name || '')
   const [description, setDescription] = useState(collection?.description || '')
@@ -462,7 +465,7 @@ export function TimeCollectionEditorDialog({
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) onClose() }}>
-      <DialogContent data-tour-id="time-collection-builder" className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent ref={builderRef} className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Clock className="size-5 text-secondary" />

@@ -1,0 +1,1542 @@
+{
+  "lexicon": 1,
+  "id": "pub.layers.defs",
+  "description": "Shared definitions for the Layers lexicons. Provides abstract anchoring primitives, W3C Web Annotation-compatible selectors (for at.margin/Semble interoperability), alignment links, and universal metadata types.",
+  "defs": {
+    "uuid": {
+      "type": "object",
+      "description": "A universally unique identifier for cross-referencing annotation objects.",
+      "required": ["value"],
+      "properties": {
+        "value": {
+          "type": "string",
+          "description": "The UUID string value.",
+          "minLength": 1,
+          "maxLength": 64
+        }
+      }
+    },
+
+    "span": {
+      "type": "object",
+      "description": "A contiguous span of text defined by UTF-8 byte offsets.",
+      "required": ["byteStart", "byteEnd"],
+      "properties": {
+        "byteStart": {
+          "type": "integer",
+          "description": "Inclusive start UTF-8 byte offset (0-indexed).",
+          "minimum": 0
+        },
+        "byteEnd": {
+          "type": "integer",
+          "description": "Exclusive end UTF-8 byte offset.",
+          "minimum": 0
+        },
+        "charStart": {
+          "type": "integer",
+          "description": "Inclusive start character offset. Optional; for compatibility with character-offset datasets.",
+          "minimum": 0
+        },
+        "charEnd": {
+          "type": "integer",
+          "description": "Exclusive end character offset. Optional; for compatibility with character-offset datasets.",
+          "minimum": 0
+        }
+      }
+    },
+
+    "tokenRef": {
+      "type": "object",
+      "description": "A reference to a specific token within a tokenization, by index.",
+      "required": ["tokenizationId", "tokenIndex"],
+      "properties": {
+        "tokenizationId": {
+          "type": "ref",
+          "ref": "#uuid",
+          "description": "UUID of the tokenization containing the referenced token."
+        },
+        "tokenIndex": {
+          "type": "integer",
+          "description": "0-based index of the token within its tokenization.",
+          "minimum": 0
+        }
+      }
+    },
+
+    "tokenRefSequence": {
+      "type": "object",
+      "description": "A sequence of token references, possibly non-contiguous, within a single tokenization.",
+      "required": ["tokenizationId", "tokenIndexes"],
+      "properties": {
+        "tokenizationId": {
+          "type": "ref",
+          "ref": "#uuid",
+          "description": "UUID of the tokenization containing the referenced tokens."
+        },
+        "tokenIndexes": {
+          "type": "array",
+          "description": "0-based indices of the tokens.",
+          "items": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "anchorTokenIndex": {
+          "type": "integer",
+          "description": "Optional head/anchor token index within the sequence.",
+          "minimum": 0
+        }
+      }
+    },
+
+    "temporalSpan": {
+      "type": "object",
+      "description": "A temporal span within a media source, defined by start and end times in milliseconds on the referenced session or stream clock. Times are signed and session-relative (they may precede the clock origin, matching BIDS StartTime); they are never UTC-epoch values.",
+      "required": ["start", "ending"],
+      "properties": {
+        "start": {
+          "type": "integer",
+          "description": "Start time in milliseconds, signed and session-relative (may be negative when it precedes the clock origin)."
+        },
+        "ending": {
+          "type": "integer",
+          "description": "End time in milliseconds, signed and session-relative."
+        },
+        "startNanos": {
+          "type": "integer",
+          "description": "Exact signed start in nanoseconds, session-relative; authoritative over start where both are present."
+        },
+        "endingNanos": {
+          "type": "integer",
+          "description": "Exact signed end in nanoseconds, session-relative; authoritative over ending where both are present."
+        },
+        "scope": {
+          "type": "ref",
+          "ref": "#mediaScope",
+          "description": "Which medium, session clock, stream, and track this span is measured against. Absent means the single medium reachable from the annotated expression."
+        }
+      }
+    },
+
+    "boundingBox": {
+      "type": "object",
+      "description": "A spatial bounding box for image or video frame annotation.",
+      "required": ["x", "y", "width", "height"],
+      "properties": {
+        "x": { "type": "integer", "description": "X coordinate of top-left corner in pixels." },
+        "y": { "type": "integer", "description": "Y coordinate of top-left corner in pixels." },
+        "width": { "type": "integer", "description": "Width in pixels.", "minimum": 1 },
+        "height": { "type": "integer", "description": "Height in pixels.", "minimum": 1 },
+        "unitUri": {
+          "type": "string",
+          "format": "at-uri",
+          "description": "AT-URI of the coordinate unit definition node (a unit typeDef under layers-core.ontology.layers.pub). Community-expandable via knowledge graph."
+        },
+        "unit": {
+          "type": "string",
+          "description": "Coordinate unit slug (fallback when unitUri unavailable). Absent means pixel.",
+          "knownValues": ["pixel", "per-mille-normalized"],
+          "maxLength": 32
+        },
+        "scope": {
+          "type": "ref",
+          "ref": "#mediaScope",
+          "description": "Which medium, session clock, stream, and track this box is measured against. Absent means the single medium reachable from the annotated expression."
+        },
+        "page": {
+          "type": "integer",
+          "description": "0-indexed page this box lies on, for paged media.",
+          "minimum": 0
+        },
+        "frameIndex": {
+          "type": "integer",
+          "description": "0-indexed frame this box lies on, for framed media.",
+          "minimum": 0
+        },
+        "timeNanos": {
+          "type": "integer",
+          "description": "Signed time in nanoseconds, session-relative, at which this box applies."
+        }
+      }
+    },
+
+    "spatioTemporalAnchor": {
+      "type": "object",
+      "description": "Combined spatial and temporal anchor for video annotation with keyframe-based tracking.",
+      "required": ["temporalSpan"],
+      "properties": {
+        "temporalSpan": {
+          "type": "ref",
+          "ref": "#temporalSpan",
+          "description": "The temporal extent over which this spatio-temporal region is tracked."
+        },
+        "keyframes": {
+          "type": "array",
+          "description": "Keyframes defining spatial positions at specific times.",
+          "items": {
+            "type": "ref",
+            "ref": "#keyframe"
+          }
+        },
+        "interpolationUri": {
+          "type": "string",
+          "format": "at-uri",
+          "description": "AT-URI of the interpolation mode definition node. Community-expandable via knowledge graph."
+        },
+        "interpolation": {
+          "type": "string",
+          "description": "Interpolation mode slug (fallback when interpolationUri unavailable).",
+          "knownValues": ["linear", "step", "cubic"]
+        }
+      }
+    },
+
+    "keyframe": {
+      "type": "object",
+      "description": "A spatial annotation at a specific time point.",
+      "required": ["timeMs", "bbox"],
+      "properties": {
+        "timeMs": {
+          "type": "integer",
+          "description": "Time in milliseconds.",
+          "minimum": 0
+        },
+        "bbox": {
+          "type": "ref",
+          "ref": "#boundingBox",
+          "description": "The spatial bounding box occupied at this time point."
+        },
+        "features": {
+          "type": "ref",
+          "ref": "#featureMap",
+          "description": "Per-keyframe features (e.g., visibility, occlusion percentage, confidence, pose data)."
+        }
+      }
+    },
+
+    "temporalEntity": {
+      "type": "object",
+      "description": "A normalized temporal value representing a point, interval, duration, or uncertain range in calendar/clock time. Subsumes OWL-Time TemporalEntity (Instant, Interval, Duration) and TimeML TIMEX3 value. Consumers dispatch on which fields are populated: instant only (point), intervalStart+intervalEnd (bounded interval), duration only (pure duration), earliest+latest (uncertain bounds), recurrence (repeating pattern).",
+      "properties": {
+        "instant": {
+          "type": "string",
+          "description": "Point in time as ISO 8601 datetime (e.g., '2024-03-15', '2024-03-15T14:30:00Z'). Maps to OWL-Time Instant.",
+          "maxLength": 64
+        },
+        "intervalStart": {
+          "type": "string",
+          "description": "Interval start as ISO 8601 datetime. Maps to OWL-Time hasBeginning.",
+          "maxLength": 64
+        },
+        "intervalEnd": {
+          "type": "string",
+          "description": "Interval end as ISO 8601 datetime. Maps to OWL-Time hasEnd.",
+          "maxLength": 64
+        },
+        "duration": {
+          "type": "string",
+          "description": "Duration as ISO 8601 duration (e.g., 'P3Y', 'PT2H30M', 'P1DT12H'). Maps to OWL-Time hasTemporalDuration.",
+          "maxLength": 64
+        },
+        "earliest": {
+          "type": "string",
+          "description": "Lower bound for uncertain or vague times, as ISO 8601 datetime.",
+          "maxLength": 64
+        },
+        "latest": {
+          "type": "string",
+          "description": "Upper bound for uncertain or vague times, as ISO 8601 datetime.",
+          "maxLength": 64
+        },
+        "granularityUri": {
+          "type": "string",
+          "format": "at-uri",
+          "description": "AT-URI of the granularity definition node. Community-expandable via knowledge graph."
+        },
+        "granularity": {
+          "type": "string",
+          "description": "Temporal granularity slug (fallback when granularityUri unavailable). Maps to OWL-Time unitType.",
+          "knownValues": ["millennium", "century", "decade", "year", "quarter", "month", "week", "day", "hour", "minute", "second", "millisecond", "custom"],
+          "maxLength": 64
+        },
+        "calendarUri": {
+          "type": "string",
+          "format": "at-uri",
+          "description": "AT-URI of the calendar system definition node. Community-expandable via knowledge graph."
+        },
+        "calendar": {
+          "type": "string",
+          "description": "Calendar system slug (fallback when calendarUri unavailable). Maps to OWL-Time TRS (Temporal Reference System).",
+          "knownValues": ["gregorian", "julian", "hijri", "hebrew", "iso-week", "unix", "japanese-imperial", "buddhist", "coptic", "custom"],
+          "maxLength": 64
+        },
+        "recurrence": {
+          "type": "string",
+          "description": "ISO 8601 repeating interval (e.g., 'R/P1W' for weekly, 'R5/P1D' for 5 daily repetitions).",
+          "maxLength": 128
+        },
+        "features": {
+          "type": "ref",
+          "ref": "#featureMap",
+          "description": "Open-ended features of this temporal value not reached by the named fields."
+        }
+      }
+    },
+
+    "temporalModifier": {
+      "type": "object",
+      "description": "Qualitative modification of a temporal value. Subsumes TimeML TIMEX3 mod attribute and OWL-Time DateTimeDescription qualifiers.",
+      "properties": {
+        "modUri": {
+          "type": "string",
+          "format": "at-uri",
+          "description": "AT-URI of the temporal modifier definition node. Community-expandable via knowledge graph."
+        },
+        "mod": {
+          "type": "string",
+          "description": "Temporal modifier slug (fallback when modUri unavailable). Maps to TimeML TIMEX3 mod.",
+          "knownValues": ["approximate", "early", "mid", "late", "start", "end", "before", "after", "on-or-before", "on-or-after", "less-than", "more-than", "custom"],
+          "maxLength": 64
+        },
+        "features": {
+          "type": "ref",
+          "ref": "#featureMap",
+          "description": "Open-ended features of this temporal modifier not reached by the named fields."
+        }
+      }
+    },
+
+    "temporalExpression": {
+      "type": "object",
+      "description": "A complete temporal annotation packaging the expression type, normalized value, modifier, anchoring, and document function. Subsumes TimeML TIMEX3 and OWL-Time GeneralDateTimeDescription. Attach to annotation objects via the temporal field.",
+      "properties": {
+        "typeUri": {
+          "type": "string",
+          "format": "at-uri",
+          "description": "AT-URI of the temporal expression type definition node. Community-expandable via knowledge graph."
+        },
+        "type": {
+          "type": "string",
+          "description": "Temporal expression type slug (fallback when typeUri unavailable). Maps to TimeML TIMEX3 type.",
+          "knownValues": ["date", "time", "duration", "set", "interval", "relative", "custom"],
+          "maxLength": 64
+        },
+        "value": {
+          "type": "ref",
+          "ref": "#temporalEntity",
+          "description": "The normalized temporal value."
+        },
+        "modifier": {
+          "type": "ref",
+          "ref": "#temporalModifier",
+          "description": "Qualitative modifier (approximate, early, late, etc.)."
+        },
+        "anchorRef": {
+          "type": "ref",
+          "ref": "#objectRef",
+          "description": "What this temporal expression is relative to (e.g., document creation time, another temporal expression, a situation). Maps to TimeML anchorTimeID."
+        },
+        "functionUri": {
+          "type": "string",
+          "format": "at-uri",
+          "description": "AT-URI of the document function definition node. Community-expandable via knowledge graph."
+        },
+        "function": {
+          "type": "string",
+          "description": "Document function slug (fallback when functionUri unavailable). Maps to TimeML functionInDocument.",
+          "knownValues": ["creation-time", "publication-time", "expiration-time", "modification-time", "release-time", "reception-time", "none", "custom"],
+          "maxLength": 64
+        },
+        "features": {
+          "type": "ref",
+          "ref": "#featureMap",
+          "description": "Open-ended features of this temporal annotation not reached by the named fields."
+        }
+      }
+    },
+
+    "spatialEntity": {
+      "type": "object",
+      "description": "A normalized spatial value representing a point, region, line, or complex geometry. Parallel to temporalEntity. Subsumes GeoJSON geometry types, WKT primitives, and ISO 19107 spatial schema. Consumers dispatch on which fields are populated: bbox only (pixel bounding box), geometry+type (parsed geometry string), geometry+geometryFormat (format-specific parsing).",
+      "properties": {
+        "bbox": {
+          "type": "ref",
+          "ref": "#boundingBox",
+          "description": "Structured pixel bounding box (axis-aligned rectangle). The most common case for image/video annotation."
+        },
+        "geometry": {
+          "type": "string",
+          "description": "Geometry as a string in the format specified by geometryFormat. WKT examples: 'POINT(37.7749 -122.4194)', 'POLYGON((0 0, 100 0, 100 100, 0 100, 0 0))'. GeoJSON example: '{\"type\":\"Point\",\"coordinates\":[-122.4194,37.7749]}'. SVG path example: 'M 10 10 L 100 10 L 100 100 Z'. Default format is WKT.",
+          "maxLength": 65536
+        },
+        "typeUri": {
+          "type": "string",
+          "format": "at-uri",
+          "description": "AT-URI of the geometry type definition node. Community-expandable via knowledge graph."
+        },
+        "type": {
+          "type": "string",
+          "description": "Geometry type slug (fallback when typeUri unavailable). For dispatch without parsing the geometry string.",
+          "knownValues": ["point", "box", "polygon", "multi-polygon", "line-string", "multi-line-string", "circle", "ellipse", "multi-point", "geometry-collection", "custom"],
+          "maxLength": 64
+        },
+        "geometryFormatUri": {
+          "type": "string",
+          "format": "at-uri",
+          "description": "AT-URI of the geometry format definition node. Community-expandable via knowledge graph."
+        },
+        "geometryFormat": {
+          "type": "string",
+          "description": "Format of the geometry string (fallback when geometryFormatUri unavailable). Default is WKT.",
+          "knownValues": ["wkt", "geojson", "svg-path", "coco-polygon", "coco-rle", "page-xml-coords", "alto-polygon", "custom"],
+          "maxLength": 64
+        },
+        "crsUri": {
+          "type": "string",
+          "format": "at-uri",
+          "description": "AT-URI of the coordinate reference system definition node. Community-expandable via knowledge graph."
+        },
+        "crs": {
+          "type": "string",
+          "description": "Coordinate reference system slug (fallback when crsUri unavailable). Determines how coordinates in geometry/bbox are interpreted.",
+          "knownValues": ["pixel", "percentage", "wgs84", "web-mercator", "per-mille-normalized", "mni152-nlin-2009c", "mni305", "talairach", "acpc", "scanner-ras", "fsaverage", "individual-t1", "voxel-index", "world-metric", "custom"],
+          "maxLength": 64
+        },
+        "dimensions": {
+          "type": "integer",
+          "description": "Number of coordinate dimensions (2 for planar, 3 for volumetric/elevation).",
+          "minimum": 2,
+          "maximum": 4
+        },
+        "uncertainty": {
+          "type": "string",
+          "description": "Spatial precision or uncertainty radius as a string with units (e.g., '50m', '10px', '0.001deg'). Units depend on the CRS.",
+          "maxLength": 64
+        },
+        "scope": {
+          "type": "ref",
+          "ref": "#mediaScope",
+          "description": "Which medium, session clock, stream, and track this region is measured against. Absent means the single medium reachable from the annotated expression."
+        },
+        "page": {
+          "type": "integer",
+          "description": "0-indexed page this region lies on, for paged media.",
+          "minimum": 0
+        },
+        "frameIndex": {
+          "type": "integer",
+          "description": "0-indexed frame this region lies on, for framed media.",
+          "minimum": 0
+        },
+        "timeNanos": {
+          "type": "integer",
+          "description": "Signed time in nanoseconds, session-relative, at which this region applies."
+        },
+        "readingOrder": {
+          "type": "integer",
+          "description": "0-indexed reading order of this region among sibling regions on the same page or surface.",
+          "minimum": 0
+        },
+        "roleUri": {
+          "type": "string",
+          "format": "at-uri",
+          "description": "AT-URI of the spatial-region role definition node (a role typeDef under layers-annotation.ontology.layers.pub). Community-expandable via knowledge graph."
+        },
+        "role": {
+          "type": "string",
+          "description": "Spatial-region role slug (fallback when roleUri unavailable), naming what layout or anatomical part this region is.",
+          "knownValues": ["text-region", "text-line", "baseline", "word", "glyph", "column", "margin-note", "figure", "table", "instance-mask", "interest-area", "articulator-contour", "region-of-interest", "custom"],
+          "maxLength": 128
+        },
+        "articulatorUri": {
+          "type": "string",
+          "format": "at-uri",
+          "description": "AT-URI of the articulator definition node (an articulator typeDef under layers-annotation.ontology.layers.pub). Community-expandable via knowledge graph."
+        },
+        "articulator": {
+          "type": "string",
+          "description": "Articulator slug (fallback when articulatorUri unavailable), naming the body part or articulator this region tracks.",
+          "knownValues": ["dominant-hand", "non-dominant-hand", "both-hands", "head", "torso", "face", "eyebrows", "mouth", "eye-gaze", "tongue", "lips", "jaw", "velum", "custom"],
+          "maxLength": 128
+        },
+        "maskMediaRef": {
+          "type": "string",
+          "format": "at-uri",
+          "description": "AT-URI of a pub.layers.media.media record carrying a pixel or voxel mask for this region."
+        },
+        "parcelRef": {
+          "type": "ref",
+          "ref": "#knowledgeRef",
+          "description": "Reference to an atlas parcel grounding this region (e.g., an Uberon or atlas node)."
+        },
+        "sensors": {
+          "type": "array",
+          "description": "Sensors whose positions define this region; each objectRef has recordRef the media record and objectId a sensorSpec uuid.",
+          "maxLength": 512,
+          "items": {
+            "type": "ref",
+            "ref": "#objectRef"
+          }
+        },
+        "features": {
+          "type": "ref",
+          "ref": "#featureMap",
+          "description": "Open-ended features of this spatial value not reached by the named fields."
+        }
+      }
+    },
+
+    "spatialModifier": {
+      "type": "object",
+      "description": "Qualitative modification of a spatial value. Parallel to temporalModifier. Indicates precision, derivation method, or processing applied to a spatial entity.",
+      "properties": {
+        "modUri": {
+          "type": "string",
+          "format": "at-uri",
+          "description": "AT-URI of the spatial modifier definition node. Community-expandable via knowledge graph."
+        },
+        "mod": {
+          "type": "string",
+          "description": "Spatial modifier slug (fallback when modUri unavailable).",
+          "knownValues": ["approximate", "projected", "interpolated", "estimated", "buffered", "simplified", "generalized", "custom"],
+          "maxLength": 64
+        },
+        "features": {
+          "type": "ref",
+          "ref": "#featureMap",
+          "description": "Open-ended features of this spatial modifier not reached by the named fields."
+        }
+      }
+    },
+
+    "spatialExpression": {
+      "type": "object",
+      "description": "A complete spatial annotation packaging the expression type, normalized value, modifier, anchoring, and document function. Parallel to temporalExpression. Subsumes ISO-Space place annotations (ISO 24617-7), SpatialML PLACE elements, and general spatial semantic annotation. Attach to annotation objects via the spatial field.",
+      "properties": {
+        "typeUri": {
+          "type": "string",
+          "format": "at-uri",
+          "description": "AT-URI of the spatial expression type definition node. Community-expandable via knowledge graph."
+        },
+        "type": {
+          "type": "string",
+          "description": "Spatial expression type slug (fallback when typeUri unavailable). Maps to ISO-Space spatial entity types.",
+          "knownValues": ["location", "region", "path", "direction", "distance", "relative", "custom"],
+          "maxLength": 64
+        },
+        "value": {
+          "type": "ref",
+          "ref": "#spatialEntity",
+          "description": "The normalized spatial value."
+        },
+        "modifier": {
+          "type": "ref",
+          "ref": "#spatialModifier",
+          "description": "Qualitative modifier (approximate, projected, interpolated, etc.)."
+        },
+        "anchorRef": {
+          "type": "ref",
+          "ref": "#objectRef",
+          "description": "What this spatial expression is relative to (e.g., a landmark annotation, a reference location, a trajector). For relative spatial expressions like 'behind the building'."
+        },
+        "functionUri": {
+          "type": "string",
+          "format": "at-uri",
+          "description": "AT-URI of the document function definition node. Community-expandable via knowledge graph."
+        },
+        "function": {
+          "type": "string",
+          "description": "Document function slug (fallback when functionUri unavailable). What role this place plays in the document.",
+          "knownValues": ["document-location", "publication-location", "situation-location", "origin", "destination", "waypoint", "none", "custom"],
+          "maxLength": 64
+        },
+        "features": {
+          "type": "ref",
+          "ref": "#featureMap",
+          "description": "Open-ended features of this spatial annotation not reached by the named fields."
+        }
+      }
+    },
+
+    "pageAnchor": {
+      "type": "object",
+      "description": "Anchor to a specific page and region in a paged document (PDF, etc.). Compatible with chive.pub's page-level annotation model.",
+      "required": ["page"],
+      "properties": {
+        "page": {
+          "type": "integer",
+          "description": "0-indexed page number.",
+          "minimum": 0
+        },
+        "boundingBox": {
+          "type": "ref",
+          "ref": "#boundingBox",
+          "description": "Bounding box of the anchored region within the page."
+        },
+        "textSpan": {
+          "type": "ref",
+          "ref": "#span",
+          "description": "Character offsets within the page text."
+        }
+      }
+    },
+
+    "textQuoteSelector": {
+      "type": "object",
+      "description": "W3C TextQuoteSelector: selects text by quoting it with surrounding context. Compatible with at.margin.annotation and the W3C Web Annotation Data Model.",
+      "required": ["exact"],
+      "properties": {
+        "exact": {
+          "type": "string",
+          "description": "The exact text to match.",
+          "maxLength": 5000
+        },
+        "prefix": {
+          "type": "string",
+          "description": "Text immediately before the selection.",
+          "maxLength": 500
+        },
+        "suffix": {
+          "type": "string",
+          "description": "Text immediately after the selection.",
+          "maxLength": 500
+        }
+      }
+    },
+
+    "textPositionSelector": {
+      "type": "object",
+      "description": "W3C TextPositionSelector adapted for ATProto: selects by UTF-8 byte offsets. Semantically equivalent to pub.layers.defs#span but named for W3C compatibility with at.margin.",
+      "required": ["byteStart", "byteEnd"],
+      "properties": {
+        "byteStart": {
+          "type": "integer",
+          "description": "Starting UTF-8 byte position (0-indexed, inclusive).",
+          "minimum": 0
+        },
+        "byteEnd": {
+          "type": "integer",
+          "description": "Ending UTF-8 byte position (exclusive).",
+          "minimum": 0
+        },
+        "charStart": {
+          "type": "integer",
+          "description": "Starting character position (0-indexed, inclusive). Optional; for compatibility with character-offset datasets.",
+          "minimum": 0
+        },
+        "charEnd": {
+          "type": "integer",
+          "description": "Ending character position (exclusive). Optional; for compatibility with character-offset datasets.",
+          "minimum": 0
+        }
+      }
+    },
+
+    "fragmentSelector": {
+      "type": "object",
+      "description": "W3C FragmentSelector: selects by URI fragment identifier.",
+      "required": ["value"],
+      "properties": {
+        "value": {
+          "type": "string",
+          "description": "Fragment identifier value.",
+          "maxLength": 1000
+        },
+        "conformsTo": {
+          "type": "string",
+          "format": "uri",
+          "description": "Specification the fragment conforms to."
+        }
+      }
+    },
+
+    "externalTarget": {
+      "type": "object",
+      "description": "Target for annotating external resources (web pages, documents, etc.). Compatible with at.margin's target model and the W3C Web Annotation Data Model.",
+      "required": ["source"],
+      "properties": {
+        "source": {
+          "type": "string",
+          "format": "uri",
+          "description": "The URI of the external resource being annotated."
+        },
+        "sourceHash": {
+          "type": "string",
+          "description": "SHA256 hash of normalized URI for indexing.",
+          "maxLength": 128
+        },
+        "title": {
+          "type": "string",
+          "description": "Title of the resource at annotation time.",
+          "maxLength": 500
+        },
+        "selector": {
+          "type": "union",
+          "description": "W3C selector for identifying the specific segment within the resource.",
+          "refs": [
+            "#textQuoteSelector",
+            "#textPositionSelector",
+            "#fragmentSelector"
+          ]
+        }
+      }
+    },
+
+    "anchor": {
+      "type": "object",
+      "description": "Abstract anchor: how an annotation attaches to its source data. This is a polymorphic type; at least one anchoring field should be present. Consumers dispatch on which field(s) are populated.",
+      "properties": {
+        "textSpan": {
+          "type": "ref",
+          "ref": "#span",
+          "description": "Character-offset span in the expression text."
+        },
+        "tokenRef": {
+          "type": "ref",
+          "ref": "#tokenRef",
+          "description": "Single token reference."
+        },
+        "tokenRefSequence": {
+          "type": "ref",
+          "ref": "#tokenRefSequence",
+          "description": "Sequence of token references (possibly non-contiguous)."
+        },
+        "temporalSpan": {
+          "type": "ref",
+          "ref": "#temporalSpan",
+          "description": "Temporal span in audio/video."
+        },
+        "spatioTemporalAnchor": {
+          "type": "ref",
+          "ref": "#spatioTemporalAnchor",
+          "description": "Spatio-temporal region in video."
+        },
+        "pageAnchor": {
+          "type": "ref",
+          "ref": "#pageAnchor",
+          "description": "Page and region in a paged document."
+        },
+        "externalTarget": {
+          "type": "ref",
+          "ref": "#externalTarget",
+          "description": "External resource target (web page, document, etc.)."
+        },
+        "boundingBox": {
+          "type": "ref",
+          "ref": "#boundingBox",
+          "description": "Static spatial region in an image or single frame. Imposes no temporal span; for a region that tracks over time use spatioTemporalAnchor."
+        },
+        "spatialRegion": {
+          "type": "ref",
+          "ref": "#spatialEntity",
+          "description": "Normalized spatial region used as an anchor (aliased so anchor-use is distinct from the annotation.spatial content-use of the same type)."
+        },
+        "signalSpan": {
+          "type": "ref",
+          "ref": "#signalSpan",
+          "description": "Sample-indexed or time-indexed span over one or more channels of a continuous signal (EEG, MEG, audio waveform, sensor stream, etc.)."
+        }
+      }
+    },
+
+    "alignmentLink": {
+      "type": "object",
+      "description": "A single link in an alignment between two parallel sequences. Maps element(s) in a source sequence to element(s) in a target sequence. Supports many-to-many correspondence for interlinear glossing, parallel text alignment, cross-tokenization mapping, etc.",
+      "properties": {
+        "sourceIndices": {
+          "type": "array",
+          "description": "Indices into the source sequence.",
+          "items": { "type": "integer", "minimum": 0 }
+        },
+        "targetIndices": {
+          "type": "array",
+          "description": "Indices into the target sequence.",
+          "items": { "type": "integer", "minimum": 0 }
+        },
+        "confidence": {
+          "type": "integer",
+          "description": "Alignment confidence 0-1000.",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "label": {
+          "type": "string",
+          "description": "Optional label for the alignment link (e.g., alignment type).",
+          "maxLength": 256
+        },
+        "knowledgeRefs": {
+          "type": "array",
+          "description": "Knowledge graph references for this link (e.g., bilingual dictionary entry, translation memory source).",
+          "maxLength": 8,
+          "items": {
+            "type": "ref",
+            "ref": "#knowledgeRef"
+          }
+        },
+        "features": {
+          "type": "ref",
+          "ref": "#featureMap",
+          "description": "Open-ended features of this alignment link not reached by the named fields."
+        }
+      }
+    },
+
+    "agentRef": {
+      "type": "object",
+      "description": "A composable reference to any agent (human annotator, ML model, crowd worker, expert panel, etc.) that produced data. Separates the identity of the producer from the interpretive framework (persona) and the software used (tool). Consumers dispatch on which field(s) are populated: did for ATProto-native agents, id for anonymized or platform-specific identifiers, knowledgeRef for externally grounded agents (ORCID, HuggingFace model card, Wikidata).",
+      "properties": {
+        "did": {
+          "type": "string",
+          "format": "did",
+          "description": "ATProto DID of the agent, if the agent has one."
+        },
+        "id": {
+          "type": "string",
+          "description": "Arbitrary string identifier (anonymized crowdworker ID, platform username, model version string, etc.).",
+          "maxLength": 512
+        },
+        "name": {
+          "type": "string",
+          "description": "Human-readable display name for the agent.",
+          "maxLength": 512
+        },
+        "knowledgeRef": {
+          "type": "ref",
+          "ref": "#knowledgeRef",
+          "description": "External knowledge graph reference for the agent (e.g., ORCID for a human, HuggingFace model card for an ML model, Wikidata for an organization)."
+        }
+      }
+    },
+
+    "annotationMetadata": {
+      "type": "object",
+      "description": "Metadata about who or what produced an annotation, when, and with what confidence. The three key provenance fields are: agent (who did it), personaRef (under what framework), and tool (with what software).",
+      "required": ["tool"],
+      "properties": {
+        "agent": {
+          "type": "ref",
+          "ref": "#agentRef",
+          "description": "The agent (human or model) that produced this annotation. Distinct from personaRef (the interpretive framework) and tool (the software)."
+        },
+        "tool": {
+          "type": "string",
+          "description": "Name or identifier of the software tool used to produce this annotation (e.g., 'spaCy 3.7', 'brat 1.3', 'ELAN 6.4'). Distinct from agent (who ran the tool). Display fallback when toolRef is unavailable.",
+          "maxLength": 512
+        },
+        "toolRef": {
+          "type": "ref",
+          "ref": "#knowledgeRef",
+          "description": "Grounded reference to the software tool, typically via rrid (a Research Resource Identifier). Distinct from agent (who ran the tool)."
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "datetime",
+          "description": "When the annotation was produced."
+        },
+        "confidence": {
+          "type": "integer",
+          "description": "Confidence score scaled 0-1000 (to avoid floats). 1000 = maximum confidence.",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "personaRef": {
+          "type": "string",
+          "format": "at-uri",
+          "description": "Reference to the persona/annotation framework under which this annotation was produced. Distinct from agent (who did it)."
+        },
+        "dependencies": {
+          "type": "array",
+          "description": "References to upstream records this annotation was derived from.",
+          "maxLength": 32,
+          "items": {
+            "type": "ref",
+            "ref": "#objectRef"
+          }
+        },
+        "contentDigest": {
+          "type": "ref",
+          "ref": "#contentDigest",
+          "description": "Structured content hash for integrity verification of this annotation."
+        }
+      }
+    },
+
+    "licenseRef": {
+      "type": "object",
+      "description": "Detail for a single license. Follows the URI+slug pattern (spdxUri is the canonical knowledge-graph node, spdx is the human-readable fallback) and mirrors one entry of a DataCite rightsList (rightsIdentifier + rightsURI).",
+      "required": ["spdx"],
+      "properties": {
+        "spdxUri": {
+          "type": "string",
+          "format": "at-uri",
+          "description": "AT-URI of the license definition node. Community-expandable via knowledge graph."
+        },
+        "spdx": {
+          "type": "string",
+          "description": "SPDX license identifier (fallback when spdxUri unavailable). Non-SPDX terms use 'proprietary' or 'custom' and ground the full text via spdxUri/url.",
+          "knownValues": ["CC0-1.0", "CC-BY-4.0", "CC-BY-SA-4.0", "CC-BY-NC-4.0", "CC-BY-NC-SA-4.0", "CC-BY-ND-4.0", "CC-BY-NC-ND-4.0", "MIT", "Apache-2.0", "BSD-3-Clause", "GPL-3.0-only", "LGPL-3.0-only", "LDC-User-Agreement", "ELRA-END-USER", "proprietary", "custom"],
+          "maxLength": 128
+        },
+        "name": {
+          "type": "string",
+          "description": "Human-readable license name (e.g., 'Creative Commons Attribution 4.0 International').",
+          "maxLength": 256
+        },
+        "url": {
+          "type": "string",
+          "format": "uri",
+          "description": "URL of the full license text (DataCite rightsURI).",
+          "maxLength": 2048
+        },
+        "attribution": {
+          "type": "string",
+          "description": "Required attribution / credit text for downstream users.",
+          "maxLength": 2048
+        },
+        "notes": {
+          "type": "string",
+          "description": "Additional licensing notes, restrictions, or usage terms.",
+          "maxLength": 4096
+        },
+        "appliesToUri": {
+          "type": "string",
+          "format": "at-uri",
+          "description": "AT-URI of the license-component definition node (a license-component typeDef under layers-core.ontology.layers.pub). Community-expandable via knowledge graph."
+        },
+        "appliesTo": {
+          "type": "string",
+          "description": "Component this license covers when an artifact mixes licenses by part (fallback when appliesToUri unavailable). Omit when the license covers the whole artifact.",
+          "knownValues": ["whole", "annotations", "underlying-text", "underlying-media", "code", "documentation", "ontology", "derived-data", "custom"],
+          "maxLength": 256
+        }
+      }
+    },
+
+    "licensing": {
+      "type": "object",
+      "description": "Complete licensing terms for a released artifact. Represents single, dual/multi (choose-one), composite (all-apply), exception (WITH), and component-scoped licensing. The SPDX license expression encodes the boolean relationship between licenses; the licenses array carries per-license detail.",
+      "required": ["licenses"],
+      "properties": {
+        "expression": {
+          "type": "string",
+          "description": "SPDX license expression encoding the relationship between licenses: OR for dual/multi-licensing (the licensee chooses one), AND for composite terms (all apply), WITH for exceptions. Examples: 'MIT OR Apache-2.0', 'CC-BY-4.0 AND LicenseRef-LDC-User-Agreement'. Optional when a single license applies.",
+          "maxLength": 512
+        },
+        "licenses": {
+          "type": "array",
+          "description": "The individual licenses named by the expression, or the single governing license. Each entry may scope itself to a component via appliesTo.",
+          "minLength": 1,
+          "maxLength": 32,
+          "items": {
+            "type": "ref",
+            "ref": "#licenseRef"
+          }
+        }
+      }
+    },
+
+    "reproducibilityInfo": {
+      "type": "object",
+      "description": "Information about how to reproduce a dataset or the data produced from an eprint. Shared by data-producing produces (corpus, annotation layers, experiments) and eprint data links.",
+      "properties": {
+        "codeUri": {
+          "type": "string",
+          "format": "uri",
+          "description": "URI of the code repository.",
+          "maxLength": 2048
+        },
+        "commitHash": {
+          "type": "string",
+          "description": "Git commit hash for reproducibility.",
+          "maxLength": 64
+        },
+        "command": {
+          "type": "string",
+          "description": "Command to reproduce the data.",
+          "maxLength": 4096
+        },
+        "environment": {
+          "type": "string",
+          "description": "Environment specification (Docker image, conda env, etc.).",
+          "maxLength": 2048
+        },
+        "randomSeed": {
+          "type": "integer",
+          "description": "Random seed used."
+        },
+        "name": {
+          "type": "string",
+          "description": "Human-readable name of the pipeline, model, or procedure that produced the data.",
+          "maxLength": 256
+        },
+        "version": {
+          "type": "string",
+          "description": "Version string of the pipeline, model, or procedure.",
+          "maxLength": 64
+        },
+        "softwareRefs": {
+          "type": "array",
+          "description": "Grounded references to the software used, typically via rrid (Research Resource Identifiers).",
+          "maxLength": 32,
+          "items": {
+            "type": "ref",
+            "ref": "#knowledgeRef"
+          }
+        },
+        "operatingSystem": {
+          "type": "string",
+          "description": "Operating system the procedure ran on.",
+          "maxLength": 256
+        },
+        "container": {
+          "type": "object",
+          "description": "The container or environment image the procedure ran in.",
+          "properties": {
+            "typeUri": {
+              "type": "string",
+              "format": "at-uri",
+              "description": "AT-URI of the container type definition node. Community-expandable via knowledge graph."
+            },
+            "type": {
+              "type": "string",
+              "description": "Container type slug (fallback when typeUri unavailable).",
+              "knownValues": ["docker", "singularity", "apptainer", "podman", "conda", "nix", "custom"],
+              "maxLength": 64
+            },
+            "tag": {
+              "type": "string",
+              "description": "Image tag or reference (e.g., 'python:3.13-slim').",
+              "maxLength": 256
+            },
+            "uri": {
+              "type": "string",
+              "format": "uri",
+              "description": "URI of the container registry entry or image definition.",
+              "maxLength": 2048
+            },
+            "digest": {
+              "type": "ref",
+              "ref": "#contentDigest",
+              "description": "Content digest pinning the exact image."
+            }
+          }
+        },
+        "funding": {
+          "type": "array",
+          "description": "Grants or awards that funded the work producing this data.",
+          "maxLength": 16,
+          "items": {
+            "type": "ref",
+            "ref": "#fundingRef"
+          }
+        },
+        "ethicsApprovals": {
+          "type": "array",
+          "description": "Ethics or IRB approvals covering the work producing this data.",
+          "maxLength": 16,
+          "items": {
+            "type": "ref",
+            "ref": "#ethicsApproval"
+          }
+        }
+      }
+    },
+
+    "knowledgeRef": {
+      "type": "object",
+      "description": "A reference to an external knowledge base entry. Supports ATProto-native KBs (e.g., chive.pub with AT-URI nodes), external KBs (e.g., Wikidata with QIDs), and user/persona-specific KBs (AT-URIs in user PDSes).",
+      "required": ["source", "identifier"],
+      "properties": {
+        "sourceUri": {
+          "type": "string",
+          "format": "at-uri",
+          "description": "AT-URI of the knowledge base type definition node. Community-expandable via knowledge graph."
+        },
+        "source": {
+          "type": "string",
+          "description": "Knowledge base source slug (fallback when sourceUri unavailable).",
+          "knownValues": ["chive.pub", "wikidata", "wordnet", "framenet", "propbank", "verbnet", "unimorph", "glottolog", "cldr", "iso639-3", "orcid", "ror", "openalex", "crossref", "dblp", "semantic-scholar", "doi", "handle", "islrn", "datacite", "ldc", "elra", "lindat", "openneuro", "dandi", "paradisec", "talkbank", "ncbi-taxonomy", "rrid", "cognitive-atlas", "cogpo", "hed", "uberon", "mesh", "clinicaltrials", "custom"],
+          "maxLength": 128
+        },
+        "identifier": {
+          "type": "string",
+          "description": "The identifier within the knowledge base (e.g., Wikidata QID, chive.pub node URI, Glottolog languoid ID).",
+          "maxLength": 512
+        },
+        "uri": {
+          "type": "string",
+          "format": "uri",
+          "description": "Optional full URI for the knowledge base entry."
+        },
+        "label": {
+          "type": "string",
+          "description": "Human-readable label for the referenced entity.",
+          "maxLength": 1024
+        }
+      }
+    },
+
+    "featureMap": {
+      "type": "object",
+      "description": "An open-ended set of typed key-value features that can be attached to any annotation. Provides maximum extensibility without committing to any label set or linguistic theory.",
+      "required": ["entries"],
+      "properties": {
+        "entries": {
+          "type": "array",
+          "description": "The feature entries.",
+          "items": {
+            "type": "ref",
+            "ref": "#feature"
+          }
+        }
+      }
+    },
+
+    "feature": {
+      "type": "object",
+      "description": "A single key-value feature.",
+      "required": ["key", "value"],
+      "properties": {
+        "key": {
+          "type": "string",
+          "description": "Feature name/key.",
+          "maxLength": 256
+        },
+        "value": {
+          "type": "string",
+          "description": "Feature value as string. Consumers may parse typed values based on the key's semantics.",
+          "maxLength": 4096
+        }
+      }
+    },
+
+    "constraint": {
+      "type": "object",
+      "description": "An abstract constraint expression. Used for type constraints on role slots, slot-level constraints in templates, cross-slot agreement constraints, and any other declarative restriction. The expression field holds a DSL string whose format is identified by expressionFormat/expressionFormatUri.",
+      "required": ["expression"],
+      "properties": {
+        "expression": {
+          "type": "string",
+          "description": "The constraint expression (e.g., 'self.pos == \"VERB\"', 'subject.features.number == verb.features.number').",
+          "maxLength": 4096
+        },
+        "expressionFormatUri": {
+          "type": "string",
+          "format": "at-uri",
+          "description": "AT-URI of the expression format definition node. Community-expandable via knowledge graph."
+        },
+        "expressionFormat": {
+          "type": "string",
+          "description": "Expression format slug (fallback when expressionFormatUri unavailable).",
+          "knownValues": ["python-expr", "json-logic", "regex", "sparql-filter", "type-ref", "custom"],
+          "maxLength": 128
+        },
+        "scopeUri": {
+          "type": "string",
+          "format": "at-uri",
+          "description": "AT-URI of the scope definition node. Community-expandable via knowledge graph."
+        },
+        "scope": {
+          "type": "string",
+          "description": "Constraint scope slug (fallback when scopeUri unavailable).",
+          "knownValues": ["slot", "template", "cross-template", "global"],
+          "maxLength": 128
+        },
+        "context": {
+          "type": "array",
+          "description": "Names of the slots or variables this constraint ranges over (for cross-slot and cross-template constraints).",
+          "maxLength": 32,
+          "items": {
+            "type": "string",
+            "maxLength": 256
+          }
+        },
+        "description": {
+          "type": "string",
+          "description": "Human-readable description of the constraint.",
+          "maxLength": 2048
+        }
+      }
+    },
+
+    "objectRef": {
+      "type": "object",
+      "description": "A composable reference to any Layers object, whether local (same record, by UUID), remote (different record, by AT-URI + optional object UUID), or external (knowledge graph entry). This is the universal cross-referencing primitive; consumers dispatch on which field(s) are populated. Used by argumentRef, graphNode, alignment endpoints, and any other cross-object pointer.",
+      "properties": {
+        "localId": {
+          "type": "ref",
+          "ref": "#uuid",
+          "description": "UUID of an object within the same record."
+        },
+        "recordRef": {
+          "type": "string",
+          "format": "at-uri",
+          "description": "AT-URI of a Layers record in another user's PDS or another record in the same PDS."
+        },
+        "objectId": {
+          "type": "ref",
+          "ref": "#uuid",
+          "description": "UUID of a specific object within the record referenced by recordRef."
+        },
+        "knowledgeRef": {
+          "type": "ref",
+          "ref": "#knowledgeRef",
+          "description": "Reference to an external knowledge graph node (Wikidata, chive.pub, FrameNet, etc.)."
+        }
+      }
+    },
+
+    "contentDigest": {
+      "type": "object",
+      "description": "A structured content hash for integrity verification. Separates the algorithm from the digest value so verifiers dispatch on algorithm rather than parsing a packed string.",
+      "required": ["algorithm", "value"],
+      "properties": {
+        "algorithmUri": {
+          "type": "string",
+          "format": "at-uri",
+          "description": "AT-URI of the digest algorithm definition node. Community-expandable via knowledge graph."
+        },
+        "algorithm": {
+          "type": "string",
+          "description": "Digest algorithm slug (fallback when algorithmUri unavailable).",
+          "knownValues": ["sha256", "sha512", "blake3", "md5", "custom"],
+          "maxLength": 32
+        },
+        "value": {
+          "type": "string",
+          "description": "The digest as lowercase hexadecimal.",
+          "maxLength": 160
+        }
+      }
+    },
+
+    "mediaScope": {
+      "type": "object",
+      "description": "Identifies which medium, session clock, stream, and track a sample-indexed or time-indexed anchor is measured against. Absent means the single medium reachable from the annotated expression, which preserves the single-stream reading of records that omit it.",
+      "properties": {
+        "mediaRef": {
+          "type": "string",
+          "format": "at-uri",
+          "description": "AT-URI of the pub.layers.media.media record this anchor addresses."
+        },
+        "mediaCid": {
+          "type": "string",
+          "format": "cid",
+          "description": "CID pinning the exact version of the media record."
+        },
+        "sessionRef": {
+          "type": "string",
+          "format": "at-uri",
+          "description": "AT-URI of the pub.layers.acquisition.session whose clock the sample and nanosecond times are on."
+        },
+        "stream": {
+          "type": "ref",
+          "ref": "#objectRef",
+          "description": "The session stream this anchor is on; recordRef is the sessionRef and objectId is the stream uuid (acquisition.defs#stream)."
+        },
+        "trackIndex": {
+          "type": "integer",
+          "description": "0-indexed track within the medium (e.g., an audio track or a subtitle track).",
+          "minimum": 0
+        }
+      }
+    },
+
+    "frequencyBand": {
+      "type": "object",
+      "description": "A frequency band selecting a sub-band of a continuous signal (e.g., an EEG rhythm or a speech formant). Follows the URI+slug pattern; explicit low/high bounds override the slug where present.",
+      "properties": {
+        "bandUri": {
+          "type": "string",
+          "format": "at-uri",
+          "description": "AT-URI of the frequency band definition node. Community-expandable via knowledge graph."
+        },
+        "band": {
+          "type": "string",
+          "description": "Frequency band slug (fallback when bandUri unavailable).",
+          "knownValues": ["delta", "theta", "alpha", "mu", "beta", "low-gamma", "high-gamma", "ripple", "broadband", "f0", "f1", "f2", "f3", "f4", "custom"],
+          "maxLength": 64
+        },
+        "lowMilliHz": {
+          "type": "integer",
+          "description": "Lower bound of the band in millihertz.",
+          "minimum": 0
+        },
+        "highMilliHz": {
+          "type": "integer",
+          "description": "Upper bound of the band in millihertz.",
+          "minimum": 0
+        }
+      }
+    },
+
+    "signalSpan": {
+      "type": "object",
+      "description": "A span over one or more channels of a continuous signal (EEG, MEG, ECoG, audio waveform, motion or eye-tracking stream). Addressable by sample index or by session-relative nanoseconds; scope is required because an unscoped sample index is meaningless.",
+      "required": ["scope"],
+      "properties": {
+        "scope": {
+          "type": "ref",
+          "ref": "#mediaScope",
+          "description": "Which medium, session clock, stream, and track the sample and nanosecond indices are measured against. Required."
+        },
+        "startSample": {
+          "type": "integer",
+          "description": "Inclusive 0-indexed start sample, signed (may precede the clock origin)."
+        },
+        "endSample": {
+          "type": "integer",
+          "description": "Exclusive end sample, signed."
+        },
+        "startNanos": {
+          "type": "integer",
+          "description": "Signed start on the stream or session clock, session-relative and never UTC-epoch. Authoritative when startSample is absent; startSample wins where both are present."
+        },
+        "endingNanos": {
+          "type": "integer",
+          "description": "Signed end on the stream or session clock, session-relative."
+        },
+        "channels": {
+          "type": "array",
+          "description": "Channels this span covers; each objectRef has recordRef the media record and objectId a signalChannel uuid. Empty or absent means all channels.",
+          "maxLength": 4096,
+          "items": {
+            "type": "ref",
+            "ref": "#objectRef"
+          }
+        },
+        "channelNames": {
+          "type": "array",
+          "description": "Advisory channel-name fallback; channels wins where both are present.",
+          "maxLength": 512,
+          "items": {
+            "type": "string",
+            "maxLength": 128
+          }
+        },
+        "sensors": {
+          "type": "array",
+          "description": "Sensors this span covers; each objectRef has recordRef the media record and objectId a sensorSpec uuid.",
+          "maxLength": 1024,
+          "items": {
+            "type": "ref",
+            "ref": "#objectRef"
+          }
+        },
+        "frequencyBand": {
+          "type": "ref",
+          "ref": "#frequencyBand",
+          "description": "Frequency band this span selects, for time-frequency annotation."
+        },
+        "volumeIndexStart": {
+          "type": "integer",
+          "description": "Inclusive 0-indexed start volume, for volumetric time series (e.g., fMRI runs).",
+          "minimum": 0
+        },
+        "volumeIndexEnd": {
+          "type": "integer",
+          "description": "Exclusive end volume, for volumetric time series.",
+          "minimum": 0
+        },
+        "epochIndex": {
+          "type": "integer",
+          "description": "0-indexed epoch within an epoched signal.",
+          "minimum": 0
+        },
+        "region": {
+          "type": "ref",
+          "ref": "#spatialEntity",
+          "description": "Spatial region this span applies to, reusing the promoted spatial anchor (no separate voxel-region type is introduced)."
+        }
+      }
+    },
+
+    "fundingRef": {
+      "type": "object",
+      "description": "A reference to a grant or award that funded a piece of work. Shared across acquisition consent and reproducibility info.",
+      "required": ["awardId"],
+      "properties": {
+        "awardId": {
+          "type": "string",
+          "description": "Grant or award number.",
+          "maxLength": 256
+        },
+        "title": {
+          "type": "string",
+          "description": "Title of the grant or award.",
+          "maxLength": 1024
+        },
+        "funderRef": {
+          "type": "ref",
+          "ref": "#knowledgeRef",
+          "description": "The funding body, grounded via ror or the Crossref Funder Registry."
+        },
+        "uri": {
+          "type": "string",
+          "format": "uri",
+          "description": "URI of the award record.",
+          "maxLength": 2048
+        }
+      }
+    },
+
+    "ethicsApproval": {
+      "type": "object",
+      "description": "A reference to an ethics or institutional review board approval covering a piece of work. Shared across acquisition consent, sessions, and reproducibility info.",
+      "required": ["protocolId"],
+      "properties": {
+        "protocolId": {
+          "type": "string",
+          "description": "Protocol or approval number.",
+          "maxLength": 256
+        },
+        "bodyRef": {
+          "type": "ref",
+          "ref": "#knowledgeRef",
+          "description": "The approving board, grounded via ror; clinicaltrials for a registered trial."
+        },
+        "bodyName": {
+          "type": "string",
+          "description": "Advisory name of the approving board; bodyRef wins where both are present.",
+          "maxLength": 512
+        },
+        "approvedAt": {
+          "type": "string",
+          "format": "datetime",
+          "description": "When the approval was granted."
+        },
+        "expiresAt": {
+          "type": "string",
+          "format": "datetime",
+          "description": "When the approval expires."
+        },
+        "uri": {
+          "type": "string",
+          "format": "uri",
+          "description": "URI of the approval record.",
+          "maxLength": 2048
+        }
+      }
+    },
+
+    "languageRef": {
+      "type": "object",
+      "description": "A structured reference to a language or language variety, decomposing a BCP-47 tag into its codes plus a knowledge-graph grounding and a role. The tag is the canonical addressable key; importers normalize it on write.",
+      "required": ["tag"],
+      "properties": {
+        "tag": {
+          "type": "string",
+          "description": "Canonical BCP-47 tag using the shortest ISO 639 code (en not eng, fi not fin, poma for Pomak). Importers must normalize on write.",
+          "maxLength": 32
+        },
+        "languageUri": {
+          "type": "string",
+          "format": "at-uri",
+          "description": "AT-URI of the language definition node. Community-expandable via knowledge graph."
+        },
+        "knowledgeRef": {
+          "type": "ref",
+          "ref": "#knowledgeRef",
+          "description": "Grounding of the language, with source glottolog, iso639-3, or cldr."
+        },
+        "scriptCode": {
+          "type": "string",
+          "description": "ISO 15924 script code.",
+          "maxLength": 8
+        },
+        "regionCode": {
+          "type": "string",
+          "description": "ISO 3166-1 or UN M.49 region code.",
+          "maxLength": 8
+        },
+        "varietyLabel": {
+          "type": "string",
+          "description": "Prose residue naming the variety after every code applies.",
+          "maxLength": 256
+        },
+        "roleUri": {
+          "type": "string",
+          "format": "at-uri",
+          "description": "AT-URI of the language-role definition node (a language-role typeDef under layers-core.ontology.layers.pub). Community-expandable via knowledge graph."
+        },
+        "role": {
+          "type": "string",
+          "description": "Language-role slug (fallback when roleUri unavailable), naming the role this language plays in the record.",
+          "knownValues": ["primary", "source", "target", "metalanguage", "gloss", "translation", "contact", "l1", "l2", "heritage", "simultaneous-bilingual", "signed-l1", "signed-l2", "custom"],
+          "maxLength": 64
+        }
+      }
+    },
+
+    "accessCondition": {
+      "type": "object",
+      "description": "How the referenced bytes may actually be obtained. 0.8.0 carries licensing but no gate: it can say a corpus is LDC-User-Agreement licensed but not that obtaining it requires a signed agreement with a named body. Layers DECLARES access conditions and cannot ENFORCE them, because every record it indexes lives in someone else's PDS; the block exists so a consumer knows where the gate is before wasting a request.",
+      "required": ["mode"],
+      "properties": {
+        "modeUri": { "type": "string", "format": "at-uri", "description": "AT-URI of the access mode definition node (typeDef of access-condition at layers-core.ontology.layers.pub)." },
+        "mode": { "type": "string", "description": "Access mode slug (fallback when modeUri unavailable).", "knownValues": ["open", "registration-required", "agreement-required", "restricted", "embargoed", "closed"], "maxLength": 64 },
+        "gatekeeperRef": { "type": "ref", "ref": "pub.layers.defs#knowledgeRef", "description": "The body that grants access, grounded via ror or wikidata (an archive, a data access committee, a consortium)." },
+        "applicationUri": { "type": "string", "format": "uri", "description": "URL of the access application or registration form.", "maxLength": 2048 },
+        "agreementUri": { "type": "string", "format": "uri", "description": "The data use agreement or end-user licence that must be signed.", "maxLength": 2048 },
+        "embargoedUntil": { "type": "string", "format": "datetime", "description": "When an embargo lifts, when mode is embargoed." },
+        "permittedUseUri": { "type": "string", "format": "at-uri", "description": "AT-URI of the permitted-use definition node." },
+        "permittedUse": { "type": "string", "description": "What the access grant permits (fallback when the Uri is unavailable). Distinct from the licence: some agreements permit analysis but forbid redistribution or model training regardless of licence.", "knownValues": ["any", "research-only", "non-commercial", "no-redistribution", "no-model-training", "custom"], "maxLength": 128 },
+        "notes": { "type": "string", "description": "Free-text access detail the typed fields do not capture.", "maxLength": 4096 }
+      }
+    },
+
+    "deviceInfo": {
+      "type": "object",
+      "description": "An instrument used in acquisition. Manufacturer, product and software are GROUNDED through defs#knowledgeRef rather than enumerated: an organization is a citable entity reachable via ror and wikidata, a package via rrid, and enumerating vendors in a released lexicon makes a rebrand a lexicon version bump. BIDS Manufacturer, ManufacturersModelName, DeviceSerialNumber, SoftwareVersions, SoftwareRRID; NWB Device.",
+      "required": ["kind"],
+      "properties": {
+        "kindUri": {
+          "type": "string",
+          "format": "at-uri",
+          "description": "AT-URI of the device kind definition node (typeDef of `device-kind`). MUST resolve into the same `modality` node set as recordingMethod.methodUri where the two overlap, so an instrument named in a protocol and the same instrument named in a session join."
+        },
+        "kind": {
+          "type": "string",
+          "description": "Device kind slug (fallback when kindUri unavailable).",
+          "knownValues": ["microphone", "camera", "scanner", "eeg-amplifier", "electrode-cap", "meg-scanner", "mri-scanner", "fnirs-system", "electrode-array", "eye-tracker", "motion-capture-system", "articulograph", "ultrasound-system", "button-box", "keyboard", "mouse", "touchscreen", "response-glove", "custom"],
+          "maxLength": 128
+        },
+        "manufacturerRef": {
+          "type": "ref",
+          "ref": "pub.layers.defs#knowledgeRef",
+          "description": "Manufacturer, grounded via source ror or wikidata. Replaces a free-text vendor name: MEGIN, Elekta and Elekta/MEGIN are one organization and must facet as one."
+        },
+        "manufacturerName": {
+          "type": "string",
+          "description": "Display name when no identifier exists. Advisory; manufacturerRef wins.",
+          "maxLength": 256
+        },
+        "productRef": {
+          "type": "ref",
+          "ref": "pub.layers.defs#knowledgeRef",
+          "description": "The product, grounded via rrid where one exists."
+        },
+        "model": {
+          "type": "string",
+          "description": "BIDS ManufacturersModelName, as printed on the device.",
+          "maxLength": 256
+        },
+        "serialNumber": {
+          "type": "string",
+          "description": "BIDS DeviceSerialNumber. A serial number can be a de-anonymizing quasi-identifier in a single-site study; omit it when the participant's identifiability is anonymous.",
+          "maxLength": 256
+        },
+        "software": {
+          "type": "ref",
+          "ref": "pub.layers.defs#reproducibilityInfo",
+          "description": "Acquisition or presentation software, reusing the shared reproducibility block rather than re-declaring softwareName, softwareVersion, codeUri and operatingSystem. BIDS SoftwareVersions and GeneratedBy."
+        },
+        "features": {
+          "type": "ref",
+          "ref": "pub.layers.defs#featureMap",
+          "description": "Open-ended device features not captured by the typed fields."
+        }
+      }
+    }
+}
+}

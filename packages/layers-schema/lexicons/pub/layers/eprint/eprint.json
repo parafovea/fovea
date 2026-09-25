@@ -1,0 +1,121 @@
+{
+  "lexicon": 1,
+  "id": "pub.layers.eprint.eprint",
+  "defs": {
+    "main": {
+      "type": "record",
+      "description": "A link between a Layers data record and an eprint.",
+      "key": "any",
+      "record": {
+        "type": "object",
+        "required": ["eprintIdentifier", "linkType", "createdAt"],
+        "properties": {
+          "eprintIdentifier": {
+            "type": "string",
+            "description": "The eprint identifier (DOI, arXiv ID, ACL Anthology ID, etc.).",
+            "maxLength": 512
+          },
+          "eprintIdentifierTypeUri": {
+            "type": "string",
+            "format": "at-uri",
+            "description": "AT-URI of the identifier type definition node. Community-expandable via knowledge graph."
+          },
+          "eprintIdentifierType": {
+            "type": "string",
+            "description": "Identifier type slug (fallback when eprintIdentifierTypeUri unavailable).",
+            "knownValues": ["doi", "arxiv", "acl-anthology", "semantic-scholar", "pubmed", "isbn", "url", "at-uri", "custom"],
+            "maxLength": 128
+          },
+          "eprintUri": {
+            "type": "string",
+            "format": "uri",
+            "description": "Full URI of the eprint."
+          },
+          "platformEprintRefs": {
+            "type": "array",
+            "description": "AT-URIs of the eprint record on its publication platforms (e.g., chive.pub, any ATProto-native publication service). An eprint may be mirrored on multiple platforms.",
+            "maxLength": 32,
+            "items": {
+              "type": "string",
+              "format": "at-uri"
+            }
+          },
+          "linkTypeUri": {
+            "type": "string",
+            "format": "at-uri",
+            "description": "AT-URI of the link type definition node. Community-expandable via knowledge graph."
+          },
+          "linkType": {
+            "type": "string",
+            "description": "Link type slug (fallback when linkTypeUri unavailable).",
+            "knownValues": [
+              "produced-by",
+              "described-in",
+              "evaluated-in",
+              "replicated-from",
+              "extends",
+              "supplements",
+              "cited-in",
+              "annotates",
+              "training-data-for",
+              "test-data-for"
+            ],
+            "maxLength": 128
+          },
+          "expressionRefs": {
+            "type": "array",
+            "description": "References to Layers expressions linked to this eprint.",
+            "maxLength": 1000,
+            "items": {
+              "type": "string",
+              "format": "at-uri"
+            }
+          },
+          "annotationRefs": {
+            "type": "array",
+            "description": "References to specific annotation records linked to this eprint.",
+            "maxLength": 1000,
+            "items": {
+              "type": "string",
+              "format": "at-uri"
+            }
+          },
+          "corpusRef": {
+            "type": "string",
+            "format": "at-uri",
+            "description": "Reference to a corpus record."
+          },
+          "description": {
+            "type": "string",
+            "description": "Description of the relationship.",
+            "maxLength": 10000
+          },
+          "citation": {
+            "type": "ref",
+            "ref": "pub.layers.eprint.defs#citation",
+            "description": "Bibliographic citation for the eprint. Carries rendered metadata (authors, title, venue, year) as a raw string and/or structured CSL-JSON/DataCite fields; eprintIdentifier/eprintIdentifierType remain the canonical link key."
+          },
+          "knowledgeRefs": {
+            "type": "array",
+            "description": "Knowledge graph references (e.g., Wikidata for the venue, DBLP, Semantic Scholar corpus ID).",
+            "maxLength": 32,
+            "items": {
+              "type": "ref",
+              "ref": "pub.layers.defs#knowledgeRef"
+            }
+          },
+          "features": {
+            "type": "ref",
+            "ref": "pub.layers.defs#featureMap",
+            "description": "Open-ended features for this eprint link as key-value pairs."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "datetime",
+            "description": "Timestamp when this eprint link record was created."
+          }
+        }
+      }
+    }
+  }
+}

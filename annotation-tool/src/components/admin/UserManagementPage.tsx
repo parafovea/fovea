@@ -19,6 +19,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { useUsers, useDeleteUser, UserWithStats } from '@store/queries/admin/useUsers'
+import { useTourAnchor } from '@/tours/engine/anchorRegistry'
 import { CreateUserDialog } from './CreateUserDialog'
 import { EditUserDialog } from './EditUserDialog'
 import { ConfirmDialog } from '../shared/ConfirmDialog'
@@ -31,6 +32,7 @@ type SortOrder = 'asc' | 'desc'
  * Provides interface for viewing, creating, editing, and deleting users.
  */
 export function UserManagementPage(): JSX.Element {
+  const pageAnchor = useTourAnchor('user-management-page')
   const { data: users = [], isLoading, error } = useUsers()
   const deleteUser = useDeleteUser()
 
@@ -166,7 +168,7 @@ export function UserManagementPage(): JSX.Element {
 
   if (isLoading) {
     return (
-      <div className="flex justify-center p-8" data-tour-id="user-management-page">
+      <div className="flex justify-center p-8" ref={pageAnchor}>
         <Spinner />
       </div>
     )
@@ -174,7 +176,7 @@ export function UserManagementPage(): JSX.Element {
 
   if (error) {
     return (
-      <div className="p-6" data-tour-id="user-management-page">
+      <div className="p-6" ref={pageAnchor}>
         <Alert variant="destructive">
           <AlertDescription>Failed to load users: {error.message}</AlertDescription>
         </Alert>
@@ -183,7 +185,7 @@ export function UserManagementPage(): JSX.Element {
   }
 
   return (
-    <div className="p-6" data-tour-id="user-management-page">
+    <div className="p-6" ref={pageAnchor}>
       {/* Toolbar */}
       <div className="flex gap-4 mb-6 items-center">
         <div className="relative flex-grow max-w-[400px]">

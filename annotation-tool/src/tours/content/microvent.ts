@@ -363,6 +363,23 @@ export const microventContent: TourContentBundle = {
     ],
   },
 
+  documentAnnotation: {
+    personaName: 'LoanDepot Park Guest Services Usher',
+    personaRole: 'LoanDepot Park Guest Services Usher',
+    // Fixed v4 UUID so creating the demo document is idempotent across tour
+    // runs and every per-document step can route to it directly.
+    documentId: '7d1f8c9a-2b3e-4c5d-9e6f-0a1b2c3d4e5f',
+    documentTitle: 'Phillies-Karen incident report',
+    // A single sentence with clear entity spans (the adult fan, the foul ball,
+    // the young boy) and a grab relation between two of them, so the span and
+    // relation beats land on tokens that mean something on the Phillies-Karen
+    // running example the other tours share.
+    documentText:
+      'An adult fan seated behind home plate grabbed the foul ball from a young boy after his father caught it.',
+    spanTypeName: 'Spectator',
+    relationTypeName: 'grabbed-from',
+  },
+
   collaboration: {
     projectName: 'Phillies-Marlins incident review',
     groupName: 'Stadium operations team',

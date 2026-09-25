@@ -5,7 +5,7 @@ These tests exercise :class:`Settings` defaults, environment overrides, the
 provider-key reader, and the OTLP per-signal default handling. A guard test
 also asserts that no environment read leaks outside the settings module.
 
-The tests build ``Settings(_env_file=None)`` so they never pick up a stray
+The tests build ``Settings.load()`` so they never pick up a stray
 local ``.env`` file and stay deterministic regardless of the developer's
 environment.
 """
@@ -52,7 +52,7 @@ def _clear_managed_env(monkeypatch: pytest.MonkeyPatch) -> None:
 def _settings(monkeypatch: pytest.MonkeyPatch) -> Settings:
     """Build a fresh Settings with no .env and a cleared managed environment."""
     _clear_managed_env(monkeypatch)
-    return Settings(_env_file=None)
+    return Settings.load()
 
 
 class TestSettingsDefaults:
@@ -93,7 +93,7 @@ class TestSettingsOverrides:
         """MODEL_CONFIG_PATH overrides the catalog path."""
         _clear_managed_env(monkeypatch)
         monkeypatch.setenv("MODEL_CONFIG_PATH", "/custom/models.yaml")
-        settings = Settings(_env_file=None)
+        settings = Settings.load()
         assert settings.model_config_path == Path("/custom/models.yaml")
 
     def test_path_root_overrides(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -102,7 +102,7 @@ class TestSettingsOverrides:
         monkeypatch.setenv("VIDEO_DATA_ROOT", "/data/videos")
         monkeypatch.setenv("AUDIO_OUTPUT_ROOT", "/data/audio")
         monkeypatch.setenv("THUMBNAIL_OUTPUT_ROOT", "/data/thumbs")
-        settings = Settings(_env_file=None)
+        settings = Settings.load()
         assert settings.video_data_root == Path("/data/videos")
         assert settings.audio_output_root == Path("/data/audio")
         assert settings.thumbnail_output_root == Path("/data/thumbs")
@@ -111,7 +111,7 @@ class TestSettingsOverrides:
         """TRANSFORMERS_CACHE overrides the HF cache directory."""
         _clear_managed_env(monkeypatch)
         monkeypatch.setenv("TRANSFORMERS_CACHE", "/models/hf")
-        settings = Settings(_env_file=None)
+        settings = Settings.load()
         assert settings.transformers_cache == Path("/models/hf")
 
     def test_admin_token_override(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -119,7 +119,7 @@ class TestSettingsOverrides:
         _clear_managed_env(monkeypatch)
         admin_value = "shared-secret"
         monkeypatch.setenv("MODEL_SERVICE_ADMIN_TOKEN", admin_value)
-        settings = Settings(_env_file=None)
+        settings = Settings.load()
         assert settings.model_service_admin_token == admin_value
 
 
@@ -131,7 +131,7 @@ class TestHfTokenAliasChoice:
         _clear_managed_env(monkeypatch)
         fallback = "hf-fallback"
         monkeypatch.setenv("HF_TOKEN", fallback)
-        settings = Settings(_env_file=None)
+        settings = Settings.load()
         assert settings.hf_token == fallback
 
     def test_reads_hugging_face_hub_token(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -139,7 +139,7 @@ class TestHfTokenAliasChoice:
         _clear_managed_env(monkeypatch)
         primary = "hf-primary"
         monkeypatch.setenv("HUGGING_FACE_HUB_TOKEN", primary)
-        settings = Settings(_env_file=None)
+        settings = Settings.load()
         assert settings.hf_token == primary
 
     def test_primary_wins_over_fallback(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -149,7 +149,7 @@ class TestHfTokenAliasChoice:
         primary = "hf-primary"
         monkeypatch.setenv("HF_TOKEN", fallback)
         monkeypatch.setenv("HUGGING_FACE_HUB_TOKEN", primary)
-        settings = Settings(_env_file=None)
+        settings = Settings.load()
         assert settings.hf_token == primary
 
 
@@ -191,7 +191,7 @@ class TestOtelEndpoints:
         """When set, both exporters use the raw endpoint with no suffix."""
         _clear_managed_env(monkeypatch)
         monkeypatch.setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://collector:4318")
-        settings = Settings(_env_file=None)
+        settings = Settings.load()
         assert settings.otel_traces_endpoint == "http://collector:4318"
         assert settings.otel_metrics_endpoint == "http://collector:4318"
 
@@ -208,7 +208,7 @@ class TestProcessorAudioRoot:
         """A set AUDIO_OUTPUT_ROOT is shared by both audio consumers."""
         _clear_managed_env(monkeypatch)
         monkeypatch.setenv("AUDIO_OUTPUT_ROOT", "/data/audio")
-        settings = Settings(_env_file=None)
+        settings = Settings.load()
         assert settings.processor_audio_output_root == Path("/data/audio")
         assert settings.audio_output_root == Path("/data/audio")
 

@@ -135,13 +135,24 @@ Some integration tests create separate app instances to test mode-specific behav
 - `FOVEA_MODE=single-user`: Auto-authentication with default user
 
 **Database Cleanup:**
-All authentication tests clean the database in dependency order during `beforeEach`:
+All authentication tests clean the database in dependency order during `beforeEach`.
+Annotations, ontologies, world state, and claims live in the unified layers store,
+so their tables are cleared in reverse foreign-key order before the videos,
+personas, and users they reference:
 ```typescript
 await prisma.apiKey.deleteMany()
 await prisma.session.deleteMany()
-await prisma.annotation.deleteMany()
+// Layers store (reverse-FK order)
+await prisma.textAnnotationRelation.deleteMany()
+await prisma.layersAnnotation.deleteMany()
+await prisma.annotationLayer.deleteMany()
+await prisma.graphEdge.deleteMany()
+await prisma.graphNode.deleteMany()
+await prisma.typeDef.deleteMany()
+await prisma.layersOntology.deleteMany()
+await prisma.expression.deleteMany()
+await prisma.media.deleteMany()
 await prisma.videoSummary.deleteMany()
-await prisma.ontology.deleteMany()
 await prisma.persona.deleteMany()
 await prisma.user.deleteMany()
 ```

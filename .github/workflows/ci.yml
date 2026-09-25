@@ -225,7 +225,7 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: ${{ env.PYTHON_VERSION }}
+          python-version: '3.14'
           cache: 'pip'
           cache-dependency-path: model-service/pyproject.toml
 
@@ -256,7 +256,7 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: ${{ env.PYTHON_VERSION }}
+          python-version: '3.14'
           cache: 'pip'
           cache-dependency-path: model-service/pyproject.toml
 
@@ -430,7 +430,7 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: ${{ env.PYTHON_VERSION }}
+          python-version: '3.14'
           cache: 'pip'
           cache-dependency-path: model-service/pyproject.toml
 

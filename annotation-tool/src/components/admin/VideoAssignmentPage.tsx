@@ -39,6 +39,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { useTourAnchor } from '@/tours/engine/anchorRegistry'
 import { ConfirmDialog } from '../shared/ConfirmDialog'
 
 interface AssignmentRule {
@@ -87,6 +88,7 @@ async function fetchRules(): Promise<AssignmentRule[]> {
  * Provides three sections: manual assignment, assignment rules CRUD, and bulk operations.
  */
 export function VideoAssignmentPage(): JSX.Element {
+  const pageAnchor = useTourAnchor('project-video-assignment')
   const queryClient = useQueryClient()
   const { data: rules = [], isLoading, error } = useQuery({
     queryKey: assignmentKeys.ruleList(),
@@ -285,7 +287,7 @@ export function VideoAssignmentPage(): JSX.Element {
 
   if (isLoading) {
     return (
-      <div className="flex justify-center p-8" data-tour-id="project-video-assignment">
+      <div className="flex justify-center p-8" ref={pageAnchor}>
         <Spinner />
       </div>
     )
@@ -293,7 +295,7 @@ export function VideoAssignmentPage(): JSX.Element {
 
   if (error) {
     return (
-      <div className="p-6" data-tour-id="project-video-assignment">
+      <div className="p-6" ref={pageAnchor}>
         <Alert variant="destructive">
           <AlertDescription>
             Failed to load assignment rules: {error instanceof Error ? error.message : 'Unknown error'}
@@ -304,7 +306,7 @@ export function VideoAssignmentPage(): JSX.Element {
   }
 
   return (
-    <div className="flex flex-col gap-8 p-6" data-tour-id="project-video-assignment">
+    <div className="flex flex-col gap-8 p-6" ref={pageAnchor}>
       {/* Section 1: Manual Assignment */}
       <div className="rounded-lg border bg-card p-6">
         <h3 className="text-lg font-semibold mb-1">

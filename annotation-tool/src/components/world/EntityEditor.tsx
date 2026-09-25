@@ -28,6 +28,7 @@ import GlossEditor from '@components/ontology/GlossEditor'
 import { TypeObjectBadge } from '../shared/TypeObjectToggle'
 import WikidataImportFlow from '../shared/WikidataImportFlow'
 import { useUnsavedChangesPrompt } from '../../hooks/data'
+import { useTourAnchor } from '@/tours/engine/anchorRegistry'
 
 interface EntityEditorProps {
   open: boolean
@@ -42,6 +43,8 @@ export default function EntityEditor({ open, onClose, entity }: EntityEditorProp
   const { data: personaOntologies = [] } = useAllPersonaOntologies(personaIds)
   const { mutateAsync: addEntity } = useAddEntity()
   const { mutateAsync: updateEntity } = useUpdateEntity()
+  const editorRef = useTourAnchor('entity-editor')
+  const nameInputRef = useTourAnchor('entity-name-input')
 
   // Active persona from Zustand store
   const activePersonaId = useAnnotationUiStore((state) => state.selectedPersonaId)
@@ -198,7 +201,7 @@ export default function EntityEditor({ open, onClose, entity }: EntityEditorProp
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) handleCancel() }}>
-      <DialogContent data-tour-id="entity-editor" className="sm:max-w-2xl">
+      <DialogContent ref={editorRef} className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Package className="size-5 text-secondary" />
@@ -248,8 +251,8 @@ export default function EntityEditor({ open, onClose, entity }: EntityEditorProp
           <div className="space-y-1">
             <Label htmlFor="entity-name">Name *</Label>
             <Input
+              ref={nameInputRef}
               id="entity-name"
-              data-tour-id="entity-name-input"
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Entity name"

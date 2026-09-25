@@ -1,7 +1,8 @@
 import { describe, it, expect, vi } from 'vitest'
 import { screen } from '@testing-library/react'
 import { renderWithProviders } from '../utils/test-utils'
-import { ImportResultDialog, shouldShowOrphanSkippedBanner } from '@components/data-management/ImportResultDialog'
+import { ImportResultDialog } from '@components/data-management/ImportResultDialog'
+import { shouldShowOrphanSkippedBanner } from '@components/data-management/importResultBanner'
 import type { ImportResult } from '@models/types'
 
 /**

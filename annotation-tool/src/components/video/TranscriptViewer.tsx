@@ -4,6 +4,7 @@
  */
 
 import { cn } from '@/lib/utils'
+import { useTourAnchor } from '@/tours/engine/anchorRegistry'
 import { TranscriptJson } from './types'
 
 /**
@@ -54,6 +55,8 @@ function formatTimestamp(seconds: number): string {
  * ```
  */
 export function TranscriptViewer({ transcript, currentTime, onSeek }: TranscriptViewerProps) {
+  const viewerAnchorRef = useTourAnchor('transcript-viewer')
+
   // Handle empty transcript
   if (!transcript || !transcript.segments || transcript.segments.length === 0) {
     return (
@@ -67,7 +70,7 @@ export function TranscriptViewer({ transcript, currentTime, onSeek }: Transcript
 
   return (
     <ul
-      data-tour-id="transcript-viewer"
+      ref={viewerAnchorRef}
       className="w-full max-h-[400px] overflow-auto bg-card"
     >
       {transcript.segments.map((segment, index) => {

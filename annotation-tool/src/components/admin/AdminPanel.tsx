@@ -45,6 +45,7 @@ import { PermissionsPage } from './PermissionsPage'
 import { ModelManagementPage } from './ModelManagementPage'
 import { SystemConfigPanel } from './SystemConfigPanel'
 import { DemoAdminPanel } from './DemoAdminPanel'
+import { useTourAnchor } from '@/tours/engine/anchorRegistry'
 import { config } from '@/config'
 
 /**
@@ -53,6 +54,16 @@ import { config } from '@/config'
  * Redirects non-admin users to home page.
  */
 export function AdminPanel(): JSX.Element {
+  const panelAnchor = useTourAnchor('admin-panel')
+  const usersTabAnchor = useTourAnchor('admin-tab-users')
+  const groupsTabAnchor = useTourAnchor('admin-tab-groups')
+  const projectsTabAnchor = useTourAnchor('admin-tab-projects')
+  const videoAccessTabAnchor = useTourAnchor('admin-tab-video-access')
+  const permissionsTabAnchor = useTourAnchor('admin-tab-permissions')
+  const sessionsTabAnchor = useTourAnchor('admin-tab-sessions')
+  const modelsTabAnchor = useTourAnchor('admin-tab-models')
+  const systemConfigTabAnchor = useTourAnchor('admin-tab-system-config')
+  const settingsTabAnchor = useTourAnchor('admin-tab-settings')
   const currentUser = useAuthStore(state => state.currentUser)
   // Stock deployments keep the original redirect for non-admins so a
   // user who reaches /app/admin (or /admin) by typing the URL is
@@ -66,17 +77,14 @@ export function AdminPanel(): JSX.Element {
   if (!isDemoPublic && !currentUser?.isAdmin) {
     return <Navigate to="/" replace />
   }
-  // CRITICAL data-leak prevention: when DEMO_PUBLIC is on but the
-  // visitor is NOT an authenticated admin, render an entirely static
-  // mock panel instead of the real one. The previous behaviour
-  // (dropping the redirect, keeping the real components) mounted
-  // UserManagementPage / SessionManagementPage / PermissionsPage etc.,
-  // each of which issued its own /api/admin/* fetch — and the DEMO_MODE
-  // backend widened the read scope to make those fetches succeed, so a
-  // demo visitor could see real admin usernames, real sessions, and
-  // real role assignments on the production deployment. Mock panel
-  // shares every data-tour-id anchor the Admin tour walks through so
-  // the spotlight still lands on the right element. Real admins
+  // Data-leak prevention: when DEMO_PUBLIC is on but the visitor is NOT
+  // an authenticated admin, render an entirely static mock panel instead
+  // of the real one. The live panel mounts UserManagementPage /
+  // SessionManagementPage / PermissionsPage etc., each of which issues
+  // its own /api/admin/* fetch, so rendering it for a demo visitor would
+  // expose real admin usernames, sessions, and role assignments. The
+  // mock panel registers every tour anchor the Admin tour walks through
+  // so the spotlight still lands on the right element. Real admins
   // signing in via /login fall through to the live AdminPanel below
   // because isDemoPublic + !isAdmin is the only branch this catches.
   if (isDemoPublic && !currentUser?.isAdmin) {
@@ -84,7 +92,7 @@ export function AdminPanel(): JSX.Element {
   }
 
   return (
-    <div className="mx-auto max-w-screen-xl py-8 px-4" data-tour-id="admin-panel">
+    <div className="mx-auto max-w-screen-xl py-8 px-4" ref={panelAnchor}>
       <div className="mb-6">
         <h1 className="text-3xl font-bold tracking-tight mb-1">
           Admin Panel
@@ -97,39 +105,39 @@ export function AdminPanel(): JSX.Element {
       <div className="rounded-lg border bg-card w-full">
         <Tabs defaultValue="users">
           <TabsList className="w-full justify-start overflow-x-auto border-b rounded-none h-auto p-0">
-            <TabsTrigger value="users" data-tour-id="admin-tab-users" className="gap-2 rounded-none border-b-2 border-transparent data-[state=active]:border-primary">
+            <TabsTrigger value="users" ref={usersTabAnchor} className="gap-2 rounded-none border-b-2 border-transparent data-[state=active]:border-primary">
               <Users className="h-4 w-4" />
               Users
             </TabsTrigger>
-            <TabsTrigger value="groups" data-tour-id="admin-tab-groups" className="gap-2 rounded-none border-b-2 border-transparent data-[state=active]:border-primary">
+            <TabsTrigger value="groups" ref={groupsTabAnchor} className="gap-2 rounded-none border-b-2 border-transparent data-[state=active]:border-primary">
               <Group className="h-4 w-4" />
               Groups
             </TabsTrigger>
-            <TabsTrigger value="projects" data-tour-id="admin-tab-projects" className="gap-2 rounded-none border-b-2 border-transparent data-[state=active]:border-primary">
+            <TabsTrigger value="projects" ref={projectsTabAnchor} className="gap-2 rounded-none border-b-2 border-transparent data-[state=active]:border-primary">
               <Folder className="h-4 w-4" />
               Projects
             </TabsTrigger>
-            <TabsTrigger value="video-access" data-tour-id="admin-tab-video-access" className="gap-2 rounded-none border-b-2 border-transparent data-[state=active]:border-primary">
+            <TabsTrigger value="video-access" ref={videoAccessTabAnchor} className="gap-2 rounded-none border-b-2 border-transparent data-[state=active]:border-primary">
               <Video className="h-4 w-4" />
               Video Access
             </TabsTrigger>
-            <TabsTrigger value="permissions" data-tour-id="admin-tab-permissions" className="gap-2 rounded-none border-b-2 border-transparent data-[state=active]:border-primary">
+            <TabsTrigger value="permissions" ref={permissionsTabAnchor} className="gap-2 rounded-none border-b-2 border-transparent data-[state=active]:border-primary">
               <Shield className="h-4 w-4" />
               Permissions
             </TabsTrigger>
-            <TabsTrigger value="sessions" data-tour-id="admin-tab-sessions" className="gap-2 rounded-none border-b-2 border-transparent data-[state=active]:border-primary">
+            <TabsTrigger value="sessions" ref={sessionsTabAnchor} className="gap-2 rounded-none border-b-2 border-transparent data-[state=active]:border-primary">
               <Lock className="h-4 w-4" />
               Sessions
             </TabsTrigger>
-            <TabsTrigger value="models" data-tour-id="admin-tab-models" className="gap-2 rounded-none border-b-2 border-transparent data-[state=active]:border-primary">
+            <TabsTrigger value="models" ref={modelsTabAnchor} className="gap-2 rounded-none border-b-2 border-transparent data-[state=active]:border-primary">
               <Cpu className="h-4 w-4" />
               Models
             </TabsTrigger>
-            <TabsTrigger value="system-config" data-tour-id="admin-tab-system-config" className="gap-2 rounded-none border-b-2 border-transparent data-[state=active]:border-primary">
+            <TabsTrigger value="system-config" ref={systemConfigTabAnchor} className="gap-2 rounded-none border-b-2 border-transparent data-[state=active]:border-primary">
               <Sliders className="h-4 w-4" />
               System Config
             </TabsTrigger>
-            <TabsTrigger value="settings" data-tour-id="admin-tab-settings" className="gap-2 rounded-none border-b-2 border-transparent data-[state=active]:border-primary">
+            <TabsTrigger value="settings" ref={settingsTabAnchor} className="gap-2 rounded-none border-b-2 border-transparent data-[state=active]:border-primary">
               <Settings className="h-4 w-4" />
               Settings
             </TabsTrigger>

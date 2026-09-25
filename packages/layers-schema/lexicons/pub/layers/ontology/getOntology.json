@@ -1,0 +1,30 @@
+{
+  "lexicon": 1,
+  "id": "pub.layers.ontology.getOntology",
+  "defs": {
+    "main": {
+      "type": "query",
+      "description": "Get a single ontology by its AT-URI.",
+      "parameters": {
+        "type": "params",
+        "required": ["uri"],
+        "properties": {
+          "uri": { "type": "string", "format": "at-uri", "description": "AT-URI of the ontology to fetch." }
+        }
+      },
+      "output": {
+        "encoding": "application/json",
+        "schema": {
+          "type": "object",
+          "required": ["uri", "cid", "value"],
+          "properties": {
+            "uri": { "type": "string", "format": "at-uri", "description": "AT-URI of the returned ontology." },
+            "cid": { "type": "string", "format": "cid", "description": "CID of the returned ontology's current revision." },
+            "value": { "type": "ref", "ref": "pub.layers.ontology.ontology#main", "description": "The ontology record itself." }
+          }
+        }
+      },
+      "errors": [{ "name": "RecordNotFound" }]
+    }
+  }
+}

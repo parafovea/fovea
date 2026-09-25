@@ -51,7 +51,7 @@ class MemoryValidationDict(TypedDict):
     total_required_gb: float
     threshold: float
     max_allowed_gb: float
-    model_requirements: dict[str, "ModelRequirementDict"]
+    model_requirements: dict[str, ModelRequirementDict]
     cpu_only_mode: bool
     device: str
 
@@ -142,7 +142,7 @@ class ClaimDict(TypedDict, total=False):
     sentence_index: int | None
     char_start: int | None
     char_end: int | None
-    subclaims: list["ClaimDict"]
+    subclaims: list[ClaimDict]
     confidence: float
     claim_type: str | None
 
