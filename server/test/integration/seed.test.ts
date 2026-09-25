@@ -8,7 +8,9 @@ import { readOntologyAggregate } from '../../src/services/layers-bridge/ontology
  * Integration tests for database seeding script.
  * Validates that the seed script properly creates admin users with ADMIN_PASSWORD.
  */
-describe('Database Seed Integration', () => {
+// Each seedDatabase call hashes two bcrypt(12) passwords and writes the layers
+// ontology, about 2-4s on CI; the re-seed test runs two of them.
+describe('Database Seed Integration', { timeout: 20_000 }, () => {
   let prisma: PrismaClient
 
   beforeAll(() => {
