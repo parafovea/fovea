@@ -8,23 +8,24 @@ The 0.6 release moves every annotation, world-model, claim, and
 ontology record onto the native layers store. Your 0.5 data lives
 in five tables the 0.6 application no longer reads: `annotations`,
 `world_state`, `ontologies`, `claims`, and `claim_relations`. A
-one-time copy, run by you with the `migrate-0.6` CLI, moves that
-data into the layers tables so the 0.6 application can see it.
+one-time copy moves that data into the layers tables so the 0.6
+application can see it. The 0.6 backend runs the copy itself the
+first time it starts, verifies it, and refuses to start if the copy
+does not verify, so the upgrade is a backup plus a normal deploy.
 This page is the exact route for an admin running a real
-deployment.
+deployment, and what to do if anything goes wrong.
 
 Read [Upgrades](upgrades.md) first for the general shape of a
-minor upgrade. This page adds the data copy and says exactly when
-to run it.
+minor upgrade.
 
 ## Do you need this page?
 
-- **Upgrading a 0.5.x deployment that has data:** yes. Follow
-  every step below. Until you run the copy, the 0.6 application
-  shows none of your existing annotations, world objects, claims,
-  or ontologies. Nothing is lost, but nothing is visible either.
-- **Fresh 0.6 install:** no. There is no 0.5 data to copy, and
-  every later release installs without any extra step.
+- **Upgrading a 0.5.x deployment that has data:** yes. The copy is
+  automatic, but take the backup in step 1 and check the backend
+  log in step 3.
+- **Fresh 0.6 install:** no. There is no 0.5 data to copy, the
+  startup step does nothing, and every later release installs
+  without any extra step.
 
 ## How the upgrade is staged
 
@@ -34,10 +35,12 @@ proven:
 
 1. **Expand (0.6.0).** The 0.6.0 schema adds the layers tables and
    **keeps** the five legacy tables. Both coexist.
-2. **Migrate (you, once, on 0.6.x).** The `migrate-0.6` CLI copies
-   each legacy row into the layers store through the same panproto
-   lenses and bridges the running application uses, verifies the
-   copy, and records a `verified` marker in the database.
+2. **Migrate (automatic, on first start of 0.6.x).** When the 0.6
+   backend starts, it applies migrations and then runs the
+   `migrate-0.6` copy: every legacy row is written into the layers
+   store through the same panproto lenses and bridges the running
+   application uses, the copy is verified, and a `verified` marker is
+   recorded in the database.
 3. **Contract (a later release).** A later release removes the
    five legacy tables. Its migration drops them only when they are
    empty or the marker reads `verified`. If they still hold data
@@ -49,11 +52,11 @@ install the release that removes the legacy tables, rolling back
 to 0.5.x needs nothing beyond switching back to the 0.5.x code.
 
 :::warning Do not skip 0.6
-Upgrade to 0.6.x and complete the copy **before** installing the
-release that removes the legacy tables. That release no longer
-ships the `migrate-0.6` CLI, so it cannot run the copy for you. If
-you install it too early, its migration refuses to run and the
-backend will not start; see
+Run 0.6.x at least once, so the copy completes, **before**
+installing the release that removes the legacy tables. That release
+no longer ships the `migrate-0.6` CLI, so it cannot run the copy for
+you. If you install it too early, its migration refuses to run and
+the backend will not start; see
 [If you skipped the copy](#if-you-skipped-the-copy).
 :::
 
@@ -78,17 +81,29 @@ domain is copied through the application's own writer
 which runs the panproto lens internally. The copy only maps a
 legacy row onto the view-model that writer already consumes.
 
-## Before you start
+## What the backend does on every start
 
-- **Plan a maintenance window.** The application is down from
-  step 2 until step 9. The copy itself usually takes minutes; a
-  deployment with very large annotation tables can take longer,
-  and preflight (step 5) tells you how many rows it will move.
-- **Have shell access to the host** running `docker compose`.
-  Every command below runs from the directory holding your
-  `docker-compose.yml`.
-- **Have disk room for two backups:** a full Postgres dump and a
-  JSON export of the five legacy tables.
+The backend's start command is:
+
+```text
+prisma migrate deploy → migrate-0.6 auto → seed → start the server
+```
+
+The `auto` step decides what to do from the database itself:
+
+| Database state                                   | What `auto` does                                  |
+| ------------------------------------------------ | ------------------------------------------------- |
+| The five legacy tables are empty (fresh install) | Nothing. Prints `no 0.5 data to copy`.            |
+| A verified copy is already recorded              | Nothing. Prints `already verified`.               |
+| Legacy rows present, no verified copy            | Copies, verifies, records `verified`, continues.  |
+| The copy does not verify                         | Prints each mismatch and exits non-zero.          |
+
+A failed verify stops the start command before the server comes
+up, so the 0.6 application never serves a partial copy. The legacy
+tables are untouched, so you can roll back to 0.5.x or fix the
+cause and restart. Because `auto` is a no-op once a verified copy
+is recorded, restarting or redeploying 0.6 never rewrites migrated
+data.
 
 ## The route
 
@@ -105,20 +120,7 @@ ls -lh backups/fovea-pre-0.6.dump
 
 This is the only step that is hard to undo if you skip it.
 
-### 2. Stop the 0.5 application
-
-Stop the backend and frontend so nothing writes to the legacy
-tables while they are being copied. Leave Postgres and Redis
-running.
-
-```bash
-docker compose stop backend frontend
-```
-
-Keep them stopped until step 9. Anything a user writes to the 0.5
-application after the copy is not carried over.
-
-### 3. Get the 0.6.0 code and build it
+### 2. Get the 0.6.0 code and build it
 
 The shipped `docker-compose.yml` builds the images from your
 checkout:
@@ -132,93 +134,66 @@ docker compose build backend frontend
 If you run pre-built images instead, set the image tag to `0.6.0`
 and `docker compose pull`.
 
-Do not run `docker compose up` yet. The backend applies migrations
-and starts serving as soon as it comes up, and it would show an
-empty store until the copy has run.
-
-### 4. Apply the 0.6.0 schema
+### 3. Start 0.6.0
 
 ```bash
-docker compose run --rm backend npx prisma migrate deploy
+docker compose up -d
+docker compose logs -f backend
 ```
 
-This creates the layers tables and keeps the legacy ones.
+Compose stops the 0.5 containers and starts the 0.6 ones. In the
+backend log you should see the migrations apply, then:
 
-### 5. Preflight
-
-Confirm the 0.6 schema is applied and the legacy tables are
-readable, and see how many rows the copy will move:
-
-```bash
-docker compose run --rm backend node prisma/migrate-0.6/cli.cjs preflight
+```text
+0.5-to-0.6 copy: 0.5 data found and not yet migrated; copying now.
+...
+VERIFY OK: no mismatches.
+Recorded migration state: verified. ...
 ```
 
-Preflight prints the per-table legacy counts and any prior
-migration state. If it reports the schema is not applied, re-run
-step 4.
+followed by the seed and the server start. The copy usually takes
+seconds to minutes; a deployment with very large annotation tables
+can take longer, and the application is unavailable until it
+finishes. If the log shows `VERIFY FAILED` instead, see
+[Troubleshooting](#troubleshooting).
 
-### 6. Export the legacy tables
-
-Independently of the Postgres dump, write the five legacy tables to
-a JSON file on the host. This is a targeted, restorable copy of
-exactly what the later contract release removes:
-
-```bash
-docker compose run --rm -v "$PWD/backups:/backups" backend \
-  node prisma/migrate-0.6/cli.cjs export --out /backups/fovea-legacy-0.5.json
-```
-
-The `-v` mount matters: without it the file is written inside a
-throwaway container and discarded. Keep this file until you have
-installed the release that removes the legacy tables and confirmed
-the application shows all of your data.
-
-### 7. Dry run
-
-Run the whole copy inside a transaction that is rolled back, so
-you see exactly what it would write without persisting anything:
-
-```bash
-docker compose run --rm backend node prisma/migrate-0.6/cli.cjs dry-run
-```
-
-The dry run prints the created and updated tallies per domain.
-
-### 8. Migrate
-
-Run the copy for real. It copies every domain, then verifies the
-result and records the marker:
-
-```bash
-docker compose run --rm backend node prisma/migrate-0.6/cli.cjs migrate
-```
-
-The command prints a per-domain tally, then a verify report.
-
-- **`VERIFY OK`** and exit code 0: the marker now reads
-  `verified`. Continue to step 9.
-- **Mismatches** and a non-zero exit: the marker stays at
-  `backfilled` and each mismatch is printed. See
-  [Troubleshooting](#troubleshooting). Do not start the
-  application until this passes.
-
-The copy is idempotent and resumable. If it is interrupted, or you
-fix the cause of a mismatch, run the same command again; it
-refreshes the rows it already wrote and creates nothing new.
-
-### 9. Start 0.6.0 and check your data
+### 4. Check your data
 
 ```bash
 docker compose run --rm backend node prisma/migrate-0.6/cli.cjs status
-docker compose up -d
 ```
 
 `status` should report the phase `verified`. Then log in and
 spot-check: open a video with annotations, open a summary with
 claims, open a persona's ontology, and open the world model.
 
-You are done with the migration. Keep both backups until you have
-installed the release that removes the legacy tables.
+Keep the Postgres backup until you have installed the release that
+removes the legacy tables.
+
+## Optional: inspect or rehearse before starting 0.6
+
+If you want to see what the copy will do, or take a targeted
+backup of the legacy tables, do this between steps 2 and 3. The
+0.6.0 schema is additive and the 0.5 application keeps working on
+it, so applying it early is safe:
+
+```bash
+docker compose run --rm backend npx prisma migrate deploy
+docker compose run --rm backend node prisma/migrate-0.6/cli.cjs preflight
+docker compose run --rm -v "$PWD/backups:/backups" backend \
+  node prisma/migrate-0.6/cli.cjs export --out /backups/fovea-legacy-0.5.json
+docker compose run --rm backend node prisma/migrate-0.6/cli.cjs dry-run
+```
+
+- `preflight` confirms the schema is applied and prints how many
+  legacy rows the copy will move.
+- `export` writes the five legacy tables to a JSON file on the host.
+  The `-v` mount matters: without it the file is written inside a
+  throwaway container and discarded.
+- `dry-run` runs the whole copy in a transaction that is rolled
+  back, printing what it would write.
+
+Then continue with step 3; the backend runs the real copy on start.
 
 ## Installing the release that removes the legacy tables
 
@@ -236,8 +211,8 @@ Its migration runs when the backend starts:
 ### If you skipped the copy
 
 The refused migration leaves your data intact but is recorded as
-failed, so clear that record, go back to 0.6.x, run the copy, and
-upgrade again:
+failed, so clear that record, go back to 0.6.x, let the copy run,
+and upgrade again:
 
 1. With the new release still checked out, mark the migration
    rolled back. The error message and
@@ -248,8 +223,9 @@ upgrade again:
    docker compose run --rm backend npx prisma migrate resolve --rolled-back <migration name>
    ```
 
-2. Check out and build the latest 0.6.x release, then follow
-   steps 5 to 8 above.
+2. Check out and build the latest 0.6.x release, then
+   `docker compose up -d` and confirm the backend log reports
+   `VERIFY OK`.
 3. Upgrade to the new release again.
 
 ## What the verifier checks
@@ -285,15 +261,24 @@ In a source checkout, the same subcommands run as
 | `preflight` | Confirms the 0.6 schema is applied and prints legacy row counts.      |
 | `export`    | Writes a JSON backup of the five legacy tables (`--out <path>`).      |
 | `dry-run`   | Runs the whole copy in a rolled-back transaction; persists nothing.   |
-| `migrate`   | Runs the copy, verifies it, and records the marker.                   |
+| `auto`      | The startup step: copies only when legacy rows exist and no verified copy is recorded. |
+| `migrate`   | Runs the copy, verifies it, and records the marker; refuses after a verified copy unless `--force`. |
 | `verify`    | Re-runs the verifier without copying.                                 |
 | `status`    | Prints the recorded phase and current legacy row counts.              |
 | `rollback`  | Clears the marker so a re-run starts fresh; deletes no rows.          |
 
-Two options are shared where they apply: `--since <ISO-8601>`
-restricts the copy or verify to legacy rows updated at or after an
-instant (useful for a catch-up pass), and `--batch-size <n>` sets
-how many rows are read per page.
+Options: `--since <ISO-8601>` restricts the copy or verify to legacy
+rows updated at or after an instant, `--batch-size <n>` sets how
+many rows are read per page, and `--force` lets `migrate` run after
+a verified copy.
+
+:::danger Re-running the copy after going live
+The copy rewrites every migrated object from its 0.5 source. Once
+users have edited annotations, world objects, ontologies, or claims
+in 0.6, `migrate --force` reverts those edits. Use it only before
+anyone has worked in 0.6, for instance to pick up rows written to
+0.5 after the first copy.
+:::
 
 ## Rolling back to 0.5.x
 
@@ -302,7 +287,6 @@ rollback needs no restore, because the copy never modified the
 legacy tables:
 
 ```bash
-docker compose stop backend frontend
 git checkout v0.5.11
 docker compose build backend frontend
 docker compose up -d
@@ -319,29 +303,33 @@ you are going to roll back, do it before users start working in
 
 After you install the release that removes the legacy tables, a
 rollback to 0.5.x means restoring the Postgres dump from step 1
-(see [Backup and restore](backup-restore.md)); the JSON export from
-step 6 holds the five legacy tables as a second copy.
+(see [Backup and restore](backup-restore.md)); the JSON export, if
+you took one, holds the five legacy tables as a second copy.
 
 ## Troubleshooting
 
-- **Preflight says the schema is not applied.** Run step 4 with
-  the 0.6.0 image before the copy.
-- **Migrate exits non-zero with mismatches.** Read the printed
-  mismatches. The marker stays at `backfilled`, so the contract
-  release will still refuse to drop anything. Fix the cause and
-  re-run `migrate`; it is idempotent. If you cannot resolve a
-  mismatch, leave the 0.5 application running (roll back) and
-  report the printed mismatches.
-- **Interrupted copy.** Run `migrate` again. A re-run refreshes the
-  rows it already wrote and creates nothing new.
-- **Users kept writing to 0.5 after the copy.** Stop the 0.5
-  application and run `migrate` again with `--since` set to just
-  before your first copy began; it picks up the rows updated since
-  then.
+- **The backend log shows `VERIFY FAILED` and the backend keeps
+  restarting.** The copy wrote rows that do not reproduce their 0.5
+  source, so the server did not start. Nothing in the legacy tables
+  changed. Read the printed mismatches, then either roll back to
+  0.5.x (no restore needed) and report them, or fix the cause and
+  restart: the copy re-runs on the next start until it verifies,
+  refreshing the rows it already wrote without creating duplicates.
+- **The backend log shows `the 0.6 schema is not applied`.** The
+  `prisma migrate deploy` step failed before the copy; read the
+  lines above it in the log.
+- **The start was interrupted mid-copy.** Start it again. The copy
+  has not been verified, so it runs again and refreshes the rows it
+  already wrote.
+- **Users kept writing to 0.5 after the copy** (for instance you
+  rolled back, worked in 0.5, and upgraded again). The copy is
+  already verified, so the start step skips it. Before anyone works
+  in 0.6 again, run
+  `docker compose run --rm backend node prisma/migrate-0.6/cli.cjs migrate --force --since <ISO-8601>`
+  with `--since` set to just before you rolled back.
 - **The backend will not start after installing the contract
   release, and its log says `Refusing to drop the legacy 0.5
   tables`.** The copy never reached a passing verify on this
   database. Follow [If you skipped the copy](#if-you-skipped-the-copy).
-- **The export file is missing after step 6.** The command ran
-  without the `-v "$PWD/backups:/backups"` mount. Re-run it with
-  the mount.
+- **The export file is missing.** The `export` command ran without
+  the `-v "$PWD/backups:/backups"` mount. Re-run it with the mount.

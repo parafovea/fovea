@@ -10,18 +10,17 @@
  *
  * Every subcommand reads `DATABASE_URL` from the environment. The production
  * image ships this file bundled as `cli.cjs` (run `node prisma/migrate-0.6/cli.cjs
- * <subcommand>`); a source checkout runs it through tsx. Run in dependency order:
+ * <subcommand>`); a source checkout runs it through tsx.
  *
- * ```bash
- * tsx prisma/migrate-0.6/cli.ts preflight
- * tsx prisma/migrate-0.6/cli.ts export --out backup-0.5.json
- * tsx prisma/migrate-0.6/cli.ts dry-run
- * tsx prisma/migrate-0.6/cli.ts migrate
- * tsx prisma/migrate-0.6/cli.ts status
- * ```
+ * The backend runs `auto` on every start, after `prisma migrate deploy`: it
+ * copies and verifies only when the 0.5 tables hold rows and no verified copy
+ * is recorded, so an upgrade needs no manual step. The other subcommands
+ * (`preflight`, `export`, `dry-run`, `migrate`, `verify`, `status`, `rollback`)
+ * let an admin inspect, back up, or re-drive the copy by hand.
  *
- * `migrate` is idempotent and resumable: a re-run refreshes the same rows and
- * mints nothing new, so an interrupted run is recovered by running it again.
+ * The copy is idempotent and resumable: a re-run before verify refreshes the
+ * same rows and mints nothing new. After verify, `migrate` requires `--force`,
+ * because a re-run would revert edits made in 0.6.
  *
  * @module
  */
@@ -54,6 +53,7 @@ interface CliOptions {
   since?: Date
   batchSize?: number
   out?: string
+  force?: boolean
 }
 
 /** The legacy source tables and the Prisma delegates that count them. */
@@ -66,6 +66,12 @@ const LEGACY_TABLES = [
   'video',
   'videoSummary',
 ] as const
+
+/**
+ * The five 0.5 tables whose rows exist only for the copy. Videos and summaries
+ * are live 0.6 tables, so they do not signal pending 0.5 data.
+ */
+const COPY_SOURCE_TABLES = ['annotation', 'ontology', 'worldState', 'claim', 'claimRelation'] as const
 
 /** The native layers tables the copy writes into, checked for presence. */
 const LAYERS_TABLES = ['media', 'expression', 'layersAnnotation', 'graphNode', 'typeDef', 'layersOntology'] as const
@@ -84,6 +90,16 @@ async function legacyCounts(prisma: PrismaClient): Promise<Record<string, number
     counts[table] = await delegate.count()
   }
   return counts
+}
+
+/** Sums the rows in the five 0.5 copy-source tables. */
+async function copySourceRows(prisma: PrismaClient): Promise<number> {
+  let total = 0
+  for (const table of COPY_SOURCE_TABLES) {
+    const delegate = prisma[table] as unknown as { count: () => Promise<number> }
+    total += await delegate.count()
+  }
+  return total
 }
 
 /**
@@ -187,7 +203,13 @@ function reportVerify(report: VerifyReport): number {
   return 0
 }
 
-/** `migrate`: runs the copy for real, then verifies and records the marker. */
+/**
+ * `migrate`: runs the copy for real, then verifies and records the marker.
+ *
+ * Once the marker reads `verified` it refuses without `--force`: the copy
+ * rewrites every migrated object from its 0.5 source, so a re-run after users
+ * have edited in 0.6 would revert those edits.
+ */
 async function migrate(prisma: PrismaClient, options: CliOptions): Promise<number> {
   const missing = await missingLayersTables(prisma)
   if (missing.length > 0) {
@@ -195,7 +217,44 @@ async function migrate(prisma: PrismaClient, options: CliOptions): Promise<numbe
     return 1
   }
   await ensureStateTable(prisma)
+  const state = await readState(prisma)
+  if (state?.phase === 'verified' && !options.force) {
+    out('Refusing to migrate: the copy is already verified on this database.')
+    out('A re-run rewrites every migrated object from its 0.5 source and reverts edits made in 0.6.')
+    out('Pass --force (optionally with --since) only when no one has edited in 0.6 since the copy.')
+    return 1
+  }
+  return copyAndVerify(prisma, options)
+}
 
+/**
+ * `auto`: the startup step. Copies only when the 0.5 tables hold rows and no
+ * verified copy is recorded, so fresh installs and already-migrated
+ * deployments start without touching the layers store. A failed verify exits
+ * non-zero, which stops the backend from starting with the legacy data intact.
+ */
+async function auto(prisma: PrismaClient, options: CliOptions): Promise<number> {
+  const missing = await missingLayersTables(prisma)
+  if (missing.length > 0) {
+    out(`0.5-to-0.6 copy: the 0.6 schema is not applied (missing: ${missing.join(', ')}). Run \`prisma migrate deploy\` first.`)
+    return 1
+  }
+  if ((await copySourceRows(prisma)) === 0) {
+    out('0.5-to-0.6 copy: no 0.5 data to copy.')
+    return 0
+  }
+  await ensureStateTable(prisma)
+  const state = await readState(prisma)
+  if (state?.phase === 'verified') {
+    out('0.5-to-0.6 copy: already verified on this database.')
+    return 0
+  }
+  out('0.5-to-0.6 copy: 0.5 data found and not yet migrated; copying now.')
+  return copyAndVerify(prisma, options)
+}
+
+/** Runs the copy, verifies it, and records the marker; returns the exit code. */
+async function copyAndVerify(prisma: PrismaClient, options: CliOptions): Promise<number> {
   out('Copying legacy data into the native layers tables...')
   const report = await runBackfill(prisma, {
     since: options.since,
@@ -255,7 +314,7 @@ async function rollback(prisma: PrismaClient): Promise<number> {
   return 0
 }
 
-/** Parses `--since`, `--batch-size`, and `--out` from the argument tail. */
+/** Parses `--since`, `--batch-size`, `--out`, and `--force` from the argument tail. */
 function parseOptions(argv: string[]): CliOptions {
   const options: CliOptions = {}
   for (let i = 0; i < argv.length; i += 1) {
@@ -271,6 +330,8 @@ function parseOptions(argv: string[]): CliOptions {
       if (!value) throw new Error('--batch-size requires a number')
       options.batchSize = Number.parseInt(value, 10)
       i += 1
+    } else if (flag === '--force') {
+      options.force = true
     } else if (flag === '--out') {
       if (!value) throw new Error('--out requires a file path')
       options.out = value
@@ -286,6 +347,7 @@ const COMMANDS: Record<string, (prisma: PrismaClient, options: CliOptions) => Pr
   export: exportLegacy,
   'dry-run': dryRun,
   migrate,
+  auto,
   verify,
   status: (prisma) => status(prisma),
   rollback: (prisma) => rollback(prisma),

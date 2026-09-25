@@ -34,7 +34,7 @@ services:
     build:
       context: .
       dockerfile: server/Dockerfile
-    command: sh -c "./node_modules/.bin/prisma migrate deploy && node prisma/seed.cjs && node dist/index.js"
+    command: sh -c "./node_modules/.bin/prisma migrate deploy && node prisma/migrate-0.6/cli.cjs auto && node prisma/seed.cjs && node dist/index.js"
     ports:
       - "3001:3001"
     environment:
