@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client'
+import { PrismaClient, type User } from '@prisma/client'
 import bcrypt from 'bcrypt'
 
 import { writeOntologyAggregate } from '../src/services/layers-bridge/ontology-bridge.js'
@@ -71,7 +71,7 @@ export async function seedDatabase(prismaClient?: PrismaClient) {
   // Create default user for single-user mode (no password)
   // Only create in single-user mode - not needed in multi-user mode
   const mode = process.env.FOVEA_MODE || 'single-user'
-  let personaOwner
+  let personaOwner: User
 
   if (mode === 'single-user') {
     const defaultUser = await prisma.user.upsert({
@@ -162,20 +162,17 @@ export async function seedDatabase(prismaClient?: PrismaClient) {
         {
           id: 'test-entity-person',
           name: 'Person',
-          description: 'A person in the video',
-          color: '#FF5722',
+          gloss: [{ type: 'text', content: 'A person in the video' }],
         },
         {
           id: 'test-entity-vehicle',
           name: 'Vehicle',
-          description: 'A vehicle in the video',
-          color: '#2196F3',
+          gloss: [{ type: 'text', content: 'A vehicle in the video' }],
         },
         {
           id: 'test-entity-object',
           name: 'Object',
-          description: 'An object in the video',
-          color: '#4CAF50',
+          gloss: [{ type: 'text', content: 'An object in the video' }],
         },
       ],
       eventTypes: [],
@@ -210,15 +207,24 @@ export async function seedDatabase(prismaClient?: PrismaClient) {
   // ─────────────────────────────────────────────────────────────
   const demoPersonaHidden = process.env.FOVEA_DEMO_MODE !== 'true'
 
+  /** Carries each demo type's description as the single text item of its gloss. */
+  function withGloss(types: Array<{ id: string; name: string; description: string }>) {
+    return types.map(({ id, name, description }) => ({
+      id,
+      name,
+      gloss: [{ type: 'text' as const, content: description }],
+    }))
+  }
+
   async function upsertDemoPersona(args: {
     name: string
     role: string
     informationNeed: string
     ontology: {
-      entityTypes: Array<{ id: string; name: string; description: string; color: string }>
-      roleTypes?: Array<{ id: string; name: string; description: string; color: string }>
-      eventTypes?: Array<{ id: string; name: string; description: string; color: string }>
-      relationTypes?: Array<{ id: string; name: string; description: string; color: string }>
+      entityTypes: Array<{ id: string; name: string; description: string }>
+      roleTypes?: Array<{ id: string; name: string; description: string }>
+      eventTypes?: Array<{ id: string; name: string; description: string }>
+      relationTypes?: Array<{ id: string; name: string; description: string }>
     }
   }) {
     let persona = await prisma.persona.findFirst({ where: { name: args.name } })
@@ -250,10 +256,10 @@ export async function seedDatabase(prismaClient?: PrismaClient) {
       prisma,
       persona.id,
       {
-        entityTypes: args.ontology.entityTypes,
-        roleTypes: args.ontology.roleTypes ?? [],
-        eventTypes: args.ontology.eventTypes ?? [],
-        relationTypes: args.ontology.relationTypes ?? [],
+        entityTypes: withGloss(args.ontology.entityTypes),
+        roleTypes: withGloss(args.ontology.roleTypes ?? []),
+        eventTypes: withGloss(args.ontology.eventTypes ?? []),
+        relationTypes: withGloss(args.ontology.relationTypes ?? []),
       },
       { name: `${persona.name} ontology`, description: persona.informationNeed, domain: persona.domain },
       { projectId: persona.projectId, createdByUserId: persona.userId },
@@ -275,29 +281,29 @@ export async function seedDatabase(prismaClient?: PrismaClient) {
       'Who had which souvenir, who took it from whom, and what crowd dynamics surrounded the exchange.',
     ontology: {
       entityTypes: [
-        { id: 'type-spectator', name: 'Spectator', description: 'A fan attending the game in the stands.', color: '#3B82F6' },
-        { id: 'type-foul-ball', name: 'Foul Ball', description: 'A baseball that has left the field of play into the stands.', color: '#F59E0B' },
-        { id: 'type-souvenir', name: 'Souvenir', description: 'A keepable object received from in-game play (foul ball, broken bat, batting glove).', color: '#FB923C' },
-        { id: 'type-seating-area', name: 'Seating Area', description: 'A contiguous section of stadium seats.', color: '#22C55E' },
-        { id: 'type-staff', name: 'Stadium Staff', description: 'Employees of the venue: ushers, security, guest services.', color: '#10B981' },
+        { id: 'type-spectator', name: 'Spectator', description: 'A fan attending the game in the stands.' },
+        { id: 'type-foul-ball', name: 'Foul Ball', description: 'A baseball that has left the field of play into the stands.' },
+        { id: 'type-souvenir', name: 'Souvenir', description: 'A keepable object received from in-game play (foul ball, broken bat, batting glove).' },
+        { id: 'type-seating-area', name: 'Seating Area', description: 'A contiguous section of stadium seats.' },
+        { id: 'type-staff', name: 'Stadium Staff', description: 'Employees of the venue: ushers, security, guest services.' },
       ],
       roleTypes: [
-        { id: 'role-recipient', name: 'Recipient', description: 'The person who received the souvenir from someone else.', color: '#A78BFA' },
-        { id: 'role-prior-holder', name: 'Prior Holder', description: 'The person who held the souvenir immediately before the current holder.', color: '#8B5CF6' },
-        { id: 'role-grabber', name: 'Grabber', description: 'A person who took the souvenir from another spectator without that spectator consenting.', color: '#EF4444' },
-        { id: 'role-witness', name: 'Witness', description: 'A spectator who observed the exchange but was not a party to it.', color: '#6B7280' },
+        { id: 'role-recipient', name: 'Recipient', description: 'The person who received the souvenir from someone else.' },
+        { id: 'role-prior-holder', name: 'Prior Holder', description: 'The person who held the souvenir immediately before the current holder.' },
+        { id: 'role-grabber', name: 'Grabber', description: 'A person who took the souvenir from another spectator without that spectator consenting.' },
+        { id: 'role-witness', name: 'Witness', description: 'A spectator who observed the exchange but was not a party to it.' },
       ],
       eventTypes: [
-        { id: 'event-ball-catch', name: 'Ball Catch', description: 'A spectator catching a ball that came off the field of play.', color: '#F59E0B' },
-        { id: 'event-ball-handoff', name: 'Ball Handoff', description: 'A spectator voluntarily giving a souvenir ball to another spectator (typically a child).', color: '#84CC16' },
-        { id: 'event-ball-grab', name: 'Ball Grab', description: "A spectator taking a souvenir ball out of another spectator's possession without consent.", color: '#DC2626' },
-        { id: 'event-ball-return', name: 'Ball Return', description: 'A spectator returning a souvenir to a prior holder after a guest-services intervention.', color: '#14B8A6' },
+        { id: 'event-ball-catch', name: 'Ball Catch', description: 'A spectator catching a ball that came off the field of play.' },
+        { id: 'event-ball-handoff', name: 'Ball Handoff', description: 'A spectator voluntarily giving a souvenir ball to another spectator (typically a child).' },
+        { id: 'event-ball-grab', name: 'Ball Grab', description: "A spectator taking a souvenir ball out of another spectator's possession without consent." },
+        { id: 'event-ball-return', name: 'Ball Return', description: 'A spectator returning a souvenir to a prior holder after a guest-services intervention.' },
       ],
       relationTypes: [
-        { id: 'relation-handed-to', name: 'handed-to', description: 'The source spectator voluntarily transferred the souvenir to the target spectator.', color: '#65A30D' },
-        { id: 'relation-taken-from', name: 'taken-from', description: 'The source spectator took the souvenir out of the target spectator’s possession.', color: '#B91C1C' },
-        { id: 'relation-witnessed-by', name: 'witnessed-by', description: 'The event was directly observed by the witness spectator.', color: '#6B7280' },
-        { id: 'relation-located-in', name: 'located-in', description: 'The entity is in the named seating area.', color: '#0EA5E9' },
+        { id: 'relation-handed-to', name: 'handed-to', description: 'The source spectator voluntarily transferred the souvenir to the target spectator.' },
+        { id: 'relation-taken-from', name: 'taken-from', description: 'The source spectator took the souvenir out of the target spectator’s possession.' },
+        { id: 'relation-witnessed-by', name: 'witnessed-by', description: 'The event was directly observed by the witness spectator.' },
+        { id: 'relation-located-in', name: 'located-in', description: 'The entity is in the named seating area.' },
       ],
     },
   })
@@ -315,28 +321,28 @@ export async function seedDatabase(prismaClient?: PrismaClient) {
       'Which container failed first, what equipment was struck, and how the cascade propagated through the stack.',
     ontology: {
       entityTypes: [
-        { id: 'type-container', name: 'Shipping Container', description: 'A standard intermodal cargo container (20-ft or 40-ft TEU/FEU).', color: '#EA580C' },
-        { id: 'type-crane', name: 'Gantry Crane', description: 'A ship-to-shore gantry crane used to load and unload containers.', color: '#0EA5E9' },
-        { id: 'type-stack', name: 'Container Stack', description: 'A vertical column of stacked containers on a vessel or in a yard.', color: '#92400E' },
-        { id: 'type-vessel', name: 'Container Vessel', description: 'A ship that carries shipping containers.', color: '#1E3A8A' },
-        { id: 'type-stevedore', name: 'Stevedore', description: 'A dockworker responsible for loading and unloading cargo.', color: '#10B981' },
+        { id: 'type-container', name: 'Shipping Container', description: 'A standard intermodal cargo container (20-ft or 40-ft TEU/FEU).' },
+        { id: 'type-crane', name: 'Gantry Crane', description: 'A ship-to-shore gantry crane used to load and unload containers.' },
+        { id: 'type-stack', name: 'Container Stack', description: 'A vertical column of stacked containers on a vessel or in a yard.' },
+        { id: 'type-vessel', name: 'Container Vessel', description: 'A ship that carries shipping containers.' },
+        { id: 'type-stevedore', name: 'Stevedore', description: 'A dockworker responsible for loading and unloading cargo.' },
       ],
       roleTypes: [
-        { id: 'role-tipped-container', name: 'Tipped Container', description: 'The container that lost stability first.', color: '#F97316' },
-        { id: 'role-falling-container', name: 'Falling Container', description: 'A container in active descent.', color: '#DC2626' },
-        { id: 'role-impact-target', name: 'Impact Target', description: 'The object struck by a falling container.', color: '#B91C1C' },
-        { id: 'role-origin-stack', name: 'Origin Stack', description: 'The stack where the cascade originated.', color: '#7C2D12' },
+        { id: 'role-tipped-container', name: 'Tipped Container', description: 'The container that lost stability first.' },
+        { id: 'role-falling-container', name: 'Falling Container', description: 'A container in active descent.' },
+        { id: 'role-impact-target', name: 'Impact Target', description: 'The object struck by a falling container.' },
+        { id: 'role-origin-stack', name: 'Origin Stack', description: 'The stack where the cascade originated.' },
       ],
       eventTypes: [
-        { id: 'event-container-tip', name: 'Container Tip', description: 'A container loses stability and begins to lean off its stack.', color: '#F97316' },
-        { id: 'event-container-fall', name: 'Container Fall', description: 'A container falls from its stack.', color: '#DC2626' },
-        { id: 'event-cargo-loss', name: 'Cargo Loss', description: 'Cargo is damaged or lost overboard during a handling incident.', color: '#991B1B' },
-        { id: 'event-crane-collapse', name: 'Crane Collapse', description: 'Structural failure of a gantry crane.', color: '#7F1D1D' },
+        { id: 'event-container-tip', name: 'Container Tip', description: 'A container loses stability and begins to lean off its stack.' },
+        { id: 'event-container-fall', name: 'Container Fall', description: 'A container falls from its stack.' },
+        { id: 'event-cargo-loss', name: 'Cargo Loss', description: 'Cargo is damaged or lost overboard during a handling incident.' },
+        { id: 'event-crane-collapse', name: 'Crane Collapse', description: 'Structural failure of a gantry crane.' },
       ],
       relationTypes: [
-        { id: 'relation-fell-from', name: 'fell-from', description: 'The falling container originated from the named stack.', color: '#9A3412' },
-        { id: 'relation-struck', name: 'struck', description: 'The source object impacted the target object during the incident.', color: '#B91C1C' },
-        { id: 'relation-on-vessel', name: 'on-vessel', description: 'The container is loaded on the named vessel.', color: '#1E3A8A' },
+        { id: 'relation-fell-from', name: 'fell-from', description: 'The falling container originated from the named stack.' },
+        { id: 'relation-struck', name: 'struck', description: 'The source object impacted the target object during the incident.' },
+        { id: 'relation-on-vessel', name: 'on-vessel', description: 'The container is loaded on the named vessel.' },
       ],
     },
   })
