@@ -1,0 +1,850 @@
+import { createHash, randomUUID } from 'node:crypto'
+import { Prisma, type Expression as PrismaExpression } from '@prisma/client'
+import { subject } from '@casl/ability'
+import { accessibleBy } from '@casl/prisma'
+import camelcaseKeys from 'camelcase-keys'
+import type { Token } from '@fovea/layers-schema'
+import type { AppAbility } from '../lib/abilities.js'
+import { config } from '../config.js'
+import { AppError, ForbiddenError, NotFoundError, UnauthorizedError } from '../lib/errors.js'
+import {
+  fetchModelService,
+  MODEL_SERVICE_TIMEOUTS,
+  ModelServiceTimeoutError,
+  ModelServiceUnreachableError,
+} from '../lib/fetchModelService.js'
+import { prisma } from '../lib/prisma.js'
+import { secToMs, to1000 } from './layers-conversion-service.js'
+import { VideoAccessService } from './video-access-service.js'
+import {
+  ExpressionRepository,
+  type ExpressionDetail,
+  type ExpressionWithTokens,
+} from '../repositories/ExpressionRepository.js'
+
+/**
+ * Converts a typed value to Prisma.InputJsonValue for storage in a JSON column.
+ * Prisma JSON columns accept any serializable value at runtime; this bridges the
+ * TypeScript gap without an unsafe cast.
+ */
+function toJson(value: unknown): Prisma.InputJsonValue {
+  return JSON.parse(JSON.stringify(value))
+}
+
+/** sha256 hex digest of a string, captured at ingest for drift detection. */
+function sha256(text: string): string {
+  return createHash('sha256').update(text, 'utf8').digest('hex')
+}
+
+/** Narrows a value to a shallow copy of a plain (non-array) object, else null. */
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    return { ...(value as Record<string, unknown>) }
+  }
+  return null
+}
+
+/**
+ * One token-aligned annotation layer projected from an ASR transcript's
+ * per-segment attributes: a `kind`/`subkind` and one annotation per segment
+ * carrying that segment's value at its `tokenIndex`.
+ */
+interface SegmentLayerSpec {
+  kind: string
+  subkind: string
+  annotations: Array<{ tokenIndex: number; label?: string; confidence?: number }>
+}
+
+/**
+ * Projects an ASR transcript's per-segment speaker, confidence, and sentiment
+ * into token-tag/tier annotation-layer specs aligned to the segment
+ * tokenization. Every segment that carries a value contributes one annotation at
+ * its segment (token) index; a layer with no values is omitted. This is the
+ * native home for the per-segment attributes the token stream cannot hold.
+ */
+function transcriptSegmentLayers(segments: TranscriptSegment[]): SegmentLayerSpec[] {
+  const layers: SegmentLayerSpec[] = []
+
+  const confidence = segments
+    .map((segment, tokenIndex) => ({ tokenIndex, value: to1000(segment.confidence) }))
+    .filter((entry): entry is { tokenIndex: number; value: number } => entry.value !== undefined)
+  if (confidence.length > 0) {
+    layers.push({
+      kind: 'token-tag',
+      subkind: 'confidence',
+      annotations: confidence.map((entry) => ({
+        tokenIndex: entry.tokenIndex,
+        confidence: entry.value,
+      })),
+    })
+  }
+
+  const speakers = segments
+    .map((segment, tokenIndex) => ({ tokenIndex, value: segment.speaker }))
+    .filter((entry): entry is { tokenIndex: number; value: string } => entry.value !== undefined)
+  if (speakers.length > 0) {
+    layers.push({
+      kind: 'tier',
+      subkind: 'speaker',
+      annotations: speakers.map((entry) => ({ tokenIndex: entry.tokenIndex, label: entry.value })),
+    })
+  }
+
+  const sentiments = segments
+    .map((segment, tokenIndex) => ({ tokenIndex, value: segment.sentiment }))
+    .filter((entry): entry is { tokenIndex: number; value: string } => entry.value !== undefined)
+  if (sentiments.length > 0) {
+    layers.push({
+      kind: 'token-tag',
+      subkind: 'sentiment',
+      annotations: sentiments.map((entry) => ({
+        tokenIndex: entry.tokenIndex,
+        label: entry.value,
+      })),
+    })
+  }
+
+  return layers
+}
+
+/**
+ * A transcript segment as stored in `VideoSummary.transcriptJson.segments`.
+ * Times are in seconds.
+ */
+interface TranscriptSegment {
+  start: number
+  end: number
+  text: string
+  speaker?: string
+  confidence?: number
+  sentiment?: string
+}
+
+/** The `VideoSummary.transcriptJson` shape: ordered segments plus metadata. */
+interface TranscriptJson {
+  segments: TranscriptSegment[]
+  speakers?: string[]
+  language?: string
+}
+
+/** The subset of `Video.metadata` the text materializer reads. */
+interface VideoTextMetadata {
+  description?: string
+  title?: string
+  language?: string
+}
+
+/**
+ * Narrows an unknown JSON value to a TranscriptJson, or returns null when it
+ * carries no usable segment array.
+ */
+function asTranscriptJson(value: Prisma.JsonValue | null): TranscriptJson | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const segments = (value as { segments?: unknown }).segments
+  if (!Array.isArray(segments)) return null
+  return value as unknown as TranscriptJson
+}
+
+/** Narrows an unknown JSON value to the video-metadata text fields. */
+function asVideoTextMetadata(value: Prisma.JsonValue | null): VideoTextMetadata {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
+  return value as unknown as VideoTextMetadata
+}
+
+/**
+ * The model-service `/api/tokenize` response after `camelcaseKeys(deep)`. The
+ * wire is snake_case; these are the camelCased fields the server reads. Byte
+ * offsets are authoritative UTF-8 offsets into the expression text; character
+ * offsets are UTF-16 code units (JS-compatible), so both index the text
+ * directly without re-encoding on the client.
+ */
+interface TokenizeServiceResponse {
+  tokens: Array<{
+    tokenIndex: number
+    text: string
+    byteStart: number
+    byteEnd: number
+    charStart: number
+    charEnd: number
+  }>
+  language: string
+  languageConfidence: number
+  tokenizationKind: string
+  modelUsed: string
+}
+
+/**
+ * Builds the ASR transcript's full text and one layers {@link Token} per
+ * transcript segment. Each token carries the segment's UTF-8 byte span into the
+ * concatenated text and its temporal span in milliseconds (seconds mapped
+ * through {@link secToMs}). Segments are joined with newlines.
+ *
+ * @returns the concatenated text and the per-segment token stream
+ */
+function transcriptToTokens(segments: TranscriptSegment[]): { text: string; tokens: Token[] } {
+  const positioned: Array<{ segment: TranscriptSegment; charStart: number; charEnd: number }> = []
+  let text = ''
+  segments.forEach((segment, i) => {
+    if (i > 0) text += '\n'
+    const charStart = text.length
+    text += segment.text
+    const charEnd = text.length
+    positioned.push({ segment, charStart, charEnd })
+  })
+
+  const tokens: Token[] = positioned.map(({ segment, charStart, charEnd }, i) => ({
+    tokenIndex: i,
+    text: segment.text,
+    textSpan: {
+      byteStart: Buffer.byteLength(text.slice(0, charStart), 'utf8'),
+      byteEnd: Buffer.byteLength(text.slice(0, charEnd), 'utf8'),
+      charStart,
+      charEnd,
+    },
+    temporalSpan: { start: secToMs(segment.start), ending: secToMs(segment.end) },
+  }))
+
+  return { text, tokens }
+}
+
+/** Fields accepted when creating a standalone document expression. */
+export interface CreateDocumentInput {
+  /** Optional client-generated id; when it already exists the create is idempotent. */
+  id?: string
+  text: string
+  title?: string
+  languages?: string[]
+  projectId?: string | null
+  metadata?: unknown
+  features?: unknown
+}
+
+/** Pagination for the document grid. */
+export interface DocumentListOptions {
+  skip: number
+  take: number
+}
+
+/**
+ * API-facing shape of one nested row inside an expression detail. JSON columns
+ * pass through as `unknown`; dates become ISO strings.
+ */
+type Json = unknown
+
+/** Owns the text-expression business rules and RBAC for the layers store:
+ * the single privileged expression detail read, on-demand materialization of a
+ * video's metadata-text and ASR-transcript expressions, and standalone document
+ * creation and listing. Data access is delegated to an ExpressionRepository;
+ * every authorization decision (CASL row `read`, create pre-checks, the
+ * `accessibleBy` list filter) is made here. Construct one per request from the
+ * request-scoped CASL ability and the authenticated user's id.
+ *
+ * @example
+ * ```typescript
+ * const service = new TextExpressionService(repo, request.ability ?? null, request.user?.id)
+ * const detail = await service.getExpressionDetail(id)
+ * ```
+ */
+export class TextExpressionService {
+  constructor(
+    private readonly repository: ExpressionRepository,
+    private readonly ability: AppAbility | null,
+    private readonly userId: string | undefined
+  ) {}
+
+  /** Resolves the authenticated user id or throws. */
+  private requireUserId(): string {
+    if (!this.userId) throw new UnauthorizedError('Authentication required')
+    return this.userId
+  }
+
+  /** Authorizes an action on an expression row, throwing when denied. */
+  private authorize(action: 'read' | 'update' | 'delete', row: PrismaExpression): void {
+    if (this.ability && !this.ability.can(action, subject('Expression', row))) {
+      throw new ForbiddenError(`Cannot ${action} this Expression`)
+    }
+  }
+
+  /** Pre-authorizes creating an expression in a given ownership/project scope. */
+  private authorizeCreate(projectId: string | null, userId: string): void {
+    if (!this.ability) return
+    const candidate = subject('Expression', { projectId, createdByUserId: userId })
+    if (!this.ability.can('create', candidate)) {
+      throw new ForbiddenError('Cannot create Expression in this scope')
+    }
+  }
+
+  /**
+   * Loads an expression with its tokenizations, annotation layers (with their
+   * annotations and relations), and segmentations, enforcing a CASL row-level
+   * read check.
+   *
+   * @param id - Expression UUID
+   * @returns the mapped expression detail
+   * @throws {NotFoundError} when the expression does not exist
+   * @throws {ForbiddenError} when read access is denied
+   */
+  async getExpressionDetail(id: string): Promise<Record<string, Json>> {
+    const detail = await this.repository.findExpressionDetail(id)
+    if (!detail) throw new NotFoundError('Expression', id)
+    this.authorize('read', detail)
+    return this.mapDetail(detail)
+  }
+
+  /**
+   * Materializes (and stores) the text expressions projected from a video:
+   * the metadata-text expression from `Video.metadata` and the ASR-transcript
+   * expression + segmentation from a summary's `transcriptJson`.
+   *
+   * Materialization is per-user and idempotent under a source digest: an
+   * existing expression whose stored `sourceDigest` matches the freshly hashed
+   * source text is returned unchanged; a drifted one is rebuilt (the stale row
+   * and its cascade are dropped and re-created); absent sources are skipped.
+   *
+   * @param videoId - source Video UUID
+   * @returns the materialized text expressions with their token decomposition
+   * @throws {NotFoundError} when the video does not exist or the caller cannot access it
+   * @throws {ForbiddenError} when create access is denied
+   */
+  async materializeVideoTextExpressions(videoId: string): Promise<Array<Record<string, Json>>> {
+    const userId = this.requireUserId()
+    const video = await this.repository.findVideoById(videoId)
+    if (!video) throw new NotFoundError('Video', videoId)
+    await this.assertVideoAccessible(videoId, userId)
+
+    const results: ExpressionWithTokens[] = []
+
+    // 1. Metadata-text expression (tweet/description). Skip when the video
+    //    carries no usable metadata text.
+    const meta = asVideoTextMetadata(video.metadata)
+    const metaText = (meta.description ?? meta.title ?? '').trim()
+    if (metaText.length > 0) {
+      // Tokenize the metadata text through the model-service, forwarding any
+      // declared metadata language as the override that skips language ID. The
+      // resolved language and model tokens are stored with the expression.
+      const { tokens, language } = await this.tokenizeViaModelService(metaText, meta.language)
+      const metaExpr = await this.upsertMaterialized({
+        videoId,
+        userId,
+        sourceKind: 'video-metadata-text',
+        kind: 'social-media',
+        text: metaText,
+        languages: [language],
+        buildTokens: true,
+        tokens,
+      })
+      results.push(metaExpr)
+    }
+
+    // 2. ASR-transcript expression + segmentation, built from the first
+    //    transcript-bearing summary the caller can read. Gate on the source
+    //    summary's CASL read, mirroring the /summaries routes: a summary the
+    //    caller cannot read is skipped rather than having its transcript
+    //    materialized into a caller-owned expression, so another user's
+    //    private transcript is never exposed. When an earlier summary is
+    //    unreadable but a later one is readable, the readable transcript is
+    //    still materialized.
+    const summaries = await this.repository.findSummariesWithTranscript(videoId)
+    const readableSummary =
+      summaries.find(
+        (candidate) => !this.ability || this.ability.can('read', subject('VideoSummary', candidate))
+      ) ?? null
+    const transcript = readableSummary ? asTranscriptJson(readableSummary.transcriptJson) : null
+    if (readableSummary && transcript && transcript.segments.length > 0) {
+      const { text, tokens } = transcriptToTokens(transcript.segments)
+      const languages = transcript.language ? [transcript.language] : []
+      const asrExpr = await this.upsertMaterialized({
+        videoId,
+        userId,
+        sourceKind: 'asr-transcript',
+        kind: 'transcript',
+        text,
+        languages,
+        buildTokens: true,
+        tokens,
+        segments: transcript.segments,
+        videoSummaryId: readableSummary.id,
+      })
+      results.push(asrExpr)
+    }
+
+    return results.map((row) => this.mapWithTokens(row))
+  }
+
+  /**
+   * Gates access to a source video, mirroring the /videos routes: the caller
+   * may materialize only videos assigned to their projects (or assigned to them
+   * directly), plus globally-unassigned videos; system admins may materialize
+   * any. Throws {@link NotFoundError} (never a distinct 403) when the video is
+   * inaccessible so its existence is not leaked, matching GET
+   * /api/videos/:videoId.
+   */
+  private async assertVideoAccessible(videoId: string, userId: string): Promise<void> {
+    const systemRole = this.ability?.can('manage', 'all') ? 'system_admin' : 'user'
+    const accessible = await new VideoAccessService(prisma).getAccessibleVideoIds(
+      userId,
+      systemRole
+    )
+    if (accessible !== 'all' && !accessible.includes(videoId)) {
+      throw new NotFoundError('Video', videoId)
+    }
+  }
+
+  /**
+   * Reuses or rebuilds one materialized text expression under a source-digest
+   * guard, optionally attaching a segmentation + tokenization for token-bearing
+   * sources (the ASR transcript).
+   */
+  private async upsertMaterialized(args: {
+    videoId: string
+    userId: string
+    sourceKind: string
+    kind: string
+    text: string
+    languages: string[]
+    buildTokens: boolean
+    tokens?: Token[]
+    segments?: TranscriptSegment[]
+    videoSummaryId?: string
+  }): Promise<ExpressionWithTokens> {
+    const { videoId, userId, sourceKind, kind, text, languages, buildTokens } = args
+    const digest = sha256(text)
+
+    const existing = await this.repository.findMaterializedExpression(videoId, sourceKind, userId)
+    if (existing) {
+      // Unchanged source: reuse the stored expression after a read check.
+      if (existing.sourceDigest === digest) {
+        this.authorize('read', existing)
+        return existing
+      }
+      // Drifted source: drop the stale row (cascading its segmentations,
+      // tokenizations, and layers) and rebuild from the fresh text.
+      this.authorize('update', existing)
+      await this.repository.deleteExpression(existing.id)
+    }
+
+    this.authorizeCreate(null, userId)
+
+    const id = randomUUID()
+    await this.repository.createExpression({
+      id,
+      layersId: `video:${videoId}:${sourceKind}`,
+      kind,
+      text,
+      sourceDigest: digest,
+      sourceKind,
+      videoId,
+      videoSummaryId: args.videoSummaryId,
+      languages,
+      createdByUserId: userId,
+      projectId: null,
+    })
+
+    if (buildTokens && args.tokens) {
+      const segmentation = await this.repository.createSegmentation({
+        expressionId: id,
+        createdByUserId: userId,
+        projectId: null,
+      })
+      const tokenization = await this.repository.createTokenization({
+        segmentationId: segmentation.id,
+        expressionId: id,
+        kind: 'custom',
+        isCanonical: true,
+        tokens: toJson(args.tokens),
+      })
+      // The per-segment speaker, confidence, and sentiment the token stream
+      // cannot hold become token-aligned annotation layers over the segment
+      // tokenization, so no per-segment attribute is dropped.
+      if (args.segments) {
+        await this.materializeSegmentLayers(id, tokenization.id, userId, args.segments)
+      }
+    }
+
+    const reloaded = await this.repository.findExpressionWithTokens(id)
+    // The row was just created in this request, so a missing reload is an
+    // invariant violation rather than a not-found condition.
+    if (!reloaded) throw new NotFoundError('Expression', id)
+    return reloaded
+  }
+
+  /**
+   * Persists the ASR transcript's per-segment attributes as token-aligned
+   * annotation layers over `tokenizationId`: a token-tag confidence layer, a
+   * speaker tier, and a token-tag sentiment layer, each carrying one annotation
+   * per segment that holds a value. Every layer shares the transcript's
+   * ownership (the materializing user, unscoped project).
+   */
+  private async materializeSegmentLayers(
+    expressionId: string,
+    tokenizationId: string,
+    userId: string,
+    segments: TranscriptSegment[]
+  ): Promise<void> {
+    for (const spec of transcriptSegmentLayers(segments)) {
+      const layer = await this.repository.createAnnotationLayer({
+        expressionId,
+        kind: spec.kind,
+        subkind: spec.subkind,
+        tokenizationId,
+        sourceMethod: 'automatic',
+        createdByUserId: userId,
+        projectId: null,
+      })
+      await this.repository.createAnnotations(
+        spec.annotations.map((annotation) => ({
+          layerId: layer.id,
+          tokenizationId,
+          tokenIndex: annotation.tokenIndex,
+          label: annotation.label ?? null,
+          confidence: annotation.confidence ?? null,
+          createdByUserId: userId,
+          projectId: null,
+        }))
+      )
+    }
+  }
+
+  /**
+   * Assembles a document expression's open feature map from caller features, any
+   * caller metadata (arbitrary caller extension, not annotationMetadata
+   * provenance), and the title (the provenance column has no title field). When
+   * neither a title nor caller metadata needs merging, the caller's features pass
+   * through unchanged (including a non-object value); otherwise all three fold
+   * into one feature object.
+   */
+  private documentFeatures(input: CreateDocumentInput): unknown {
+    const callerMetadata = asRecord(input.metadata)
+    if (callerMetadata === null && input.title === undefined) {
+      return input.features
+    }
+    const merged = asRecord(input.features) ?? {}
+    if (callerMetadata) Object.assign(merged, callerMetadata)
+    if (input.title !== undefined) merged.title = input.title
+    return merged
+  }
+
+  /**
+   * Tokenizes text through the model-service `/api/tokenize` endpoint,
+   * returning layers {@link Token}s (with authoritative UTF-8 byte offsets and
+   * JS-compatible UTF-16 character offsets) plus the resolved language. A
+   * `languageHint` is forwarded as the language override that skips the model
+   * service's language identification; omit it to let the service detect.
+   *
+   * A hung, unreachable, or erroring model-service hard-fails the caller with a
+   * 5xx (504 timeout, 502 unreachable/upstream error) — there is deliberately
+   * no whitespace fallback, so a persisted document is never tokenized
+   * inconsistently with the annotation pipeline that indexes its spans.
+   *
+   * @param text - the expression text to tokenize
+   * @param languageHint - optional language override that skips language ID
+   * @returns the token stream and the resolved (detected or overridden) language
+   * @throws {AppError} 502/504 when the model-service fails or times out
+   */
+  private async tokenizeViaModelService(
+    text: string,
+    languageHint?: string
+  ): Promise<{ tokens: Token[]; language: string }> {
+    const url = `${config.modelService.url}/api/tokenize`
+
+    let response: Response
+    try {
+      response = await fetchModelService(url, {
+        method: 'POST',
+        timeoutMs: MODEL_SERVICE_TIMEOUTS.tokenize,
+        body: { text, language: languageHint ?? null },
+      })
+    } catch (error) {
+      if (error instanceof ModelServiceTimeoutError) {
+        throw new AppError(504, 'MODEL_SERVICE_TIMEOUT', error.message)
+      }
+      if (error instanceof ModelServiceUnreachableError) {
+        throw new AppError(502, 'MODEL_SERVICE_UNREACHABLE', error.message)
+      }
+      throw error
+    }
+
+    if (!response.ok) {
+      const detail = await response.text()
+      throw new AppError(502, 'MODEL_SERVICE_ERROR', `Model service tokenize error: ${detail}`)
+    }
+
+    const raw = (await response.json()) as Record<string, unknown>
+    const parsed = camelcaseKeys(raw, { deep: true }) as unknown as TokenizeServiceResponse
+    const tokens: Token[] = parsed.tokens.map((token) => ({
+      tokenIndex: token.tokenIndex,
+      text: token.text,
+      textSpan: {
+        byteStart: token.byteStart,
+        byteEnd: token.byteEnd,
+        charStart: token.charStart,
+        charEnd: token.charEnd,
+      },
+    }))
+    return { tokens, language: parsed.language }
+  }
+
+  /**
+   * Creates a standalone document expression from pasted text plus a canonical
+   * model-service tokenization, or returns the existing row when a
+   * client-supplied id already exists (idempotent create-by-client-uuid).
+   *
+   * @param input - the document text and optional scope/metadata
+   * @returns the created (or existing) document with its token decomposition
+   * @throws {ForbiddenError} when create/update access is denied
+   * @throws {AppError} 502/504 when the model-service tokenization fails
+   */
+  async createDocument(input: CreateDocumentInput): Promise<Record<string, Json>> {
+    const userId = this.requireUserId()
+    const projectId = input.projectId ?? null
+
+    // Idempotent create: an existing row with the client id is returned in
+    // place (authorized against that row's read), never duplicated.
+    if (input.id) {
+      const existing = await this.repository.findExpressionWithTokens(input.id)
+      if (existing) {
+        this.authorize('read', existing)
+        return this.mapWithTokens(existing)
+      }
+    }
+
+    this.authorizeCreate(projectId, userId)
+
+    // A project-scoped document may only be created by a member of that
+    // project. The baseline own-content create rule passes for any self-owned
+    // Expression regardless of projectId, so a non-member could otherwise
+    // inject a row into a project's read scope they cannot access; verify
+    // direct membership explicitly. System admins authorize via manage-all
+    // rather than the baseline rule, so they are exempt.
+    if (projectId && !this.ability?.can('manage', 'all')) {
+      const membership = await prisma.projectMembership.findUnique({
+        where: { userId_projectId: { userId, projectId } },
+      })
+      if (!membership) {
+        throw new ForbiddenError('Cannot create Expression in this project')
+      }
+    }
+
+    const id = input.id ?? randomUUID()
+    const text = input.text
+    const digest = sha256(text)
+
+    // The annotationMetadata provenance column has no title field, and arbitrary
+    // caller metadata is open extension rather than provenance, so the document
+    // title and any caller metadata join the expression's open feature map; the
+    // provenance column is reserved for true annotationMetadata.
+    const features = this.documentFeatures(input)
+
+    // Tokenize through the model-service before any write, so a model-service
+    // outage hard-fails the create (502/504) rather than persisting an
+    // untokenized document. A caller-declared language is forwarded as the
+    // override that skips language ID; the resolved language becomes the
+    // expression's single language.
+    const { tokens, language } = await this.tokenizeViaModelService(text, input.languages?.[0])
+
+    try {
+      await this.repository.createExpression({
+        id,
+        layersId: id,
+        kind: 'document',
+        text,
+        sourceDigest: digest,
+        sourceKind: 'document',
+        languages: [language],
+        features: features !== undefined ? toJson(features) : undefined,
+        createdByUserId: userId,
+        projectId,
+      })
+    } catch (error) {
+      // Concurrent-create race on the client id: fall back to returning the
+      // now-existing row rather than surfacing the unique-violation.
+      if (
+        input.id &&
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        const existing = await this.repository.findExpressionWithTokens(input.id)
+        if (existing) {
+          this.authorize('read', existing)
+          return this.mapWithTokens(existing)
+        }
+      }
+      throw error
+    }
+
+    const segmentation = await this.repository.createSegmentation({
+      expressionId: id,
+      createdByUserId: userId,
+      projectId,
+    })
+    await this.repository.createTokenization({
+      segmentationId: segmentation.id,
+      expressionId: id,
+      kind: 'custom',
+      isCanonical: true,
+      tokens: toJson(tokens),
+    })
+
+    const reloaded = await this.repository.findExpressionWithTokens(id)
+    if (!reloaded) throw new NotFoundError('Expression', id)
+    return this.mapWithTokens(reloaded)
+  }
+
+  /**
+   * Lists document expressions the caller can read, paginated and newest-first.
+   *
+   * @param options - pagination offsets
+   * @returns the document grid page and the total accessible count
+   */
+  async listDocuments(
+    options: DocumentListOptions
+  ): Promise<{ items: Array<Record<string, Json>>; total: number }> {
+    const readScope: Prisma.ExpressionWhereInput = this.ability
+      ? accessibleBy(this.ability, 'read').Expression
+      : { createdByUserId: this.userId ?? '' }
+
+    const [rows, total] = await Promise.all([
+      this.repository.findAccessibleDocuments(readScope, options.skip, options.take),
+      this.repository.countAccessibleDocuments(readScope),
+    ])
+
+    return { items: rows.map((row) => this.mapExpression(row)), total }
+  }
+
+  // ----------------------------------------------------------------------
+  // Response mapping
+  // ----------------------------------------------------------------------
+
+  /** Maps a bare expression row to its API shape (dates to ISO strings). */
+  private mapExpression(row: PrismaExpression): Record<string, Json> {
+    return {
+      id: row.id,
+      layersId: row.layersId,
+      kind: row.kind,
+      sourceKind: row.sourceKind,
+      text: row.text,
+      sourceDigest: row.sourceDigest,
+      parentExpressionId: row.parentExpressionId,
+      anchor: row.anchor,
+      mediaId: row.mediaId,
+      videoId: row.videoId,
+      videoSummaryId: row.videoSummaryId,
+      corpusId: row.corpusId,
+      metadata: row.metadata,
+      features: row.features,
+      languages: row.languages,
+      sourceUrl: row.sourceUrl,
+      projectId: row.projectId,
+      createdByUserId: row.createdByUserId,
+      createdAt: row.createdAt.toISOString(),
+      updatedAt: row.updatedAt.toISOString(),
+    }
+  }
+
+  /** Maps a tokenization row to its API shape. */
+  private mapTokenization(row: ExpressionWithTokens['tokenizations'][number]): Record<string, Json> {
+    return {
+      id: row.id,
+      segmentationId: row.segmentationId,
+      expressionId: row.expressionId,
+      kind: row.kind,
+      isCanonical: row.isCanonical,
+      tokens: row.tokens,
+      metadata: row.metadata,
+      createdAt: row.createdAt.toISOString(),
+      updatedAt: row.updatedAt.toISOString(),
+    }
+  }
+
+  /** Maps a segmentation row (with its tokenizations) to its API shape. */
+  private mapSegmentation(
+    row: ExpressionWithTokens['segmentations'][number]
+  ): Record<string, Json> {
+    return {
+      id: row.id,
+      expressionId: row.expressionId,
+      metadata: row.metadata,
+      features: row.features,
+      tokenizations: row.tokenizations.map((t) => this.mapTokenization(t)),
+      projectId: row.projectId,
+      createdByUserId: row.createdByUserId,
+      createdAt: row.createdAt.toISOString(),
+      updatedAt: row.updatedAt.toISOString(),
+    }
+  }
+
+  /** Maps an expression plus its token decomposition to its API shape. */
+  private mapWithTokens(row: ExpressionWithTokens): Record<string, Json> {
+    return {
+      ...this.mapExpression(row),
+      tokenizations: row.tokenizations.map((t) => this.mapTokenization(t)),
+      segmentations: row.segmentations.map((s) => this.mapSegmentation(s)),
+    }
+  }
+
+  /** Maps the full expression detail graph to its API shape. */
+  private mapDetail(row: ExpressionDetail): Record<string, Json> {
+    return {
+      ...this.mapExpression(row),
+      tokenizations: row.tokenizations.map((t) => this.mapTokenization(t)),
+      segmentations: row.segmentations.map((s) => this.mapSegmentation(s)),
+      annotationLayers: row.annotationLayers.map((layer) => ({
+        id: layer.id,
+        expressionId: layer.expressionId,
+        kind: layer.kind,
+        subkind: layer.subkind,
+        formalism: layer.formalism,
+        sourceMethod: layer.sourceMethod,
+        labelSet: layer.labelSet,
+        tokenizationId: layer.tokenizationId,
+        ontologyId: layer.ontologyId,
+        parentLayerId: layer.parentLayerId,
+        personaId: layer.personaId,
+        metadata: layer.metadata,
+        features: layer.features,
+        languages: layer.languages,
+        projectId: layer.projectId,
+        createdByUserId: layer.createdByUserId,
+        createdAt: layer.createdAt.toISOString(),
+        updatedAt: layer.updatedAt.toISOString(),
+        annotations: layer.annotations.map((a) => ({
+          id: a.id,
+          layerId: a.layerId,
+          tokenizationId: a.tokenizationId,
+          anchor: a.anchor,
+          tokenIndex: a.tokenIndex,
+          label: a.label,
+          value: a.value,
+          text: a.text,
+          parentAnnotationId: a.parentAnnotationId,
+          childIds: a.childIds,
+          headIndex: a.headIndex,
+          targetIndex: a.targetIndex,
+          arguments: a.arguments,
+          confidence: a.confidence,
+          ontologyTypeRefId: a.ontologyTypeRefId,
+          denotesNodeId: a.denotesNodeId,
+          knowledgeRefs: a.knowledgeRefs,
+          temporal: a.temporal,
+          spatial: a.spatial,
+          features: a.features,
+          startMs: a.startMs,
+          endMs: a.endMs,
+          createdAt: a.createdAt.toISOString(),
+          updatedAt: a.updatedAt.toISOString(),
+        })),
+        relations: layer.relations.map((r) => ({
+          id: r.id,
+          layerId: r.layerId,
+          sourceAnnotationId: r.sourceAnnotationId,
+          targetAnnotationId: r.targetAnnotationId,
+          relationTypeRef: r.relationTypeRef,
+          label: r.label,
+          features: r.features,
+          createdAt: r.createdAt.toISOString(),
+          updatedAt: r.updatedAt.toISOString(),
+        })),
+      })),
+    }
+  }
+}

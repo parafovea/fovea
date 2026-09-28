@@ -19,6 +19,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { cn } from '@/lib/utils'
+import { useTourAnchor } from '@/tours/engine/anchorRegistry'
 import {
   useWorld,
   useAddEntity,
@@ -84,6 +85,16 @@ export default function ObjectWorkspace() {
   const [timeEditorOpen, setTimeEditorOpen] = useState(false)
   const [collectionEditorOpen, setCollectionEditorOpen] = useState(false)
   const [timeCollectionEditorOpen, setTimeCollectionEditorOpen] = useState(false)
+
+  const panelTabsAnchor = useTourAnchor('world-panel-tabs')
+  const tabEntitiesAnchor = useTourAnchor('world-tab-entities')
+  const tabEventsAnchor = useTourAnchor('world-tab-events')
+  const tabLocationsAnchor = useTourAnchor('world-tab-locations')
+  const tabTimesAnchor = useTourAnchor('world-tab-times')
+  const tabCollectionsAnchor = useTourAnchor('world-tab-collections')
+  const addEntityCollectionAnchor = useTourAnchor('world-add-entity-collection-button')
+  const addTimeCollectionAnchor = useTourAnchor('world-add-time-collection-button')
+  const addObjectAnchor = useTourAnchor('world-add-object-button')
 
   const [selectedEntity, setSelectedEntity] = useState<typeof entities[0] | null>(null)
   const [selectedEvent, setSelectedEvent] = useState<typeof events[0] | null>(null)
@@ -476,20 +487,20 @@ export default function ObjectWorkspace() {
       </div>
 
       <Tabs value={tabValue} onValueChange={setTabValue} className="flex-1 flex flex-col">
-        <TabsList className="mx-4" data-tour-id="world-panel-tabs">
-          <TabsTrigger value="entities" data-tour-id="world-tab-entities">
+        <TabsList className="mx-4" ref={panelTabsAnchor}>
+          <TabsTrigger value="entities" ref={tabEntitiesAnchor}>
             <User className="size-4 mr-1" />Entities ({entities.length})
           </TabsTrigger>
-          <TabsTrigger value="events" data-tour-id="world-tab-events">
+          <TabsTrigger value="events" ref={tabEventsAnchor}>
             <CalendarDays className="size-4 mr-1" />Events ({events.length})
           </TabsTrigger>
-          <TabsTrigger value="locations" data-tour-id="world-tab-locations">
+          <TabsTrigger value="locations" ref={tabLocationsAnchor}>
             <MapPin className="size-4 mr-1" />Locations ({locations.length})
           </TabsTrigger>
-          <TabsTrigger value="times" data-tour-id="world-tab-times">
+          <TabsTrigger value="times" ref={tabTimesAnchor}>
             <Clock className="size-4 mr-1" />Times ({times.length})
           </TabsTrigger>
-          <TabsTrigger value="collections" data-tour-id="world-tab-collections">
+          <TabsTrigger value="collections" ref={tabCollectionsAnchor}>
             <Layers className="size-4 mr-1" />Collections ({entityCollections.length + eventCollections.length})
           </TabsTrigger>
         </TabsList>
@@ -629,15 +640,14 @@ export default function ObjectWorkspace() {
           </TabsContent>
 
           <TabsContent value="collections" className="p-6">
-            {/* Quick-add row — three distinct collection kinds. The
-                floating "+" FAB only opens an entity collection by
-                default; surface explicit buttons here so the visitor
-                can create event and time collections too. The Time
-                Collection button is the entry point Tour 5 step 5
-                spotlights (data-tour-id="time-collection-builder"
-                mounts inside the editor it opens). */}
+            {/* Quick-add row for the three collection kinds. The floating
+                "+" FAB opens an entity collection by default, so explicit
+                buttons here let the visitor create event and time
+                collections too. The Time Pattern button opens the editor
+                that holds the time-collection builder. */}
             <div className="mb-4 flex gap-2">
               <Button
+                ref={addEntityCollectionAnchor}
                 variant="outline"
                 size="sm"
                 onClick={() => {
@@ -645,7 +655,6 @@ export default function ObjectWorkspace() {
                   setSelectedCollectionType('entity')
                   setCollectionEditorOpen(true)
                 }}
-                data-tour-id="world-add-entity-collection-button"
               >
                 + Entity Collection
               </Button>
@@ -661,10 +670,10 @@ export default function ObjectWorkspace() {
                 + Event Collection
               </Button>
               <Button
+                ref={addTimeCollectionAnchor}
                 variant="outline"
                 size="sm"
                 onClick={() => setTimeCollectionEditorOpen(true)}
-                data-tour-id="world-add-time-collection-button"
               >
                 + Time Pattern
               </Button>
@@ -782,11 +791,11 @@ export default function ObjectWorkspace() {
           <TooltipTrigger
             render={
               <Button
+                ref={addObjectAnchor}
                 size="icon-lg"
                 className="absolute bottom-4 right-4 rounded-full shadow-lg"
                 aria-label="add"
                 onClick={handleAddNew}
-                data-tour-id="world-add-object-button"
               />
             }
           >

@@ -28,6 +28,7 @@ import { Separator } from '@/components/ui/separator'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
+import { useTourAnchor } from '@/tours/engine/anchorRegistry'
 import { Claim, ClaimTextSpan } from '@models/types'
 import { GlossRenderer } from '@components/ontology/GlossRenderer'
 import { ClaimRelationsViewer } from './ClaimRelationsViewer'
@@ -366,6 +367,8 @@ export function ClaimsViewer({
   const [filterStrategy, setFilterStrategy] = useState<string>('all')
   const [filterModel, setFilterModel] = useState<string>('all')
 
+  const viewerAnchor = useTourAnchor('claims-viewer')
+
   // Memoize event handlers to prevent unnecessary re-renders
   const handleSelect = useCallback((claimId: string, sourceSpans: ClaimTextSpan[]) => {
     // Notify parent component when claim is selected with its source spans
@@ -492,7 +495,7 @@ export function ClaimsViewer({
   }
 
   return (
-    <div data-tour-id="claims-viewer">
+    <div ref={viewerAnchor}>
       {/* Error state */}
       {error && (
         <Alert variant="destructive" className="mb-4">

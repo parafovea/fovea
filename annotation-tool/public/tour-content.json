@@ -621,6 +621,15 @@
       }
     ]
   },
+  "documentAnnotation": {
+    "personaName": "Ballpark Guest Services Supervisor",
+    "personaRole": "Stadium operations analyst documenting spectator interactions for guest-experience review.",
+    "documentId": "7d1f8c9a-2b3e-4c5d-9e6f-0a1b2c3d4e5f",
+    "documentTitle": "Phillies-Karen incident report",
+    "documentText": "An adult fan seated behind home plate grabbed the foul ball from a young boy after his father caught it.",
+    "spanTypeName": "Spectator",
+    "relationTypeName": "grabbed-from"
+  },
   "collaboration": {
     "projectName": "Phillies-Marlins incident review",
     "groupName": "Stadium operations team"

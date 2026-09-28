@@ -236,7 +236,7 @@ test.describe('Every-feature live walkthrough', () => {
       const ow = Number(outline.getAttribute('width') ?? '0')
       const oh = Number(outline.getAttribute('height') ?? '0')
       const anchor = document.querySelector(
-        '[data-tour-id="video-browser-card-first"]',
+        '[data-tour-anchor="video-browser-card-first"]',
       ) as HTMLElement | null
       if (!anchor) return { reason: 'no-anchor' }
       const r = anchor.getBoundingClientRect()

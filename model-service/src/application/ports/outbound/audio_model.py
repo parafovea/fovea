@@ -5,9 +5,10 @@ and voice activity detection model adapters.
 """
 
 from abc import ABC, abstractmethod
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from src.domain.value_objects import TimeRange
+if TYPE_CHECKING:
+    from src.domain.value_objects import TimeRange
 
 
 class IAudioTranscriber(ABC):

@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Annotated
 from fastapi import Depends, HTTPException
 
 if TYPE_CHECKING:
+    from src.application.ports.outbound.layers_codec import ILayersCodec
     from src.application.services.model_management import ModelManager
     from src.infrastructure.config.container import Container
 
@@ -47,5 +48,16 @@ def get_model_manager() -> ModelManager:
         ) from e
 
 
+def get_layers_codec() -> ILayersCodec:
+    """Get the layers codec from the container.
+
+    Binds :class:`LairsCodecAdapter` when the ``lairs`` stack is importable, else
+    a :class:`NullLayersCodec` whose methods raise a clear ``RuntimeError`` (routes
+    map that to ``501 Not Implemented``).
+    """
+    return get_container_dep().layers_codec()
+
+
 ModelManagerDep = Annotated["ModelManager", Depends(get_model_manager)]
 ContainerDep = Annotated["Container", Depends(get_container_dep)]
+LayersCodecDep = Annotated["ILayersCodec", Depends(get_layers_codec)]

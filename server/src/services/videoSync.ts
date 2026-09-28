@@ -430,7 +430,15 @@ export async function syncVideosFromStorage(
         .filter(video => !syncedVideoIds.has(video.id))
         .map(video => video.id)
 
-      if (orphanedIds.length > 0) {
+      if (totalVideos === 0 && allDbVideos.length > 0) {
+        // An empty listing against a populated database almost always means
+        // the storage is misconfigured or unreachable. Deleting here would
+        // cascade to every summary, claim, and annotation on those videos.
+        logger.warn(
+          { databaseVideos: allDbVideos.length, storageType: storageConfig.type },
+          'Storage listed no videos; skipping orphaned video cleanup'
+        )
+      } else if (orphanedIds.length > 0) {
         // Delete orphaned videos
         const deleteResult = await prisma.video.deleteMany({
           where: {

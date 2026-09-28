@@ -3,6 +3,7 @@ import type Player from 'video.js/dist/types/player'
 import 'video.js/dist/video-js.css'
 import { VideoMetadata } from '@models/types'
 import { useVideoPlayer } from '@hooks/annotation/useVideoPlayer'
+import { useTourAnchor } from '@/tours/engine/anchorRegistry'
 
 export interface VideoPlayerProps {
   videoId: string | undefined
@@ -102,6 +103,9 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
       onPlayingChange,
     })
 
+    const scrubberAnchor = useTourAnchor('video-player-scrubber')
+    const drawingCanvasAnchor = useTourAnchor('drawing-canvas')
+
     // Track whether the stream failed to load (e.g. a 429 rate limit or a
     // network error) so we can offer a retry instead of leaving a black player.
     const [hasError, setHasError] = useState(false)
@@ -170,8 +174,8 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
     ])
 
     return (
-      <div className="relative flex-grow bg-black min-h-0" data-tour-id="video-player-scrubber">
-        <div className="annotation-video-container" data-tour-id="drawing-canvas">
+      <div ref={scrubberAnchor} className="relative flex-grow bg-black min-h-0">
+        <div ref={drawingCanvasAnchor} className="annotation-video-container">
           <video
             ref={videoRef}
             className="video-js vjs-big-play-centered vjs-fluid vjs-default-skin"

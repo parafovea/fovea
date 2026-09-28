@@ -1,4 +1,4 @@
-import { Persona, Prisma, type WorldState as PrismaWorldState } from '@prisma/client'
+import { Persona, Prisma } from '@prisma/client'
 import { subject } from '@casl/ability'
 import type { AppAbility } from '../lib/abilities.js'
 import {
@@ -11,8 +11,8 @@ import { invalidateUserAbilities } from '../middleware/abilities.js'
 import {
   ProjectRepository,
   AssignableUser,
+  type ProjectWorldStateView,
 } from '../repositories/ProjectRepository.js'
-import { mergeById } from './world-state-service.js'
 
 /** Convert a value to Prisma JSON without type assertions. */
 function toJson(value: unknown): Prisma.InputJsonValue {
@@ -646,13 +646,10 @@ export class ProjectService {
       throw new ForbiddenError('You must be a project member to access world state')
     }
 
-    // Get-or-create on the compound unique (userId, projectId). Upsert keyed on
-    // the unique avoids the find-then-create race: a concurrent first access
-    // would otherwise have both callers miss the find, both create, and the
-    // second hit the @@unique([userId, projectId]) constraint (P2002 -> 500).
-    const worldState = await this.repository.upsertEmptyWorldState(userId, projectId)
-
-    return this.mapWorldState(worldState)
+    // First access reconstructs an empty aggregate from the layers store; the
+    // layers world keys objects by (userId, projectId) rather than a single
+    // compound-unique row, so there is no first-access create race to guard.
+    return this.mapWorldState(await this.repository.readWorldState(userId, projectId))
   }
 
   /**
@@ -683,35 +680,18 @@ export class ProjectService {
       throw new ForbiddenError('You must be a project member to update world state')
     }
 
-    // Guarantee the (userId, projectId) row exists before merging. Upserting the
-    // empty row collapses the find-then-create race on concurrent first access:
-    // a plain create would have both callers miss the find, both create, and the
-    // second hit the @@unique([userId, projectId]) constraint (P2002 -> 500).
-    // With the row guaranteed, both the existing-row and first-access paths run
-    // through the same guarded optimistic merge below.
-    await this.repository.upsertEmptyWorldState(userId, projectId)
-
-    // Merge each provided array by id (upsert) instead of replacing it, under
-    // optimistic concurrency. Project world state is multi-user (every project
-    // member shares the (userId, projectId) row), so whole-blob replacement
-    // would let concurrent writers clobber each other's additions; the merge
-    // re-runs against the freshly-read row on each retry. On a first-access row
-    // each `current` array is empty, so the merge yields exactly the input.
-    const mergeTransform = (current: PrismaWorldState): Prisma.WorldStateUpdateInput => ({
-      entities: input.entities !== undefined ? mergeById(current.entities, input.entities) : undefined,
-      events: input.events !== undefined ? mergeById(current.events, input.events) : undefined,
-      times: input.times !== undefined ? mergeById(current.times, input.times) : undefined,
-      entityCollections: input.entityCollections !== undefined ? mergeById(current.entityCollections, input.entityCollections) : undefined,
-      eventCollections: input.eventCollections !== undefined ? mergeById(current.eventCollections, input.eventCollections) : undefined,
-      timeCollections: input.timeCollections !== undefined ? mergeById(current.timeCollections, input.timeCollections) : undefined,
-      relations: input.relations !== undefined ? mergeById(current.relations, input.relations) : undefined,
+    // The repository merges each provided bucket into the caller's project
+    // world by id (a whole-blob replace would drop a concurrent writer's
+    // additions), preserving buckets the caller omitted.
+    const worldState = await this.repository.writeWorldState(userId, projectId, {
+      entities: input.entities,
+      events: input.events,
+      times: input.times,
+      entityCollections: input.entityCollections,
+      eventCollections: input.eventCollections,
+      timeCollections: input.timeCollections,
+      relations: input.relations,
     })
-
-    const worldState = await this.repository.updateProjectWorldStateOptimistic(
-      userId,
-      projectId,
-      mergeTransform
-    )
 
     return this.mapWorldState(worldState)
   }
@@ -781,34 +761,21 @@ export class ProjectService {
   }
 
   /**
-   * Maps a Prisma world-state row to the response shape: ISO date strings,
-   * JSON arrays defaulted to [] when null.
+   * Maps a reconstructed project world-state view to the response shape: ISO
+   * date strings and the seven JSON buckets.
    */
-  private mapWorldState(worldState: {
-    id: string
-    userId: string
-    projectId: string | null
-    entities: Prisma.JsonValue
-    events: Prisma.JsonValue
-    times: Prisma.JsonValue
-    entityCollections: Prisma.JsonValue
-    eventCollections: Prisma.JsonValue
-    timeCollections: Prisma.JsonValue
-    relations: Prisma.JsonValue
-    createdAt: Date
-    updatedAt: Date
-  }): WorldStateResponse {
+  private mapWorldState(worldState: ProjectWorldStateView): WorldStateResponse {
     return {
       id: worldState.id,
       userId: worldState.userId,
       projectId: worldState.projectId,
-      entities: (worldState.entities as unknown[]) || [],
-      events: (worldState.events as unknown[]) || [],
-      times: (worldState.times as unknown[]) || [],
-      entityCollections: (worldState.entityCollections as unknown[]) || [],
-      eventCollections: (worldState.eventCollections as unknown[]) || [],
-      timeCollections: (worldState.timeCollections as unknown[]) || [],
-      relations: (worldState.relations as unknown[]) || [],
+      entities: worldState.entities,
+      events: worldState.events,
+      times: worldState.times,
+      entityCollections: worldState.entityCollections,
+      eventCollections: worldState.eventCollections,
+      timeCollections: worldState.timeCollections,
+      relations: worldState.relations,
       createdAt: worldState.createdAt.toISOString(),
       updatedAt: worldState.updatedAt.toISOString(),
     }

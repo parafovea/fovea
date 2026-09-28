@@ -13,7 +13,7 @@
 import { Card, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { useTour, builtInTours } from '@/tours'
+import { useTour, defaultBuiltInTours } from '@/tours'
 import logo from '@/assets/fovea-logo.svg'
 import { isPresenterMode, isSafeMode } from '../mode-flags'
 
@@ -51,13 +51,13 @@ export function DemoLandingPage() {
           <h2 className="text-lg font-medium mb-4">Pick a tour to get started</h2>
         )}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {builtInTours
+          {defaultBuiltInTours
             // Safe mode hides the model-in-the-loop tile because that
             // tour requires live inference; the rest can run from
-            // pre-recorded fixture data. Plan §9 risk 1.
+            // pre-recorded fixture data.
             .filter((tour) => !safe || tour.id !== 'model-in-the-loop')
             .map((tour) => (
-            <Card key={tour.id} data-tour-id={`demo-landing-tile-${tour.id}`}>
+            <Card key={tour.id}>
               <CardHeader>
                 <CardTitle className="text-base">{tour.title}</CardTitle>
                 <CardDescription>{tour.description}</CardDescription>

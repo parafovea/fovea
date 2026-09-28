@@ -95,6 +95,7 @@ const sidebars: SidebarsConfig = {
         'operations/monitoring',
         'operations/backup-restore',
         'operations/upgrades',
+        'operations/upgrading-0.5-to-0.6',
         'operations/troubleshooting',
       ],
     },

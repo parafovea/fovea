@@ -24,6 +24,30 @@ interface Permission {
 }
 
 /**
+ * Resource types of the layers-shaped annotation store, governed by the same
+ * project-role matrix as the legacy content types. Tokenization scopes through
+ * its parent expression but is still seeded so a project role that can read the
+ * expression can read its tokenizations; corpus_membership is intentionally
+ * omitted (it is authorized entirely through its parent corpus).
+ */
+const LAYERS_CONTENT_TYPES = [
+  'media',
+  'expression',
+  'segmentation',
+  'tokenization',
+  'annotation_layer',
+  'layers_annotation',
+  'text_annotation_relation',
+  'graph_node',
+  'graph_edge',
+  'layers_ontology',
+  'type_def',
+  'corpus',
+  'cluster_set',
+  'alignment',
+]
+
+/**
  * Generates CRUD + share + export permissions for a project-level role
  * across all content resource types.
  *
@@ -32,7 +56,7 @@ interface Permission {
  * @returns array of Permission objects for the role
  */
 function generateProjectRolePermissions(role: string, ownOnly: boolean): Permission[] {
-  const contentTypes = ['annotation', 'summary', 'claim', 'persona', 'world_state']
+  const contentTypes = ['annotation', 'summary', 'claim', 'persona', 'world_state', ...LAYERS_CONTENT_TYPES]
   const actions = ['create', 'read', 'update', 'delete']
 
   return contentTypes.flatMap(rt =>
@@ -78,7 +102,7 @@ const permissions: Permission[] = [
   // =========================================================================
   // Reviewer: read all content + review action on annotations/summaries/claims
   // =========================================================================
-  ...['annotation', 'summary', 'claim', 'persona', 'world_state', 'video'].map(rt => ({
+  ...['annotation', 'summary', 'claim', 'persona', 'world_state', 'video', ...LAYERS_CONTENT_TYPES].map(rt => ({
     scope: 'project', role: 'reviewer', resourceType: rt, action: 'read', ownOnly: false,
   })),
   ...['annotation', 'summary', 'claim'].map(rt => ({
@@ -90,7 +114,7 @@ const permissions: Permission[] = [
   // =========================================================================
   // Viewer: read-only access to all project content
   // =========================================================================
-  ...['annotation', 'summary', 'claim', 'persona', 'world_state', 'video'].map(rt => ({
+  ...['annotation', 'summary', 'claim', 'persona', 'world_state', 'video', ...LAYERS_CONTENT_TYPES].map(rt => ({
     scope: 'project', role: 'viewer', resourceType: rt, action: 'read', ownOnly: false,
   })),
   { scope: 'project', role: 'viewer', resourceType: 'project', action: 'read', ownOnly: false },

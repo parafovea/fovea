@@ -12,6 +12,7 @@ import {
   ToggleLeft,
   ToggleRight,
 } from 'lucide-react'
+import { useTourAnchor } from '@/tours/engine/anchorRegistry'
 import { useAuthStore } from '@store/zustand/authStore'
 import { useAllApiKeys, useDeleteApiKey, useUpdateApiKey, ApiKey } from '@store/queries/useApiKeys'
 import { Button } from '@/components/ui/button'
@@ -35,6 +36,7 @@ import { ConfirmDialog } from '../shared/ConfirmDialog'
  * Displays list of user API keys and admin keys with management options.
  */
 export default function ApiKeyManagementPanel() {
+  const apiKeysAnchorRef = useTourAnchor('api-keys-page')
   const currentUser = useAuthStore(state => state.currentUser)
   const { data: apiKeys = [], isLoading, error } = useAllApiKeys(currentUser?.isAdmin || false)
   const deleteApiKey = useDeleteApiKey()
@@ -149,7 +151,7 @@ export default function ApiKeyManagementPanel() {
   }
 
   return (
-    <div className="flex flex-col gap-4" data-tour-id="api-keys-page">
+    <div className="flex flex-col gap-4" ref={apiKeysAnchorRef}>
       {/* Header */}
       <div className="flex items-center justify-between">
         <p className="text-sm text-muted-foreground">

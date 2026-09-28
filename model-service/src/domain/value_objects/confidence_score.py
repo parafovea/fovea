@@ -79,7 +79,7 @@ class ConfidenceScore:
         return self.value < threshold
 
     @classmethod
-    def from_logit(cls, logit: float) -> "ConfidenceScore":
+    def from_logit(cls, logit: float) -> ConfidenceScore:
         """Create confidence score from a logit value.
 
         Parameters
@@ -99,18 +99,18 @@ class ConfidenceScore:
         """Convert to float."""
         return self.value
 
-    def __lt__(self, other: "ConfidenceScore") -> bool:
+    def __lt__(self, other: ConfidenceScore) -> bool:
         """Less than comparison."""
         return self.value < other.value
 
-    def __le__(self, other: "ConfidenceScore") -> bool:
+    def __le__(self, other: ConfidenceScore) -> bool:
         """Less than or equal comparison."""
         return self.value <= other.value
 
-    def __gt__(self, other: "ConfidenceScore") -> bool:
+    def __gt__(self, other: ConfidenceScore) -> bool:
         """Greater than comparison."""
         return self.value > other.value
 
-    def __ge__(self, other: "ConfidenceScore") -> bool:
+    def __ge__(self, other: ConfidenceScore) -> bool:
         """Greater than or equal comparison."""
         return self.value >= other.value

@@ -71,7 +71,6 @@ export function TourCataloguePage(): JSX.Element {
           {tours.map((tour) => (
             <Card
               key={tour.id}
-              data-tour-id={`tour-catalogue-tile-${tour.id}`}
               className="flex flex-col"
             >
               <CardHeader>

@@ -278,7 +278,7 @@ test.describe('Tour rigorous page-state walkthrough', () => {
     await expect
       .poll(
         async () =>
-          page.locator('[data-tour-id^="video-browser-card-"]').count(),
+          page.locator('[data-tour-anchor^="video-browser-card-"]').count(),
         { timeout: 12_000 },
       )
       .toBeGreaterThan(0)

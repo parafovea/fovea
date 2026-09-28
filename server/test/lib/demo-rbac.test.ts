@@ -9,9 +9,7 @@
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import {
-  DEMO_ANNOTATION_READ_SCOPE,
   DEMO_PERSONA_READ_SCOPE,
-  demoAnnotationListWhere,
   demoPersonaListWhere,
   demoPermitsSystemPersonaRead,
   demoGrantsAllVideos,
@@ -40,32 +38,8 @@ describe('demo-rbac', () => {
   }
 
   describe('read-scope fragments', () => {
-    it('annotation scope matches demo-fixture sources', () => {
-      expect(DEMO_ANNOTATION_READ_SCOPE).toEqual({
-        source: { startsWith: 'demo-fixture' },
-      })
-    })
-
     it('persona scope matches system-generated personas', () => {
       expect(DEMO_PERSONA_READ_SCOPE).toEqual({ isSystemGenerated: true })
-    })
-  })
-
-  describe('demoAnnotationListWhere', () => {
-    const accessible = { id: { in: ['a', 'b'] } }
-
-    it('returns the plain videoId-scoped accessible filter when demo is off', () => {
-      expect(demoAnnotationListWhere('vid-1', accessible)).toEqual({
-        AND: [{ videoId: 'vid-1' }, accessible],
-      })
-    })
-
-    it('widens to accessible OR demo fixtures, scoped to the video, when demo is on', () => {
-      enableDemo()
-      expect(demoAnnotationListWhere('vid-1', accessible)).toEqual({
-        videoId: 'vid-1',
-        OR: [accessible, { source: { startsWith: 'demo-fixture' } }],
-      })
     })
   })
 

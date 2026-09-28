@@ -75,6 +75,14 @@ export const globalCommands: Omit<Command, 'execute'>[] = [
     description: 'Navigate back to the last active video annotation'
   },
   {
+    id: 'navigate.toggleDocuments',
+    title: 'Toggle Documents',
+    category: 'navigation',
+    keybinding: 'd',
+    when: '!inputFocused && !dialogOpen',
+    description: 'Toggle between current view and the document browser'
+  },
+  {
     id: 'file.save',
     title: 'Save',
     category: 'file',

@@ -1,5 +1,9 @@
 """Tests for LLM loader with multi-model support and quantization."""
 
+import pytest
+
+pytest.importorskip("torch")  # requires the ML backend; skipped in the torch-free venv
+
 from pathlib import Path
 from unittest.mock import Mock, patch
 

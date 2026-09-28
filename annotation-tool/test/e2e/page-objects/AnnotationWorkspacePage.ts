@@ -230,7 +230,7 @@ export class AnnotationWorkspacePage extends BasePage {
    */
   private async waitForSaveSuccess(): Promise<void> {
     await this.page.waitForResponse(
-      resp => resp.url().includes('/api/annotations') && resp.status() === 200,
+      resp => resp.url().includes('/annotations') && resp.status() === 200,
       { timeout: 5000 }
     ).catch(() => {
       // Ignore timeout - save might not trigger API call in test environment
@@ -245,7 +245,7 @@ export class AnnotationWorkspacePage extends BasePage {
    * seeks the playhead to the annotation's start.
    */
   async selectFirstAnnotation(): Promise<void> {
-    const firstRow = this.page.locator('[data-tour-id="annotation-list-first"]')
+    const firstRow = this.page.locator('[data-tour-anchor="annotation-list-first"]')
     await expect(firstRow).toBeVisible({ timeout: 10000 })
     await firstRow.click()
     await this.page.waitForTimeout(300)
@@ -341,7 +341,7 @@ export class AnnotationWorkspacePage extends BasePage {
       (response) => {
         const url = response.url()
         const method = response.request().method()
-        const isAnnotationEndpoint = url.includes('/api/annotations')
+        const isAnnotationEndpoint = url.includes('/annotations')
         const isSuccessStatus = response.status() === 200 || response.status() === 201
         const isSaveMethod = method === 'POST' || method === 'PUT'
         return isAnnotationEndpoint && isSuccessStatus && isSaveMethod

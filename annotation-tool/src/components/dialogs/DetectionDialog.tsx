@@ -30,6 +30,7 @@ import {
 } from '@/components/ui/select'
 import { usePersonas } from '@store/queries'
 import { useAnnotationUiStore } from '@store/zustand'
+import { useTourAnchor } from '@/tours/engine/anchorRegistry'
 
 /**
  * Detection query options for persona-based detection.
@@ -103,6 +104,8 @@ export function DetectionDialog({
   isLoading = false,
   error = null,
 }: DetectionDialogProps) {
+  const dialogAnchorRef = useTourAnchor('detect-dialog')
+  const runButtonAnchorRef = useTourAnchor('detect-dialog-run-button')
   const selectedPersonaId = useAnnotationUiStore((state) => state.selectedPersonaId)
   const { data: personas = [] } = usePersonas()
 
@@ -187,7 +190,7 @@ export function DetectionDialog({
 
   return (
     <Dialog open={open} onOpenChange={(val) => { if (!val) onClose() }}>
-      <DialogContent className="sm:max-w-2xl" data-tour-id="detect-dialog">
+      <DialogContent className="sm:max-w-2xl" ref={dialogAnchorRef}>
         <DialogHeader>
           <DialogTitle>Detect Objects</DialogTitle>
         </DialogHeader>
@@ -423,7 +426,7 @@ export function DetectionDialog({
           <Button
             onClick={handleDetect}
             disabled={isLoading || !canDetect}
-            data-tour-id="detect-dialog-run-button"
+            ref={runButtonAnchorRef}
           >
             {isLoading ? (
               <Spinner className="mr-2 h-4 w-4" />

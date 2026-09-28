@@ -1,21 +1,22 @@
 import { Type } from '@sinclair/typebox'
-import { FastifyPluginAsync } from 'fastify'
-import { Prisma } from '@prisma/client'
+import { FastifyPluginAsync, FastifyRequest } from 'fastify'
 import { subject } from '@casl/ability'
 import { requireAuth } from '../middleware/auth.js'
 import { config } from '../config.js'
 import { buildAbilities } from '../middleware/abilities.js'
-import { NotFoundError, UnauthorizedError, InternalError, ForbiddenError, AppError } from '../lib/errors.js'
-import { isSingleUserMode } from '../services/user-service.js'
+import { NotFoundError, ForbiddenError, AppError, InternalError } from '../lib/errors.js'
+import { GraphRepository } from '../repositories/GraphRepository.js'
+import { LayersOntologyRepository } from '../repositories/LayersOntologyRepository.js'
+import {
+  OntologyLayersService,
+  type OntologySaveInput,
+} from '../services/ontology-layers-service.js'
 import {
   fetchModelService,
   MODEL_SERVICE_TIMEOUTS,
   ModelServiceTimeoutError,
   ModelServiceUnreachableError,
 } from '../lib/fetchModelService.js'
-import { mergeById } from '../services/world-state-service.js'
-import { PersonaRepository } from '../repositories/PersonaRepository.js'
-import { WorldStateRepository } from '../repositories/WorldStateRepository.js'
 import camelcaseKeys from 'camelcase-keys'
 
 /**
@@ -63,11 +64,22 @@ const WorldSchema = Type.Object({
  * - POST /api/ontology/augment - Generate AI-powered type suggestions
  */
 const ontologyRoute: FastifyPluginAsync = async (fastify) => {
-  // Request-independent: one repository each for the plugin's lifetime. These
-  // own the updatedAt-guarded optimistic merges the combined save routes
-  // through so concurrent edits do not clobber each other.
-  const personaRepository = new PersonaRepository(fastify.prisma)
-  const worldStateRepository = new WorldStateRepository(fastify.prisma)
+  // Request-independent: repositories for the plugin's lifetime.
+  const graphRepo = new GraphRepository(fastify.prisma)
+  const ontologyRepo = new LayersOntologyRepository(fastify.prisma)
+
+  /**
+   * Builds a per-request service from the request-scoped CASL ability and the
+   * authenticated user's id.
+   */
+  const serviceFor = (request: FastifyRequest): OntologyLayersService =>
+    new OntologyLayersService(
+      graphRepo,
+      ontologyRepo,
+      fastify.prisma,
+      request.ability ?? null,
+      request.user?.id
+    )
 
   /**
    * Get all personas, their ontologies, and world state.
@@ -94,85 +106,9 @@ const ontologyRoute: FastifyPluginAsync = async (fastify) => {
       }
     }
   }, async (request, reply) => {
-    // Get user ID: use authenticated user or find default user in single-user mode
-    let userId: string
-    if (request.user) {
-      userId = request.user.id
-    } else if (isSingleUserMode()) {
-      // Find default user
-      const defaultUser = await fastify.prisma.user.findFirst({
-        where: { username: config.defaultUser.username }
-      })
-      if (!defaultUser) {
-        throw new InternalError('Default user not found in single-user mode')
-      }
-      userId = defaultUser.id
-    } else {
-      throw new UnauthorizedError('Authentication required')
-    }
-
-    // Fetch personas for this user with their ontologies
-    const personas = await fastify.prisma.persona.findMany({
-      where: { userId },
-      include: {
-        ontology: true
-      },
-      orderBy: { createdAt: 'desc' }
-    })
-
-    // Fetch personal world state for this user (projectId: null)
-    const worldState = await fastify.prisma.worldState.findFirst({
-      where: { userId, projectId: null }
-    })
-
-    // Transform to frontend format
-    const personasData = personas.map(p => ({
-      id: p.id,
-      name: p.name,
-      role: p.role,
-      informationNeed: p.informationNeed,
-      details: p.details,
-      createdAt: p.createdAt.toISOString(),
-      updatedAt: p.updatedAt.toISOString()
-    }))
-
-    const ontologiesData = personas
-      .filter(p => p.ontology)
-      .map(p => ({
-        id: p.ontology!.id,
-        personaId: p.id,
-        entities: p.ontology!.entityTypes || [],
-        roles: p.ontology!.roleTypes || [],
-        events: p.ontology!.eventTypes || [],
-        relationTypes: p.ontology!.relationTypes || [],
-        relations: [],
-        createdAt: p.ontology!.createdAt.toISOString(),
-        updatedAt: p.ontology!.updatedAt.toISOString()
-      }))
-
-    const worldData = worldState ? {
-      entities: (worldState.entities as Prisma.JsonArray) || [],
-      events: (worldState.events as Prisma.JsonArray) || [],
-      times: (worldState.times as Prisma.JsonArray) || [],
-      entityCollections: (worldState.entityCollections as Prisma.JsonArray) || [],
-      eventCollections: (worldState.eventCollections as Prisma.JsonArray) || [],
-      timeCollections: (worldState.timeCollections as Prisma.JsonArray) || [],
-      relations: (worldState.relations as Prisma.JsonArray) || []
-    } : {
-      entities: [],
-      events: [],
-      times: [],
-      entityCollections: [],
-      eventCollections: [],
-      timeCollections: [],
-      relations: []
-    }
-
-    return reply.send({
-      personas: personasData,
-      personaOntologies: ontologiesData,
-      world: worldData
-    })
+    const service = serviceFor(request)
+    const bundle = await service.getBundle()
+    return reply.send(bundle)
   })
 
   /**
@@ -206,222 +142,18 @@ const ontologyRoute: FastifyPluginAsync = async (fastify) => {
       }
     }
   }, async (request, reply) => {
-    // Get user ID: use authenticated user or find default user in single-user mode
-    let userId: string
-    if (request.user) {
-      userId = request.user.id
-    } else if (isSingleUserMode()) {
-      // Find default user
-      const defaultUser = await fastify.prisma.user.findFirst({
-        where: { username: config.defaultUser.username }
-      })
-      if (!defaultUser) {
-        throw new InternalError('Default user not found in single-user mode')
-      }
-      userId = defaultUser.id
-    } else {
-      throw new UnauthorizedError('Authentication required')
-    }
-
-    interface PersonaInput {
-      id: string
-      name: string
-      role: string
-      informationNeed: string
-      details?: string
-    }
-
-    interface OntologyInput {
-      personaId: string
-      entities?: Prisma.InputJsonValue[]
-      roles?: Prisma.InputJsonValue[]
-      events?: Prisma.InputJsonValue[]
-      relationTypes?: Prisma.InputJsonValue[]
-    }
-
-    interface WorldInput {
-      entities: Prisma.InputJsonValue[]
-      events: Prisma.InputJsonValue[]
-      times: Prisma.InputJsonValue[]
-      entityCollections: Prisma.InputJsonValue[]
-      eventCollections: Prisma.InputJsonValue[]
-      timeCollections: Prisma.InputJsonValue[]
-      relations: Prisma.InputJsonValue[]
-    }
-
-    const { personas, personaOntologies, world } = request.body as {
-      personas: PersonaInput[]
-      personaOntologies: OntologyInput[]
-      world?: WorldInput
-    }
-
-    // This multi-entity save merges ontology types and personal world state by
-    // id instead of overwriting whole columns, under optimistic concurrency, so
-    // concurrent edits (rapid edits, an AI augmentation, or a second tab) do not
-    // clobber each other. Removals go through the explicit type/object deletion
-    // routes, never omission. Personas carry only scalar fields and so are safe
-    // to upsert directly. The ontology and world writes each self-retry on an
-    // updatedAt-guarded conflict, which is why a single raw transaction is no
-    // longer used: correctness (no lost updates) takes priority over wrapping
-    // all writes in one atomic statement.
+    const service = serviceFor(request)
     try {
-      const savedPersonas = []
-      const savedOntologies = []
-
-      // Save all personas for this user, verifying RBAC on existing ones
-      for (const persona of personas) {
-        const existing = await fastify.prisma.persona.findUnique({ where: { id: persona.id } })
-        if (existing) {
-          if (!request.ability!.can('update', subject('Persona', existing))) {
-            throw new ForbiddenError('Cannot update persona ' + persona.id)
-          }
-        }
-        const savedPersona = await fastify.prisma.persona.upsert({
-          where: { id: persona.id },
-          update: {
-            name: persona.name,
-            role: persona.role,
-            informationNeed: persona.informationNeed,
-            details: persona.details
-          },
-          create: {
-            id: persona.id,
-            name: persona.name,
-            role: persona.role,
-            informationNeed: persona.informationNeed,
-            details: persona.details,
-            userId: userId
-          }
-        })
-        savedPersonas.push(savedPersona)
-      }
-
-      // Save all ontologies, verifying the caller can update the owning persona.
-      // Each provided array is merged into the current row by id under
-      // optimistic concurrency; a row that does not exist yet is created.
-      for (const ontology of personaOntologies) {
-        const owningPersona = await fastify.prisma.persona.findUnique({ where: { id: ontology.personaId } })
-        if (!owningPersona) {
-          throw new NotFoundError('Persona', ontology.personaId)
-        }
-        if (!request.ability!.can('update', subject('Persona', owningPersona))) {
-          throw new ForbiddenError('Cannot modify ontology for persona ' + ontology.personaId)
-        }
-
-        let savedOntology
-        const existingOntology = await fastify.prisma.ontology.findUnique({
-          where: { personaId: ontology.personaId }
-        })
-        if (existingOntology) {
-          savedOntology = await personaRepository.updateOntologyOptimistic(ontology.personaId, (current) => ({
-            entityTypes: ontology.entities !== undefined ? mergeById(current.entityTypes, ontology.entities) : undefined,
-            roleTypes: ontology.roles !== undefined ? mergeById(current.roleTypes, ontology.roles) : undefined,
-            eventTypes: ontology.events !== undefined ? mergeById(current.eventTypes, ontology.events) : undefined,
-            relationTypes: ontology.relationTypes !== undefined ? mergeById(current.relationTypes, ontology.relationTypes) : undefined,
-          }))
-        } else {
-          savedOntology = await fastify.prisma.ontology.create({
-            data: {
-              personaId: ontology.personaId,
-              entityTypes: ontology.entities || [],
-              roleTypes: ontology.roles || [],
-              eventTypes: ontology.events || [],
-              relationTypes: ontology.relationTypes || []
-            }
-          })
-        }
-        savedOntologies.push({
-          id: savedOntology.id,
-          personaId: savedOntology.personaId,
-          entities: savedOntology.entityTypes,
-          roles: savedOntology.roleTypes,
-          events: savedOntology.eventTypes,
-          relationTypes: savedOntology.relationTypes,
-          relations: [],
-          createdAt: savedOntology.createdAt.toISOString(),
-          updatedAt: savedOntology.updatedAt.toISOString()
-        })
-      }
-
-      // Save world state if provided (for this user). Merge each array by id
-      // under optimistic concurrency; create an empty-seeded row if none exists.
-      let savedWorldState = null
-      if (world) {
-        const existingWorld = await fastify.prisma.worldState.findFirst({
-          where: { userId, projectId: null }
-        })
-
-        if (existingWorld) {
-          savedWorldState = await worldStateRepository.updatePersonalWorldStateOptimistic(userId, (current) => ({
-            entities: world.entities !== undefined ? mergeById(current.entities, world.entities) : undefined,
-            events: world.events !== undefined ? mergeById(current.events, world.events) : undefined,
-            times: world.times !== undefined ? mergeById(current.times, world.times) : undefined,
-            entityCollections: world.entityCollections !== undefined ? mergeById(current.entityCollections, world.entityCollections) : undefined,
-            eventCollections: world.eventCollections !== undefined ? mergeById(current.eventCollections, world.eventCollections) : undefined,
-            timeCollections: world.timeCollections !== undefined ? mergeById(current.timeCollections, world.timeCollections) : undefined,
-            relations: world.relations !== undefined ? mergeById(current.relations, world.relations) : undefined,
-          }))
-        } else {
-          savedWorldState = await fastify.prisma.worldState.create({
-            data: {
-              userId,
-              entities: world.entities || [],
-              events: world.events || [],
-              times: world.times || [],
-              entityCollections: world.entityCollections || [],
-              eventCollections: world.eventCollections || [],
-              timeCollections: world.timeCollections || [],
-              relations: world.relations || []
-            }
-          })
-        }
-      }
-
-      const result = { savedPersonas, savedOntologies, savedWorldState }
-
-      const worldData = result.savedWorldState ? {
-        entities: (result.savedWorldState.entities as Prisma.JsonArray) || [],
-        events: (result.savedWorldState.events as Prisma.JsonArray) || [],
-        times: (result.savedWorldState.times as Prisma.JsonArray) || [],
-        entityCollections: (result.savedWorldState.entityCollections as Prisma.JsonArray) || [],
-        eventCollections: (result.savedWorldState.eventCollections as Prisma.JsonArray) || [],
-        timeCollections: (result.savedWorldState.timeCollections as Prisma.JsonArray) || [],
-        relations: (result.savedWorldState.relations as Prisma.JsonArray) || []
-      } : undefined
-
-      return reply.send({
-        personas: result.savedPersonas.map(p => ({
-          id: p.id,
-          name: p.name,
-          role: p.role,
-          informationNeed: p.informationNeed,
-          details: p.details,
-          createdAt: p.createdAt.toISOString(),
-          updatedAt: p.updatedAt.toISOString()
-        })),
-        personaOntologies: result.savedOntologies,
-        world: worldData
-      })
+      const bundle = await service.saveBundle(request.body as OntologySaveInput)
+      return reply.send(bundle)
     } catch (error: unknown) {
       // Re-throw AppError so the global handler returns the proper status
       // (403 for ability denials, 404 for not-found); without this the
       // catch collapsed every error including ForbiddenError into a 500.
       if (error instanceof AppError) throw error
       fastify.log.error({ error }, 'Error saving ontology data')
-      if (error instanceof Error) {
-        fastify.log.error(`Error name: ${error.name}`)
-        fastify.log.error(`Error message: ${error.message}`)
-        // Log Prisma-specific error details if available
-        if ('code' in error) {
-          fastify.log.error(`Prisma error code: ${(error as Record<string, unknown>).code}`)
-        }
-        if ('meta' in error) {
-          fastify.log.error(`Prisma error meta: ${JSON.stringify((error as Record<string, unknown>).meta)}`)
-        }
-      }
       // Re-throw to the global handler, which returns a safe generic 500. The
-      // raw error message (which can carry DB/internal detail) is logged above
-      // but never sent to the client.
+      // raw error is logged above but never sent to the client.
       throw new InternalError('Failed to save ontology data')
     }
   })

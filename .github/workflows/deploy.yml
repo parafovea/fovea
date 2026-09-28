@@ -420,10 +420,31 @@ jobs:
               sleep 2
             done
 
+            echo '💾 Backing up the database before migrations...'
+            mkdir -p ~/backups
+            BACKUP=~/backups/fovea-\$(date -u +%Y%m%dT%H%M%SZ).dump
+            if ! docker compose exec -T postgres pg_dump -U fovea -Fc fovea < /dev/null > \$BACKUP || [ ! -s \$BACKUP ]; then
+              echo '❌ Database backup failed; not running migrations.'
+              exit 1
+            fi
+            echo \"✅ Backup written to \$BACKUP\"
+            # Keep the five most recent pre-deploy backups.
+            ls -1t ~/backups/fovea-*.dump | tail -n +6 | xargs -r rm -f
+
             echo '🔄 Running database migrations (out-of-band)...'
             if ! docker compose run --rm --no-deps -T backend sh -c 'npx prisma migrate deploy'; then
               echo '❌ Migrations failed.'
               docker compose logs --tail=80 postgres
+              exit 1
+            fi
+
+            # Copies 0.5 annotation, world, ontology, and claim data into the
+            # layers store and verifies it. A no-op on a fresh install or once a
+            # verified copy is recorded. On a failed verify the legacy tables are
+            # untouched, and the deploy stops before starting the new application.
+            echo '📦 Copying 0.5 data into the layers store (if any)...'
+            if ! docker compose run --rm --no-deps -T backend sh -c 'node prisma/migrate-0.6/cli.cjs auto'; then
+              echo '❌ The 0.5-to-0.6 copy did not verify. Legacy data is intact; not starting the new application.'
               exit 1
             fi
 

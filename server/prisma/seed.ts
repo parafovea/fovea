@@ -1,6 +1,10 @@
-import { PrismaClient } from '@prisma/client'
+import { PrismaClient, type User } from '@prisma/client'
 import bcrypt from 'bcrypt'
 
+import { writeOntologyAggregate } from '../src/services/layers-bridge/ontology-bridge.js'
+import { writeVideoAnnotation } from '../src/services/layers-bridge/annotation-bridge.js'
+import { deriveId } from '../src/services/layers-id-map.js'
+import type { BoundingBoxSequence } from '../src/services/layers-conversion-service.js'
 import { seedPermissions } from './seed-permissions.js'
 
 /**
@@ -67,7 +71,7 @@ export async function seedDatabase(prismaClient?: PrismaClient) {
   // Create default user for single-user mode (no password)
   // Only create in single-user mode - not needed in multi-user mode
   const mode = process.env.FOVEA_MODE || 'single-user'
-  let personaOwner
+  let personaOwner: User
 
   if (mode === 'single-user') {
     const defaultUser = await prisma.user.upsert({
@@ -147,41 +151,42 @@ export async function seedDatabase(prismaClient?: PrismaClient) {
     )
   }
 
-  // Create test ontology for Automated persona (for E2E tests)
-  const existingOntology = await prisma.ontology.findUnique({
-    where: { personaId: automatedPersona.id },
-  })
-
-  if (!existingOntology) {
-    await prisma.ontology.create({
-      data: {
-        personaId: automatedPersona.id,
-        entityTypes: [
-          {
-            id: 'test-entity-person',
-            name: 'Person',
-            description: 'A person in the video',
-            color: '#FF5722',
-          },
-          {
-            id: 'test-entity-vehicle',
-            name: 'Vehicle',
-            description: 'A vehicle in the video',
-            color: '#2196F3',
-          },
-          {
-            id: 'test-entity-object',
-            name: 'Object',
-            description: 'An object in the video',
-            color: '#4CAF50',
-          },
-        ],
-      },
-    })
-    console.log('✓ Created test ontology for Automated persona')
-  } else {
-    console.log('✓ Ontology for Automated persona already exists')
-  }
+  // Create test ontology for Automated persona (for E2E tests) in the layers
+  // store. writeOntologyAggregate upserts the LayersOntology and recreates its
+  // TypeDefs, so re-seeding is idempotent.
+  await writeOntologyAggregate(
+    prisma,
+    automatedPersona.id,
+    {
+      entityTypes: [
+        {
+          id: 'test-entity-person',
+          name: 'Person',
+          gloss: [{ type: 'text', content: 'A person in the video' }],
+        },
+        {
+          id: 'test-entity-vehicle',
+          name: 'Vehicle',
+          gloss: [{ type: 'text', content: 'A vehicle in the video' }],
+        },
+        {
+          id: 'test-entity-object',
+          name: 'Object',
+          gloss: [{ type: 'text', content: 'An object in the video' }],
+        },
+      ],
+      eventTypes: [],
+      roleTypes: [],
+      relationTypes: [],
+    },
+    {
+      name: `${automatedPersona.name} ontology`,
+      description: automatedPersona.informationNeed,
+      domain: automatedPersona.domain,
+    },
+    { projectId: automatedPersona.projectId, createdByUserId: automatedPersona.userId },
+  )
+  console.log('✓ Seeded test ontology for Automated persona')
 
   // ─────────────────────────────────────────────────────────────
   // Demo-mode hand-authored personas + ontologies.
@@ -202,15 +207,24 @@ export async function seedDatabase(prismaClient?: PrismaClient) {
   // ─────────────────────────────────────────────────────────────
   const demoPersonaHidden = process.env.FOVEA_DEMO_MODE !== 'true'
 
+  /** Carries each demo type's description as the single text item of its gloss. */
+  function withGloss(types: Array<{ id: string; name: string; description: string }>) {
+    return types.map(({ id, name, description }) => ({
+      id,
+      name,
+      gloss: [{ type: 'text' as const, content: description }],
+    }))
+  }
+
   async function upsertDemoPersona(args: {
     name: string
     role: string
     informationNeed: string
     ontology: {
-      entityTypes: Array<{ id: string; name: string; description: string; color: string }>
-      roleTypes?: Array<{ id: string; name: string; description: string; color: string }>
-      eventTypes?: Array<{ id: string; name: string; description: string; color: string }>
-      relationTypes?: Array<{ id: string; name: string; description: string; color: string }>
+      entityTypes: Array<{ id: string; name: string; description: string }>
+      roleTypes?: Array<{ id: string; name: string; description: string }>
+      eventTypes?: Array<{ id: string; name: string; description: string }>
+      relationTypes?: Array<{ id: string; name: string; description: string }>
     }
   }) {
     let persona = await prisma.persona.findFirst({ where: { name: args.name } })
@@ -238,23 +252,19 @@ export async function seedDatabase(prismaClient?: PrismaClient) {
       })
       console.log(`✓ Created demo persona: ${persona.name} (hidden: ${demoPersonaHidden})`)
     }
-    const existingOntology = await prisma.ontology.findUnique({
-      where: { personaId: persona.id },
-    })
-    const data = {
-      personaId: persona.id,
-      entityTypes: args.ontology.entityTypes,
-      roleTypes: args.ontology.roleTypes ?? [],
-      eventTypes: args.ontology.eventTypes ?? [],
-      relationTypes: args.ontology.relationTypes ?? [],
-    }
-    if (existingOntology) {
-      await prisma.ontology.update({ where: { personaId: persona.id }, data })
-      console.log(`  ✓ Updated ontology for ${persona.name}`)
-    } else {
-      await prisma.ontology.create({ data })
-      console.log(`  ✓ Created ontology for ${persona.name}`)
-    }
+    await writeOntologyAggregate(
+      prisma,
+      persona.id,
+      {
+        entityTypes: withGloss(args.ontology.entityTypes),
+        roleTypes: withGloss(args.ontology.roleTypes ?? []),
+        eventTypes: withGloss(args.ontology.eventTypes ?? []),
+        relationTypes: withGloss(args.ontology.relationTypes ?? []),
+      },
+      { name: `${persona.name} ontology`, description: persona.informationNeed, domain: persona.domain },
+      { projectId: persona.projectId, createdByUserId: persona.userId },
+    )
+    console.log(`  ✓ Seeded ontology for ${persona.name}`)
     return persona
   }
 
@@ -271,29 +281,29 @@ export async function seedDatabase(prismaClient?: PrismaClient) {
       'Who had which souvenir, who took it from whom, and what crowd dynamics surrounded the exchange.',
     ontology: {
       entityTypes: [
-        { id: 'type-spectator', name: 'Spectator', description: 'A fan attending the game in the stands.', color: '#3B82F6' },
-        { id: 'type-foul-ball', name: 'Foul Ball', description: 'A baseball that has left the field of play into the stands.', color: '#F59E0B' },
-        { id: 'type-souvenir', name: 'Souvenir', description: 'A keepable object received from in-game play (foul ball, broken bat, batting glove).', color: '#FB923C' },
-        { id: 'type-seating-area', name: 'Seating Area', description: 'A contiguous section of stadium seats.', color: '#22C55E' },
-        { id: 'type-staff', name: 'Stadium Staff', description: 'Employees of the venue: ushers, security, guest services.', color: '#10B981' },
+        { id: 'type-spectator', name: 'Spectator', description: 'A fan attending the game in the stands.' },
+        { id: 'type-foul-ball', name: 'Foul Ball', description: 'A baseball that has left the field of play into the stands.' },
+        { id: 'type-souvenir', name: 'Souvenir', description: 'A keepable object received from in-game play (foul ball, broken bat, batting glove).' },
+        { id: 'type-seating-area', name: 'Seating Area', description: 'A contiguous section of stadium seats.' },
+        { id: 'type-staff', name: 'Stadium Staff', description: 'Employees of the venue: ushers, security, guest services.' },
       ],
       roleTypes: [
-        { id: 'role-recipient', name: 'Recipient', description: 'The person who received the souvenir from someone else.', color: '#A78BFA' },
-        { id: 'role-prior-holder', name: 'Prior Holder', description: 'The person who held the souvenir immediately before the current holder.', color: '#8B5CF6' },
-        { id: 'role-grabber', name: 'Grabber', description: 'A person who took the souvenir from another spectator without that spectator consenting.', color: '#EF4444' },
-        { id: 'role-witness', name: 'Witness', description: 'A spectator who observed the exchange but was not a party to it.', color: '#6B7280' },
+        { id: 'role-recipient', name: 'Recipient', description: 'The person who received the souvenir from someone else.' },
+        { id: 'role-prior-holder', name: 'Prior Holder', description: 'The person who held the souvenir immediately before the current holder.' },
+        { id: 'role-grabber', name: 'Grabber', description: 'A person who took the souvenir from another spectator without that spectator consenting.' },
+        { id: 'role-witness', name: 'Witness', description: 'A spectator who observed the exchange but was not a party to it.' },
       ],
       eventTypes: [
-        { id: 'event-ball-catch', name: 'Ball Catch', description: 'A spectator catching a ball that came off the field of play.', color: '#F59E0B' },
-        { id: 'event-ball-handoff', name: 'Ball Handoff', description: 'A spectator voluntarily giving a souvenir ball to another spectator (typically a child).', color: '#84CC16' },
-        { id: 'event-ball-grab', name: 'Ball Grab', description: "A spectator taking a souvenir ball out of another spectator's possession without consent.", color: '#DC2626' },
-        { id: 'event-ball-return', name: 'Ball Return', description: 'A spectator returning a souvenir to a prior holder after a guest-services intervention.', color: '#14B8A6' },
+        { id: 'event-ball-catch', name: 'Ball Catch', description: 'A spectator catching a ball that came off the field of play.' },
+        { id: 'event-ball-handoff', name: 'Ball Handoff', description: 'A spectator voluntarily giving a souvenir ball to another spectator (typically a child).' },
+        { id: 'event-ball-grab', name: 'Ball Grab', description: "A spectator taking a souvenir ball out of another spectator's possession without consent." },
+        { id: 'event-ball-return', name: 'Ball Return', description: 'A spectator returning a souvenir to a prior holder after a guest-services intervention.' },
       ],
       relationTypes: [
-        { id: 'relation-handed-to', name: 'handed-to', description: 'The source spectator voluntarily transferred the souvenir to the target spectator.', color: '#65A30D' },
-        { id: 'relation-taken-from', name: 'taken-from', description: 'The source spectator took the souvenir out of the target spectator’s possession.', color: '#B91C1C' },
-        { id: 'relation-witnessed-by', name: 'witnessed-by', description: 'The event was directly observed by the witness spectator.', color: '#6B7280' },
-        { id: 'relation-located-in', name: 'located-in', description: 'The entity is in the named seating area.', color: '#0EA5E9' },
+        { id: 'relation-handed-to', name: 'handed-to', description: 'The source spectator voluntarily transferred the souvenir to the target spectator.' },
+        { id: 'relation-taken-from', name: 'taken-from', description: 'The source spectator took the souvenir out of the target spectator’s possession.' },
+        { id: 'relation-witnessed-by', name: 'witnessed-by', description: 'The event was directly observed by the witness spectator.' },
+        { id: 'relation-located-in', name: 'located-in', description: 'The entity is in the named seating area.' },
       ],
     },
   })
@@ -311,28 +321,28 @@ export async function seedDatabase(prismaClient?: PrismaClient) {
       'Which container failed first, what equipment was struck, and how the cascade propagated through the stack.',
     ontology: {
       entityTypes: [
-        { id: 'type-container', name: 'Shipping Container', description: 'A standard intermodal cargo container (20-ft or 40-ft TEU/FEU).', color: '#EA580C' },
-        { id: 'type-crane', name: 'Gantry Crane', description: 'A ship-to-shore gantry crane used to load and unload containers.', color: '#0EA5E9' },
-        { id: 'type-stack', name: 'Container Stack', description: 'A vertical column of stacked containers on a vessel or in a yard.', color: '#92400E' },
-        { id: 'type-vessel', name: 'Container Vessel', description: 'A ship that carries shipping containers.', color: '#1E3A8A' },
-        { id: 'type-stevedore', name: 'Stevedore', description: 'A dockworker responsible for loading and unloading cargo.', color: '#10B981' },
+        { id: 'type-container', name: 'Shipping Container', description: 'A standard intermodal cargo container (20-ft or 40-ft TEU/FEU).' },
+        { id: 'type-crane', name: 'Gantry Crane', description: 'A ship-to-shore gantry crane used to load and unload containers.' },
+        { id: 'type-stack', name: 'Container Stack', description: 'A vertical column of stacked containers on a vessel or in a yard.' },
+        { id: 'type-vessel', name: 'Container Vessel', description: 'A ship that carries shipping containers.' },
+        { id: 'type-stevedore', name: 'Stevedore', description: 'A dockworker responsible for loading and unloading cargo.' },
       ],
       roleTypes: [
-        { id: 'role-tipped-container', name: 'Tipped Container', description: 'The container that lost stability first.', color: '#F97316' },
-        { id: 'role-falling-container', name: 'Falling Container', description: 'A container in active descent.', color: '#DC2626' },
-        { id: 'role-impact-target', name: 'Impact Target', description: 'The object struck by a falling container.', color: '#B91C1C' },
-        { id: 'role-origin-stack', name: 'Origin Stack', description: 'The stack where the cascade originated.', color: '#7C2D12' },
+        { id: 'role-tipped-container', name: 'Tipped Container', description: 'The container that lost stability first.' },
+        { id: 'role-falling-container', name: 'Falling Container', description: 'A container in active descent.' },
+        { id: 'role-impact-target', name: 'Impact Target', description: 'The object struck by a falling container.' },
+        { id: 'role-origin-stack', name: 'Origin Stack', description: 'The stack where the cascade originated.' },
       ],
       eventTypes: [
-        { id: 'event-container-tip', name: 'Container Tip', description: 'A container loses stability and begins to lean off its stack.', color: '#F97316' },
-        { id: 'event-container-fall', name: 'Container Fall', description: 'A container falls from its stack.', color: '#DC2626' },
-        { id: 'event-cargo-loss', name: 'Cargo Loss', description: 'Cargo is damaged or lost overboard during a handling incident.', color: '#991B1B' },
-        { id: 'event-crane-collapse', name: 'Crane Collapse', description: 'Structural failure of a gantry crane.', color: '#7F1D1D' },
+        { id: 'event-container-tip', name: 'Container Tip', description: 'A container loses stability and begins to lean off its stack.' },
+        { id: 'event-container-fall', name: 'Container Fall', description: 'A container falls from its stack.' },
+        { id: 'event-cargo-loss', name: 'Cargo Loss', description: 'Cargo is damaged or lost overboard during a handling incident.' },
+        { id: 'event-crane-collapse', name: 'Crane Collapse', description: 'Structural failure of a gantry crane.' },
       ],
       relationTypes: [
-        { id: 'relation-fell-from', name: 'fell-from', description: 'The falling container originated from the named stack.', color: '#9A3412' },
-        { id: 'relation-struck', name: 'struck', description: 'The source object impacted the target object during the incident.', color: '#B91C1C' },
-        { id: 'relation-on-vessel', name: 'on-vessel', description: 'The container is loaded on the named vessel.', color: '#1E3A8A' },
+        { id: 'relation-fell-from', name: 'fell-from', description: 'The falling container originated from the named stack.' },
+        { id: 'relation-struck', name: 'struck', description: 'The source object impacted the target object during the incident.' },
+        { id: 'relation-on-vessel', name: 'on-vessel', description: 'The container is loaded on the named vessel.' },
       ],
     },
   })
@@ -405,41 +415,25 @@ export async function seedDatabase(prismaClient?: PrismaClient) {
     confidence: number
     notes?: string
   }) {
-    // The stableId is the upsert key so multiple distinct tracks
-    // with the same label (three Spectator instances on Crossing
-    // Broad: Karen, son, father) each persist as their own row.
-    // We store it in the metadata-ish `source` field by encoding
-    // 'demo-fixture:<stableId>' so the read-side filter still
-    // matches the LIKE 'demo-fixture%' family.
-    const sourceKey = `demo-fixture:${args.stableId}`
-    const existing = await prisma.annotation.findFirst({
-      where: { videoId: args.videoId, source: sourceKey },
-    })
-    if (existing) {
-      await prisma.annotation.update({
-        where: { id: existing.id },
-        data: {
-          frames: args.frames as never,
-          confidence: args.confidence,
-          label: args.label,
-          personaId: args.personaId,
-        },
-      })
-    } else {
-      await prisma.annotation.create({
-        data: {
-          videoId: args.videoId,
-          personaId: args.personaId,
-          type: 'type',
-          label: args.label,
-          frames: args.frames as never,
-          confidence: args.confidence,
-          source: sourceKey,
-          userId: personaOwner.id,
-          createdByUserId: personaOwner.id,
-        },
-      })
-    }
+    // The stableId derives the annotation's layers id so multiple distinct
+    // tracks with the same label (three Spectator instances on Crossing Broad:
+    // Karen, son, father) each persist as their own row, and re-seeding upserts
+    // the same rows idempotently. The source is tagged 'demo-fixture:<stableId>'.
+    await writeVideoAnnotation(
+      prisma,
+      {
+        id: deriveId('demo-annotation', args.stableId),
+        videoId: args.videoId,
+        personaId: args.personaId,
+        type: 'type',
+        label: args.label,
+        linkType: null,
+        frames: args.frames as BoundingBoxSequence,
+        confidence: args.confidence,
+        source: `demo-fixture:${args.stableId}`,
+      },
+      { userId: personaOwner.id, projectId: null },
+    )
   }
 
   // Verify the demo videos are in the database (they get there via
@@ -455,17 +449,8 @@ export async function seedDatabase(prismaClient?: PrismaClient) {
   const haveAllVideos = presentVideos.length === Object.values(VIDEO_IDS).length
 
   if (haveAllVideos) {
-    // Wipe prior demo-fixture annotations before re-seeding. Idempotent:
-    // produces identical state on every run regardless of whether the
-    // last run used the same upsert key shape. Demo-mode rows are
-    // tagged with source: 'demo-fixture:<stableId>' so this deletion
-    // never touches a self-hoster's real annotations.
-    const wiped = await prisma.annotation.deleteMany({
-      where: { source: { startsWith: 'demo-fixture' } },
-    })
-    if (wiped.count > 0) {
-      console.log(`  ↻ Wiped ${wiped.count} prior demo annotations before re-seeding`)
-    }
+    // Demo-fixture annotations are seeded with deterministic ids derived from
+    // their stableId, so re-seeding upserts the same rows idempotently.
 
     // ABC7 shipping containers — model-in-the-loop tour. Three
     // tracked objects: Container A falls first (ease-in segments

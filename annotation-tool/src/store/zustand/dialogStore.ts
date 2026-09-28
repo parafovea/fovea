@@ -40,6 +40,8 @@ export type DialogName =
   | 'import'
   | 'export'
   | 'importResult'
+  | 'importCorpus'
+  | 'exportLayers'
   // Video dialogs
   | 'videoSummary'
   | 'detection'
@@ -104,6 +106,8 @@ const initialDialogState: DialogState = {
   import: false,
   export: false,
   importResult: false,
+  importCorpus: false,
+  exportLayers: false,
   // Video dialogs
   videoSummary: false,
   detection: false,

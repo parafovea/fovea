@@ -9,6 +9,7 @@
 import { create } from 'zustand'
 import { devtools } from 'zustand/middleware'
 import { createMongoAbility, MongoAbility, RawRuleOf } from '@casl/ability'
+import type { ForcedSubject } from '@casl/ability'
 
 /** Actions that can be performed on resources. */
 type Actions =
@@ -24,8 +25,8 @@ type Actions =
   | 'review'
   | 'manage'
 
-/** Resource subjects that actions apply to. */
-type Subjects =
+/** Resource subject names that actions apply to. */
+type SubjectName =
   | 'Annotation'
   | 'Claim'
   | 'Persona'
@@ -35,7 +36,19 @@ type Subjects =
   | 'Project'
   | 'UserGroup'
   | 'User'
-  | 'all'
+  // Layers-shaped annotation store. The server authorizes span/relation writes
+  // against these subjects (each scoped by createdByUserId + projectId), so the
+  // frontend gates the span annotator's edit-vs-view mode against the same names.
+  | 'AnnotationLayer'
+  | 'LayersAnnotation'
+  | 'TextAnnotationRelation'
+
+/**
+ * Resource subjects: a bare subject name, `'all'`, or a `subject()`-tagged row
+ * (a `ForcedSubject`) so instance-level checks can match conditions against a
+ * row's fields (for example gating on a specific annotation's createdByUserId).
+ */
+type Subjects = SubjectName | 'all' | ForcedSubject<SubjectName>
 
 /** Application-wide CASL ability type. */
 export type AppAbility = MongoAbility<[Actions, Subjects]>

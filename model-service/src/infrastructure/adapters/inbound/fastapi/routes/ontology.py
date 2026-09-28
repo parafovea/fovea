@@ -16,34 +16,41 @@ if TYPE_CHECKING:
 from fastapi import APIRouter, HTTPException
 from opentelemetry import trace
 
+from src.infrastructure.adapters.inbound.fastapi import dto_bridge, models
 from src.infrastructure.adapters.inbound.fastapi.dependencies import ModelManagerDep  # noqa: TC001
-from src.infrastructure.adapters.inbound.fastapi.mappers import ontology_type_dto_to_schema
-from src.infrastructure.adapters.inbound.fastapi.schemas import (
-    AugmentRequest,
-    AugmentResponse,
-    ErrorResponse,
+from src.infrastructure.adapters.inbound.fastapi.dx_bodies import (
+    as_request,
+    as_response,
+    dump,
 )
 
 router = APIRouter()
 tracer = trace.get_tracer(__name__)
 logger = logging.getLogger(__name__)
 
+if TYPE_CHECKING:
+    # Handlers type-check against the source wire model; at runtime the body is
+    # the Pydantic mirror FastAPI validates against (the ``else`` branch).
+    _AugmentRequestBody = models.AugmentRequest
+else:
+    _AugmentRequestBody = as_request(models.AugmentRequest)
+
 
 @router.post(
     "/ontology/augment",
-    response_model=AugmentResponse,
+    response_model=as_response(models.AugmentResponse),
     responses={
-        400: {"model": ErrorResponse},
-        500: {"model": ErrorResponse},
+        400: {"model": as_response(models.ErrorResponse)},
+        500: {"model": as_response(models.ErrorResponse)},
     },
     summary="Augment ontology with AI suggestions",
     description="Suggests new ontology types based on domain description and existing types. "
     "Uses language models to generate semantically relevant entity types, event types, roles, or relations.",
 )
 async def augment_ontology(
-    request: AugmentRequest,
+    request: _AugmentRequestBody,
     manager: ModelManagerDep,
-) -> AugmentResponse:
+) -> dict[str, object]:
     """Suggest new ontology types using language models."""
     with tracer.start_as_current_span("augment_ontology") as span:
         span.set_attribute("persona_id", request.persona_id)
@@ -75,7 +82,7 @@ async def augment_ontology(
 
             context = AugmentationContext(
                 domain=request.domain,
-                existing_types=request.existing_types,
+                existing_types=list(request.existing_types),
                 target_category=request.target_category,
                 persona_role=None,
                 information_need=None,
@@ -137,7 +144,7 @@ async def augment_ontology(
                     await language_model.aunload()
 
             reasoning = generate_augmentation_reasoning(suggestion_dtos, context)
-            suggestions = [ontology_type_dto_to_schema(s) for s in suggestion_dtos]
+            suggestions = tuple(dto_bridge.ontology_type(s) for s in suggestion_dtos)
 
             augmentation_id = str(uuid.uuid4())
 
@@ -151,12 +158,14 @@ async def augment_ontology(
                 ),
             )
 
-            return AugmentResponse(
-                id=augmentation_id,
-                persona_id=request.persona_id,
-                target_category=request.target_category,
-                suggestions=suggestions,
-                reasoning=reasoning,
+            return dump(
+                models.AugmentResponse(
+                    id=augmentation_id,
+                    persona_id=request.persona_id,
+                    target_category=request.target_category,
+                    suggestions=suggestions,
+                    reasoning=reasoning,
+                )
             )
 
         except HTTPException:

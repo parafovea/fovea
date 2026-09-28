@@ -238,11 +238,13 @@ export function useAddEntity() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: async (entityData: Omit<Entity, 'id' | 'createdAt' | 'updatedAt'>) => {
+    mutationFn: async (
+      entityData: Omit<Entity, 'id' | 'createdAt' | 'updatedAt'> & { id?: string },
+    ) => {
       const currentState = queryClient.getQueryData<WorldState>(worldKeys.state())
       const newEntity: Entity = {
         ...entityData,
-        id: generateId(),
+        id: entityData.id ?? generateId(),
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       }

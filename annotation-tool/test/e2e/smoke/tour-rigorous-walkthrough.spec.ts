@@ -3,7 +3,7 @@
  * earlier smoke tests missed, asserted at every step of every tour.
  *
  * The earlier `tour-demo-launch-all.spec.ts` ran in a stub-only local
- * preview where every data-tour-id anchor happened to mount on every
+ * preview where every data-tour-anchor anchor happened to mount on every
  * route (no real backend → empty data → all components rendered
  * their empty states without lazy-loading), so the engine's
  * waitForAnchor never failed. Shipped to demo.fovea.video the same

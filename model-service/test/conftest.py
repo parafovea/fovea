@@ -21,8 +21,6 @@ if "pkg_resources" not in sys.modules:
 import pytest
 from fastapi.testclient import TestClient
 
-from src.main import app
-
 
 @pytest.fixture
 def client() -> TestClient:
@@ -39,6 +37,11 @@ def client() -> TestClient:
             assert response.status_code == 200
         ```
     """
+    # Imported lazily so test subsets that never use `client` (e.g. the
+    # lairs-based interop suite in the codec venv) collect without pulling the
+    # full FastAPI/video/model stack.
+    from src.main import app
+
     return TestClient(app, base_url="http://testserver")
 
 

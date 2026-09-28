@@ -1,0 +1,111 @@
+{
+  "lexicon": 1,
+  "id": "pub.layers.eprint.dataLink",
+  "defs": {
+    "main": {
+      "type": "record",
+      "description": "A link from an eprint to the Layers data it produced or is associated with. Generalizes the former chive-specific eprintDataLink.",
+      "key": "any",
+      "record": {
+        "type": "object",
+        "required": ["eprintUri", "dataKind", "createdAt"],
+        "properties": {
+          "eprintUri": {
+            "type": "string",
+            "format": "at-uri",
+            "description": "AT-URI of the eprint on its publication platform."
+          },
+          "eprintDid": {
+            "type": "string",
+            "format": "did",
+            "description": "DID of the eprint author/owner on the publication platform."
+          },
+          "dataKindUri": {
+            "type": "string",
+            "format": "at-uri",
+            "description": "AT-URI of the data kind definition node. Community-expandable via knowledge graph."
+          },
+          "dataKind": {
+            "type": "string",
+            "description": "Data kind slug (fallback when dataKindUri unavailable).",
+            "knownValues": [
+              "corpus",
+              "annotation-layer",
+              "model-output",
+              "gold-standard",
+              "evaluation-data",
+              "supplementary",
+              "replication",
+              "experiment",
+              "judgments",
+              "dataset"
+            ],
+            "maxLength": 128
+          },
+          "corpusRef": {
+            "type": "string",
+            "format": "at-uri",
+            "description": "Reference to a Layers corpus."
+          },
+          "catalogRef": {
+            "type": "string",
+            "format": "at-uri",
+            "description": "Reference to a pub.layers.catalog.collection record: the browsable dataset artifact this eprint produced or is associated with."
+          },
+          "experimentRefs": {
+            "type": "array",
+            "description": "References to pub.layers.judgment.experimentDef records this eprint produced or describes.",
+            "maxLength": 10000,
+            "items": {
+              "type": "string",
+              "format": "at-uri"
+            }
+          },
+          "expressionRefs": {
+            "type": "array",
+            "description": "References to specific Layers expressions.",
+            "maxLength": 10000,
+            "items": {
+              "type": "string",
+              "format": "at-uri"
+            }
+          },
+          "annotationRefs": {
+            "type": "array",
+            "description": "References to specific annotation records.",
+            "maxLength": 10000,
+            "items": {
+              "type": "string",
+              "format": "at-uri"
+            }
+          },
+          "description": {
+            "type": "string",
+            "description": "Free-text description of this data link.",
+            "maxLength": 10000
+          },
+          "paperSection": {
+            "type": "string",
+            "description": "Which section of the paper this data corresponds to (e.g., 'Section 4.2', 'Table 3', 'Appendix A').",
+            "maxLength": 256
+          },
+          "reproducibility": {
+            "type": "ref",
+            "ref": "pub.layers.defs#reproducibilityInfo",
+            "description": "How this data was produced (code, commit, command, environment, seed)."
+          },
+          "features": {
+            "type": "ref",
+            "ref": "pub.layers.defs#featureMap",
+            "description": "Open-ended features for this data link as key-value pairs."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "datetime",
+            "description": "Timestamp when this data link record was created."
+          }
+        }
+      }
+    }
+  }
+}

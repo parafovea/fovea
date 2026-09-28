@@ -5,11 +5,13 @@ segments within the domain layer.
 """
 
 from dataclasses import dataclass, field
-
-import numpy as np
-from numpy.typing import NDArray
+from typing import TYPE_CHECKING
 
 from src.domain.value_objects import TimeRange, Timestamp
+
+if TYPE_CHECKING:
+    import numpy as np
+    from numpy.typing import NDArray
 
 
 @dataclass

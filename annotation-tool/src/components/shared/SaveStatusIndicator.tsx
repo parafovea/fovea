@@ -12,6 +12,7 @@ import { Check, CircleAlert, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { useTourAnchor } from '@/tours/engine/anchorRegistry'
 
 /**
  * Status of the save operation.
@@ -87,15 +88,16 @@ export function SaveStatusIndicator({
   onRetry,
   compact = false,
 }: SaveStatusIndicatorProps): JSX.Element {
+  const saveIndicatorRef = useTourAnchor('save-indicator')
+
   if (status === 'idle') {
-    // Idle still renders an invisible placeholder so the
-    // save-indicator data-tour-id is present in the DOM for the
-    // first-annotation tour's "Saved. No submit button" step.
-    // Visually identical to no indicator (height 0, no children).
+    // Idle renders an invisible placeholder so the save-indicator anchor stays
+    // in the DOM, keeping the auto-save surface spotlightable while no save is
+    // in flight. Visually identical to no indicator (height 0, no children).
     return (
       <div
+        ref={saveIndicatorRef}
         data-testid="save-status-idle"
-        data-tour-id="save-indicator"
         aria-hidden="true"
         className="sr-only"
       />
@@ -105,8 +107,8 @@ export function SaveStatusIndicator({
   if (compact) {
     return (
       <div
+        ref={saveIndicatorRef}
         data-testid={`save-status-${status}`}
-        data-tour-id="save-indicator"
         className="flex items-center gap-1"
       >
         {status === 'saving' && <Spinner className="size-3.5" />}
@@ -139,8 +141,8 @@ export function SaveStatusIndicator({
 
   return (
     <div
+      ref={saveIndicatorRef}
       data-testid={`save-status-${status}`}
-      data-tour-id="save-indicator"
       className="flex items-center gap-2"
     >
       {status === 'saving' && (

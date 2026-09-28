@@ -14,6 +14,7 @@ import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
 import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
 import { useAddAnnotation } from '@store/queries'
+import { useTourAnchor } from '@/tours/engine/anchorRegistry'
 import type { Detection, FrameDetections } from '@api/client'
 import { v4 as uuidv4 } from 'uuid'
 
@@ -136,6 +137,7 @@ export function AnnotationCandidatesList({
   initialConfidenceThreshold = 0.3,
 }: AnnotationCandidatesListProps) {
   const { mutate: addAnnotation } = useAddAnnotation()
+  const candidatesListAnchor = useTourAnchor('annotation-candidates-list')
   const [candidates, setCandidates] = useState<CandidateItem[]>(() => {
     // Flatten all detections into candidate items
     return frames.flatMap((frame) =>
@@ -299,7 +301,7 @@ export function AnnotationCandidatesList({
   }
 
   return (
-    <div data-tour-id="annotation-candidates-list">
+    <div ref={candidatesListAnchor}>
       {/* Statistics Bar */}
       <div className="mb-4 p-4 bg-card rounded-lg ring-1 ring-foreground/10">
         <div className="flex flex-row gap-4 items-center">

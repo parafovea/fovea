@@ -51,10 +51,13 @@ class DetectObjectsExecutionInput:
     """Input to :meth:`DetectObjectsUseCase.execute`.
 
     Wraps the original request with the pre-extracted frames that the
-    infrastructure adapter is responsible for providing.
+    infrastructure adapter is responsible for providing, plus the source frame
+    dimensions in pixels (needed to project normalized boxes to layers records).
     """
 
     request: DetectObjectsRequestDTO
+    video_width: int = 0
+    video_height: int = 0
     frames: list[DetectObjectsFrameInput] = field(default_factory=list)
 
 
@@ -141,4 +144,6 @@ class DetectObjectsUseCase:
                 frames=frame_results,
                 total_detections=total_detections,
                 processing_time=processing_time,
+                video_width=input.video_width,
+                video_height=input.video_height,
             )

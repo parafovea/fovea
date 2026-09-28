@@ -34,6 +34,7 @@ import GlossEditor from '@components/ontology/GlossEditor'
 import { TypeObjectBadge } from '../shared/TypeObjectToggle'
 import WikidataImportFlow from '../shared/WikidataImportFlow'
 import { useUnsavedChangesPrompt } from '../../hooks/data'
+import { useTourAnchor } from '@/tours/engine/anchorRegistry'
 
 interface EventEditorProps {
   open: boolean
@@ -60,6 +61,8 @@ export default function EventEditor({ open, onClose, event }: EventEditorProps) 
   const times = useMemo(() => worldData?.times ?? [], [worldData?.times])
   const { mutateAsync: addEvent } = useAddEvent()
   const { mutateAsync: updateEvent } = useUpdateEvent()
+  const editorRef = useTourAnchor('event-editor')
+  const nameInputRef = useTourAnchor('event-name-input')
 
   const [name, setName] = useState('')
   const [description, setDescription] = useState<GlossItem[]>([{ type: 'text', content: '' }])
@@ -228,7 +231,7 @@ export default function EventEditor({ open, onClose, event }: EventEditorProps) 
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) handleCancel() }}>
-      <DialogContent data-tour-id="event-editor" className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
+      <DialogContent ref={editorRef} className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Zap className="size-5 text-secondary" />
@@ -294,8 +297,8 @@ export default function EventEditor({ open, onClose, event }: EventEditorProps) 
           <div className="space-y-1">
             <Label htmlFor="event-name">Name *</Label>
             <Input
+              ref={nameInputRef}
               id="event-name"
-              data-tour-id="event-name-input"
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Event name"

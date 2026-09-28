@@ -13,6 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { useTourAnchor } from '@/tours/engine/anchorRegistry'
 import { AudioConfig, FusionStrategy } from './types'
 
 /**
@@ -73,6 +74,8 @@ const FUSION_STRATEGIES: { value: FusionStrategy; label: string; description: st
  * ```
  */
 export function AudioConfigPanel({ config, onChange, disabled = false }: AudioConfigPanelProps) {
+  const panelAnchorRef = useTourAnchor('audio-config-panel')
+
   const handleEnableAudioChange = (checked: boolean) => {
     onChange({
       ...config,
@@ -106,7 +109,7 @@ export function AudioConfigPanel({ config, onChange, disabled = false }: AudioCo
   const selectedStrategy = FUSION_STRATEGIES.find((s) => s.value === config.fusionStrategy)
 
   return (
-    <div className="flex flex-col gap-4" data-tour-id="audio-config-panel">
+    <div ref={panelAnchorRef} className="flex flex-col gap-4">
       <p className="text-sm font-medium text-muted-foreground">
         Audio Processing Options
       </p>

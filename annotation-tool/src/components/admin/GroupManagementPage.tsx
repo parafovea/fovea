@@ -44,6 +44,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { useUsers } from '@store/queries/admin/useUsers'
+import { useTourAnchor } from '@/tours/engine/anchorRegistry'
 import { ConfirmDialog } from '../shared/ConfirmDialog'
 
 interface GroupMember {
@@ -93,6 +94,7 @@ async function fetchGroups(): Promise<Group[]> {
  * as well as managing group membership.
  */
 export function GroupManagementPage(): JSX.Element {
+  const pageAnchor = useTourAnchor('group-management-page')
   const queryClient = useQueryClient()
   const { data: groups = [], isLoading, error } = useQuery({
     queryKey: groupKeys.list(),
@@ -249,7 +251,7 @@ export function GroupManagementPage(): JSX.Element {
   }
 
   return (
-    <div className="p-6" data-tour-id="group-management-page">
+    <div className="p-6" ref={pageAnchor}>
       <div className="flex gap-4 mb-6 justify-end">
         <Button onClick={handleOpenCreate}>
           <Plus className="mr-2 h-4 w-4" />

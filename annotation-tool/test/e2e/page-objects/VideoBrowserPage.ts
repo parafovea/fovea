@@ -71,9 +71,11 @@ export class VideoBrowserPage extends BasePage {
 
   /**
    * Get the Export button.
+   * Matches the exact "Export" name so the locator does not also resolve the
+   * adjacent "Export Corpus" (layers) toolbar button.
    */
   get exportButton(): Locator {
-    return this.page.getByRole('button', { name: /export/i })
+    return this.page.getByRole('button', { name: 'Export', exact: true })
   }
 
   /**

@@ -20,6 +20,8 @@ import { ModeSelector } from './ModeSelector'
 import { WikidataChip } from './WikidataChip'
 import { TypeObjectBadge } from './TypeObjectToggle'
 import { ImportType } from '@hooks/wikidata'
+import { useTourAnchor } from '@/tours/engine/anchorRegistry'
+import type { AnchorId } from '@/tours/engine/anchorCatalog'
 
 export interface BaseTypeEditorProps {
   // Required props
@@ -92,6 +94,10 @@ export default function BaseTypeEditor({
   isEditing = false,
   availablePersonas = [],
 }: BaseTypeEditorProps) {
+  const editorAnchor = useTourAnchor(`${typeCategory}-type-editor` as AnchorId)
+  const cancelAnchor = useTourAnchor('type-editor-cancel')
+  const saveAnchor = useTourAnchor('type-editor-save')
+
   const handlePersonaToggle = (personaId: string) => {
     setTargetPersonaIds(
       targetPersonaIds.includes(personaId)
@@ -107,10 +113,7 @@ export default function BaseTypeEditor({
   return (
     <Dialog open={open} onOpenChange={(val) => { if (!val) onClose() }}>
       <DialogContent
-        // Tour anchor — typeCategory ∈ {entity, role, event} maps to the
-        // anchors Tour 2 ('Building a persona's ontology') drives, and
-        // 'relation' is covered by the dedicated RelationTypeEditor dialog.
-        data-tour-id={`${typeCategory}-type-editor`}
+        ref={editorAnchor}
         className="sm:max-w-2xl min-h-[60vh]"
       >
         <DialogHeader>
@@ -235,11 +238,11 @@ export default function BaseTypeEditor({
               Delete
             </Button>
           )}
-          <Button variant="outline" onClick={onClose} data-tour-id="type-editor-cancel">Cancel</Button>
+          <Button ref={cancelAnchor} variant="outline" onClick={onClose}>Cancel</Button>
           <Button
+            ref={saveAnchor}
             onClick={onSave}
             disabled={!isValid}
-            data-tour-id="type-editor-save"
           >
             {isEditing ? 'Save' : 'Create'}
           </Button>

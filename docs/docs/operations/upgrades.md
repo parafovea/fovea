@@ -57,6 +57,12 @@ migrations are forward-only. To revert, restore the Postgres
 backup taken in step 1 and switch the image tag back. The
 videos in `STORAGE_PATH` are unaffected by the database revert.
 
+The 0.5 to 0.6 upgrade has an extra one-time data-copy phase
+between steps 6 and 7, because 0.6 moves your annotation, world,
+claim, and ontology data onto the layers store. Follow
+[Upgrading 0.5 to 0.6](upgrading-0.5-to-0.6.md) for that release
+instead of the generic steps above.
+
 ## Major upgrade (X.y.z → X+1.0.0)
 
 Treat a major upgrade as a planned migration project, not a

@@ -18,6 +18,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { useSessions, useRevokeSession } from '@store/queries/admin/useSessions'
+import { useTourAnchor } from '@/tours/engine/anchorRegistry'
 import { ConfirmDialog } from '../shared/ConfirmDialog'
 
 /**
@@ -28,6 +29,7 @@ import { ConfirmDialog } from '../shared/ConfirmDialog'
  * @returns Session management page
  */
 export function SessionManagementPage(): JSX.Element {
+  const pageAnchor = useTourAnchor('session-management-page')
   const { data: sessions = [], isLoading, error, refetch } = useSessions()
   const revokeSession = useRevokeSession()
 
@@ -101,7 +103,7 @@ export function SessionManagementPage(): JSX.Element {
 
   if (isLoading) {
     return (
-      <div className="flex justify-center p-8" data-tour-id="session-management-page">
+      <div className="flex justify-center p-8" ref={pageAnchor}>
         <Spinner />
       </div>
     )
@@ -109,7 +111,7 @@ export function SessionManagementPage(): JSX.Element {
 
   if (error) {
     return (
-      <div className="p-6" data-tour-id="session-management-page">
+      <div className="p-6" ref={pageAnchor}>
         <Alert variant="destructive">
           <AlertDescription>Failed to load sessions: {error.message}</AlertDescription>
         </Alert>
@@ -118,7 +120,7 @@ export function SessionManagementPage(): JSX.Element {
   }
 
   return (
-    <div className="p-6" data-tour-id="session-management-page">
+    <div className="p-6" ref={pageAnchor}>
       {/* Toolbar */}
       <div className="flex gap-4 mb-6 items-center justify-between">
         <p className="text-sm text-muted-foreground">

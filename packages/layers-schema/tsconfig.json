@@ -1,0 +1,20 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "CommonJS",
+    "moduleResolution": "Node10",
+    "lib": ["ES2022"],
+    "strict": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "outDir": "dist",
+    "rootDir": "src",
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "isolatedModules": true,
+    "forceConsistentCasingInFileNames": true
+  },
+  "//": "Scope to the authored barrel: tsc checks src/index.ts plus everything it transitively imports (the whole useful generated tree). The generated top-level aggregation barrels (generated/index.ts, pub/layers/index.ts, examples.ts) are redundant with src/index.ts, are hidden by the package `exports` map, and carry known upstream codegen-barrel bugs (empty examples re-export; duplicate Entry), so they are deliberately not type-checked.",
+  "include": ["src/index.ts"]
+}

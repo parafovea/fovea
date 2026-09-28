@@ -47,6 +47,25 @@ class ExtractedClaimDTO:
 
 
 @dataclass
+class ClaimsResultDTO:
+    """A document's extracted claim tree together with cross-claim relationships.
+
+    Parameters
+    ----------
+    text : str
+        The source document text all claim offsets reference.
+    claims : list[ExtractedClaimDTO]
+        The top-level claims, each of which may nest subclaims.
+    relationships : list[ClaimRelationshipDTO]
+        Typed, directed relationships between claims.
+    """
+
+    text: str
+    claims: list[ExtractedClaimDTO] = field(default_factory=list)
+    relationships: list[ClaimRelationshipDTO] = field(default_factory=list)
+
+
+@dataclass
 class ClaimSourceDTO:
     """Source of claims for synthesis (single video or collection).
 

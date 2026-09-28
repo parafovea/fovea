@@ -1,31 +1,29 @@
 /**
- * Tour 6 — "Model in the loop: detection, tracking, interpolation" (plan §4).
+ * The model-in-the-loop tour: tracking, interpolation, and on-demand
+ * detection.
  *
- * The CV-credibility tour. Required at CVPR. Shows that Fovea has
- * actual model integration — tracker, interpolation, detection
- * candidates — and that every prediction is an editable annotation
- * rather than a black-box output.
+ * Shows that every model prediction is an editable annotation rather than a
+ * black-box output. The tracker propagates a single bounding box across the
+ * clip, the timeline exposes the sparse keyframes and per-segment
+ * interpolation curve, and the detector proposes fresh candidates the visitor
+ * accepts or rejects.
  *
- * The tour's narration is content-neutral (it's about model machinery,
- * not specific subject matter). The TourContentBundle still carries
- * a persona slot so admins can attribute the prerequisite annotation
- * to the right perspective for their domain.
+ * The narration is content-neutral (it describes model machinery, not subject
+ * matter). The content bundle still carries a persona slot so a deployment can
+ * attribute the running example to the right perspective for its domain.
  *
- * Anchored on existing workspace surfaces: drawing-canvas (always
- * present), video-player-scrubber, detect-objects-button +
- * annotation-candidates-list (on-demand detection), show-timeline-
- * button + timeline-panel (keyframe + interpolation surface), and
- * event-annotation-button. Visitors with workspace fixtures see the
- * pre-seeded annotations Fovea's tracker produced for the demo
- * video.
+ * Steps targeting conditional workspace surfaces declare a `driver`: a
+ * capability that seeds an annotation so the timeline and detection toolbars
+ * mount, or runs detection so the candidates list populates. The engine
+ * derives the click chain that opens each surface from the anchor catalog.
  */
 
-import type { TourScript } from '../engine/types'
+import type { Tour } from '../engine/tourSchema'
 import type { TourModelInTheLoopContent } from '../content/types'
 
 export function buildModelInTheLoopTour(
   c: TourModelInTheLoopContent,
-): TourScript {
+): Tour {
   const annotateRoute = '/app/annotate/:videoId'
   const annotateParams = { videoId: c.videoId }
   return {
@@ -35,7 +33,6 @@ export function buildModelInTheLoopTour(
       'Models propose. Humans dispose. Track a bbox across the clip, edit the trajectory, accept detection candidates.',
     durationMinutes: 4,
     tags: ['model-service', 'tracking', 'interpolation', 'detection'],
-    fixtureBundle: 'model-in-the-loop',
     personaName: c.personaName,
     recap:
       'Every prediction is an editable annotation, not a black-box output.',
@@ -65,15 +62,16 @@ export function buildModelInTheLoopTour(
         narration:
           "Open the timeline panel to see every annotation's keyframes laid out in time.",
         expectAction: 'click',
+        driver: { capability: 'ensure-annotation-exists' },
       },
       {
         anchor: 'timeline-panel',
         route: annotateRoute,
         routeParams: annotateParams,
-        revealBy: 'show-timeline-button',
         narration:
           'Sparse keyframes are the rule. Intermediate frames are interpolated. Linear by default. Switch to Bézier or parametric (e.g. gravity) per segment.',
         expectAction: 'none',
+        driver: { capability: 'ensure-annotation-exists' },
       },
       {
         anchor: 'detect-objects-button',
@@ -82,38 +80,25 @@ export function buildModelInTheLoopTour(
         narration:
           'Detection is on-demand: click to ask the model for fresh candidates on the current frame. The query is built from the active persona ontology.',
         expectAction: 'click',
+        driver: { capability: 'ensure-annotation-exists' },
       },
       {
         anchor: 'annotation-candidates-list',
         route: annotateRoute,
         routeParams: annotateParams,
-        // The candidates list only mounts AFTER the detection API
-        // call resolves. Step 5's expectAction='click' on
-        // detect-objects-button merely OPENS the DetectionDialog;
-        // the visitor (or the engine, in demo mode) still has to
-        // click 'Run Detection' inside the dialog to fire the
-        // mutation. Without that second click the candidates list
-        // never mounts and the missing-anchor banner paints. So the
-        // revealBy chain ensures both clicks happen: open the
-        // dialog, then run the detection. The engine short-circuits
-        // the chain when the anchor is already mounted, so a
-        // forward step from step 6 → 7 is a no-op (dialog stays
-        // open, candidates list stays rendered).
-        revealBy: ['detect-objects-button', 'detect-dialog-run-button'],
         narration:
           'The detector returned four candidates. Accept the two high-confidence containers, reject the two spurious boxes (a water splash and a piece of the gantry crane).',
         expectAction: 'click',
-        requiresFixture: false,
+        driver: { capability: 'run-detection' },
       },
       {
         anchor: 'annotation-candidates-list',
         route: annotateRoute,
         routeParams: annotateParams,
-        revealBy: ['detect-objects-button', 'detect-dialog-run-button'],
         narration:
           "Snap each accepted box to a general type from your ontology: 'Shipping Container' (Wikidata Q987767). The QID travels with the annotation.",
         expectAction: 'click',
-        requiresFixture: false,
+        driver: { capability: 'run-detection' },
       },
       {
         anchor: 'event-annotation-button',
@@ -127,11 +112,10 @@ export function buildModelInTheLoopTour(
         anchor: 'timeline-panel',
         route: annotateRoute,
         routeParams: annotateParams,
-        revealBy: 'show-timeline-button',
         narration:
           'The gantry crane tracker drifted at frame 214; it briefly latched onto a water splash to the right. Click that keyframe in the timeline, drag the box back onto the crane, and the interpolation re-anchors the remaining frames automatically.',
         expectAction: 'click',
-        requiresFixture: false,
+        driver: { capability: 'ensure-annotation-exists' },
       },
       {
         anchor: 'save-indicator',

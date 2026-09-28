@@ -8,7 +8,7 @@ loaders:
       - infrastructure.adapters.inbound.fastapi.routes.summarization
       - infrastructure.adapters.inbound.fastapi.routes.claims
       - infrastructure.adapters.inbound.fastapi.routes.ontology
-      - infrastructure.adapters.inbound.fastapi.schemas
+      - infrastructure.adapters.inbound.fastapi.models
       - infrastructure.adapters.outbound.models.llm.loader
       - infrastructure.adapters.outbound.models.vlm.loader
       - infrastructure.adapters.outbound.models.detection.loader

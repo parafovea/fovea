@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { useTourAnchor } from '@/tours/engine/anchorRegistry'
 import { Claim } from '@models/types'
 import {
   useClaimRelations,
@@ -38,6 +39,8 @@ export function ClaimRelationsViewer({
   const entities = useEntities()
   const events = useEvents()
   const times = useTimes()
+
+  const relationsAnchor = useTourAnchor('claim-relations-viewer')
 
   const handleDelete = async (relationId: string) => {
     if (window.confirm('Delete this relation?')) {
@@ -86,7 +89,7 @@ export function ClaimRelationsViewer({
   const asTarget = relationData?.asTarget || []
 
   return (
-    <div data-testid="claim-relations-viewer" data-tour-id="claim-relations-viewer">
+    <div ref={relationsAnchor} data-testid="claim-relations-viewer">
       <div className="mb-4 flex items-center justify-between">
         <p className="text-sm font-medium">
           Claim Relations

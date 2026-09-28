@@ -3,7 +3,9 @@
  *
  * Routes perform HTTP concerns only: schema validation, request parsing, and
  * dispatch to a per-request ClaimService that owns business rules and CASL
- * authorization. The ClaimRepository owns all Prisma access.
+ * authorization. Claims are stored as layers GraphNode / LayersAnnotation /
+ * GraphEdge rows; the service reads and writes them through the GraphRepository
+ * and AnnotationLayerRepository.
  *
  * Endpoints for creating, retrieving, updating, and deleting atomic claims
  * extracted from video summaries, queueing extraction and synthesis jobs, and
@@ -15,7 +17,8 @@ import { FastifyPluginAsync, FastifyRequest } from 'fastify'
 import { ErrorResponseSchema } from '../lib/errors.js'
 import { requireAuth } from '../middleware/auth.js'
 import { buildAbilities } from '../middleware/abilities.js'
-import { ClaimRepository } from '../repositories/ClaimRepository.js'
+import { GraphRepository } from '../repositories/GraphRepository.js'
+import { AnnotationLayerRepository } from '../repositories/AnnotationLayerRepository.js'
 import { ClaimService } from '../services/claim-service.js'
 
 /**
@@ -239,8 +242,9 @@ const CreateClaimRelationSchema = Type.Object({
 })
 
 const claimsRoute: FastifyPluginAsync = async (fastify) => {
-  // Request-independent: one repository for the plugin's lifetime.
-  const repository = new ClaimRepository(fastify.prisma)
+  // Request-independent: repositories for the plugin's lifetime.
+  const graphRepo = new GraphRepository(fastify.prisma)
+  const annotationLayerRepo = new AnnotationLayerRepository(fastify.prisma)
 
   /**
    * Builds a per-request service from the request-scoped CASL ability and the
@@ -248,7 +252,9 @@ const claimsRoute: FastifyPluginAsync = async (fastify) => {
    */
   const serviceFor = (request: FastifyRequest): ClaimService =>
     new ClaimService(
-      repository,
+      graphRepo,
+      annotationLayerRepo,
+      fastify.prisma,
       request.ability ?? null,
       request.user?.id,
       request.user?.systemRole ?? undefined
