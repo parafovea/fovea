@@ -240,7 +240,7 @@ export async function seedLegacyFixture(prisma: PrismaClient): Promise<LegacyFix
       videoId: video.id,
       personaId: null,
       userId: user.id,
-      type: 'bounding-box',
+      type: 'object',
       label: entityId,
       linkType: 'entity',
       frames: FIXTURE_FRAMES as unknown as object,

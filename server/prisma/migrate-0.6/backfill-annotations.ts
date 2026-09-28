@@ -65,6 +65,12 @@ export async function backfillAnnotations(
     const existed =
       (await prisma.layersAnnotation.count({ where: { id: reuseAnnotationId(row.id) } })) > 0
     await writeVideoAnnotation(prisma, input, scope)
+    // The writer stamps the row with the time of the write; the view-model
+    // serves the row's timestamps, so carry the original ones.
+    await prisma.layersAnnotation.update({
+      where: { id: reuseAnnotationId(row.id) },
+      data: { createdAt: row.createdAt, updatedAt: row.updatedAt },
+    })
     existed ? (stats.updated += 1) : (stats.created += 1)
   }
   return stats

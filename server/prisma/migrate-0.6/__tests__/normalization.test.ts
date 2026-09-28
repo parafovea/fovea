@@ -10,7 +10,7 @@
 import { describe, it, expect } from 'vitest'
 
 import { legacyTypeOf, legacyTypesOf } from '../backfill-ontologies.js'
-import { reconMatchesSource } from '../verify.js'
+import { auditDroppedFields, droppedPaths, reconMatchesSource } from '../verify.js'
 
 describe('legacyTypeOf', () => {
   it('carries a string description as a single text gloss item', () => {
@@ -68,5 +68,38 @@ describe('reconMatchesSource', () => {
 
   it('ignores source-only fields the view-model does not carry', () => {
     expect(reconMatchesSource({ id: 't', name: 'T' }, { id: 't', name: 'T', color: '#fff' })).toBe(true)
+  })
+})
+
+describe('field audit', () => {
+  it('reports a content-bearing field the reconstruction lacks, with its path', () => {
+    expect(droppedPaths({ a: 1, b: { c: 'x', d: '' } }, { a: 1, b: {} })).toEqual([{ path: 'b.c', value: 'x' }])
+  })
+
+  it('reports dropped fields inside list elements', () => {
+    expect(droppedPaths({ boxes: [{ x: 1, note: 'n' }] }, { boxes: [{ x: 1 }] })).toEqual([
+      { path: 'boxes[].note', value: 'n' },
+    ])
+  })
+
+  it('fails a record that drops an unlisted field', () => {
+    const mismatches: string[] = []
+    expect(auditDroppedFields('worldObject', 'World entity e', { id: 'e', globe: 'Q2' }, { id: 'e' }, mismatches)).toBe(
+      false,
+    )
+    expect(mismatches[0]).toContain('would lose field globe')
+  })
+
+  it('passes a listed drop', () => {
+    const mismatches: string[] = []
+    expect(auditDroppedFields('ontologyType', 'type', { id: 't', color: '#fff' }, { id: 't' }, mismatches)).toBe(true)
+    expect(mismatches).toEqual([])
+  })
+
+  it('applies a value-limited drop only to the accepted value', () => {
+    const accepted: string[] = []
+    expect(auditDroppedFields('ontologyType', 'type', { id: 't', symmetric: false }, { id: 't' }, accepted)).toBe(true)
+    const rejected: string[] = []
+    expect(auditDroppedFields('ontologyType', 'type', { id: 't', symmetric: true }, { id: 't' }, rejected)).toBe(false)
   })
 })

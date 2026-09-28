@@ -40,6 +40,7 @@ import {
   recordVerified,
 } from './state.js'
 import { runVerify, type VerifyReport } from './verify.js'
+import { COPIED_ANNOTATIONS } from './helpers.js'
 
 /** A thrown sentinel that rolls a dry-run's transaction back after it reports. */
 class DryRunRollback extends Error {
@@ -191,7 +192,7 @@ async function dryRun(prisma: PrismaClient, options: CliOptions): Promise<number
 /** Prints a verify report and returns the process exit code it implies. */
 function reportVerify(report: VerifyReport): number {
   out(`Verify: ${report.roundTripped} annotation(s) round-tripped to the canonical 0.6 projection.`)
-  out(`        ${report.contentChecked} world/ontology/claim object(s) reproduced faithfully by the backward read.`)
+  out(`        ${report.contentChecked} record(s) matched field for field through the backward read, with no unaccepted field drops.`)
   out('Count parity:')
   for (const [name, count] of Object.entries(report.counts)) out(`  ${name.padEnd(16)} ${count}`)
   if (report.mismatches.length > 0) {
@@ -220,8 +221,9 @@ async function migrate(prisma: PrismaClient, options: CliOptions): Promise<numbe
   const state = await readState(prisma)
   if (state?.phase === 'verified' && !options.force) {
     out('Refusing to migrate: the copy is already verified on this database.')
-    out('A re-run rewrites every migrated object from its 0.5 source and reverts edits made in 0.6.')
-    out('Pass --force (optionally with --since) only when no one has edited in 0.6 since the copy.')
+    out('0.5 rows changed after the verified copy are caught up automatically when the backend starts.')
+    out('A full re-run rewrites every migrated object from its 0.5 source and reverts edits made in 0.6;')
+    out('pass --force only when no one has edited in 0.6 since the copy.')
     return 1
   }
   return copyAndVerify(prisma, options)
@@ -245,12 +247,36 @@ async function auto(prisma: PrismaClient, options: CliOptions): Promise<number> 
   }
   await ensureStateTable(prisma)
   const state = await readState(prisma)
-  if (state?.phase === 'verified') {
-    out('0.5-to-0.6 copy: already verified on this database.')
-    return 0
+  if (state?.phase === 'verified' && state.verifiedAt) {
+    // 0.5 rows written after the verified copy (a rollback to 0.5 and back)
+    // are caught up object by object, so 0.6 edits to objects 0.5 did not
+    // change are kept and the later contract drop loses nothing.
+    const changed = await rowsChangedSince(prisma, state.verifiedAt)
+    if (changed === 0) {
+      out('0.5-to-0.6 copy: already verified on this database.')
+      return 0
+    }
+    out(
+      `0.5-to-0.6 copy: ${changed} 0.5 row(s) changed after the verified copy at ` +
+        `${state.verifiedAt.toISOString()}; catching them up.`,
+    )
+    return copyAndVerify(prisma, { ...options, since: state.verifiedAt })
   }
   out('0.5-to-0.6 copy: 0.5 data found and not yet migrated; copying now.')
   return copyAndVerify(prisma, options)
+}
+
+/** Counts rows in the five copied 0.5 tables updated after `since`. */
+async function rowsChangedSince(prisma: PrismaClient, since: Date): Promise<number> {
+  const after = { updatedAt: { gt: since } }
+  const counts = await Promise.all([
+    prisma.annotation.count({ where: { ...after, ...COPIED_ANNOTATIONS } }),
+    prisma.ontology.count({ where: after }),
+    prisma.worldState.count({ where: after }),
+    prisma.claim.count({ where: after }),
+    prisma.claimRelation.count({ where: after }),
+  ])
+  return counts.reduce((total, count) => total + count, 0)
 }
 
 /** Runs the copy, verifies it, and records the marker; returns the exit code. */
@@ -310,7 +336,8 @@ async function rollback(prisma: PrismaClient): Promise<number> {
   await ensureStateTable(prisma)
   await clearState(prisma)
   out('Cleared the migration marker. Legacy tables are untouched and still present.')
-  out('Re-run `migrate` to copy again, or restore from a backup for a full revert.')
+  out('The next backend start runs a full copy again, which reverts edits made in 0.6 to migrated')
+  out('objects; clear the marker only before anyone works in 0.6, or restore from a backup instead.')
   return 0
 }
 

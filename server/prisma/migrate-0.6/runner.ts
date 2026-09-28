@@ -105,7 +105,7 @@ export async function runBackfill(
     (skip, take) =>
       prisma.ontology.findMany({ where: sinceFilter, orderBy: { id: 'asc' }, skip, take }),
     batchSize,
-    (rows) => backfillOntologies(prisma, rows),
+    (rows) => backfillOntologies(prisma, rows, options.since),
     report.ontologies,
   )
 
@@ -114,7 +114,7 @@ export async function runBackfill(
     (skip, take) =>
       prisma.worldState.findMany({ where: sinceFilter, orderBy: { id: 'asc' }, skip, take }),
     batchSize,
-    (rows) => backfillWorldStates(prisma, rows),
+    (rows) => backfillWorldStates(prisma, rows, options.since),
     report.world,
   )
 

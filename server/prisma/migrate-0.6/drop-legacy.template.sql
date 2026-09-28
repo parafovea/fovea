@@ -20,17 +20,20 @@
 --      deployment must upgrade to 0.6.x and complete the copy first.
 --
 -- The guard drops the tables when they hold no rows (a fresh install, or one
--- that never had 0.5 data) or when the migration tool recorded a passing verify
--- in `_layers_migration_state`. Otherwise a RAISE aborts the migration
--- transaction, so `prisma migrate deploy` fails and no table is dropped: an
--- operator who installs this release without running the copy is stopped with
+-- that never had 0.5 data), or when the migration tool recorded a passing verify
+-- in `_layers_migration_state` and no 0.5 row changed after it. Otherwise a
+-- RAISE aborts the migration transaction, so `prisma migrate deploy` fails and
+-- no table is dropped: an operator who installs this release without running
+-- the copy, or before 0.6.x has caught up later 0.5 changes, is stopped with
 -- data intact, not silently emptied.
 
 DO $$
 DECLARE
   legacy_rows bigint := 0;
+  changed_rows bigint := 0;
   marker_exists boolean;
   marker_phase text;
+  marker_verified_at timestamptz;
   t text;
   n bigint;
 BEGIN
@@ -54,13 +57,38 @@ BEGIN
   ) INTO marker_exists;
 
   IF marker_exists THEN
-    SELECT phase INTO marker_phase FROM "_layers_migration_state" WHERE id = 1;
+    SELECT phase, "verifiedAt" INTO marker_phase, marker_verified_at
+      FROM "_layers_migration_state" WHERE id = 1;
   END IF;
 
   IF marker_phase IS DISTINCT FROM 'verified' THEN
     RAISE EXCEPTION
       'Refusing to drop the legacy 0.5 tables: they hold % row(s) and the 0.5-to-0.6 data migration is at phase "%", not "verified". Using the image of the release that contains it, mark this migration rolled back (`npx prisma migrate resolve --rolled-back <migration name>`); then switch back to the 0.6.x image, run `node prisma/migrate-0.6/cli.cjs migrate` until it reports VERIFY OK, and upgrade again. See the "Upgrading 0.5 to 0.6" operations guide.',
       legacy_rows, COALESCE(marker_phase, 'not started');
+  END IF;
+
+  -- 0.5 rows written after the verified copy (a rollback to 0.5 and back) are
+  -- not in the layers store until a 0.6.x backend start catches them up.
+  FOREACH t IN ARRAY ARRAY['annotations', 'world_state', 'ontologies', 'claims', 'claim_relations'] LOOP
+    IF EXISTS (
+      SELECT 1 FROM information_schema.tables
+      WHERE table_schema = current_schema() AND table_name = t
+    ) THEN
+      IF t = 'annotations' THEN
+        EXECUTE format(
+          'SELECT count(*) FROM %I WHERE "updatedAt" > $1 AND "source" NOT LIKE ''demo-fixture%%''', t
+        ) INTO n USING marker_verified_at;
+      ELSE
+        EXECUTE format('SELECT count(*) FROM %I WHERE "updatedAt" > $1', t) INTO n USING marker_verified_at;
+      END IF;
+      changed_rows := changed_rows + n;
+    END IF;
+  END LOOP;
+
+  IF changed_rows > 0 THEN
+    RAISE EXCEPTION
+      'Refusing to drop the legacy 0.5 tables: % row(s) changed after the verified copy at %. Using the image of the release that contains this migration, mark it rolled back (`npx prisma migrate resolve --rolled-back <migration name>`); then start the latest 0.6.x once so it catches those rows up, and upgrade again.',
+      changed_rows, marker_verified_at;
   END IF;
 END $$;
 

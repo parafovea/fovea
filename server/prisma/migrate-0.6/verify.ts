@@ -35,6 +35,7 @@ import {
 import { readWorldAggregate, type WorldScope } from '../../src/services/layers-bridge/world-bridge.js'
 import { readOntologyAggregate, typeDefRowId } from '../../src/services/layers-bridge/ontology-bridge.js'
 import { readSummaryClaims } from '../../src/services/layers-bridge/claim-bridge.js'
+import { readAnnotationById } from '../../src/services/layers-bridge/annotation-bridge.js'
 import {
   expressionVideoId,
   layersOntologyForPersonaId,
@@ -43,16 +44,9 @@ import {
   reuseClaimNodeId,
   reuseWorldObjectNodeId,
 } from './id-map.js'
-import { legacyTypesOf } from './backfill-ontologies.js'
-import { COPIED_ANNOTATIONS } from './helpers.js'
+import { legacyTypesOf, ONTOLOGY_BUCKETS } from './backfill-ontologies.js'
+import { COPIED_ANNOTATIONS, selectForCopy } from './helpers.js'
 
-/** The four ontology buckets and the layers `typeKind` each maps to. */
-const ONTOLOGY_BUCKETS: ReadonlyArray<readonly [bucket: string, typeKind: string]> = [
-  ['entityTypes', 'entity-type'],
-  ['eventTypes', 'situation-type'],
-  ['roleTypes', 'role-type'],
-  ['relationTypes', 'relation-type'],
-]
 
 /** Default numeric tolerance for the round-trip deep-equality. */
 const DEFAULT_EPSILON = 1e-9
@@ -74,6 +68,7 @@ export interface VerifyReport {
     ontologyTypes: number
     worldObjects: number
     claims: number
+    claimRelations: number
     videos: number
   }
 }
@@ -134,6 +129,8 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
  */
 export function reconMatchesSource(recon: unknown, source: unknown, epsilon = DEFAULT_EPSILON): boolean {
   if (recon === source) return true
+  // A null reconstructed field carries nothing, so it matches an omitted one.
+  if (recon === null && source === undefined) return true
   if (typeof recon === 'number' && typeof source === 'number') {
     return Math.abs(recon - source) <= epsilon
   }
@@ -163,6 +160,158 @@ export function reconMatchesSource(recon: unknown, source: unknown, epsilon = DE
     return Object.keys(recon).every((key) => reconMatchesSource(recon[key], source[key], epsilon))
   }
   return false
+}
+
+/**
+ * A legacy field the copy deliberately does not carry into the layers store,
+ * with the reason. The field audit fails on any dropped field not listed here,
+ * so every loss at the contract-phase drop is an explicit, reviewed decision.
+ */
+export interface AcceptedDrop {
+  /** The record kind the path belongs to. */
+  domain: AuditDomain
+  /** A path as {@link droppedPaths} reports it (`a.b`, `list[].c`). */
+  path: string
+  /** Why the field is safe to lose. */
+  reason: string
+  /** When set, the drop is accepted only for source values this accepts. */
+  onlyWhen?: (value: unknown) => boolean
+}
+
+/** The record kinds the field audit covers. */
+export type AuditDomain =
+  | 'annotation'
+  | 'annotationFrames'
+  | 'ontologyType'
+  | 'worldObject'
+  | 'claim'
+  | 'claimRelation'
+
+/** Every legacy field the copy is known and allowed not to carry. */
+export const ACCEPTED_DROPS: readonly AcceptedDrop[] = [
+  {
+    domain: 'ontologyType',
+    path: 'color',
+    reason: 'written only by 0.5 seed scripts; neither the 0.5 nor the 0.6 type model has a color',
+  },
+  {
+    domain: 'ontologyType',
+    path: 'description',
+    reason: 'a 0.5 seed-written plain-string definition; legacyTypeOf carries it as the gloss',
+  },
+  {
+    domain: 'ontologyType',
+    path: 'symmetric',
+    reason: 'the ontology lens records the flag only when true, and an absent flag reads as false',
+    onlyWhen: (value) => value === false,
+  },
+  {
+    domain: 'ontologyType',
+    path: 'transitive',
+    reason: 'the ontology lens records the flag only when true, and an absent flag reads as false',
+    onlyWhen: (value) => value === false,
+  },
+  {
+    domain: 'ontologyType',
+    path: 'createdAt',
+    reason: 'carried on the TypeDef row, which the verifier checks directly; the type view-model has no timestamps',
+  },
+  {
+    domain: 'ontologyType',
+    path: 'updatedAt',
+    reason: 'carried on the TypeDef row, which the verifier checks directly; the type view-model has no timestamps',
+  },
+  {
+    domain: 'annotation',
+    path: 'projectId',
+    reason: 'carried on the LayersAnnotation row, which the verifier checks directly; the view-model has no project',
+  },
+]
+
+/** Whether a value carries information worth preserving. */
+function hasContent(value: unknown): boolean {
+  if (value === null || value === undefined) return false
+  if (typeof value === 'string') return value.trim() !== ''
+  if (value instanceof Date || typeof value === 'number' || typeof value === 'boolean') return true
+  if (Array.isArray(value)) return value.some((item) => !isEmptyTextItem(item) && hasContent(item))
+  if (isPlainObject(value)) return Object.values(value).some(hasContent)
+  return true
+}
+
+/**
+ * Lists the paths of every field that holds content in the legacy source but
+ * is absent from the reconstruction. Objects recurse by key; arrays recurse
+ * element-wise (empty text items removed) when both sides have the same length,
+ * reporting element fields as `list[].field`. A length mismatch is left to
+ * {@link reconMatchesSource}.
+ *
+ * @param source - the legacy value
+ * @param recon - the value reconstructed from the layers store
+ * @param prefix - the path of `source` within its record
+ * @returns the dropped paths
+ */
+export function droppedPaths(
+  source: unknown,
+  recon: unknown,
+  prefix = '',
+): Array<{ path: string; value: unknown }> {
+  if (Array.isArray(source) && Array.isArray(recon)) {
+    const sourceItems = source.filter((item) => !isEmptyTextItem(item))
+    const reconItems = recon.filter((item) => !isEmptyTextItem(item))
+    if (sourceItems.length !== reconItems.length) return []
+    return sourceItems.flatMap((item, index) => droppedPaths(item, reconItems[index], `${prefix}[]`))
+  }
+  if (!isPlainObject(source) || source instanceof Date) return []
+  const reconRecord = isPlainObject(recon) && !(recon instanceof Date) ? recon : {}
+  const dropped: Array<{ path: string; value: unknown }> = []
+  for (const [key, value] of Object.entries(source)) {
+    if (!hasContent(value)) continue
+    const path = prefix === '' ? key : `${prefix}.${key}`
+    if (!(key in reconRecord) || reconRecord[key] === undefined) {
+      dropped.push({ path, value })
+    } else {
+      dropped.push(...droppedPaths(value, reconRecord[key], path))
+    }
+  }
+  return dropped
+}
+
+/**
+ * Records a mismatch for every field of `source` that the reconstruction drops
+ * and {@link ACCEPTED_DROPS} does not list for `domain`.
+ *
+ * @param domain - the record kind
+ * @param label - how the record is named in a mismatch
+ * @param source - the legacy record
+ * @param recon - the reconstruction
+ * @param mismatches - the list to append to
+ * @returns whether the record passed the audit
+ */
+export function auditDroppedFields(
+  domain: AuditDomain,
+  label: string,
+  source: unknown,
+  recon: unknown,
+  mismatches: string[],
+): boolean {
+  const unaccepted = droppedPaths(source, recon).filter(
+    ({ path, value }) =>
+      !ACCEPTED_DROPS.some(
+        (drop) =>
+          drop.domain === domain && drop.path === path && (drop.onlyWhen === undefined || drop.onlyWhen(value)),
+      ),
+  )
+  for (const { path, value } of unaccepted) {
+    mismatches.push(
+      `${label} would lose field ${path} = ${JSON.stringify(value)} (not carried into the layers store)`,
+    )
+  }
+  return unaccepted.length === 0
+}
+
+/** Returns a shallow copy of `record` without the listed keys. */
+function withoutKeys(record: Record<string, unknown>, keys: readonly string[]): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(record).filter(([key]) => !keys.includes(key)))
 }
 
 /** Whether a value is a gloss text item with no content. */
@@ -251,6 +400,53 @@ export async function runVerify(
           `expected ${JSON.stringify(canonical)} got ${JSON.stringify(rebuilt)}`,
       )
     }
+
+    // Every other field, read back through the view-model the application
+    // serves, must match the legacy row, and nothing may be silently dropped.
+    const reconAnnotation = await readAnnotationById(prisma, layersId)
+    if (!reconAnnotation) {
+      mismatches.push(`Annotation ${annotation.id} did not reconstruct through the application read path`)
+      continue
+    }
+    const { frames: legacyFrames, ...legacyRow } = annotation as unknown as Record<string, unknown>
+    const { frames: reconFrames, ...reconRead } = reconAnnotation as unknown as Record<string, unknown>
+    // `linkedObjectName` is derived on read from the denoted world object's name,
+    // not stored for the annotation, so it has no legacy counterpart.
+    const reconFields = withoutKeys(reconRead, ['linkedObjectName'])
+    // 0.5 kept an owner (`userId`) and a creator (`createdByUserId`); the layers
+    // store keeps one creator, which the view-model serves as `createdBy`. Two
+    // different values would lose one of them.
+    if (
+      annotation.userId !== null &&
+      annotation.createdByUserId !== null &&
+      annotation.userId !== annotation.createdByUserId
+    ) {
+      mismatches.push(
+        `Annotation ${annotation.id} has owner ${annotation.userId} and creator ` +
+          `${annotation.createdByUserId}; the layers store keeps only one`,
+      )
+    }
+    const legacyFields = {
+      ...withoutKeys(legacyRow, ['userId', 'createdByUserId']),
+      createdBy: annotation.createdByUserId ?? annotation.userId,
+    }
+    if (layersAnnotation.projectId !== annotation.projectId) {
+      mismatches.push(
+        `Annotation ${annotation.id} project ${String(annotation.projectId)} was stored as ` +
+          `${String(layersAnnotation.projectId)}`,
+      )
+    }
+    if (!reconMatchesSource(reconFields, legacyFields, epsilon)) {
+      mismatches.push(
+        `Annotation ${annotation.id} fields did not round-trip: ` +
+          `source ${JSON.stringify(legacyFields)} reconstructed ${JSON.stringify(reconFields)}`,
+      )
+    } else if (
+      auditDroppedFields('annotation', `Annotation ${annotation.id}`, legacyFields, reconFields, mismatches) &&
+      auditDroppedFields('annotationFrames', `Annotation ${annotation.id} frames`, legacyFrames, reconFrames, mismatches)
+    ) {
+      contentChecked += 1
+    }
   }
 
   // --- Ontology types -> TypeDef count parity + content fidelity ------------
@@ -268,17 +464,38 @@ export async function runVerify(
     const { aggregate: reconOntology } = await readOntologyAggregate(prisma, ontology.personaId)
     const reconOntologyRecord = reconOntology as unknown as Record<string, unknown>
     for (const [bucket, typeKind] of ONTOLOGY_BUCKETS) {
-      const types = legacyTypesOf(record[bucket]) as Array<{ id: string }>
       const reconBucket = Array.isArray(reconOntologyRecord[bucket])
         ? byId(reconOntologyRecord[bucket] as Array<{ id: string }>)
         : new Map<string, Record<string, unknown>>()
+      // A catch-up verify checks only the types the catch-up copy wrote.
+      const types = selectForCopy(
+        legacyTypesOf(record[bucket]),
+        new Set(reconBucket.keys()),
+        options.since,
+      ) as Array<{ id: string }>
       for (const type of types) {
         ontologyTypeCount += 1
         // The bridge keys a TypeDef by a derived id, not the raw type id.
         const typeDefId = typeDefRowId(layersOntologyId, typeKind, type.id)
-        if ((await prisma.typeDef.count({ where: { id: typeDefId } })) === 0) {
+        const typeDef = await prisma.typeDef.findUnique({
+          where: { id: typeDefId },
+          select: { createdAt: true, updatedAt: true },
+        })
+        if (!typeDef) {
           mismatches.push(`Ontology type ${type.id} has no TypeDef (count parity)`)
           continue
+        }
+        // The type view-model has no timestamps, so the legacy ones are checked
+        // against the TypeDef row the copy stamped.
+        const legacyTimes = type as { createdAt?: unknown; updatedAt?: unknown }
+        for (const [field, stored] of [
+          ['createdAt', typeDef.createdAt],
+          ['updatedAt', typeDef.updatedAt],
+        ] as const) {
+          const legacy = legacyTimes[field]
+          if (typeof legacy === 'string' && legacy !== '' && new Date(legacy).getTime() !== stored.getTime()) {
+            mismatches.push(`Ontology type ${type.id} ${field} ${legacy} was stored as ${stored.toISOString()}`)
+          }
         }
         const recon = reconBucket.get(type.id)
         if (!recon) {
@@ -288,7 +505,7 @@ export async function runVerify(
             `Ontology ${bucket} ${type.id} content did not round-trip: ` +
               `source ${JSON.stringify(type)} reconstructed ${JSON.stringify(recon)}`,
           )
-        } else {
+        } else if (auditDroppedFields('ontologyType', `Ontology ${bucket} ${type.id}`, type, recon, mismatches)) {
           contentChecked += 1
         }
       }
@@ -320,10 +537,15 @@ export async function runVerify(
     const { aggregate: reconWorld } = await readWorldAggregate(prisma, scope)
     const reconWorldRecord = reconWorld as unknown as Record<string, unknown>
     for (const bucket of WORLD_BUCKETS) {
-      const objects = Array.isArray(record[bucket]) ? (record[bucket] as Array<{ id: string }>) : []
       const reconBucket = Array.isArray(reconWorldRecord[bucket])
         ? byId(reconWorldRecord[bucket] as Array<{ id: string }>)
         : new Map<string, Record<string, unknown>>()
+      // A catch-up verify checks only the objects the catch-up copy wrote.
+      const objects = selectForCopy(
+        Array.isArray(record[bucket]) ? (record[bucket] as unknown[]) : [],
+        new Set(reconBucket.keys()),
+        options.since,
+      ) as Array<{ id: string }>
       for (const object of objects) {
         if (WORLD_NODE_BUCKET_SET.has(bucket)) {
           worldObjectCount += 1
@@ -340,7 +562,7 @@ export async function runVerify(
             `World ${bucket} ${object.id} content did not round-trip: ` +
               `source ${JSON.stringify(object)} reconstructed ${JSON.stringify(recon)}`,
           )
-        } else {
+        } else if (auditDroppedFields('worldObject', `World ${bucket} ${object.id}`, object, recon, mismatches)) {
           contentChecked += 1
         }
       }
@@ -373,7 +595,46 @@ export async function runVerify(
         `Claim ${claim.id} content did not round-trip: ` +
           `source ${JSON.stringify(claim)} reconstructed ${JSON.stringify(recon)}`,
       )
-    } else {
+    } else if (auditDroppedFields('claim', `Claim ${claim.id}`, claim, recon, mismatches)) {
+      contentChecked += 1
+    }
+  }
+
+  // --- Claim relations -> relation edges + content fidelity ----------------
+  // A relation is read back with its source claim's summary and matched by its
+  // endpoints and type, since the relation lens keys the edge by that triple.
+  const relations = await prisma.claimRelation.findMany({
+    where: sinceFilter,
+    include: { sourceClaim: { select: { summaryId: true } } },
+  })
+  const summaryRelationCache = new Map<string, ReadonlyArray<Record<string, unknown>>>()
+  for (const relation of relations) {
+    const { sourceClaim, ...source } = relation
+    let reconRelations = summaryRelationCache.get(sourceClaim.summaryId)
+    if (!reconRelations) {
+      const read = await readSummaryClaims(prisma, sourceClaim.summaryId)
+      reconRelations = read.relations as unknown as ReadonlyArray<Record<string, unknown>>
+      summaryRelationCache.set(sourceClaim.summaryId, reconRelations)
+    }
+    const recon = reconRelations.find(
+      (candidate) =>
+        candidate.sourceClaimId === relation.sourceClaimId &&
+        candidate.targetClaimId === relation.targetClaimId &&
+        candidate.relationTypeId === relation.relationTypeId,
+    )
+    if (!recon) {
+      mismatches.push(`Claim relation ${relation.id} did not reconstruct from the layers store`)
+      continue
+    }
+    // The edge id is derived from the triple, so it is not compared to the legacy id.
+    const reconFields = withoutKeys(recon, ['id'])
+    const sourceFields = withoutKeys(source as unknown as Record<string, unknown>, ['id'])
+    if (!reconMatchesSource(reconFields, sourceFields, epsilon)) {
+      mismatches.push(
+        `Claim relation ${relation.id} content did not round-trip: ` +
+          `source ${JSON.stringify(sourceFields)} reconstructed ${JSON.stringify(reconFields)}`,
+      )
+    } else if (auditDroppedFields('claimRelation', `Claim relation ${relation.id}`, sourceFields, reconFields, mismatches)) {
       contentChecked += 1
     }
   }
@@ -398,6 +659,7 @@ export async function runVerify(
       ontologyTypes: ontologyTypeCount,
       worldObjects: worldObjectCount,
       claims: claims.length,
+      claimRelations: relations.length,
       videos: videos.length,
     },
   }

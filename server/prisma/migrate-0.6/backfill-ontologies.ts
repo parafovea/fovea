@@ -16,25 +16,16 @@
 
 import type { PrismaClient, Ontology } from '@prisma/client'
 
-import type {
-  PersonaOntologyAggregate,
-  OntologyMeta,
-  OntologyLayersScope,
-} from '../../src/services/ontology-model.js'
-import { writeOntologyAggregate } from '../../src/services/layers-bridge/ontology-bridge.js'
+import type { OntologyMeta, OntologyLayersScope } from '../../src/services/ontology-model.js'
+import {
+  readOntologyAggregate,
+  typeDefRowId,
+  writeOntologyAggregate,
+} from '../../src/services/layers-bridge/ontology-bridge.js'
 import { layersOntologyForPersonaId } from '../../src/services/layers-id-map.js'
 
-import type { StepStats } from './helpers.js'
+import { idsOf, selectForCopy, type StepStats } from './helpers.js'
 
-/** Assembles the aggregate the ontology lens consumes from a legacy row. */
-function aggregateOf(row: Ontology): PersonaOntologyAggregate {
-  return {
-    entityTypes: legacyTypesOf(row.entityTypes),
-    eventTypes: legacyTypesOf(row.eventTypes),
-    roleTypes: legacyTypesOf(row.roleTypes),
-    relationTypes: legacyTypesOf(row.relationTypes),
-  }
-}
 
 /**
  * Normalizes one legacy ontology type onto the view-model's `gloss` field.
@@ -61,6 +52,41 @@ export function legacyTypesOf(bucket: unknown): unknown[] {
   return Array.isArray(bucket) ? bucket.map(legacyTypeOf) : []
 }
 
+/** The four ontology buckets and the layers `typeKind` each maps to. */
+export const ONTOLOGY_BUCKETS: ReadonlyArray<readonly [bucket: 'entityTypes' | 'eventTypes' | 'roleTypes' | 'relationTypes', typeKind: string]> = [
+  ['entityTypes', 'entity-type'],
+  ['eventTypes', 'situation-type'],
+  ['roleTypes', 'role-type'],
+  ['relationTypes', 'relation-type'],
+]
+
+/**
+ * Stamps TypeDef rows with timestamps. The ontology writer recreates every
+ * TypeDef with the time of the write and the type view-model has no
+ * timestamps, so the row is the only place a type's dates survive.
+ *
+ * @param prisma - the Prisma client
+ * @param stamps - TypeDef id to the dates it should carry
+ */
+async function stampTypeDefs(
+  prisma: PrismaClient,
+  stamps: ReadonlyMap<string, { createdAt?: Date; updatedAt?: Date }>,
+): Promise<void> {
+  for (const [id, data] of stamps) {
+    if (data.createdAt === undefined && data.updatedAt === undefined) continue
+    await prisma.typeDef.updateMany({ where: { id }, data })
+  }
+}
+
+/** The dates a legacy type carries, parsed from its ISO strings. */
+function legacyTypeDates(type: unknown): { createdAt?: Date; updatedAt?: Date } {
+  const { createdAt, updatedAt } = (type ?? {}) as { createdAt?: unknown; updatedAt?: unknown }
+  const dates: { createdAt?: Date; updatedAt?: Date } = {}
+  if (typeof createdAt === 'string' && createdAt !== '') dates.createdAt = new Date(createdAt)
+  if (typeof updatedAt === 'string' && updatedAt !== '') dates.updatedAt = new Date(updatedAt)
+  return dates
+}
+
 /**
  * Copies a batch of legacy ontology rows into native layers ontologies.
  *
@@ -71,6 +97,7 @@ export function legacyTypesOf(bucket: unknown): unknown[] {
 export async function backfillOntologies(
   prisma: PrismaClient,
   rows: Ontology[],
+  since?: Date,
 ): Promise<StepStats> {
   const stats: StepStats = { created: 0, updated: 0 }
   for (const row of rows) {
@@ -83,7 +110,38 @@ export async function backfillOntologies(
     const meta: OntologyMeta = { name: persona.name, description: null, domain: null }
     const existed =
       (await prisma.layersOntology.count({ where: { id: layersOntologyForPersonaId(row.personaId) } })) > 0
-    await writeOntologyAggregate(prisma, row.personaId, aggregateOf(row), meta, scope)
+    // Merge the selected legacy types over the persona's current layers
+    // ontology, since the writer replaces the whole type set: types that exist
+    // only in the layers store, or that 0.5 did not change since `since`, stay.
+    const ontologyId = layersOntologyForPersonaId(row.personaId)
+    const current = await readOntologyAggregate(prisma, row.personaId)
+    const priorDates = new Map(
+      (
+        await prisma.typeDef.findMany({
+          where: { ontologyId },
+          select: { id: true, createdAt: true, updatedAt: true },
+        })
+      ).map((typeDef) => [typeDef.id, { createdAt: typeDef.createdAt, updatedAt: typeDef.updatedAt }]),
+    )
+    const merged = { ...current.aggregate }
+    const stamps = new Map<string, { createdAt?: Date; updatedAt?: Date }>()
+    for (const [bucket, typeKind] of ONTOLOGY_BUCKETS) {
+      const currentTypes = (current.aggregate[bucket] ?? []) as Array<{ id: string }>
+      const selected = selectForCopy(legacyTypesOf(row[bucket]), idsOf(currentTypes), since)
+      const selectedIds = idsOf(selected)
+      const kept = currentTypes.filter((type) => !selectedIds.has(type.id))
+      merged[bucket] = [...kept, ...selected] as typeof merged[typeof bucket]
+      for (const type of kept) {
+        const typeDefId = typeDefRowId(ontologyId, typeKind, type.id)
+        const prior = priorDates.get(typeDefId)
+        if (prior) stamps.set(typeDefId, prior)
+      }
+      for (const type of selected) {
+        stamps.set(typeDefRowId(ontologyId, typeKind, (type as { id: string }).id), legacyTypeDates(type))
+      }
+    }
+    await writeOntologyAggregate(prisma, row.personaId, merged, meta, scope)
+    await stampTypeDefs(prisma, stamps)
     existed ? (stats.updated += 1) : (stats.created += 1)
   }
   return stats

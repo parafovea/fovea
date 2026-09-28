@@ -58,7 +58,7 @@ installing the release that removes the legacy tables. That release
 no longer ships the `migrate-0.6` CLI, so it cannot run the copy for
 you. If you install it too early, its migration refuses to run and
 the backend will not start; see
-[If you skipped the copy](#if-you-skipped-the-copy).
+[If the drop refuses](#if-the-drop-refuses).
 :::
 
 ## What the copy moves
@@ -94,16 +94,27 @@ The `auto` step decides what to do from the database itself:
 
 | Database state                                   | What `auto` does                                  |
 | ------------------------------------------------ | ------------------------------------------------- |
-| The five legacy tables are empty (fresh install) | Nothing. Prints `no 0.5 data to copy`.            |
-| A verified copy is already recorded              | Nothing. Prints `already verified`.               |
-| Legacy rows present, no verified copy            | Copies, verifies, records `verified`, continues.  |
-| The copy does not verify                         | Prints each mismatch and exits non-zero.          |
+| Database state                                          | What `auto` does                                                        |
+| ------------------------------------------------------- | ----------------------------------------------------------------------- |
+| The five legacy tables are empty (fresh install)        | Nothing. Prints `no 0.5 data to copy`.                                  |
+| A verified copy is recorded and no 0.5 row changed since | Nothing. Prints `already verified`.                                    |
+| A verified copy is recorded, but 0.5 rows changed since | Catches those changes up object by object, re-verifies, continues.      |
+| Legacy rows present, no verified copy                   | Copies, verifies, records `verified`, continues.                        |
+| The copy does not verify                                | Prints each mismatch and exits non-zero.                                |
 
 A failed verify stops the start command before the server comes
 up, so the 0.6 application never serves a partial copy. The legacy
 tables are untouched, so you can roll back to 0.5.x or fix the
-cause and restart. Because `auto` is a no-op once a verified copy
-is recorded, restarting or redeploying 0.6 never rewrites migrated
+cause and restart.
+
+0.5 rows only change after a verified copy if you roll back to
+0.5.x and keep working there. When you then start 0.6 again, the
+catch-up writes only the world objects, ontology types,
+annotations, claims, and relations that changed in 0.5 since the
+verified copy, judged by each object's own `updatedAt`. Objects you
+edited in 0.6 but did not change in 0.5 keep their 0.6 version,
+and ontology types you added in 0.6 are kept. Restarting or
+redeploying 0.6 without such changes never rewrites migrated
 data.
 
 ## The route
@@ -202,18 +213,20 @@ When that release comes out, upgrade to it like any other minor
 release (back up, get the code, build, `docker compose up -d`).
 Its migration runs when the backend starts:
 
-- If the legacy tables are empty, or your marker reads `verified`,
-  it drops the five legacy tables and the backend starts normally.
-- If the legacy tables still hold rows and the marker does not
-  read `verified`, the migration refuses, nothing is dropped, and
-  the backend fails to start. `docker compose logs backend` shows
-  `Refusing to drop the legacy 0.5 tables`.
+- If the legacy tables are empty, or your marker reads `verified`
+  and no 0.5 row changed after it, it drops the five legacy tables
+  and the backend starts normally.
+- Otherwise the migration refuses, nothing is dropped, and the
+  backend fails to start. `docker compose logs backend` shows
+  `Refusing to drop the legacy 0.5 tables` and the reason.
 
-### If you skipped the copy
+### If the drop refuses
 
-The refused migration leaves your data intact but is recorded as
-failed, so clear that record, go back to 0.6.x, let the copy run,
-and upgrade again:
+The drop refuses when the copy never verified on this database, or
+when 0.5 rows changed after the verified copy and no 0.6.x start has
+caught them up. Either way the refused migration leaves your data
+intact but is recorded as failed, so clear that record, start 0.6.x
+once so it copies or catches up, and upgrade again:
 
 1. With the new release still checked out, mark the migration
    rolled back. The error message and
@@ -238,14 +251,33 @@ checks more than that rows exist:
   annotation it rebuilds a bounding-box sequence from the native
   spatio-temporal anchor and compares it, within a float epsilon,
   to the canonical 0.6 projection of the original frames.
-- **Content fidelity** for world objects, ontology types, and
-  claims. Each is reconstructed through the application's own
-  backward read path and compared field by field to the legacy
-  source. Every field the layers view-model preserves must match,
-  so a copy that routed the wrong legacy column into a view-model
-  field is caught here.
+- **Content fidelity** for annotations, world objects, ontology
+  types, claims, and claim relations. Each is read back through the
+  same code the application serves it with and compared field by
+  field to the legacy source, including its original `createdAt`
+  and `updatedAt`, so a copy that routed a legacy column into the
+  wrong field is caught here.
+- **No silent field loss.** Every legacy field that holds a value
+  must either reach the 0.6 record or be on a short, reviewed list
+  of fields that are safe to lose. Anything else fails the verify
+  and names the field, so a data shape the copy did not anticipate
+  blocks the upgrade instead of disappearing. The reviewed list:
+  - an ontology type's `color`, which only 0.5 seed scripts wrote
+    and which neither the 0.5 nor the 0.6 type model has;
+  - an ontology type's plain-string `description`, which the copy
+    carries as the type's gloss;
+  - a relation type's `symmetric` or `transitive` when `false`,
+    since 0.6 reads an absent flag as false (a `true` must survive);
+  - an ontology type's `createdAt`/`updatedAt` and an annotation's
+    `projectId`, which 0.6 stores on the underlying row rather than
+    in the view, and which the verifier checks on that row.
 - **Count parity** across all domains. Every legacy row yields the
   native rows it should.
+
+The copy does not carry the annotations 0.5's seed wrote onto the
+demo tour videos (`source` beginning `demo-fixture:`), because the
+0.6 seed writes the same fixtures again. Annotations users made
+with the demo personas are copied like any other.
 
 ## CLI reference
 
@@ -273,12 +305,13 @@ rows updated at or after an instant, `--batch-size <n>` sets how
 many rows are read per page, and `--force` lets `migrate` run after
 a verified copy.
 
-:::danger Re-running the copy after going live
-The copy rewrites every migrated object from its 0.5 source. Once
-users have edited annotations, world objects, ontologies, or claims
-in 0.6, `migrate --force` reverts those edits. Use it only before
-anyone has worked in 0.6, for instance to pick up rows written to
-0.5 after the first copy.
+:::danger Re-running the full copy after going live
+You never need to re-run the copy by hand: the backend catches up
+0.5 changes on its own when it starts. A full `migrate --force`
+rewrites every migrated object from its 0.5 source, so once users
+have edited in 0.6 it reverts those edits. Use it only before
+anyone has worked in 0.6. The same holds for `rollback`, which
+clears the marker so the next start runs a full copy.
 :::
 
 ## Rolling back
@@ -327,14 +360,20 @@ you took one, holds the five legacy tables as a second copy.
   has not been verified, so it runs again and refreshes the rows it
   already wrote.
 - **Users kept writing to 0.5 after the copy** (for instance you
-  rolled back, worked in 0.5, and upgraded again). The copy is
-  already verified, so the start step skips it. Before anyone works
-  in 0.6 again, run
-  `docker compose run --rm backend node prisma/migrate-0.6/cli.cjs migrate --force --since <ISO-8601>`
-  with `--since` set to just before you rolled back.
+  rolled back, worked in 0.5, and upgraded again). Nothing to do:
+  the next 0.6 start logs `0.5 row(s) changed after the verified
+  copy; catching them up` and brings those changes across. Check
+  that it ends with `VERIFY OK`.
+- **The verify names a field it `would lose`.** Your data holds a
+  field the copy does not carry. Nothing was dropped and the 0.5
+  tables are intact. Roll back to 0.5.11 (no restore needed) and
+  report the printed field, so the copy can be extended to carry
+  it.
 - **The backend will not start after installing the contract
   release, and its log says `Refusing to drop the legacy 0.5
-  tables`.** The copy never reached a passing verify on this
-  database. Follow [If you skipped the copy](#if-you-skipped-the-copy).
+  tables`.** Either the copy never reached a passing verify on this
+  database, or 0.5 rows changed after it and no 0.6.x start has
+  caught them up yet. Follow
+  [If the drop refuses](#if-the-drop-refuses).
 - **The export file is missing.** The `export` command ran without
   the `-v "$PWD/backups:/backups"` mount. Re-run it with the mount.

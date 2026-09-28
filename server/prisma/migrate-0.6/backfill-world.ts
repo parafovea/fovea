@@ -15,11 +15,15 @@
 
 import type { PrismaClient, WorldState } from '@prisma/client'
 
-import { mergeWorldObjects, type WorldScope } from '../../src/services/layers-bridge/world-bridge.js'
+import {
+  mergeWorldObjects,
+  readWorldAggregate,
+  type WorldScope,
+} from '../../src/services/layers-bridge/world-bridge.js'
 import { worldScaffoldLayerId } from '../../src/services/layers-id-map.js'
 import type { WorldStateAggregate } from '../../src/services/world-model.js'
 
-import type { StepStats } from './helpers.js'
+import { idsOf, selectForCopy, type StepStats } from './helpers.js'
 
 /** Assembles the aggregate the world lens consumes from a legacy row. */
 function aggregateOf(row: WorldState): WorldStateAggregate {
@@ -45,13 +49,24 @@ function aggregateOf(row: WorldState): WorldStateAggregate {
 export async function backfillWorldStates(
   prisma: PrismaClient,
   rows: WorldState[],
+  since?: Date,
 ): Promise<StepStats> {
   const stats: StepStats = { created: 0, updated: 0 }
   for (const row of rows) {
     const scope: WorldScope = { userId: row.userId, projectId: row.projectId }
     const scaffoldId = worldScaffoldLayerId(row.userId, row.projectId)
     const existed = (await prisma.annotationLayer.count({ where: { id: scaffoldId } })) > 0
-    await mergeWorldObjects(prisma, scope, aggregateOf(row))
+    // A catch-up writes only the objects 0.5 changed since the watermark, so an
+    // object edited in 0.6 but not in 0.5 keeps its layers version.
+    const legacy = aggregateOf(row)
+    const current = since === undefined ? null : (await readWorldAggregate(prisma, scope)).aggregate
+    const selected = Object.fromEntries(
+      Object.entries(legacy).map(([bucket, objects]) => [
+        bucket,
+        selectForCopy(objects, idsOf(current?.[bucket as keyof WorldStateAggregate]), since),
+      ]),
+    ) as unknown as WorldStateAggregate
+    await mergeWorldObjects(prisma, scope, selected)
     existed ? (stats.updated += 1) : (stats.created += 1)
   }
   return stats

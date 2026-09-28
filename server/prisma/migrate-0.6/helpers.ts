@@ -46,6 +46,39 @@ export const COPIED_ANNOTATIONS: Prisma.AnnotationWhereInput = {
   NOT: { source: { startsWith: 'demo-fixture' } },
 }
 
+/**
+ * Selects the objects of a legacy aggregate (world objects, ontology types) a
+ * copy writes. A full copy (no `since`) writes every object. A catch-up copy
+ * writes only objects changed in 0.5 at or after `since`, judged by each
+ * object's own `updatedAt`, plus objects without a timestamp that the layers
+ * store does not hold yet. Every other object keeps its layers version, so a
+ * catch-up never reverts an edit made in 0.6 to an object 0.5 did not change.
+ *
+ * @param objects - the legacy objects, each with an `id`
+ * @param currentIds - ids the layers store already holds for this aggregate
+ * @param since - the catch-up watermark, or undefined for a full copy
+ * @returns the objects to write
+ */
+export function selectForCopy(objects: unknown[], currentIds: ReadonlySet<string>, since?: Date): unknown[] {
+  if (since === undefined) return objects
+  return objects.filter((object) => {
+    const { id, updatedAt } = (object ?? {}) as { id?: unknown; updatedAt?: unknown }
+    if (typeof updatedAt === 'string' && updatedAt !== '') return new Date(updatedAt).getTime() >= since.getTime()
+    return typeof id === 'string' && !currentIds.has(id)
+  })
+}
+
+/** Collects the string `id`s of a list of objects. */
+export function idsOf(objects: unknown): Set<string> {
+  const ids = new Set<string>()
+  if (!Array.isArray(objects)) return ids
+  for (const object of objects) {
+    const id = (object as { id?: unknown } | null)?.id
+    if (typeof id === 'string') ids.add(id)
+  }
+  return ids
+}
+
 export interface StepStats {
   created: number
   updated: number
