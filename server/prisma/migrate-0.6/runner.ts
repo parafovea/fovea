@@ -20,7 +20,7 @@ import { backfillWorldStates } from './backfill-world.js'
 import { backfillSummaries } from './backfill-summaries.js'
 import { backfillAnnotations } from './backfill-annotations.js'
 import { backfillClaims } from './backfill-claims.js'
-import { addStats, type StepStats } from './helpers.js'
+import { addStats, COPIED_ANNOTATIONS, type StepStats } from './helpers.js'
 
 /** Options controlling a backfill run. */
 export interface BackfillOptions {
@@ -130,7 +130,12 @@ export async function runBackfill(
   log('Step 5/6: annotations -> annotation layers + layers annotations')
   await foldPages(
     (skip, take) =>
-      prisma.annotation.findMany({ where: sinceFilter, orderBy: { id: 'asc' }, skip, take }),
+      prisma.annotation.findMany({
+        where: { ...sinceFilter, ...COPIED_ANNOTATIONS },
+        orderBy: { id: 'asc' },
+        skip,
+        take,
+      }),
     batchSize,
     (rows) => backfillAnnotations(prisma, rows),
     report.annotations,

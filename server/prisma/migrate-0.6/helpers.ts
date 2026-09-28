@@ -35,6 +35,17 @@ export function requiredJson(value: unknown): Prisma.InputJsonValue | typeof Pri
 }
 
 /** A per-source tally the runner aggregates and prints. */
+/**
+ * Selects the legacy annotations the copy carries forward. Rows tagged
+ * `demo-fixture:<stableId>` were written by the 0.5 seed onto the tour videos;
+ * the 0.6 seed recreates the same fixtures under deterministic ids, so copying
+ * them would show every fixture twice. The copy and the verifier both apply this
+ * filter, so count parity holds over the rows that are copied.
+ */
+export const COPIED_ANNOTATIONS: Prisma.AnnotationWhereInput = {
+  NOT: { source: { startsWith: 'demo-fixture' } },
+}
+
 export interface StepStats {
   created: number
   updated: number

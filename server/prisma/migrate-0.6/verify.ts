@@ -43,6 +43,8 @@ import {
   reuseClaimNodeId,
   reuseWorldObjectNodeId,
 } from './id-map.js'
+import { legacyTypesOf } from './backfill-ontologies.js'
+import { COPIED_ANNOTATIONS } from './helpers.js'
 
 /** The four ontology buckets and the layers `typeKind` each maps to. */
 const ONTOLOGY_BUCKETS: ReadonlyArray<readonly [bucket: string, typeKind: string]> = [
@@ -143,14 +145,33 @@ export function reconMatchesSource(recon: unknown, source: unknown, epsilon = DE
     const sourceIso = source instanceof Date ? source.toISOString() : source
     return reconIso === sourceIso
   }
+  // The view-model defaults an absent list field (a type's roles, filler types,
+  // or relation endpoints) to `[]`, so an empty reconstructed list matches a
+  // source that omits the field.
+  if (Array.isArray(recon) && source === undefined) {
+    return recon.every((item) => isEmptyTextItem(item))
+  }
   if (Array.isArray(recon) && Array.isArray(source)) {
-    if (recon.length !== source.length) return false
-    return recon.every((item, index) => reconMatchesSource(item, source[index], epsilon))
+    // An empty text gloss item carries no content, and the bridges drop it on
+    // write, so it is not a mis-mapped field.
+    const reconItems = recon.filter((item) => !isEmptyTextItem(item))
+    const sourceItems = source.filter((item) => !isEmptyTextItem(item))
+    if (reconItems.length !== sourceItems.length) return false
+    return reconItems.every((item, index) => reconMatchesSource(item, sourceItems[index], epsilon))
   }
   if (isPlainObject(recon) && isPlainObject(source)) {
     return Object.keys(recon).every((key) => reconMatchesSource(recon[key], source[key], epsilon))
   }
   return false
+}
+
+/** Whether a value is a gloss text item with no content. */
+function isEmptyTextItem(value: unknown): boolean {
+  return (
+    isPlainObject(value) &&
+    value.type === 'text' &&
+    (value.content === undefined || (typeof value.content === 'string' && value.content.trim() === ''))
+  )
 }
 
 /** Indexes a list of `{ id }` objects by id for id-matched fidelity comparison. */
@@ -179,7 +200,7 @@ export async function runVerify(
   let contentChecked = 0
 
   // --- Annotations: round-trip + 1:1 count parity --------------------------
-  const annotations = await prisma.annotation.findMany({ where: sinceFilter })
+  const annotations = await prisma.annotation.findMany({ where: { ...sinceFilter, ...COPIED_ANNOTATIONS } })
   const frameRateCache = new Map<string, number>()
 
   for (const annotation of annotations) {
@@ -247,7 +268,7 @@ export async function runVerify(
     const { aggregate: reconOntology } = await readOntologyAggregate(prisma, ontology.personaId)
     const reconOntologyRecord = reconOntology as unknown as Record<string, unknown>
     for (const [bucket, typeKind] of ONTOLOGY_BUCKETS) {
-      const types = Array.isArray(record[bucket]) ? (record[bucket] as Array<{ id: string }>) : []
+      const types = legacyTypesOf(record[bucket]) as Array<{ id: string }>
       const reconBucket = Array.isArray(reconOntologyRecord[bucket])
         ? byId(reconOntologyRecord[bucket] as Array<{ id: string }>)
         : new Map<string, Record<string, unknown>>()

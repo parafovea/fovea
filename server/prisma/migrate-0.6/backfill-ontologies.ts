@@ -29,11 +29,36 @@ import type { StepStats } from './helpers.js'
 /** Assembles the aggregate the ontology lens consumes from a legacy row. */
 function aggregateOf(row: Ontology): PersonaOntologyAggregate {
   return {
-    entityTypes: (row.entityTypes as unknown[]) ?? [],
-    eventTypes: (row.eventTypes as unknown[]) ?? [],
-    roleTypes: (row.roleTypes as unknown[]) ?? [],
-    relationTypes: (row.relationTypes as unknown[]) ?? [],
+    entityTypes: legacyTypesOf(row.entityTypes),
+    eventTypes: legacyTypesOf(row.eventTypes),
+    roleTypes: legacyTypesOf(row.roleTypes),
+    relationTypes: legacyTypesOf(row.relationTypes),
   }
+}
+
+/**
+ * Normalizes one legacy ontology type onto the view-model's `gloss` field.
+ *
+ * Types written by 0.5 seed scripts carry a plain-string `description` and no
+ * `gloss`; the view-model reads only `gloss`, so the description becomes a
+ * single text gloss item. A type that already has a `gloss` array is returned
+ * unchanged. The verifier compares reconstructions against this same
+ * normalization, so the copy and its check agree on the source shape.
+ *
+ * @param type - one element of a legacy type bucket
+ * @returns the type with its description carried as gloss
+ */
+export function legacyTypeOf(type: unknown): unknown {
+  if (typeof type !== 'object' || type === null || Array.isArray(type)) return type
+  const record = type as Record<string, unknown>
+  if (Array.isArray(record.gloss) || typeof record.description !== 'string') return type
+  const gloss = record.description.trim() === '' ? [] : [{ type: 'text', content: record.description }]
+  return { ...record, gloss }
+}
+
+/** Normalizes every type in a legacy bucket with {@link legacyTypeOf}. */
+export function legacyTypesOf(bucket: unknown): unknown[] {
+  return Array.isArray(bucket) ? bucket.map(legacyTypeOf) : []
 }
 
 /**
