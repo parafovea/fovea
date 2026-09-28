@@ -150,6 +150,18 @@ export interface VideoAnnotationSource {
   keyframes: VideoKeyframe[]
   /** The track this annotation joins, or null when its sequence carries no track. */
   track: VideoTrack | null
+  /**
+   * Tracker provenance for a sequence that carries a tracker name or confidence
+   * but no track id, which the annotation's own features hold; null otherwise.
+   */
+  untrackedProvenance: VideoTrackProvenance | null
+}
+
+/** A tracker name and confidence recorded on a sequence without a track id. */
+export interface VideoTrackProvenance {
+  trackingSource?: FoveaTrackingSource
+  /** The confidence as a 0-1 float. */
+  trackingConfidence?: number
 }
 
 /**
@@ -254,6 +266,7 @@ export function toVideoAnnotationSource(
     interpolation: anchor.interpolation ?? 'linear',
     keyframes: (anchor.keyframes ?? []).map(flattenKeyframe),
     track: null,
+    untrackedProvenance: null,
   }
   if (anchor.interpolationUri) source.interpolationUri = anchor.interpolationUri
 
@@ -263,6 +276,11 @@ export function toVideoAnnotationSource(
     if (seq.trackingSource !== undefined) track.trackingSource = seq.trackingSource
     if (seq.trackingConfidence !== undefined) track.trackingConfidence = seq.trackingConfidence
     source.track = track
+  } else if (seq.trackingSource !== undefined || seq.trackingConfidence !== undefined) {
+    const provenance: VideoTrackProvenance = {}
+    if (seq.trackingSource !== undefined) provenance.trackingSource = seq.trackingSource
+    if (seq.trackingConfidence !== undefined) provenance.trackingConfidence = seq.trackingConfidence
+    source.untrackedProvenance = provenance
   }
 
   return source
@@ -479,6 +497,8 @@ export interface LayersAnnotationObject {
   ontologyTypeRef?: string
   /** The denotation link to a graph node, as a role/argument reference. */
   arguments?: Array<{ role: string; target: { recordRef: string } }>
+  /** Open features; carries an untracked sequence's tracker provenance. */
+  features?: { entries: Array<{ key: string; value: string }> }
 }
 
 /**
@@ -545,6 +565,33 @@ export interface VideoLayersRecords {
 /** A cluster feature key carrying the tracked-sequence confidence (0-1000 int). */
 const TRACK_CONFIDENCE_KEY = 'trackingConfidence'
 
+/** Annotation feature key for an untracked sequence's tracker name. */
+const TRACKING_SOURCE_KEY = 'trackingSource'
+
+/** Encodes untracked tracker provenance as annotation features (confidence on the 0-1000 scale). */
+function provenanceFeatureEntries(provenance: VideoTrackProvenance): Array<{ key: string; value: string }> {
+  const entries: Array<{ key: string; value: string }> = []
+  if (provenance.trackingSource !== undefined) {
+    entries.push({ key: TRACKING_SOURCE_KEY, value: provenance.trackingSource })
+  }
+  if (provenance.trackingConfidence !== undefined) {
+    entries.push({ key: TRACK_CONFIDENCE_KEY, value: String(to1000(provenance.trackingConfidence)) })
+  }
+  return entries
+}
+
+/** Decodes the provenance {@link provenanceFeatureEntries} wrote into a row's features. */
+function provenanceFromFeatures(features: unknown): VideoTrackProvenance {
+  const entries = (features as { entries?: Array<{ key?: unknown; value?: unknown }> } | null)?.entries ?? []
+  const provenance: VideoTrackProvenance = {}
+  for (const entry of entries) {
+    if (typeof entry.value !== 'string') continue
+    if (entry.key === TRACKING_SOURCE_KEY) provenance.trackingSource = entry.value as FoveaTrackingSource
+    if (entry.key === TRACK_CONFIDENCE_KEY) provenance.trackingConfidence = from1000(Number(entry.value))
+  }
+  return provenance
+}
+
 /** A fixed creation timestamp for the composed records (identity is deterministic). */
 const COMPOSED_AT = '1970-01-01T00:00:00.000Z'
 
@@ -606,6 +653,9 @@ export function composeVideoRecords(
   if (ontologyTypeRef !== undefined) annotation.ontologyTypeRef = ontologyTypeRef
   if (graphNode) {
     annotation.arguments = [{ role: 'denotes', target: { recordRef: graphNode._id } }]
+  }
+  if (source.untrackedProvenance) {
+    annotation.features = { entries: provenanceFeatureEntries(source.untrackedProvenance) }
   }
 
   const annotationLayer: AnnotationLayerRecord = {
@@ -679,6 +729,8 @@ export interface MappedLayersAnnotation {
   confidence: number | null
   ontologyTypeRefId: string | null
   denotesNode: MappedDenotesNode | null
+  /** Open features: an untracked sequence's tracker provenance, or null. */
+  features: { entries: Array<{ key: string; value: string }> } | null
   startMs: number
   endMs: number
 }
@@ -739,6 +791,7 @@ export function videoRecordsToRows(records: VideoLayersRecords): AnnotationLayer
     denotesNode,
     startMs: anchor.temporalSpan.start,
     endMs: anchor.temporalSpan.ending,
+    features: annotationObject.features ?? null,
   }
 
   let mappedTrack: MappedTrack | null = null
@@ -1037,6 +1090,10 @@ export async function layersToAnnotationViaLens(
     if (track.trackingConfidence !== undefined) {
       frames.trackingConfidence = from1000(track.trackingConfidence)
     }
+  } else {
+    const provenance = provenanceFromFeatures(row.features)
+    if (provenance.trackingSource !== undefined) frames.trackingSource = provenance.trackingSource
+    if (provenance.trackingConfidence !== undefined) frames.trackingConfidence = provenance.trackingConfidence
   }
 
   // An object layer's annotation is `object`; a persona layer's is a `type`
@@ -1136,6 +1193,10 @@ export function layersToAnnotation(
     if (track.trackingConfidence !== undefined) {
       frames.trackingConfidence = from1000(track.trackingConfidence)
     }
+  } else {
+    const provenance = provenanceFromFeatures(row.features)
+    if (provenance.trackingSource !== undefined) frames.trackingSource = provenance.trackingSource
+    if (provenance.trackingConfidence !== undefined) frames.trackingConfidence = provenance.trackingConfidence
   }
 
   // An object layer's annotation is `object`; a persona layer's is a `type`

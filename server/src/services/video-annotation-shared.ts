@@ -157,6 +157,8 @@ export interface MappedLayersAnnotation {
    * side derives `type`/`linkType` from its `nodeType`.
    */
   denotesNode: MappedDenotesNode | null
+  /** Open features: an untracked sequence's tracker provenance, or null. */
+  features: { entries: Array<{ key: string; value: string }> } | null
   startMs: number
   endMs: number
 }
@@ -178,6 +180,8 @@ export interface StoredLayersAnnotation {
   ontologyTypeRefId: string | null
   denotesNodeId: string | null
   createdByUserId: string | null
+  /** The row's open features (an untracked sequence's tracker provenance). */
+  features?: unknown
   createdAt: Date
   updatedAt: Date
 }

@@ -128,6 +128,8 @@ export async function writeVideoAnnotation(
     denotesNodeId,
     startMs: mapping.annotation.startMs,
     endMs: mapping.annotation.endMs,
+    features:
+      mapping.annotation.features === null ? Prisma.DbNull : toJsonInput(mapping.annotation.features),
   }
 
   await prisma.layersAnnotation.upsert({

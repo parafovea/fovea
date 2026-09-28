@@ -1123,6 +1123,39 @@ function orderedCoordinates(coordinates: Record<string, unknown>, system: string
   return ordered.filter((v): v is number => typeof v === 'number')
 }
 
+/** Coordinate keys the WKT geometry itself carries. */
+const GEOMETRY_COORDINATE_KEYS = new Set(['latitude', 'longitude', 'altitude', 'x', 'y', 'z'])
+
+/** Feature-key prefix for coordinate fields the WKT geometry cannot carry. */
+const COORDINATE_FEATURE_PREFIX = 'coordinates.'
+
+/**
+ * Encodes a point's non-geometry coordinate fields (a Wikidata `globe` or
+ * `precision`, for instance) as featureMap entries, JSON-encoded so the value's
+ * type survives the string-valued feature.
+ */
+function coordinateExtras(coordinates: Record<string, unknown>): Array<{ key: string; value: string }> {
+  return Object.entries(coordinates)
+    .filter(([key, value]) => !GEOMETRY_COORDINATE_KEYS.has(key) && value !== null && value !== undefined)
+    .map(([key, value]) => ({ key: `${COORDINATE_FEATURE_PREFIX}${key}`, value: JSON.stringify(value) }))
+}
+
+/** Decodes the coordinate fields {@link coordinateExtras} wrote into a spatial value's features. */
+function readCoordinateExtras(value: Record<string, unknown> | undefined): Record<string, unknown> {
+  const features = value?.features as { entries?: Array<{ key?: unknown; value?: unknown }> } | undefined
+  const out: Record<string, unknown> = {}
+  for (const entry of features?.entries ?? []) {
+    if (typeof entry.key !== 'string' || !entry.key.startsWith(COORDINATE_FEATURE_PREFIX)) continue
+    if (typeof entry.value !== 'string') continue
+    try {
+      out[entry.key.slice(COORDINATE_FEATURE_PREFIX.length)] = JSON.parse(entry.value)
+    } catch {
+      out[entry.key.slice(COORDINATE_FEATURE_PREFIX.length)] = entry.value
+    }
+  }
+  return out
+}
+
 /** Reconstructs a coordinate object from a numeric tuple per the coordinate system. */
 function coordinatesFromNumbers(numbers: number[], system: string | null): Record<string, unknown> {
   const out: Record<string, unknown> = {}
@@ -1187,6 +1220,8 @@ function spatialExpressionFor(
         value.geometry = projectPointGeometry(lenses, numbers)
         value.type = 'point'
         value.dimensions = numbers.length >= 3 ? 3 : 2
+        const extras = coordinateExtras(coordinates as Record<string, unknown>)
+        if (extras.length > 0) value.features = { entries: extras }
       }
     }
   }
@@ -1207,7 +1242,7 @@ function readSpatial(annotation: WorldAnnotationRow): Record<string, unknown> {
   } else {
     out.locationType = 'point'
     const numbers = parseWktPoint(value?.geometry)
-    if (numbers) out.coordinates = coordinatesFromNumbers(numbers, system)
+    if (numbers) out.coordinates = { ...coordinatesFromNumbers(numbers, system), ...readCoordinateExtras(value) }
   }
   return out
 }
