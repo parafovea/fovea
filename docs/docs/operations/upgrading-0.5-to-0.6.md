@@ -20,9 +20,10 @@ minor upgrade.
 
 ## Do you need this page?
 
-- **Upgrading a 0.5.x deployment that has data:** yes. The copy is
-  automatic, but take the backup in step 1 and check the backend
-  log in step 3.
+- **Upgrading a 0.5.x or 0.4.x deployment that has data:** yes. The
+  copy is automatic, but take the backup in step 1 and check the
+  backend log in step 3. A 0.4.x deployment upgrades directly: the
+  migrations bring its schema through 0.5 before the copy runs.
 - **Fresh 0.6 install:** no. There is no 0.5 data to copy, the
   startup step does nothing, and every later release installs
   without any extra step.
@@ -49,7 +50,7 @@ proven:
 
 The copy is additive: it never modifies a legacy row. Until you
 install the release that removes the legacy tables, rolling back
-to 0.5.x needs nothing beyond switching back to the 0.5.x code.
+to 0.5.11 needs nothing beyond switching back to its code.
 
 :::warning Do not skip 0.6
 Run 0.6.x at least once, so the copy completes, **before**
@@ -280,17 +281,21 @@ anyone has worked in 0.6, for instance to pick up rows written to
 0.5 after the first copy.
 :::
 
-## Rolling back to 0.5.x
+## Rolling back
 
 Before you install the release that removes the legacy tables, a
-rollback needs no restore, because the copy never modified the
-legacy tables:
+rollback to 0.5.11 needs no restore, because the copy never
+modified the legacy tables:
 
 ```bash
 git checkout v0.5.11
 docker compose build backend frontend
 docker compose up -d
 ```
+
+This holds even if you upgraded from 0.4.x, because the upgrade
+already moved your schema through 0.5. To return to 0.4.x itself,
+restore the Postgres backup from step 1 instead.
 
 The 0.5 application reads its original tables, and it ignores the
 layers rows the copy wrote. Its startup `prisma migrate deploy`
