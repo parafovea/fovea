@@ -29,6 +29,33 @@ jobs:
           echo "Checking fovea.video certificate..."
           echo | openssl s_client -servername fovea.video -connect fovea.video:443 2>/dev/null | openssl x509 -noout -dates
 
+      - name: Set up SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.DEPLOY_SSH_KEY }}
+
+      - name: Check demo disk usage
+        # Fails at 80% of the root filesystem, well before a full disk wedges the
+        # deployment, whatever the cause. A failed scheduled run notifies the
+        # repository's workflow owner. The report names the largest Docker
+        # volumes and the total container log size, the usual places growth hides.
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts 2>/dev/null
+          ssh ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} '
+            set -e
+            used=$(df --output=pcent / | tail -1 | tr -dc 0-9)
+            echo "Root filesystem: ${used}% used"
+            df -h /
+            echo "Largest Docker volumes:"
+            sudo sh -c "du -sh /var/lib/docker/volumes/*" 2>/dev/null | sort -h | tail -5
+            echo "Container logs: $(sudo du -sh /var/lib/docker/containers 2>/dev/null | cut -f1)"
+            if [ "$used" -ge 80 ]; then
+              echo "::error::demo.fovea.video root filesystem is ${used}% full"
+              exit 1
+            fi
+          '
+
       - name: Notify on failure
         if: failure()
         run: |
