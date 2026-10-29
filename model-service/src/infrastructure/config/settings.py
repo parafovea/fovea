@@ -20,12 +20,11 @@ from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar, cast
 
 import didactic.api as dx
-from didactic.settings import EnvSource
+from didactic.settings import EnvSource, Layer, Origin, Source
 from didactic.settings import Settings as DxSettings
-from didactic.settings._settings import _Source
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping, Sequence
+    from collections.abc import Mapping
 
     from didactic.types._typing import FieldValue, JsonObject
 
@@ -64,7 +63,7 @@ def _to_path(value: object) -> FieldValue:
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class _AliasEnvSource(_Source):
+class _AliasEnvSource(Source):
     """Read fields from the first set variable among a list of aliases.
 
     didactic's :class:`~didactic.settings.EnvSource` maps a field name to a
@@ -84,17 +83,17 @@ class _AliasEnvSource(_Source):
     aliases: Mapping[str, tuple[str, ...]]
     name: str = "env-alias"
 
-    def fetch(self, fields: Sequence[str]) -> JsonObject:
-        """Return ``{field: value}`` for each alias-backed field that is set."""
-        out: JsonObject = {}
+    def layer(self, schema: type[dx.Model]) -> Layer | None:
+        """Return a layer of each alias-backed field that is set, or ``None``."""
+        document: JsonObject = {}
         for field_name, names in self.aliases.items():
-            if field_name not in fields:
-                continue
             for env_name in names:
                 if env_name in os.environ:
-                    out[field_name] = os.environ[env_name]
+                    document[field_name] = os.environ[env_name]
                     break
-        return out
+        if not document:
+            return None
+        return Layer(origin=Origin("source", name=self.name), document=document, textual=True)
 
 
 class Settings(DxSettings):
@@ -166,7 +165,7 @@ class Settings(DxSettings):
     model_service_admin_token: str | None = None
     hf_token: str | None = None
 
-    __sources__: ClassVar[tuple[_Source, ...]] = (
+    __sources__: ClassVar[tuple[Source, ...]] = (
         EnvSource(),
         _AliasEnvSource(
             aliases={
