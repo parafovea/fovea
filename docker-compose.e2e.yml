@@ -2,8 +2,15 @@
 # Lightweight stack for running Playwright E2E tests in CI
 name: fovea-e2e
 
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   frontend:
+    logging: *default-logging
     build:
       context: .
       dockerfile: annotation-tool/Dockerfile
@@ -31,6 +38,7 @@ services:
       start_period: 10s
 
   backend:
+    logging: *default-logging
     build:
       context: .
       dockerfile: server/Dockerfile
@@ -71,6 +79,7 @@ services:
 
   # Lightweight mock model service for E2E tests
   mock-model-service:
+    logging: *default-logging
     build:
       context: ./test-utils
       dockerfile: Dockerfile.mock-model-service
@@ -93,6 +102,7 @@ services:
   # Model service not needed for basic E2E tests
   # Can be enabled if tests require AI features
   model-service:
+    logging: *default-logging
     build:
       context: ./model-service
       dockerfile: Dockerfile
@@ -121,6 +131,7 @@ services:
     profiles: ["with-models"]  # Only start if explicitly requested
 
   postgres:
+    logging: *default-logging
     image: pgvector/pgvector:pg16
     environment:
       - POSTGRES_USER=fovea
@@ -139,6 +150,7 @@ services:
       - /var/lib/postgresql/data  # Use tmpfs for faster tests
 
   redis:
+    logging: *default-logging
     image: redis:7-alpine
     ports:
       - "6380:6379"  # Different port to avoid conflicts

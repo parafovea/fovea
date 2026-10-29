@@ -11,8 +11,15 @@
 #
 # See docs/docs/reference/docker-commands.md for full documentation.
 
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   frontend:
+    logging: *default-logging
     build:
       target: builder  # Use builder stage for development
     working_dir: /repo/annotation-tool
@@ -26,6 +33,7 @@ services:
     command: ./node_modules/.bin/vite --host 0.0.0.0 --port 3000
 
   backend:
+    logging: *default-logging
     build:
       target: builder  # Use builder stage which has devDependencies (tsx)
     working_dir: /repo/server
@@ -37,6 +45,7 @@ services:
     command: sh -c "./node_modules/.bin/prisma migrate deploy && ./node_modules/.bin/tsx prisma/migrate-0.6/cli.ts auto && ./node_modules/.bin/tsx prisma/seed.ts && pnpm dev"
 
   model-service:
+    logging: *default-logging
     volumes:
       - ./model-service/src:/app/src:ro
     environment:
@@ -45,6 +54,7 @@ services:
 
   # Add Jaeger for distributed tracing in development
   jaeger:
+    logging: *default-logging
     image: jaegertracing/all-in-one:latest
     environment:
       - COLLECTOR_OTLP_ENABLED=true
@@ -58,6 +68,7 @@ services:
 
   # Development mail catcher for testing email
   maildev:
+    logging: *default-logging
     image: maildev/maildev:latest
     ports:
       - "1080:1080"  # Web UI
