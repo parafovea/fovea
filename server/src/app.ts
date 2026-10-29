@@ -17,6 +17,7 @@ import { ZodError } from 'zod'
 import { AppError, TooManyRequestsError } from './lib/errors.js'
 import { requireAdmin, requireAuth } from './middleware/auth.js'
 import { recordApiError } from './lib/errorMetrics.js'
+import { routeLabel } from './lib/metric-labels.js'
 
 /**
  * Builds and configures the Fastify application instance.
@@ -149,7 +150,7 @@ export async function buildApp() {
   app.addHook('onResponse', async (request, reply) => {
     // Record API request metrics
     const duration = Date.now() - (request.requestStartTime || Date.now())
-    const route = request.routeOptions.url || request.url
+    const route = routeLabel(request)
     const method = request.method
     const statusCode = reply.statusCode
 
@@ -182,7 +183,7 @@ export async function buildApp() {
    * - Unknown errors: Logs full error and returns safe generic 500 response
    */
   app.setErrorHandler((error: FastifyError, request, reply) => {
-    const route = request.routeOptions?.url || request.url
+    const route = routeLabel(request)
     const method = request.method
 
     // Handle known AppError instances
