@@ -130,4 +130,4 @@ export type ExperimentDefGuidelinesFormat = "plain" | "html" | "markdown" | stri
 
 export type ExperimentDefMeasureType = "acceptability" | "inference" | "similarity" | "plausibility" | "comprehension" | "preference" | "extraction" | "reading-time" | "production" | "custom" | string & {};
 
-export type ExperimentDefTaskType = "forced-choice" | "multi-select" | "ordinal-scale" | "magnitude" | "binary" | "categorical" | "free-text" | "cloze" | "span-labeling" | "custom" | string & {};
+export type ExperimentDefTaskType = "forced-choice" | "multi-select" | "ordinal-scale" | "magnitude" | "continuous" | "binary" | "categorical" | "free-text" | "cloze" | "span-labeling" | "custom" | string & {};

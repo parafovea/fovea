@@ -6,6 +6,20 @@ import type { Constraint, FeatureMap, ObjectRef, Span } from "./../defs";
 // Shared object definitions for the judgment namespace.
 
 /**
+* An exact finite decimal represented as coefficient multiplied by 10 to the exponent. For example, 0.73 is coefficient 73 with exponent -2. This carrier permits negative values and values outside 0 to 1; the experiment declaration owns any range constraint.
+*/
+export interface DecimalValue {
+  /**
+  * Signed integer coefficient of the decimal value.
+  */
+  coefficient: number;
+  /**
+  * Base-10 exponent applied to coefficient.
+  */
+  exponent: number;
+}
+
+/**
 * Experiment design parameters for item distribution, ordering, and timing.
 */
 export interface ExperimentDesign {
@@ -56,6 +70,10 @@ export interface Judgment {
   */
   confidence?: number;
   /**
+  * Exact finite decimal response for continuous tasks. The value is coefficient multiplied by 10 to the exponent; it is distinct from the integer scalarValue arm.
+  */
+  continuousValue?: DecimalValue;
+  /**
   * Open-ended features carrying judgment detail not covered by the typed fields.
   */
   features?: FeatureMap;
@@ -80,7 +98,7 @@ export interface Judgment {
   */
   responseTimeMs?: number;
   /**
-  * Numeric response value (ordinal-scale rating, magnitude estimate, or rank position).
+  * Integer response value (ordinal-scale rating, integer magnitude estimate, or rank position). Use continuousValue for an exact decimal response.
   */
   scalarValue?: number;
   /**
