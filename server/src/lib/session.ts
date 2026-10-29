@@ -6,6 +6,20 @@ import { prisma } from './prisma.js'
  * Generates a secure random session token.
  * @returns 32-byte hex string (64 characters)
  */
+const MS_PER_DAY = 24 * 60 * 60 * 1000
+
+/**
+ * The instant `days` whole days from now, as a fixed duration. Calendar-day
+ * arithmetic in local time would make a session an hour shorter or longer
+ * whenever its lifetime crosses a daylight-saving change.
+ *
+ * @param days - the session lifetime in days
+ * @returns the expiry instant
+ */
+export function daysFromNow(days: number): Date {
+  return new Date(Date.now() + days * MS_PER_DAY)
+}
+
 export function generateSessionToken(): string {
   return crypto.randomBytes(32).toString('hex')
 }
@@ -26,8 +40,7 @@ export async function createSession(
 ) {
   const token = generateSessionToken()
   const daysToExpire = rememberMe ? 30 : config.auth.sessionTimeoutDays
-  const expiresAt = new Date()
-  expiresAt.setDate(expiresAt.getDate() + daysToExpire)
+  const expiresAt = daysFromNow(daysToExpire)
 
   const session = await prisma.session.create({
     data: {

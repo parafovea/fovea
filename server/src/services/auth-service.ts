@@ -1,6 +1,7 @@
 import crypto from 'crypto'
 import { config } from '../config.js'
 import { prisma } from '../lib/prisma.js'
+import { daysFromNow } from '../lib/session.js'
 import { User, Session } from '@prisma/client'
 import { AuthProvider, AuthCredentials, AuthResult } from './auth/types.js'
 import { PasswordAuthProvider } from './auth/password-provider.js'
@@ -65,8 +66,7 @@ export class AuthService {
 
     // Calculate expiration
     const expiresInDays = options.expiresInDays || 7
-    const expiresAt = new Date()
-    expiresAt.setDate(expiresAt.getDate() + expiresInDays)
+    const expiresAt = daysFromNow(expiresInDays)
 
     // Store session in database
     await prisma.session.create({
@@ -213,8 +213,7 @@ export class AuthService {
 
     // Calculate expiration
     const expiresInDays = options.expiresInDays || 7
-    const expiresAt = new Date()
-    expiresAt.setDate(expiresAt.getDate() + expiresInDays)
+    const expiresAt = daysFromNow(expiresInDays)
 
     // Use transaction to atomically delete old session and create new one
     const result = await prisma.$transaction(async (tx) => {
