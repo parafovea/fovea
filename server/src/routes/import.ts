@@ -3,7 +3,7 @@ import { FastifyPluginAsync } from 'fastify'
 import multipart from '@fastify/multipart'
 import { Prisma } from '@prisma/client'
 import { ImportHandler } from '../services/import-handler.js'
-import { DEFAULT_IMPORT_OPTIONS, ImportOptions } from '../services/import-types.js'
+import { DEFAULT_IMPORT_OPTIONS, ImportOptions, ImportLine, ImportPreview } from '../services/import-types.js'
 import { ValidationError, InternalError } from '../lib/errors.js'
 import { requireAuth } from '../middleware/auth.js'
 import { buildAbilities } from '../middleware/abilities.js'
@@ -29,6 +29,28 @@ const ErrorSchema = Type.Object({
 })
 
 const ConflictSchema = Type.Unknown()
+
+/** Maps supported record types to their import preview counters. */
+const previewCountKeys: Record<ImportLine['type'], keyof ImportPreview['counts'] | null> = {
+  persona: 'personas',
+  ontology: 'ontologies',
+  entity: 'entities',
+  event: 'events',
+  time: 'times',
+  entityCollection: 'entityCollections',
+  entity_collection: 'entityCollections',
+  eventCollection: 'eventCollections',
+  event_collection: 'eventCollections',
+  timeCollection: 'timeCollections',
+  time_collection: 'timeCollections',
+  relation: 'relations',
+  summary: 'summaries',
+  claim: 'claims',
+  claim_relation: 'claimRelations',
+  annotation: 'annotations',
+  video: null,
+  metadata: null,
+}
 
 /**
  * Fastify plugin for import-related routes.
@@ -199,6 +221,18 @@ const importRoute: FastifyPluginAsync = async (fastify) => {
       response: {
         200: Type.Object({
           counts: Type.Object({
+            personas: Type.Integer({ minimum: 0 }),
+            ontologies: Type.Integer({ minimum: 0 }),
+            entities: Type.Integer({ minimum: 0 }),
+            events: Type.Integer({ minimum: 0 }),
+            times: Type.Integer({ minimum: 0 }),
+            entityCollections: Type.Integer({ minimum: 0 }),
+            eventCollections: Type.Integer({ minimum: 0 }),
+            timeCollections: Type.Integer({ minimum: 0 }),
+            relations: Type.Integer({ minimum: 0 }),
+            summaries: Type.Integer({ minimum: 0 }),
+            claims: Type.Integer({ minimum: 0 }),
+            claimRelations: Type.Integer({ minimum: 0 }),
             annotations: Type.Number(),
             totalKeyframes: Type.Number(),
             singleKeyframeSequences: Type.Number()
@@ -246,7 +280,19 @@ const importRoute: FastifyPluginAsync = async (fastify) => {
       }
 
       // Count items and validate
-      const counts = {
+      const counts: ImportPreview['counts'] = {
+        personas: 0,
+        ontologies: 0,
+        entities: 0,
+        events: 0,
+        times: 0,
+        entityCollections: 0,
+        eventCollections: 0,
+        timeCollections: 0,
+        relations: 0,
+        summaries: 0,
+        claims: 0,
+        claimRelations: 0,
         annotations: 0,
         totalKeyframes: 0,
         singleKeyframeSequences: 0
@@ -255,9 +301,10 @@ const importRoute: FastifyPluginAsync = async (fastify) => {
       const warnings: string[] = []
 
       for (const line of importLines) {
-        if (line.type === 'annotation') {
-          counts.annotations++
+        const countKey = previewCountKeys[line.type]
+        if (countKey) counts[countKey]++
 
+        if (line.type === 'annotation') {
           // Count keyframes
           const sequence = line.data.boundingBoxSequence as { boxes?: Array<{ isKeyframe?: boolean }> } | undefined
           if (sequence && sequence.boxes) {

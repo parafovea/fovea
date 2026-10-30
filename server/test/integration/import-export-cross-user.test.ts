@@ -402,8 +402,26 @@ describe('Cross-user import/export round-trip', () => {
     const preview = previewResponse.json()
 
     // Conflicts should be detected (ID collisions)
-    expect(preview.conflicts.length).toBeGreaterThanOrEqual(0)
+    expect(preview.conflicts).toContainEqual(expect.objectContaining({
+      type: 'duplicate-persona', ownedByImporter: false,
+    }))
     // Counts should reflect the import content
-    expect(preview.counts.annotations).toBeGreaterThanOrEqual(0)
+    expect(preview.counts).toEqual({
+      personas: 1,
+      ontologies: 1,
+      entities: 1,
+      events: 0,
+      times: 0,
+      entityCollections: 0,
+      eventCollections: 0,
+      timeCollections: 0,
+      relations: 0,
+      summaries: 1,
+      claims: 1,
+      claimRelations: 0,
+      annotations: 1,
+      totalKeyframes: 1,
+      singleKeyframeSequences: 1,
+    })
   })
 })

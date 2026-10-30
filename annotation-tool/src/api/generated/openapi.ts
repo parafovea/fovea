@@ -11030,6 +11030,18 @@ export interface paths {
                     content: {
                         "application/json": {
                             counts: {
+                                personas: number;
+                                ontologies: number;
+                                entities: number;
+                                events: number;
+                                times: number;
+                                entityCollections: number;
+                                eventCollections: number;
+                                timeCollections: number;
+                                relations: number;
+                                summaries: number;
+                                claims: number;
+                                claimRelations: number;
                                 annotations: number;
                                 totalKeyframes: number;
                                 singleKeyframeSequences: number;

@@ -26985,11 +26985,71 @@
                     "counts": {
                       "type": "object",
                       "required": [
+                        "personas",
+                        "ontologies",
+                        "entities",
+                        "events",
+                        "times",
+                        "entityCollections",
+                        "eventCollections",
+                        "timeCollections",
+                        "relations",
+                        "summaries",
+                        "claims",
+                        "claimRelations",
                         "annotations",
                         "totalKeyframes",
                         "singleKeyframeSequences"
                       ],
                       "properties": {
+                        "personas": {
+                          "minimum": 0,
+                          "type": "integer"
+                        },
+                        "ontologies": {
+                          "minimum": 0,
+                          "type": "integer"
+                        },
+                        "entities": {
+                          "minimum": 0,
+                          "type": "integer"
+                        },
+                        "events": {
+                          "minimum": 0,
+                          "type": "integer"
+                        },
+                        "times": {
+                          "minimum": 0,
+                          "type": "integer"
+                        },
+                        "entityCollections": {
+                          "minimum": 0,
+                          "type": "integer"
+                        },
+                        "eventCollections": {
+                          "minimum": 0,
+                          "type": "integer"
+                        },
+                        "timeCollections": {
+                          "minimum": 0,
+                          "type": "integer"
+                        },
+                        "relations": {
+                          "minimum": 0,
+                          "type": "integer"
+                        },
+                        "summaries": {
+                          "minimum": 0,
+                          "type": "integer"
+                        },
+                        "claims": {
+                          "minimum": 0,
+                          "type": "integer"
+                        },
+                        "claimRelations": {
+                          "minimum": 0,
+                          "type": "integer"
+                        },
                         "annotations": {
                           "type": "number"
                         },
