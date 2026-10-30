@@ -73,6 +73,10 @@ The 0.6.0 release is a single coordinated landing that moves Fovea's annotations
 
 ### Fixed
 
+- Production Node dependencies resolve without published advisories, with a blocking lockfile audit in release CI. The shadcn generator is a development dependency. Proxy headers require explicit trusted IPs/CIDRs by default; legacy hop counts fail closed under the patched Fastify runtime.
+- Python OpenTelemetry uses the patched header parser and matching instrumentation, with a base-dependency audit in CI. Tour component modules separate React refresh boundaries from stores and hooks, removing the existing frontend lint warnings.
+- Thumbnail generation preserves custom shared video paths. Transcription rejects videos without an audio stream with a client error; real-model browser journeys select an audio-bearing fixture and explicitly request summary generation before claim extraction.
+
 - Pass every sampled frame to SmolVLM summaries and process each frame for single-image Moondream models, instead of silently discarding all but the first frame.
 
 - Keep model-service requests responsive during detection and tracking. Honor the tracking option with the configured tracker, preserve object identities across frames, and remove unsupported per-request tracker controls from the detection dialog.

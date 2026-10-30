@@ -6,7 +6,7 @@ import { describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import type { ReactElement } from 'react'
 import { SaveStatusIndicator } from './SaveStatusIndicator'
-import { AnchorRegistryProvider } from '@/tours/engine/anchorRegistry'
+import { AnchorRegistryProvider } from '@/tours/engine/AnchorRegistryProvider'
 
 /** Render within an anchor registry so the save-indicator tour anchor can register. */
 function renderIndicator(ui: ReactElement) {

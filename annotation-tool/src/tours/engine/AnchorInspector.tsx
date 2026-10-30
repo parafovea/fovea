@@ -22,30 +22,10 @@
 
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import type { CSSProperties } from 'react'
-import { create } from 'zustand'
+import { useAnchorInspectorMode } from './anchorInspectorMode'
 
 import type { AnchorId } from './anchorCatalog'
 import { useAnchorRegistry } from './anchorRegistry'
-
-/** The author-mode flag. When `enabled`, the inspector overlays anchor badges. */
-interface AnchorInspectorMode {
-  /** Whether the inspector overlay is painting anchor badges. */
-  enabled: boolean
-  /** Turn the overlay on or off. */
-  setEnabled: (enabled: boolean) => void
-  /** Flip the overlay between on and off. */
-  toggle: () => void
-}
-
-/**
- * Author-mode toggle store. Any control can read `enabled` to reflect state and
- * call `toggle` / `setEnabled` to drive it.
- */
-export const useAnchorInspectorMode = create<AnchorInspectorMode>((set) => ({
-  enabled: false,
-  setEnabled: (enabled) => set({ enabled }),
-  toggle: () => set((state) => ({ enabled: !state.enabled })),
-}))
 
 type Rect = { x: number; y: number; width: number; height: number }
 

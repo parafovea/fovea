@@ -22,6 +22,7 @@ from typing import TYPE_CHECKING, cast
 import didactic.api as dx
 from fastapi import APIRouter, HTTPException
 
+from src.domain.exceptions import AudioProcessingError
 from src.infrastructure.adapters.inbound.fastapi.dependencies import ModelManagerDep  # noqa: TC001
 from src.infrastructure.adapters.inbound.fastapi.dx_bodies import (
     as_request,
@@ -153,6 +154,8 @@ async def transcribe(
             result: TranscriptionResult = await asyncio.to_thread(
                 model.transcribe, audio_path_real, language=request.language or None
             )
+    except AudioProcessingError as exc:
+        raise HTTPException(status_code=400, detail=exc.reason) from exc
     except Exception as exc:
         logger.exception("Transcription failed")
         raise HTTPException(status_code=500, detail=f"Transcription failed: {exc}") from exc

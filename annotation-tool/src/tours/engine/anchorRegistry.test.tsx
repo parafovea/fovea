@@ -1,7 +1,8 @@
 import { render, screen } from '@testing-library/react'
 import { describe, it, expect } from 'vitest'
 
-import { AnchorRegistry, AnchorRegistryProvider, useAnchorElement, useTourAnchor } from './anchorRegistry'
+import { AnchorRegistry, useAnchorElement, useTourAnchor } from './anchorRegistry'
+import { AnchorRegistryProvider } from './AnchorRegistryProvider'
 
 describe('AnchorRegistry', () => {
   it('registers, reads, and unregisters with change notifications', () => {

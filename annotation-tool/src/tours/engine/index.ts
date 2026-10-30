@@ -13,7 +13,6 @@ export type { AnchorId, AnchorMeta } from './anchorCatalog'
 
 export {
   AnchorRegistry,
-  AnchorRegistryProvider,
   useAnchorRegistry,
   useTourAnchor,
   useAnchorElement,
@@ -33,7 +32,9 @@ export type { TourCapability, TourCapabilityContext } from './capabilities'
 
 export type { TourEvent, TourCloseReason } from './events'
 
-export { AnchorInspector, useAnchorInspectorMode } from './AnchorInspector'
+export { AnchorRegistryProvider } from './AnchorRegistryProvider'
+export { AnchorInspector } from './AnchorInspector'
+export { useAnchorInspectorMode } from './anchorInspectorMode'
 
 export { simulateAction } from './simulateAction'
 export { SpotlightOverlay } from './SpotlightOverlay'

@@ -10,7 +10,7 @@
 .PHONY: help install generate gen-contract \
 	lint lint-frontend lint-backend lint-model-service lint-wikibase \
 	typecheck test test-frontend test-backend test-model-service test-wikibase \
-	build dev-infra stop
+	build audit-dependencies dev-infra stop
 
 help: ## List available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -70,6 +70,9 @@ test-wikibase: ## Wikibase loader tests
 	cd wikibase && uv run pytest
 
 ## --- Build / dev ----------------------------------------------------------
+
+audit-dependencies: ## Audit production Node dependencies for published advisories
+	pnpm audit --prod --audit-level low
 
 build: generate ## Build the frontend and backend
 	pnpm --filter @fovea/annotation-tool build

@@ -39,6 +39,7 @@ services:
       - "127.0.0.1:3001:3001"
     environment:
       - NODE_ENV=${NODE_ENV:-production}
+      - TRUST_PROXY=${TRUST_PROXY:-false}
       - FOVEA_MODE=${FOVEA_MODE:-multi-user}
       - ALLOW_REGISTRATION=${ALLOW_REGISTRATION:-false}
       # Demo deployment flags. FOVEA_DEMO_MODE enables the demo plugin

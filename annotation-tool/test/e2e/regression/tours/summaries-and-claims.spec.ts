@@ -5,7 +5,7 @@
  * workspace, then drives the tour through the engine and asserts every
  * step's anchor resolves and the tour reaches its end.
  */
-import { test, expect } from '../../fixtures/test-context.js'
+import { test } from '../../fixtures/test-context.js'
 import { skipUnlessRealVideoCorpus } from './_skip-unless-real-videos.js'
 import { launchTour, expectTourWalksClean } from './_walk-tour.js'
 import { microventContent } from '@/tours/content/microvent'

@@ -42,10 +42,9 @@ export class DocumentAnnotationPage extends BasePage {
 
   /**
    * Select the workspace persona (the DocumentWorkspace's "Active persona"
-   * shadcn Select) so type options resolve in the picker. Defaults to the
-   * `testPersona` name.
+   * shadcn Select) so type options resolve for the named fixture persona.
    */
-  async selectPersona(name = 'Test Analyst'): Promise<void> {
+  async selectPersona(name: string): Promise<void> {
     const trigger = this.page.getByRole('combobox', { name: /active persona/i })
     await expect(trigger).toBeVisible({ timeout: 10000 })
     await trigger.click()

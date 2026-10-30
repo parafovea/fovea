@@ -97,6 +97,16 @@ network, not the public internet.
   currently-running detection or summarization job; the user
   retries from the UI.
 
+## Optional CPU dependency advisory
+
+The CPU image includes DiskCache through llama-cpp-python. DiskCache 5.6.3
+has an [unpatched deserialization advisory](https://github.com/advisories/GHSA-w8v5-vhqr-4h9v)
+that requires attacker write access to a cache directory subsequently read by
+the application. Fovea's llama.cpp loaders leave that disk cache disabled.
+Keep it disabled when extending these loaders, and restrict model-volume
+write access to the service and trusted operators. This advisory remains in
+scans that include the CPU extra; the base-dependency CI audit excludes that extra.
+
 ## What to plan for
 
 - [Backup and restore](backup-restore.md) for Postgres and the

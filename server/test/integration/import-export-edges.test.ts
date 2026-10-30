@@ -396,14 +396,14 @@ describe('Import/export edge cases', () => {
       expect(history!.filename).not.toContain('/')
     })
 
-    it('filename with embedded newline does not break the ImportHistory write', async () => {
+    it('rejects a raw newline in a filename header without writing import data', async () => {
       const A = await registerAndLogin('userA', 'passA12345')
       const jsonl = JSON.stringify({ type: 'persona', data: { id: '44444444-4444-4444-4444-444444444444', userId: A.userId, name: 'Edge', role: 'r', informationNeed: 'i' } })
-      const odd = 'line1\nline2.jsonl'
-      const res = await importAs(A, jsonl, odd)
-      expect(res.statusCode).toBe(200)
+      const res = await importAs(A, jsonl, 'line1\nline2.jsonl')
+      expect(res.statusCode).toBe(400)
       const history = await prisma.importHistory.findFirst({ where: { importedBy: A.userId } })
-      expect(history?.filename).toBeDefined()
+      expect(history).toBeNull()
+      expect(await prisma.persona.count({ where: { userId: A.userId } })).toBe(0)
     })
   })
 

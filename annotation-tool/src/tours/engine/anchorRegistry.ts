@@ -10,8 +10,7 @@
  * disappears, or swaps. The anchor inspector reads `snapshot()` to list what is
  * currently registered.
  */
-import { createContext, useCallback, useContext, useMemo, useSyncExternalStore } from 'react'
-import type { ReactNode } from 'react'
+import { createContext, useCallback, useContext, useSyncExternalStore } from 'react'
 
 import type { AnchorId } from './anchorCatalog'
 
@@ -56,13 +55,7 @@ export class AnchorRegistry {
   }
 }
 
-const AnchorRegistryContext = createContext<AnchorRegistry | null>(null)
-
-/** Provides one `AnchorRegistry` to the subtree; the engine and every anchored component share it. */
-export function AnchorRegistryProvider({ children }: { children: ReactNode }) {
-  const registry = useMemo(() => new AnchorRegistry(), [])
-  return <AnchorRegistryContext.Provider value={registry}>{children}</AnchorRegistryContext.Provider>
-}
+export const AnchorRegistryContext = createContext<AnchorRegistry | null>(null)
 
 /** The registry for the current subtree. Throws when used outside an `AnchorRegistryProvider`. */
 export function useAnchorRegistry(): AnchorRegistry {

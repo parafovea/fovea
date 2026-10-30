@@ -95,8 +95,8 @@ export const thumbnailRoutes: FastifyPluginAsync<{
       let modelVideoPath: string
 
       if (storageConfig.type === 'local') {
-        // Model service can access local files directly via volume mount
-        modelVideoPath = video.path.replace(storagePath, '/videos')
+        // Preserve shared mount paths; translate only the legacy backend mount.
+        modelVideoPath = video.path.replace(/^\/data\//, '/videos/')
       } else {
         // For S3/hybrid storage, generate a pre-signed URL for model service to download
         // URL expires in 15 minutes (900 seconds) - enough time for thumbnail generation

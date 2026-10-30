@@ -1,8 +1,10 @@
 import { act, cleanup, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { AnchorInspector, useAnchorInspectorMode } from './AnchorInspector'
-import { AnchorRegistryProvider, useTourAnchor } from './anchorRegistry'
+import { AnchorInspector } from './AnchorInspector'
+import { useAnchorInspectorMode } from './anchorInspectorMode'
+import { useTourAnchor } from './anchorRegistry'
+import { AnchorRegistryProvider } from './AnchorRegistryProvider'
 
 function Anchored({ mounted }: { mounted: boolean }) {
   const ref = useTourAnchor('app-shell')

@@ -548,7 +548,13 @@ test.describe('Per-task user journeys against real model-service', () => {
     // gated behind an HF agreement and may not be configured in every
     // booth), click Transcribe Audio, and assert the dialog renders at
     // least one timed segment with a clickable timestamp pill.
-    await openAnnotationWorkspace(page, testVideo.id)
+    // The worker-striped dust-storm fixture has no audio track.
+    const videosResponse = await page.request.get('/api/videos')
+    expect(videosResponse.ok()).toBe(true)
+    const videos = await videosResponse.json() as Array<{ id: string; filename: string }>
+    const audioVideo = videos.find((video) => video.filename === 'mummy-dust.webm')
+    expect(audioVideo, 'the committed transcription fixture must contain audio').toBeDefined()
+    await openAnnotationWorkspace(page, audioVideo!.id)
 
     const transcribeButton = page.getByTestId('transcribe-audio-button')
     await expect(transcribeButton).toBeVisible({ timeout: FAST_UI_WAIT_MS })
@@ -746,29 +752,15 @@ test.describe.serial('Multi-service knowledge-extraction journey', () => {
     await detectionResultsDialog.getByRole('button', { name: /^close$/i }).first().click()
     await expect(detectionResultsDialog).toBeHidden({ timeout: FAST_UI_WAIT_MS })
 
-    // STEP 5: Open the Edit Summary dialog, pick the journey persona,
-    // and let the VideoSummaryEditor generate the VLM summary. The
-    // editor auto-kicks a summarize job when no summary exists for
-    // the (video, persona) pair; we wait for the editor to render
-    // real summary text.
-    await page.getByRole('button', { name: /^edit summary$/i }).click()
-    const summaryDialog = page.getByRole('dialog').filter({ hasText: 'Edit Video Summary' })
-    await expect(summaryDialog).toBeVisible({ timeout: FAST_UI_WAIT_MS })
+    // STEP 5: Generate through the browser's explicit Summarize action.
+    // The editor only edits stored summaries; opening it does not run inference.
+    await page.goto('/', { timeout: FAST_UI_WAIT_MS })
+    await page.locator('#video-browser-root').getByRole('combobox').click()
+    await page.getByRole('option').filter({ hasText: journeyPersonaName }).click()
+    const journeyCard = page.locator(`[data-video-id="${testVideo.id}"]`)
+    await journeyCard.getByRole('button', { name: /^summarize$/i }).click()
 
-    const summaryPersonaSelect = summaryDialog.getByRole('combobox')
-    await summaryPersonaSelect.click()
-    const escapedPersona = journeyPersonaName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    await page
-      .getByRole('option')
-      .filter({ hasText: new RegExp(`^${escapedPersona} \\(`) })
-      .first()
-      .click()
-
-    // Wait for either the in-editor summary text to render OR a
-    // saved-status indicator to flip. The editor's Summary tab
-    // renders the gloss content inside a textarea / contenteditable
-    // region; the cleanest cross-implementation wait is for the
-    // backend summarize job to land. Bound by LONG_INFERENCE_WAIT_MS.
+    // Wait for the generated summary to persist before opening its editor.
     await expect(async () => {
       const summariesRes = await page.request.get(
         `/api/videos/${testVideo.id}/summaries`,
@@ -781,6 +773,20 @@ test.describe.serial('Multi-service knowledge-extraction journey', () => {
         'real VLM summary for the journey persona must persist with non-trivial content',
       ).toBe(true)
     }).toPass({ timeout: LONG_INFERENCE_WAIT_MS, intervals: [5_000, 15_000, 30_000] })
+
+    await openAnnotationWorkspace(page, testVideo.id)
+    await page.getByRole('button', { name: /^edit summary$/i }).click()
+    const summaryDialog = page.getByRole('dialog').filter({ hasText: 'Edit Video Summary' })
+    await expect(summaryDialog).toBeVisible({ timeout: FAST_UI_WAIT_MS })
+
+    const summaryPersonaSelect = summaryDialog.getByRole('combobox')
+    await summaryPersonaSelect.click()
+    const escapedPersona = journeyPersonaName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    await page
+      .getByRole('option')
+      .filter({ hasText: new RegExp(`^${escapedPersona} \\(`) })
+      .first()
+      .click()
 
     // STEP 6: From the same dialog's Claims tab, run Extract Claims
     // and wait for >=1 claim to land.

@@ -37,6 +37,17 @@ refuses to boot on a fatal problem rather than failing later in a handler:
 
 A misconfigured deployment therefore stops immediately with a clear error.
 
+## Trusted proxies
+
+`TRUST_PROXY` defaults to `false`, so the backend uses the socket peer for
+per-IP rate limiting and ignores forwarding headers. Behind a reverse proxy,
+set a comma-separated list of that proxy's IPs or CIDRs to retain client IPs.
+Only include networks whose peers you trust to supply those headers.
+
+Numeric hop counts fail closed under Fastify's security fix. Replace any old
+numeric setting with explicit proxy addresses. `true` trusts every peer and
+requires the deployment to block direct access to the backend.
+
 ## Deployment mode
 
 Two variables decide the high-level posture of a backend deployment:

@@ -426,10 +426,12 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
    * Creates a test persona before the test and cleans up after.
    * Depends on testUser fixture.
    */
-  testPersona: async ({ db, testUser, workerSessionToken }, use) => {
+  testPersona: async ({ db, testUser, workerSessionToken }, use, testInfo) => {
+    // Admin sessions also see other workers' personas, so names must be unique.
+    const perTestId = testInfo.testId.replace(/[^a-zA-Z0-9]/g, '').slice(-12)
     const persona = await db.createPersona({
       userId: testUser.id,
-      name: 'Test Analyst',
+      name: `Test Analyst W${testInfo.workerIndex}-${testUser.id.slice(0, 8)}-${perTestId}`,
       role: 'Intelligence Analyst'
     }, workerSessionToken)
     await use(persona)
