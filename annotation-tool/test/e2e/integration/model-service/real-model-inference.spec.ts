@@ -142,7 +142,7 @@ async function openAnnotationWorkspace(page: Page, videoId: string): Promise<voi
 /**
  * Pick a persona inside the AnnotationWorkspace toolbar's persona
  * combobox by exact display name. The combobox renders options as
- * "<name> - <role>" so the match anchors on a "<name> -" prefix to
+ * "<name> (<role>)" so the match anchors on the name and opening parenthesis to
  * avoid colliding with a worker-parallel persona of the same role.
  */
 async function selectPersonaInWorkspace(page: Page, personaName: string): Promise<void> {
@@ -155,7 +155,7 @@ async function selectPersonaInWorkspace(page: Page, personaName: string): Promis
   const escaped = personaName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   const option = page
     .getByRole('option')
-    .filter({ hasText: new RegExp(`^${escaped} -`) })
+    .filter({ hasText: new RegExp(`^${escaped} \\(`) })
     .first()
   await expect(option).toBeVisible({ timeout: FAST_UI_WAIT_MS })
   await option.click()
@@ -461,7 +461,7 @@ test.describe('Per-task user journeys against real model-service', () => {
     const escaped = testPersona.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
     await page
       .getByRole('option')
-      .filter({ hasText: new RegExp(`^${escaped} -`) })
+      .filter({ hasText: new RegExp(`^${escaped} \\(`) })
       .first()
       .click()
 
@@ -774,7 +774,7 @@ test.describe.serial('Multi-service knowledge-extraction journey', () => {
     const escapedPersona = journeyPersonaName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
     await page
       .getByRole('option')
-      .filter({ hasText: new RegExp(`^${escapedPersona} -`) })
+      .filter({ hasText: new RegExp(`^${escapedPersona} \\(`) })
       .first()
       .click()
 
