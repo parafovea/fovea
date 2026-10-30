@@ -15,6 +15,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from . import __version__
 from .infrastructure.adapters.inbound.fastapi.routes import router
 from .infrastructure.config.container import (
     ContainerConfig,
@@ -68,7 +69,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 app = FastAPI(
     title="Fovea Model Service",
     description="AI model inference service for video annotation",
-    version="0.1.0",
+    version=__version__,
     lifespan=lifespan,
 )
 
@@ -122,7 +123,7 @@ async def root() -> JSONResponse:
     return JSONResponse(
         content={
             "service": "Fovea Model Service",
-            "version": "0.1.0",
+            "version": __version__,
             "docs": "/docs",
         }
     )

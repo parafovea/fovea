@@ -68,6 +68,7 @@ if str(_PROJECT_ROOT) not in sys.path:
 # The E402 (import-not-at-top) suppression is intentional: the sys.path
 # bootstrap above must run before this import can resolve when the script is
 # invoked as a file.
+from src import __version__  # noqa: E402
 from src.infrastructure.adapters.inbound.fastapi import models as _wire  # noqa: E402
 from src.infrastructure.adapters.inbound.fastapi.dx_bodies import (  # noqa: E402
     as_request,
@@ -286,7 +287,7 @@ def build_spec() -> dict[str, object]:
         "openapi": "3.1.0",
         "info": {
             "title": "FOVEA Model Service Contract",
-            "version": "0.5.0",
+            "version": __version__,
             "description": (
                 "Cross-service contract for the request/response shapes the FOVEA "
                 "model-service produces and the server consumes. Generated without "

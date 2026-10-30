@@ -76,7 +76,8 @@ Ready to write code? Great! See the sections below for our development workflow 
 Before contributing, ensure you have:
 
 - **Node.js 22 LTS** or later
-- **Python 3.12** or later
+- **Python 3.14** or later for the model service (Wikibase requires 3.12 or later)
+- **pnpm 10.15** and **uv** for workspace dependency management
 - **Docker** and **Docker Compose** (for full stack development)
 - **PostgreSQL 16** (if running locally without Docker)
 - **Redis 7** (if running locally without Docker)
@@ -100,18 +101,8 @@ Before contributing, ensure you have:
 4. **Install dependencies** for each component:
 
    ```bash
-   # Frontend
-   cd annotation-tool
-   npm install
-
-   # Backend
-   cd ../server
-   npm install
-   npx prisma generate
-
-   # Model service
-   cd ../model-service
-   pip install -e ".[dev]"
+   make install
+   make generate
    ```
 
 5. **Set up environment variables**:
@@ -129,15 +120,15 @@ Before contributing, ensure you have:
 
    # Terminal 2: Backend
    cd server
-   npm run dev
+   pnpm run dev
 
    # Terminal 3: Frontend
    cd annotation-tool
-   npm run dev
+   pnpm run dev
 
    # Terminal 4: Model service (optional)
    cd model-service
-   uvicorn src.main:app --reload --port 8000
+   uv run uvicorn src.main:app --reload --port 8000
    ```
 
 7. **Verify your setup** by running tests through the root `Makefile` (the
@@ -151,7 +142,7 @@ Before contributing, ensure you have:
    make test-wikibase
    ```
 
-For detailed setup instructions, see the [Manual Setup Guide](docs/docs/getting-started/manual-setup.md).
+For detailed setup instructions, see the [manual setup instructions](README.md#manual-setup).
 
 ### Development Modes
 

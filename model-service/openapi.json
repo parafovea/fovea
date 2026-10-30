@@ -1668,7 +1668,7 @@
   "info": {
     "description": "Cross-service contract for the request/response shapes the FOVEA model-service produces and the server consumes. Generated without importing the ML stack by scripts/gen_contract_spec.py; do not edit by hand.",
     "title": "FOVEA Model Service Contract",
-    "version": "0.5.0"
+    "version": "0.6.0"
   },
   "openapi": "3.1.0",
   "paths": {

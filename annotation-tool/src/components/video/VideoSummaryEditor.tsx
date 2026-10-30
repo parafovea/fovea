@@ -481,17 +481,15 @@ const VideoSummaryEditor = forwardRef<VideoSummaryEditorRef, VideoSummaryEditorP
           <div className="flex gap-2">
             <TooltipProvider>
               <Tooltip>
-                <TooltipTrigger>
-                  <span>
-                    <Button
-                      ref={extractClaimsAnchorRef}
-                      onClick={() => setExtractDialogOpen(true)}
-                      disabled={extracting || !summaryId || localSummary.length === 0 || modelsDisabled}
-                      size="sm"
-                    >
-                      Extract Claims
-                    </Button>
-                  </span>
+                <TooltipTrigger render={<span />}>
+                  <Button
+                    ref={extractClaimsAnchorRef}
+                    onClick={() => setExtractDialogOpen(true)}
+                    disabled={extracting || !summaryId || localSummary.length === 0 || modelsDisabled}
+                    size="sm"
+                  >
+                    Extract Claims
+                  </Button>
                 </TooltipTrigger>
                 {modelsDisabled && (
                   <TooltipContent>

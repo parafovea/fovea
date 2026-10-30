@@ -227,8 +227,11 @@ class TestDownloadVideoIfNeeded:
             os.unlink(result_path)
 
     @pytest.mark.asyncio
-    async def test_download_failure_cleans_up_temp_file(self):
+    async def test_download_failure_cleans_up_temp_file(self, tmp_path, monkeypatch):
         """Test that temp file is cleaned up on download failure."""
+        module = "src.infrastructure.adapters.outbound.video.downloader"
+        monkeypatch.setattr(f"{module}.TEMP_VIDEO_DIR", str(tmp_path))
+        monkeypatch.setattr(f"{module}._TEMP_DIR_PREFIX", str(tmp_path.resolve()) + os.sep)
         url = TEST_S3_URL_HTTPS
 
         mock_response = AsyncMock()
@@ -240,14 +243,18 @@ class TestDownloadVideoIfNeeded:
             mock_session = AsyncMock()
             mock_session.__aenter__.return_value = mock_session
             mock_session.__aexit__.return_value = None
-            mock_session.get.return_value.__aenter__.return_value = mock_response
-            mock_session.get.return_value.__aexit__.return_value = None
+            mock_get_cm = AsyncMock()
+            mock_get_cm.__aenter__.return_value = mock_response
+            mock_get_cm.__aexit__.return_value = None
+            mock_session.get = MagicMock(return_value=mock_get_cm)
             mock_session_class.return_value = mock_session
 
-            with pytest.raises(RuntimeError, match="Failed to download video"):
+            with pytest.raises(RuntimeError, match="Connection failed") as error:
                 await download_video_if_needed(url)
 
-            # Verify no temp files left behind (hard to test, but error was raised)
+            assert isinstance(error.value.__cause__, aiohttp.ClientError)
+            assert list(tmp_path.iterdir()) == []
+            mock_response.raise_for_status.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_http_error_raises_exception(self):
@@ -268,12 +275,18 @@ class TestDownloadVideoIfNeeded:
             mock_session = AsyncMock()
             mock_session.__aenter__.return_value = mock_session
             mock_session.__aexit__.return_value = None
-            mock_session.get.return_value.__aenter__.return_value = mock_response
-            mock_session.get.return_value.__aexit__.return_value = None
+            mock_get_cm = AsyncMock()
+            mock_get_cm.__aenter__.return_value = mock_response
+            mock_get_cm.__aexit__.return_value = None
+            mock_session.get = MagicMock(return_value=mock_get_cm)
             mock_session_class.return_value = mock_session
 
-            with pytest.raises(RuntimeError, match="Failed to download video"):
+            with pytest.raises(RuntimeError, match="Not Found") as error:
                 await download_video_if_needed(url)
+
+            assert isinstance(error.value.__cause__, aiohttp.ClientResponseError)
+            assert error.value.__cause__.status == 404
+            mock_response.raise_for_status.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_preserves_file_extension_from_url(self):

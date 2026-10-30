@@ -7,7 +7,7 @@
 # Run `make` or `make help` to list targets.
 
 .DEFAULT_GOAL := help
-.PHONY: help install generate gen-contract \
+.PHONY: help install install-model-service-ci generate gen-contract \
 	lint lint-frontend lint-backend lint-model-service lint-wikibase \
 	typecheck test test-frontend test-backend test-model-service test-wikibase \
 	build audit-dependencies dev-infra stop
@@ -20,6 +20,11 @@ install: ## Install all dependencies (pnpm workspace + uv for the Python service
 	pnpm install --frozen-lockfile
 	cd model-service && uv sync
 	cd wikibase && uv sync
+
+install-model-service-ci: ## Install model-service test tools with CPU wheels on Linux CI
+	python -m pip install --upgrade pip
+	python -m pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu
+	python -m pip install --no-cache-dir -e "./model-service[dev]"
 
 generate: ## Generate the Prisma client (needed before backend typecheck/test)
 	pnpm --filter @fovea/server exec prisma generate

@@ -238,14 +238,9 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.14'
-          cache: 'pip'
-          cache-dependency-path: model-service/pyproject.toml
 
-      - name: Install dependencies
-        working-directory: model-service
-        run: |
-          pip install --upgrade pip
-          pip install -e ".[dev]"
+      - name: Install model-service with CPU dependencies
+        run: make install-model-service-ci
 
       - name: Run ruff check
         working-directory: model-service
@@ -259,7 +254,7 @@ jobs:
         working-directory: model-service
         run: mypy src/
 
-      - name: Audit installed model-service base dependencies
+      - name: Audit installed model-service base and development dependencies
         working-directory: model-service
         run: |
           pip install pip-audit
@@ -275,14 +270,9 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.14'
-          cache: 'pip'
-          cache-dependency-path: model-service/pyproject.toml
 
-      - name: Install dependencies
-        working-directory: model-service
-        run: |
-          pip install --upgrade pip
-          pip install --no-cache-dir -e ".[dev]"
+      - name: Install model-service with CPU dependencies
+        run: make install-model-service-ci
 
       - name: Run tests
         working-directory: model-service
@@ -441,22 +431,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # The contract spec is emitted WITHOUT importing the ML stack, so this job
-      # installs the model-service the same lint-only way as lint-model-service
-      # (pip install -e ".[dev]"); it never needs the multi-gigabyte inference
-      # extras.
+      # Use the same CPU installation as lint and unit tests. The base package
+      # includes torch, though contract generation does not load model weights.
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.14'
-          cache: 'pip'
-          cache-dependency-path: model-service/pyproject.toml
 
-      - name: Install model-service (dev extra only, no ML extras)
-        working-directory: model-service
-        run: |
-          pip install --upgrade pip
-          pip install -e ".[dev]"
+      - name: Install model-service with CPU dependencies
+        run: make install-model-service-ci
 
       - uses: pnpm/action-setup@v4
 

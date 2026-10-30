@@ -6,8 +6,8 @@ for FastAPI and Redis clients.
 
 from __future__ import annotations
 
-import asyncio
 import functools
+import inspect
 import time
 from contextlib import contextmanager
 from typing import TYPE_CHECKING, ParamSpec, TypeVar
@@ -23,6 +23,7 @@ from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 
+from src import __version__
 from src.infrastructure.config.settings import get_settings
 
 if TYPE_CHECKING:
@@ -42,7 +43,7 @@ def configure_observability() -> None:
     resource = Resource.create(
         {
             "service.name": "fovea-model-service",
-            "service.version": "0.1.0",
+            "service.version": __version__,
         }
     )
 
@@ -162,7 +163,7 @@ def instrument_method(
                     return "unknown"
             return str(current)
 
-        if asyncio.iscoroutinefunction(func):
+        if inspect.iscoroutinefunction(func):
 
             @functools.wraps(func)
             async def async_wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
