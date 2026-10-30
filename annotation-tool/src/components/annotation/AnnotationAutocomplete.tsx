@@ -321,10 +321,11 @@ export default function AnnotationAutocomplete({
     // own their own persistence (emitLinkTarget=false) skip this write so they
     // never mutate the video-annotation link state.
     if (!isTypeOption(option.type) && emitLinkTarget) {
-      let targetType: 'entity' | 'event' | 'location' | 'entity-collection' | 'event-collection' | null = null
+      let targetType: 'entity' | 'event' | 'time' | 'location' | 'entity-collection' | 'event-collection' | null = null
       if (option.type === 'entity-object') targetType = 'entity'
       else if (option.type === 'event-object') targetType = 'event'
       else if (option.type === 'location-object') targetType = 'location'
+      else if (option.type === 'time-object') targetType = 'time'
       else if (option.type === 'collection') {
         const isEntityCollection = entityCollections.some((c) => c.id === option.id)
         targetType = isEntityCollection ? 'entity-collection' : 'event-collection'

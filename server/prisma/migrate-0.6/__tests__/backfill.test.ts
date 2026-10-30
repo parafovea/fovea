@@ -17,6 +17,7 @@ import { PrismaClient } from '@prisma/client'
 
 import { runBackfill } from '../runner.js'
 import { runVerify } from '../verify.js'
+import { readClaimById, readSummaryClaims } from '../../../src/services/layers-bridge/claim-bridge.js'
 import { to1000 } from '../../../src/services/layers-conversion-service.js'
 import {
   expressionTranscriptId,
@@ -102,6 +103,13 @@ describe('layers backfill', () => {
     prisma = new PrismaClient()
     since = new Date()
     fixture = await seedLegacyFixture(prisma)
+    // Put the child before its parent in distinct one-row pages.
+    const [child, parent] = [fixture.claimAId, fixture.claimBId].sort()
+    await prisma.claim.update({ where: { id: child }, data: { parentClaimId: parent, claimEventId: fixture.eventId } })
+    await prisma.claimRelation.update({
+      where: { id: fixture.claimRelationId },
+      data: { sourceSpans: [{ charStart: 0, charEnd: 8 }], targetSpans: [{ charStart: 0, charEnd: 5 }] },
+    })
   })
 
   afterAll(async () => {
@@ -110,7 +118,7 @@ describe('layers backfill', () => {
   })
 
   it('backfills, round-trips annotation frames, and reaches count parity', async () => {
-    const report = await runBackfill(prisma, { since })
+    const report = await runBackfill(prisma, { since, batchSize: 1 })
     expect(report.total.created).toBeGreaterThan(0)
 
     // Every legacy source produced its layers rows.
@@ -176,7 +184,7 @@ describe('layers backfill', () => {
 
   it('is idempotent: re-running produces no duplicate rows', async () => {
     const before = await snapshotCounts(prisma, fixture)
-    const rerun = await runBackfill(prisma, { since })
+    const rerun = await runBackfill(prisma, { since, batchSize: 1 })
     const after = await snapshotCounts(prisma, fixture)
 
     // A re-run mints nothing new and only refreshes existing rows in place.
@@ -200,9 +208,30 @@ describe('layers backfill', () => {
     expect(broken.roundTripped).toBe(0)
 
     // Re-running the backfill restores the row, and verify goes green again.
-    await runBackfill(prisma, { since })
+    await runBackfill(prisma, { since, batchSize: 1 })
     const healed = await runVerify(prisma, { since })
     expect(healed.mismatches).toEqual([])
     expect(healed.roundTripped).toBe(1)
   })
+  it('preserves parent links and replaces reference edges and endpoint spans on repeat copies', async () => {
+    const [child, parent] = [fixture.claimAId, fixture.claimBId].sort()
+    expect((await readClaimById(prisma, child))?.parentClaimId).toBe(parent)
+    await runBackfill(prisma, { since, batchSize: 1 })
+    expect((await readClaimById(prisma, child))?.parentClaimId).toBe(parent)
+    const { relations } = await readSummaryClaims(prisma, fixture.summaryId)
+    expect(relations).toHaveLength(1)
+    expect(relations[0].sourceSpans).toEqual([{ charStart: 0, charEnd: 8 }])
+  })
+
+  it('catches up a relation when neither endpoint claim changed', async () => {
+    const watermark = new Date()
+    await prisma.claimRelation.update({
+      where: { id: fixture.claimRelationId },
+      data: { confidence: 0.43, updatedAt: new Date(watermark.getTime() + 10) },
+    })
+    await runBackfill(prisma, { since: watermark, batchSize: 1 })
+    const { relations } = await readSummaryClaims(prisma, fixture.summaryId)
+    expect(relations[0].confidence).toBe(0.43)
+  })
+
 })

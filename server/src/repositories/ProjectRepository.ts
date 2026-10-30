@@ -1,8 +1,7 @@
 import { PrismaClient, Project, ProjectMembership, Persona, Prisma } from '@prisma/client'
 
-import { mergeById } from '../services/world-state-service.js'
 import { readWorldAggregate, mergeWorldObjects } from '../services/layers-bridge/world-bridge.js'
-import { projectWorldStateId, type WorldStateAggregate } from '../services/world-model.js'
+import { projectWorldStateId, emptyWorldState, type WorldStateAggregate } from '../services/world-model.js'
 
 /**
  * Project row joined with its members (each carrying the public user
@@ -487,27 +486,12 @@ export class ProjectRepository {
     projectId: string,
     data: ProjectWorldStatePartialUpdate
   ): Promise<ProjectWorldStateView> {
-    const { aggregate } = await readWorldAggregate(this.prisma, { userId, projectId })
-    const merged: WorldStateAggregate = { ...aggregate }
-    const buckets: (keyof ProjectWorldStatePartialUpdate & keyof WorldStateAggregate)[] = [
-      'entities',
-      'events',
-      'times',
-      'entityCollections',
-      'eventCollections',
-      'timeCollections',
-      'relations',
-    ]
-    for (const bucket of buckets) {
+    const incoming = emptyWorldState()
+    for (const bucket of Object.keys(incoming) as Array<keyof WorldStateAggregate>) {
       const value = data[bucket]
-      if (value !== undefined) {
-        merged[bucket] = mergeById(
-          aggregate[bucket] as unknown as Prisma.JsonValue,
-          Array.isArray(value) ? value : [],
-        ) as unknown as unknown[]
-      }
+      if (value !== undefined) incoming[bucket] = Array.isArray(value) ? value : []
     }
-    await this.prisma.$transaction((tx) => mergeWorldObjects(tx, { userId, projectId }, merged))
-    return ProjectRepository.worldStateView(userId, projectId, merged)
+    await mergeWorldObjects(this.prisma, { userId, projectId }, incoming)
+    return this.readWorldState(userId, projectId)
   }
 }

@@ -35,6 +35,7 @@ export default async function interchangeRoutes(fastify: FastifyInstance): Promi
    * Import: normalize a source payload through the model-service and persist it.
    */
   fastify.post('/import', {
+    bodyLimit: 100 * 1024 * 1024,
     schema: {
       description: 'Normalize an interchange payload through the model-service and persist the resulting layers records',
       tags: ['layers', 'interchange'],

@@ -3,12 +3,13 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent, within } from '@testing-library/react'
+import { render, screen, fireEvent, within, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { http, HttpResponse } from 'msw'
 import { AnnotationCandidatesList } from './AnnotationCandidatesList'
 import type { FrameDetections } from '@api/client'
 import { server } from '@test/setup'
+import { videoKeys } from '@store/queries/useVideos'
 
 /**
  * Create QueryClient for testing.
@@ -27,6 +28,9 @@ function createQueryClient() {
  */
 function renderWithQueryClient(component: React.ReactElement) {
   const queryClient = createQueryClient()
+  for (const id of ['wildlife-video', 'sports-video', 'traffic-video', 'retail-video', 'empty-video']) {
+    queryClient.setQueryData(videoKeys.detail(id), { id, width: 1920, height: 1080 })
+  }
   return {
     queryClient,
     ...render(
@@ -332,7 +336,12 @@ describe('AnnotationCandidatesList', () => {
   })
 
   describe('accept/reject actions', () => {
-    it('accepts a wildlife detection and updates statistics', () => {
+    it('accepts a wildlife detection in pixel coordinates and updates statistics', async () => {
+      let saved: { frames: { boxes: unknown[] } } | undefined
+      server.use(http.post('/api/layers/videos/:videoId/annotations', async ({ request }) => {
+        saved = await request.json() as typeof saved
+        return HttpResponse.json({ ...saved, id: 'accepted', createdAt: '2026-01-01', updatedAt: '2026-01-01' }, { status: 201 })
+      }))
       const onAccept = vi.fn()
       renderWithQueryClient(
         <AnnotationCandidatesList
@@ -358,6 +367,7 @@ describe('AnnotationCandidatesList', () => {
       // Statistics updated
       expect(screen.getByText('Accepted: 1')).toBeInTheDocument()
       expect(screen.getByText('Pending: 2')).toBeInTheDocument()
+      await waitFor(() => expect(saved?.frames.boxes[0]).toMatchObject({ x: 192, y: 216, width: 576, height: 432 }))
     })
 
     it('rejects a sports detection', () => {

@@ -122,6 +122,21 @@ describe('Layers interchange cross-user isolation and round-trip', () => {
     return { corpusId: corpus.id, expressionId: expression.id, layerId: layer.id, annotationId: annotation.id }
   }
 
+  it('exports expressions that belong only through corpus membership', async () => {
+    const seeded = await seedCorpusA()
+    await prisma.expression.update({ where: { id: seeded.expressionId }, data: { corpusId: null } })
+    await prisma.corpusMembership.create({ data: { corpusId: seeded.corpusId, expressionId: seeded.expressionId } })
+    const records = await repository.readCorpusRecords({ id: seeded.corpusId, name: 'Corpus A' }, {})
+    expect(records.some(record => record.nsid === EXPRESSION_NSID && record.local_id === seeded.expressionId)).toBe(true)
+    expect(records.some(record => record.nsid === ANNOTATION_NSID && record.local_id === seeded.annotationId)).toBe(true)
+  })
+
+  it('resolves corpus names within the caller read scope', async () => {
+    await seedCorpusA()
+    const own = await prisma.corpus.create({ data: { name: 'Corpus A', createdByUserId: userBId } })
+    expect((await repository.findCorpusByName('Corpus A', { createdByUserId: userBId }))?.id).toBe(own.id)
+  })
+
   it('exports a corpus as normalized records with object value_json', async () => {
     const seeded = await seedCorpusA()
     const records = await repository.readCorpusRecords({ id: seeded.corpusId, name: 'Corpus A' }, {})

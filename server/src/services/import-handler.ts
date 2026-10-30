@@ -329,7 +329,13 @@ export class ImportHandler {
     // Build resolution map for quick lookup
     const resolutionMap = new Map<string, Resolution>()
     for (const resolution of resolutions) {
-      resolutionMap.set(resolution.originalId, resolution)
+      const previous = resolutionMap.get(resolution.originalId)
+      if (!previous || (previous.action !== 'skip' && previous.action !== 'fail')) {
+        resolutionMap.set(resolution.originalId, resolution)
+      }
+    }
+    for (const resolution of resolutions) {
+      if (resolution.newId) resolutionMap.set(resolution.newId, resolutionMap.get(resolution.originalId)!)
     }
 
     // Store conflicts with resolutions

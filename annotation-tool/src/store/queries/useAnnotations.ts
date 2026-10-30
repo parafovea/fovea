@@ -229,21 +229,14 @@ export function useSaveAnnotations() {
         }
       }
 
+      if (results.errors.length > 0) throw new Error(results.errors.join('; '))
       return { videoId, annotations, results }
-    },
-    onSuccess: ({ results }) => {
-      // mutationFn collects per-annotation failures rather than rejecting,
-      // so a partial failure resolves here instead of hitting onError. Surface
-      // those collected failures to the user.
-      if (results.errors.length > 0) {
-        toast.error(`Failed to save ${results.errors.length} annotation change(s)`)
-      }
     },
     onMutate: async ({ videoId, annotations }) => {
       // Cancel any outgoing refetches to avoid overwriting optimistic update
       await queryClient.cancelQueries({ queryKey: annotationKeys.video(videoId) })
 
-      // Snapshot the previous value for rollback
+      // Read the cached identities before the optimistic update.
       const previous = queryClient.getQueryData<Annotation[]>(annotationKeys.video(videoId))
 
       // Capture cachedIds before optimistic update so mutationFn can distinguish new vs existing
@@ -252,19 +245,9 @@ export function useSaveAnnotations() {
       // Optimistically update to the new value
       queryClient.setQueryData(annotationKeys.video(videoId), annotations)
 
-      // Return context with previous value for rollback
-      return { previous, videoId }
     },
-    onError: (_err, _variables, context) => {
-      // Rollback on failure
-      if (context?.previous) {
-        queryClient.setQueryData(annotationKeys.video(context.videoId), context.previous)
-      }
-    },
-    onSettled: (_data, _error, { videoId }) => {
-      // Always refetch after error or success to ensure consistency
-      queryClient.invalidateQueries({ queryKey: annotationKeys.video(videoId) })
-    },
+    // Keep local edits while saves settle. A refetch or rollback here can erase
+    // changes made during the request; auto-save retries the retained snapshot.
   })
 }
 
@@ -347,6 +330,8 @@ export function useAddKeyframe() {
         updatedSequence.boxes[keyframeIndex] = {
           ...updatedSequence.boxes[keyframeIndex],
           ...box,
+          frameNumber,
+          isKeyframe: true,
         }
       }
 

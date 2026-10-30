@@ -64,12 +64,12 @@ export async function recordBackfilled(prisma: Client, report: Prisma.InputJsonV
 }
 
 /** Records that the verifier passed with zero mismatches. */
-export async function recordVerified(prisma: Client, report: Prisma.InputJsonValue): Promise<void> {
+export async function recordVerified(prisma: Client, report: Prisma.InputJsonValue, verifiedAt = new Date()): Promise<void> {
   await prisma.$executeRaw(Prisma.sql`
     INSERT INTO "_layers_migration_state" ("id", "phase", "backfilledAt", "verifiedAt", "report")
-    VALUES (1, 'verified', now(), now(), ${report})
+    VALUES (1, 'verified', now(), ${verifiedAt}, ${report})
     ON CONFLICT ("id") DO UPDATE
-      SET "phase" = 'verified', "verifiedAt" = now(), "report" = ${report}
+      SET "phase" = 'verified', "verifiedAt" = ${verifiedAt}, "report" = ${report}
   `)
 }
 

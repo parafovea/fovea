@@ -4385,6 +4385,8 @@ export interface paths {
                             visualAnalysis?: string;
                             audioTranscript?: string;
                             keyFrames?: {
+                                frame_number?: number;
+                                confidence?: number;
                                 timestamp: number;
                                 description: string;
                             }[];
@@ -4470,6 +4472,8 @@ export interface paths {
                             visualAnalysis?: string;
                             audioTranscript?: string;
                             keyFrames?: {
+                                frame_number?: number;
+                                confidence?: number;
                                 timestamp: number;
                                 description: string;
                             }[];
@@ -4607,6 +4611,8 @@ export interface paths {
                             visualAnalysis?: string;
                             audioTranscript?: string;
                             keyFrames?: {
+                                frame_number?: number;
+                                confidence?: number;
                                 timestamp: number;
                                 description: string;
                             }[];
@@ -4765,10 +4771,8 @@ export interface paths {
                                 personaId: string;
                             };
                             returnvalue?: {
-                                /** Format: uuid */
-                                id: string;
+                                summaryId: string;
                                 videoId: string;
-                                /** Format: uuid */
                                 personaId: string;
                                 summary: {
                                     type: "text" | "typeRef" | "objectRef" | "annotationRef" | "claimRef";
@@ -4780,37 +4784,12 @@ export interface paths {
                                 visualAnalysis?: string;
                                 audioTranscript?: string;
                                 keyFrames?: {
+                                    frame_number?: number;
+                                    confidence?: number;
                                     timestamp: number;
                                     description: string;
                                 }[];
                                 confidence?: number;
-                                transcriptJson?: {
-                                    segments: {
-                                        start: number;
-                                        end: number;
-                                        text: string;
-                                        speaker?: string;
-                                        confidence?: number;
-                                        sentiment?: string;
-                                    }[];
-                                    speakers?: string[];
-                                    language?: string;
-                                };
-                                audioLanguage?: string;
-                                speakerCount?: number;
-                                audioModelUsed?: string;
-                                visualModelUsed?: string;
-                                fusionStrategy?: string;
-                                processingTimeAudio?: number;
-                                processingTimeVisual?: number;
-                                processingTimeFusion?: number;
-                                comment?: string | null;
-                                createdBy?: string;
-                                projectId?: string | null;
-                                /** Format: date-time */
-                                createdAt: string;
-                                /** Format: date-time */
-                                updatedAt: string;
                             } | null;
                             failedReason?: string | null;
                             finishedOn?: number | null;
@@ -4869,9 +4848,12 @@ export interface paths {
                             refClaimId?: string;
                         }[];
                     } & {
+                        comment?: string | null;
                         visualAnalysis?: string;
                         audioTranscript?: string;
                         keyFrames?: {
+                            frame_number?: number;
+                            confidence?: number;
                             timestamp: number;
                             description: string;
                         }[];
@@ -4923,6 +4905,8 @@ export interface paths {
                             visualAnalysis?: string;
                             audioTranscript?: string;
                             keyFrames?: {
+                                frame_number?: number;
+                                confidence?: number;
                                 timestamp: number;
                                 description: string;
                             }[];
@@ -5030,6 +5014,8 @@ export interface paths {
                             visualAnalysis?: string;
                             audioTranscript?: string;
                             keyFrames?: {
+                                frame_number?: number;
+                                confidence?: number;
                                 timestamp: number;
                                 description: string;
                             }[];
@@ -5715,7 +5701,7 @@ export interface paths {
                             includeOntology: boolean;
                             ontologyDepth: "names-only" | "names-and-glosses" | "full-definitions";
                         };
-                        extractionStrategy: "sentence-based" | "semantic-units" | "hierarchical" | "manual";
+                        extractionStrategy: "sentence-based" | "semantic-units" | "hierarchical";
                         maxClaimsPerSummary?: number;
                         maxSubclaimDepth?: number;
                         minConfidence?: number;
@@ -8432,6 +8418,7 @@ export interface paths {
                             frames: unknown;
                             confidence: null | number;
                             source: string;
+                            notes?: string;
                             linkedObjectName?: null | string;
                             createdBy: null | string;
                             createdAt: string;
@@ -8461,10 +8448,11 @@ export interface paths {
                         personaId?: null | string;
                         type: string;
                         label: string;
-                        linkType?: null | "entity" | "event" | "time" | "location";
+                        linkType?: null | "entity" | "event" | "time" | "location" | "entity-collection" | "event-collection" | "time-collection";
                         frames: unknown;
                         confidence?: number;
                         source?: string;
+                        notes?: string;
                     };
                 };
             };
@@ -8485,6 +8473,7 @@ export interface paths {
                             frames: unknown;
                             confidence: null | number;
                             source: string;
+                            notes?: string;
                             linkedObjectName?: null | string;
                             createdBy: null | string;
                             createdAt: string;
@@ -8508,6 +8497,7 @@ export interface paths {
                             frames: unknown;
                             confidence: null | number;
                             source: string;
+                            notes?: string;
                             linkedObjectName?: null | string;
                             createdBy: null | string;
                             createdAt: string;
@@ -8547,10 +8537,11 @@ export interface paths {
                     "application/json": {
                         type?: string;
                         label?: string;
-                        linkType?: null | "entity" | "event" | "time" | "location";
+                        linkType?: null | "entity" | "event" | "time" | "location" | "entity-collection" | "event-collection" | "time-collection";
                         frames?: unknown;
                         confidence?: number;
                         source?: string;
+                        notes?: string;
                     };
                 };
             };
@@ -8571,6 +8562,7 @@ export interface paths {
                             frames: unknown;
                             confidence: null | number;
                             source: string;
+                            notes?: string;
                             linkedObjectName?: null | string;
                             createdBy: null | string;
                             createdAt: string;
@@ -12299,6 +12291,24 @@ export interface paths {
                             createdAt: string;
                             /** Format: date-time */
                             updatedAt: string;
+                            members: {
+                                /** Format: uuid */
+                                id: string;
+                                /** Format: uuid */
+                                userId: string;
+                                /** Format: uuid */
+                                groupId: string;
+                                role: string;
+                                /** Format: date-time */
+                                joinedAt: string;
+                                user?: {
+                                    /** Format: uuid */
+                                    id: string;
+                                    username: string;
+                                    displayName: string;
+                                    email: null | string;
+                                };
+                            }[];
                             _count: {
                                 members: number;
                             };

@@ -29,7 +29,7 @@ vi.mock('@store/queries', () => ({
   usePersonaOntology: () => ({ data: mocks.state.ontology }),
   useWorld: () => ({ data: null }),
   useUpsertLayer: () => ({ mutateAsync: mocks.upsertLayerMutateAsync }),
-  useUpsertLayersAnnotation: () => ({ mutate: mocks.upsertAnnotationMutate }),
+  useUpsertLayersAnnotation: () => ({ mutate: mocks.upsertAnnotationMutate, mutateAsync: mocks.upsertAnnotationMutate }),
   useDeleteLayersAnnotation: () => ({ mutate: vi.fn() }),
   useCreateLayersRelation: () => ({ mutate: vi.fn() }),
   useDeleteLayersRelation: () => ({ mutate: vi.fn() }),
@@ -71,6 +71,16 @@ beforeEach(() => {
 })
 
 describe('useLayersSpanAnnotator on-demand span layer', () => {
+  it('stores collection labels without a graph-node denotation', async () => {
+    const { result } = renderHook(() => useLayersSpanAnnotator('expr-1', 'persona-1'))
+    act(() => result.current.onCreateSpan({ ...draft, mode: 'object', option: {
+      id: 'collection-1', label: 'People', category: 'Collections', type: 'collection',
+    } }))
+    await waitFor(() => expect(mocks.upsertAnnotationMutate).toHaveBeenCalled())
+    expect(mocks.upsertAnnotationMutate.mock.calls[0][0].input).toMatchObject({ features: { collectionId: 'collection-1' } })
+    expect(mocks.upsertAnnotationMutate.mock.calls[0][0].input.denotesNodeId).toBeUndefined()
+  })
+
   it('mints one layer for a concurrent burst of span creates and shares its id', async () => {
     const { result } = renderHook(() => useLayersSpanAnnotator('expr-1', 'persona-1'))
 

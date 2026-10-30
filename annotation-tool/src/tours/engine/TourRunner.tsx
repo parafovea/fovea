@@ -160,10 +160,11 @@ export function TourRunner({ tour, startIndex = 0, onEvent, onClose, onPause }: 
           try {
             await capability(
               {
-                navigate: (path) => navigateRef.current(path),
+                signal,
+                navigate: (path) => { signal.throwIfAborted(); navigateRef.current(path) },
                 registry,
-                getAnchor: (id) => registry.get(id),
-                sleep,
+                getAnchor: (id) => { signal.throwIfAborted(); return registry.get(id) },
+                sleep: async (ms) => { signal.throwIfAborted(); await sleep(ms); signal.throwIfAborted() },
               },
               step.driver.params,
             )

@@ -67,7 +67,7 @@ export interface UseAnnotationStateResult {
   /** The currently selected annotation, or null */
   selectedAnnotation: Annotation | null
   /** Save mutation for the annotations array */
-  saveAnnotationsMutation: ReturnType<typeof useSaveAnnotations>['mutate']
+  saveAnnotationsMutation: ReturnType<typeof useSaveAnnotations>['mutateAsync']
   /** Delete mutation for a single annotation */
   deleteAnnotationMutation: ReturnType<typeof useDeleteAnnotation>['mutate']
   /** Current auto-save status */
@@ -122,7 +122,7 @@ export function useAnnotationState(
   const [currentFrame, setCurrentFrame] = useState(0)
   const [duration, setDuration] = useState(0)
 
-  const { mutate: saveAnnotationsMutation } = useSaveAnnotations()
+  const { mutateAsync: saveAnnotationsMutation } = useSaveAnnotations()
   const { mutate: deleteAnnotationMutation } = useDeleteAnnotation()
 
   const selectedAnnotation = useAnnotationUiStore((state) => state.selectedAnnotation)
@@ -130,7 +130,7 @@ export function useAnnotationState(
   // Memoize the auto-save callback to prevent cascading effect resets
   // that cause dropdown jitter when annotations exist
   const handleAutoSave = useCallback(async (annotations: Annotation[]) => {
-    saveAnnotationsMutation({ videoId: videoId!, annotations })
+    await saveAnnotationsMutation({ videoId: videoId!, annotations })
   }, [saveAnnotationsMutation, videoId])
 
   // Auto-save annotations to database using useAutoSave hook.

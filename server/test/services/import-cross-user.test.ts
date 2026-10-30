@@ -1620,7 +1620,7 @@ describe('Cross-user import ownership', () => {
       expect(handlerB.isCrossUserImport(withUndef)).toBe(false)
     })
 
-    it('should prefer create-new over a skip resolution when both exist for same originalId', async () => {
+    it('resolves an entity supplied by the same file before remapping annotation ids', async () => {
       // Regression: missing-dependency conflicts resolve to skip and were
       // previously blocking cross-user ID regeneration for annotations
       // referencing not-yet-imported entities.
@@ -1649,15 +1649,13 @@ describe('Cross-user import ownership', () => {
       ]
 
       const conflicts = await handlerB.detectConflicts(exportedLines, emptyExistingData)
-      // Missing-dependency conflict is expected since ent-1 is not in DB yet.
-      expect(conflicts.some(c => c.type === 'missing-dependency')).toBe(true)
+      expect(conflicts.some(c => c.type === 'missing-dependency')).toBe(false)
 
       const resolutions = handlerB.resolveConflicts(conflicts, DEFAULT_IMPORT_OPTIONS)
       resolutions.push(...handlerB.generateCrossUserResolutions(exportedLines, resolutions))
 
-      // Two resolutions exist for ann-1 (skip from missing-dep, create-new from cross-user).
       const annResolutions = resolutions.filter(r => r.originalId === 'ann-1')
-      expect(annResolutions.length).toBe(2)
+      expect(annResolutions.length).toBe(1)
       expect(annResolutions.some(r => r.action === 'create-new')).toBe(true)
 
       const remapped = handlerB.remapIds(exportedLines, resolutions)

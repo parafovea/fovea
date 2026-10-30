@@ -206,10 +206,14 @@ function nodeData(node: MappedWorldNode): {
 }
 
 /** Upserts one GraphNode from its projection (a pruned-but-kept node is updated). */
-function upsertNode(prisma: PrismaLike, node: MappedWorldNode): Promise<unknown> {
+async function upsertNode(prisma: PrismaLike, node: MappedWorldNode): Promise<unknown> {
+  const existing = await prisma.graphNode.findUnique({ where: { id: node.id } })
+  if (existing && (existing.createdByUserId !== node.createdByUserId || existing.projectId !== node.projectId)) {
+    throw new ConflictError('World object id belongs to another scope')
+  }
   const data = nodeData(node)
   return prisma.graphNode.upsert({
-    where: { id: node.id },
+    where: { id: node.id, createdByUserId: node.createdByUserId, projectId: node.projectId },
     update: data,
     create: { id: node.id, projectId: node.projectId, createdByUserId: node.createdByUserId, ...data },
   })
@@ -286,7 +290,11 @@ function createCatalogMembership(prisma: PrismaLike, membership: MappedCatalogMe
  * SetNulls its `denotesNodeId` but leaves the row) is re-adopted rather than
  * colliding on the id a same-id node deterministically derives.
  */
-function createAnnotation(prisma: PrismaLike, annotation: MappedWorldAnnotation): Promise<unknown> {
+async function createAnnotation(prisma: PrismaLike, annotation: MappedWorldAnnotation): Promise<unknown> {
+  const existing = await prisma.layersAnnotation.findUnique({ where: { id: annotation.id } })
+  if (existing && existing.layerId !== annotation.layerId) {
+    throw new ConflictError('World annotation id belongs to another scope')
+  }
   const anchor = toJson(annotation.anchor) ?? Prisma.DbNull
   const data = {
     layerId: annotation.layerId,
@@ -297,13 +305,13 @@ function createAnnotation(prisma: PrismaLike, annotation: MappedWorldAnnotation)
     anchor,
     ontologyTypeRefId: annotation.ontologyTypeRefId,
     arguments: toJson(annotation.arguments),
-    temporal: toJson(annotation.temporal),
-    spatial: toJson(annotation.spatial),
+    temporal: toJson(annotation.temporal) ?? Prisma.DbNull,
+    spatial: toJson(annotation.spatial) ?? Prisma.DbNull,
     confidence: annotation.confidence,
-    features: toJson(annotation.features),
+    features: toJson(annotation.features) ?? Prisma.DbNull,
   }
   return prisma.layersAnnotation.upsert({
-    where: { id: annotation.id },
+    where: { id: annotation.id, layerId: annotation.layerId },
     update: data,
     create: {
       id: annotation.id,
@@ -343,146 +351,152 @@ export async function createWorldProjection(
  * type-assignment, interpretation, and gloss annotations, and each collection's
  * catalog memberships) are replaced so an edit
  * does not orphan a stale value. On a same-object compare-and-swap miss the whole
- * merge retries against a fresh read; after `maxAttempts` it throws.
+ * transaction rolls back, so callers cannot retry an obsolete projection.
  *
  * @param prisma - the Prisma client (or a transaction client)
  * @param scope - the owning scope
  * @param projection - the projected world rows to upsert
- * @param maxAttempts - how many times to retry a conflicting compare-and-swap
- * @throws {ConflictError} when the write keeps conflicting after retries
+ * @throws {ConflictError} when an object changes during this write
  */
 export async function upsertWorldProjection(
   prisma: PrismaLike,
   scope: WorldLayersScope,
   projection: WorldLayersProjection,
-  maxAttempts: number,
 ): Promise<void> {
+  if ('$transaction' in prisma) {
+    return prisma.$transaction((tx) => upsertWorldProjection(tx, scope, projection))
+  }
   const where = scopeWhere(scope)
   const layerId = worldScaffoldLayerId(scope.createdByUserId, scope.projectId)
-  const nodeIds = projection.nodes.map((n) => n.id)
-  const collectionAnnotationIds = projection.annotations
-    .filter((a) => a.denotesNodeId === null)
-    .map((a) => a.id)
+  const nodeIds = projection.nodes.map((node) => node.id)
+  const collectionIds = projection.catalogCollections.map((collection) => collection.id)
+  const collections = await prisma.catalogCollection.findMany({ where: { id: { in: collectionIds } } })
+  if (collections.some((collection) => collection.createdByUserId !== scope.createdByUserId || collection.projectId !== scope.projectId)) {
+    throw new ConflictError('Collection id belongs to another scope')
+  }
+  // Read the old subject annotations, including values omitted by a clearing edit.
+  const oldCollectionAnnotations = await prisma.layersAnnotation.findMany({ where: { layerId, denotesNodeId: null } })
+  const collectionAnnotationIds = oldCollectionAnnotations.filter((annotation) =>
+    Array.isArray(annotation.arguments) && annotation.arguments.some((value) => {
+      const arg = value as { role?: string; target?: { localId?: { value?: string } } }
+      return arg?.role === 'subject' && collectionIds.includes(arg.target?.localId?.value ?? '')
+    })).map((annotation) => annotation.id)
+  const childIds = oldCollectionAnnotations.filter((annotation) =>
+    annotation.parentAnnotationId !== null && collectionAnnotationIds.includes(annotation.parentAnnotationId)).map((annotation) => annotation.id)
+  collectionAnnotationIds.push(...childIds)
 
-  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-    await ensureScaffold(prisma, projection)
+  await ensureScaffold(prisma, projection)
 
-    const existingNodes = new Map(
-      (await prisma.graphNode.findMany({ where: { ...where, id: { in: nodeIds } } })).map((n) => [n.id, n]),
-    )
-    const existingEdges = new Map(
-      (await prisma.graphEdge.findMany({ where })).filter(isWorldEdge).map((e) => [e.id, e]),
-    )
-    let conflict = false
+  const existingNodes = new Map(
+    (await prisma.graphNode.findMany({ where: { ...where, id: { in: nodeIds } } })).map((n) => [n.id, n]),
+  )
+  const existingEdges = new Map(
+    (await prisma.graphEdge.findMany({ where })).filter(isWorldEdge).map((e) => [e.id, e]),
+  )
+  let conflict = false
 
-    for (const node of projection.nodes) {
-      const existing = existingNodes.get(node.id)
-      if (existing) {
-        const result = await prisma.graphNode.updateMany({
-          where: { id: node.id, lockVersion: existing.lockVersion },
-          data: { ...nodeData(node), lockVersion: { increment: 1 } },
-        })
-        if (result.count !== 1) {
-          conflict = true
-          break
-        }
-      } else {
-        try {
-          await createNode(prisma, node)
-        } catch (error) {
-          if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
-            conflict = true
-            break
-          }
-          throw error
-        }
-      }
-    }
-    if (conflict) {
-      if (attempt + 1 < maxAttempts) continue
-      throw new ConflictError('World state update conflicted after retries')
-    }
-
-    // Replace the derived annotations of every written object, then recreate them.
-    if (nodeIds.length > 0) {
-      await prisma.layersAnnotation.deleteMany({ where: { layerId, denotesNodeId: { in: nodeIds } } })
-    }
-    if (collectionAnnotationIds.length > 0) {
-      await prisma.layersAnnotation.deleteMany({ where: { id: { in: collectionAnnotationIds } } })
-    }
-    for (const annotation of projection.annotations) await createAnnotation(prisma, annotation)
-
-    for (const edge of projection.edges) {
-      const existing = existingEdges.get(edge.id)
-      if (existing) {
-        const result = await prisma.graphEdge.updateMany({
-          where: { id: edge.id, lockVersion: existing.lockVersion },
-          data: {
-            source: toJson(edge.source) as Prisma.InputJsonValue,
-            target: toJson(edge.target) as Prisma.InputJsonValue,
-            sourceLocalId: edge.sourceLocalId,
-            targetLocalId: edge.targetLocalId,
-            edgeType: edge.edgeType,
-            label: edge.label,
-            ordinal: edge.ordinal,
-            confidence: edge.confidence,
-            properties: toJson(edge.properties),
-            metadata: toJson(edge.metadata),
-            lockVersion: { increment: 1 },
-          },
-        })
-        if (result.count !== 1) {
-          conflict = true
-          break
-        }
-      } else {
-        try {
-          await createEdge(prisma, edge)
-        } catch (error) {
-          if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
-            conflict = true
-            break
-          }
-          throw error
-        }
-      }
-    }
-    if (conflict) {
-      if (attempt + 1 < maxAttempts) continue
-      throw new ConflictError('World state update conflicted after retries')
-    }
-
-    // Upsert each catalog collection and replace its memberships, so an edit that
-    // drops a member does not leave a stale membership row behind.
-    const collectionIds = projection.catalogCollections.map((c) => c.id)
-    if (collectionIds.length > 0) {
-      await prisma.catalogMembership.deleteMany({ where: { catalogRef: { in: collectionIds } } })
-    }
-    for (const collection of projection.catalogCollections) {
-      await prisma.catalogCollection.upsert({
-        where: { id: collection.id },
-        update: {
-          localId: collection.localId,
-          name: collection.name,
-          kind: collection.kind,
-          features: toJson(collection.features) as Prisma.InputJsonValue,
-        },
-        create: {
-          id: collection.id,
-          localId: collection.localId,
-          name: collection.name,
-          kind: collection.kind,
-          features: toJson(collection.features) as Prisma.InputJsonValue,
-          createdAt: collection.createdAt,
-          projectId: collection.projectId,
-          createdByUserId: collection.createdByUserId,
-        },
+  for (const node of projection.nodes) {
+    const existing = existingNodes.get(node.id)
+    if (existing) {
+      const result = await prisma.graphNode.updateMany({
+        where: { id: node.id, lockVersion: existing.lockVersion },
+        data: { ...nodeData(node), lockVersion: { increment: 1 } },
       })
+      if (result.count !== 1) {
+        conflict = true
+        break
+      }
+    } else {
+      try {
+        await createNode(prisma, node)
+      } catch (error) {
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+          conflict = true
+          break
+        }
+        throw error
+      }
     }
-    for (const membership of projection.catalogMemberships) await createCatalogMembership(prisma, membership)
-
-    return
+  }
+  if (conflict) {
+    throw new ConflictError('World state changed during the update')
   }
 
-  throw new ConflictError('World state update conflicted after retries')
+  // Replace the derived annotations of every written object, then recreate them.
+  if (nodeIds.length > 0) {
+    await prisma.layersAnnotation.deleteMany({ where: { layerId, denotesNodeId: { in: nodeIds } } })
+  }
+  if (collectionAnnotationIds.length > 0) {
+    await prisma.layersAnnotation.deleteMany({ where: { layerId, id: { in: collectionAnnotationIds } } })
+  }
+  for (const annotation of projection.annotations) await createAnnotation(prisma, annotation)
+
+  for (const edge of projection.edges) {
+    const existing = existingEdges.get(edge.id)
+    if (existing) {
+      const result = await prisma.graphEdge.updateMany({
+        where: { id: edge.id, lockVersion: existing.lockVersion },
+        data: {
+          source: toJson(edge.source) as Prisma.InputJsonValue,
+          target: toJson(edge.target) as Prisma.InputJsonValue,
+          sourceLocalId: edge.sourceLocalId,
+          targetLocalId: edge.targetLocalId,
+          edgeType: edge.edgeType,
+          label: edge.label,
+          ordinal: edge.ordinal,
+          confidence: edge.confidence,
+          properties: toJson(edge.properties),
+          metadata: toJson(edge.metadata),
+          lockVersion: { increment: 1 },
+        },
+      })
+      if (result.count !== 1) {
+        conflict = true
+        break
+      }
+    } else {
+      try {
+        await createEdge(prisma, edge)
+      } catch (error) {
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+          conflict = true
+          break
+        }
+        throw error
+      }
+    }
+  }
+  if (conflict) {
+    throw new ConflictError('World state changed during the update')
+  }
+
+  // Upsert each catalog collection and replace its memberships, so an edit that
+  // drops a member does not leave a stale membership row behind.
+  if (collectionIds.length > 0) {
+    await prisma.catalogMembership.deleteMany({ where: { ...where, catalogRef: { in: collectionIds } } })
+  }
+  for (const collection of projection.catalogCollections) {
+    await prisma.catalogCollection.upsert({
+      where: { id: collection.id, ...where },
+      update: {
+        localId: collection.localId,
+        name: collection.name,
+        kind: collection.kind,
+        features: toJson(collection.features) as Prisma.InputJsonValue,
+      },
+      create: {
+        id: collection.id,
+        localId: collection.localId,
+        name: collection.name,
+        kind: collection.kind,
+        features: toJson(collection.features) as Prisma.InputJsonValue,
+        createdAt: collection.createdAt,
+        projectId: collection.projectId,
+        createdByUserId: collection.createdByUserId,
+      },
+    })
+  }
+  for (const membership of projection.catalogMemberships) await createCatalogMembership(prisma, membership)
+
+  return
 }

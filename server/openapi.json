@@ -8451,6 +8451,12 @@
                             "description"
                           ],
                           "properties": {
+                            "frame_number": {
+                              "type": "integer"
+                            },
+                            "confidence": {
+                              "type": "number"
+                            },
                             "timestamp": {
                               "type": "number"
                             },
@@ -8697,6 +8703,12 @@
                           "description"
                         ],
                         "properties": {
+                          "frame_number": {
+                            "type": "integer"
+                          },
+                          "confidence": {
+                            "type": "number"
+                          },
                           "timestamp": {
                             "type": "number"
                           },
@@ -9028,6 +9040,12 @@
                             "description"
                           ],
                           "properties": {
+                            "frame_number": {
+                              "type": "integer"
+                            },
+                            "confidence": {
+                              "type": "number"
+                            },
                             "timestamp": {
                               "type": "number"
                             },
@@ -9410,23 +9428,19 @@
                         {
                           "type": "object",
                           "required": [
-                            "id",
+                            "summaryId",
                             "videoId",
                             "personaId",
-                            "summary",
-                            "createdAt",
-                            "updatedAt"
+                            "summary"
                           ],
                           "properties": {
-                            "id": {
-                              "format": "uuid",
+                            "summaryId": {
                               "type": "string"
                             },
                             "videoId": {
                               "type": "string"
                             },
                             "personaId": {
-                              "format": "uuid",
                               "type": "string"
                             },
                             "summary": {
@@ -9502,6 +9516,12 @@
                                   "description"
                                 ],
                                 "properties": {
+                                  "frame_number": {
+                                    "type": "integer"
+                                  },
+                                  "confidence": {
+                                    "type": "number"
+                                  },
                                   "timestamp": {
                                     "type": "number"
                                   },
@@ -9512,112 +9532,7 @@
                               }
                             },
                             "confidence": {
-                              "minimum": 0,
-                              "maximum": 1,
                               "type": "number"
-                            },
-                            "transcriptJson": {
-                              "type": "object",
-                              "required": [
-                                "segments"
-                              ],
-                              "properties": {
-                                "segments": {
-                                  "type": "array",
-                                  "items": {
-                                    "type": "object",
-                                    "required": [
-                                      "start",
-                                      "end",
-                                      "text"
-                                    ],
-                                    "properties": {
-                                      "start": {
-                                        "type": "number"
-                                      },
-                                      "end": {
-                                        "type": "number"
-                                      },
-                                      "text": {
-                                        "type": "string"
-                                      },
-                                      "speaker": {
-                                        "type": "string"
-                                      },
-                                      "confidence": {
-                                        "type": "number"
-                                      },
-                                      "sentiment": {
-                                        "type": "string"
-                                      }
-                                    }
-                                  }
-                                },
-                                "speakers": {
-                                  "type": "array",
-                                  "items": {
-                                    "type": "string"
-                                  }
-                                },
-                                "language": {
-                                  "type": "string"
-                                }
-                              }
-                            },
-                            "audioLanguage": {
-                              "type": "string"
-                            },
-                            "speakerCount": {
-                              "type": "number"
-                            },
-                            "audioModelUsed": {
-                              "type": "string"
-                            },
-                            "visualModelUsed": {
-                              "type": "string"
-                            },
-                            "fusionStrategy": {
-                              "type": "string"
-                            },
-                            "processingTimeAudio": {
-                              "type": "number"
-                            },
-                            "processingTimeVisual": {
-                              "type": "number"
-                            },
-                            "processingTimeFusion": {
-                              "type": "number"
-                            },
-                            "comment": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "null"
-                                }
-                              ]
-                            },
-                            "createdBy": {
-                              "type": "string"
-                            },
-                            "projectId": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "null"
-                                }
-                              ]
-                            },
-                            "createdAt": {
-                              "format": "date-time",
-                              "type": "string"
-                            },
-                            "updatedAt": {
-                              "format": "date-time",
-                              "type": "string"
                             }
                           }
                         },
@@ -9769,6 +9684,12 @@
                   {
                     "type": "object",
                     "properties": {
+                      "comment": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
                       "visualAnalysis": {
                         "type": "string"
                       },
@@ -9784,6 +9705,12 @@
                             "description"
                           ],
                           "properties": {
+                            "frame_number": {
+                              "type": "integer"
+                            },
+                            "confidence": {
+                              "type": "number"
+                            },
                             "timestamp": {
                               "type": "number"
                             },
@@ -9978,6 +9905,12 @@
                           "description"
                         ],
                         "properties": {
+                          "frame_number": {
+                            "type": "integer"
+                          },
+                          "confidence": {
+                            "type": "number"
+                          },
                           "timestamp": {
                             "type": "number"
                           },
@@ -10315,6 +10248,12 @@
                           "description"
                         ],
                         "properties": {
+                          "frame_number": {
+                            "type": "integer"
+                          },
+                          "confidence": {
+                            "type": "number"
+                          },
                           "timestamp": {
                             "type": "number"
                           },
@@ -13540,12 +13479,6 @@
                         "type": "string",
                         "enum": [
                           "hierarchical"
-                        ]
-                      },
-                      {
-                        "type": "string",
-                        "enum": [
-                          "manual"
                         ]
                       }
                     ]
@@ -20082,6 +20015,9 @@
                       "source": {
                         "type": "string"
                       },
+                      "notes": {
+                        "type": "string"
+                      },
                       "linkedObjectName": {
                         "type": [
                           "null",
@@ -20172,6 +20108,24 @@
                         "enum": [
                           "location"
                         ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "entity-collection"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "event-collection"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "time-collection"
+                        ]
                       }
                     ]
                   },
@@ -20180,6 +20134,9 @@
                     "type": "number"
                   },
                   "source": {
+                    "type": "string"
+                  },
+                  "notes": {
                     "type": "string"
                   }
                 }
@@ -20251,6 +20208,9 @@
                       ]
                     },
                     "source": {
+                      "type": "string"
+                    },
+                    "notes": {
                       "type": "string"
                     },
                     "linkedObjectName": {
@@ -20331,6 +20291,9 @@
                     "source": {
                       "type": "string"
                     },
+                    "notes": {
+                      "type": "string"
+                    },
                     "linkedObjectName": {
                       "type": [
                         "null",
@@ -20404,6 +20367,24 @@
                         "enum": [
                           "location"
                         ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "entity-collection"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "event-collection"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "time-collection"
+                        ]
                       }
                     ]
                   },
@@ -20412,6 +20393,9 @@
                     "type": "number"
                   },
                   "source": {
+                    "type": "string"
+                  },
+                  "notes": {
                     "type": "string"
                   }
                 }
@@ -20491,6 +20475,9 @@
                       ]
                     },
                     "source": {
+                      "type": "string"
+                    },
+                    "notes": {
                       "type": "string"
                     },
                     "linkedObjectName": {
@@ -29239,6 +29226,7 @@
                       "createdBy",
                       "createdAt",
                       "updatedAt",
+                      "members",
                       "_count"
                     ],
                     "properties": {
@@ -29268,6 +29256,67 @@
                       "updatedAt": {
                         "format": "date-time",
                         "type": "string"
+                      },
+                      "members": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "required": [
+                            "id",
+                            "userId",
+                            "groupId",
+                            "role",
+                            "joinedAt"
+                          ],
+                          "properties": {
+                            "id": {
+                              "format": "uuid",
+                              "type": "string"
+                            },
+                            "userId": {
+                              "format": "uuid",
+                              "type": "string"
+                            },
+                            "groupId": {
+                              "format": "uuid",
+                              "type": "string"
+                            },
+                            "role": {
+                              "type": "string"
+                            },
+                            "joinedAt": {
+                              "format": "date-time",
+                              "type": "string"
+                            },
+                            "user": {
+                              "type": "object",
+                              "required": [
+                                "id",
+                                "username",
+                                "displayName",
+                                "email"
+                              ],
+                              "properties": {
+                                "id": {
+                                  "format": "uuid",
+                                  "type": "string"
+                                },
+                                "username": {
+                                  "type": "string"
+                                },
+                                "displayName": {
+                                  "type": "string"
+                                },
+                                "email": {
+                                  "type": [
+                                    "null",
+                                    "string"
+                                  ]
+                                }
+                              }
+                            }
+                          }
+                        }
                       },
                       "_count": {
                         "type": "object",

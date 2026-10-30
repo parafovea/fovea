@@ -514,8 +514,8 @@ export class InterchangeRepository {
    * @param name - corpus name
    * @returns the corpus, or null when none matches
    */
-  async findCorpusByName(name: string) {
-    return this.prisma.corpus.findFirst({ where: { name } })
+  async findCorpusByName(name: string, readScope: Prisma.CorpusWhereInput) {
+    return this.prisma.corpus.findFirst({ where: { AND: [{ name }, readScope] }, orderBy: { id: 'asc' } })
   }
 
   /**
@@ -534,7 +534,7 @@ export class InterchangeRepository {
     expressionScope: Prisma.ExpressionWhereInput,
   ): Promise<NormalizedRecordDTO[]> {
     const expressions = await this.prisma.expression.findMany({
-      where: { AND: [{ corpusId: corpus.id }, expressionScope] },
+      where: { AND: [{ OR: [{ corpusId: corpus.id }, { memberships: { some: { corpusId: corpus.id } } }] }, expressionScope] },
       include: { annotationLayers: { include: { annotations: true } } },
       orderBy: { createdAt: 'asc' },
     })

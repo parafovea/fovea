@@ -211,7 +211,11 @@ function SpanAnnotatorInner({
 
       if (token) {
         const spanIds = tokenSpanMap.get(tokenKey(token.elementName, token.tokenIndex)) ?? []
-        if (spanIds.length > 0) storeApi.getState().setActiveSpanId(spanIds[0])
+        if (spanIds.length > 0 && !event.shiftKey && !event.ctrlKey && !event.metaKey) {
+          storeApi.getState().setActiveSpanId(spanIds[0])
+          event.preventDefault()
+          return
+        }
       }
       selectionHandlers.onPointerDown(event)
     },

@@ -13,6 +13,7 @@
 import { useCallback, useMemo, useRef } from 'react'
 
 import { subject } from '@casl/ability'
+import { toast } from 'sonner'
 
 import {
   useCreateLayersRelation,
@@ -112,9 +113,9 @@ function findRelationLayer(
 ): LayersAnnotationLayerRow | undefined {
   const relationLayers = layers.filter((layer) => layer.kind === 'relation')
   if (personaId) {
-    return relationLayers.find((layer) => layer.personaId === personaId) ?? relationLayers[0]
+    return relationLayers.find((layer) => layer.personaId === personaId)
   }
-  return relationLayers[0]
+  return relationLayers.find((layer) => layer.personaId == null)
 }
 
 /**
@@ -166,6 +167,7 @@ export function useLayersSpanAnnotator(
     const objectNames = new Map<string, string>()
     for (const entity of world?.entities ?? []) objectNames.set(entity.id, entity.name)
     for (const event of world?.events ?? []) objectNames.set(event.id, event.name)
+    for (const collection of [...(world?.entityCollections ?? []), ...(world?.eventCollections ?? []), ...(world?.timeCollections ?? [])]) objectNames.set(collection.id, collection.name)
     for (const time of world?.times ?? []) if (time.label) objectNames.set(time.id, time.label)
     return { typeName: (id) => typeNames.get(id), objectName: (id) => objectNames.get(id) }
   }, [ontology, world])
@@ -205,10 +207,17 @@ export function useLayersSpanAnnotator(
     for (const span of spans) {
       const ids = new Set<string>([span.id])
       for (const label of span.labels ?? []) ids.add(label.annotationId)
+      const key = span.segments.flatMap(segment => segment.tokenIndexes).sort((a, b) => a - b).join(',')
+      for (const layer of spanLayerRows) {
+        for (const row of layer.rows) {
+          const indexes = row.anchor?.tokenRefSequence?.tokenIndexes
+          if (indexes && [...indexes].sort((a, b) => a - b).join(',') === key) ids.add(row.id)
+        }
+      }
       map.set(span.id, [...ids])
     }
     return map
-  }, [spans])
+  }, [spans, spanLayerRows])
 
   const symmetricByTypeId = useMemo(() => {
     const map = new Map<string, boolean>()
@@ -329,6 +338,7 @@ export function useLayersSpanAnnotator(
     return relationLayerPromiseRef.current
   }, [relationLayer, expressionUri, detail, upsertLayer, tokenizationId, personaId])
 
+  const pendingSpanRanges = useRef(new Set<string>())
   const onCreateSpan = useCallback(
     (draft: SpanDraft) => {
       if (!expressionUri || !tokenizationId) return
@@ -358,20 +368,24 @@ export function useLayersSpanAnnotator(
               anchor,
               label: draft.option?.label,
               ontologyTypeRefId: isObject ? undefined : draft.option?.id,
-              denotesNodeId: isObject ? draft.option?.id : undefined,
+              denotesNodeId: isObject && draft.option?.type !== 'collection' ? draft.option?.id : undefined,
+              features: isObject && draft.option?.type === 'collection' ? { collectionId: draft.option.id } : undefined,
             },
           })
         })
         return
       }
-      void ensureBaseSpanLayerId().then((layerId) => {
-        upsertAnnotation.mutate({
-          expressionUri,
-          input: { id: draft.id, layerId, tokenizationId, anchor },
-        })
-      })
+      const rangeKey = indexes.join(',')
+      if (spans.some(span => span.segments.flatMap(segment => segment.tokenIndexes).sort((a, b) => a - b).join(',') === rangeKey)) return
+      if (pendingSpanRanges.current.has(rangeKey)) return
+      pendingSpanRanges.current.add(rangeKey)
+      void ensureBaseSpanLayerId().then((layerId) => upsertAnnotation.mutateAsync({
+        expressionUri,
+        input: { id: draft.id, layerId, tokenizationId, anchor },
+      })).catch(() => { toast.error('Failed to create span') })
+        .finally(() => pendingSpanRanges.current.delete(rangeKey))
     },
-    [expressionUri, tokenizationId, ensureBaseSpanLayerId, ensurePersonaSpanLayerId, upsertAnnotation],
+    [expressionUri, tokenizationId, ensureBaseSpanLayerId, ensurePersonaSpanLayerId, upsertAnnotation, spans],
   )
 
   const onDeleteSpan = useCallback(

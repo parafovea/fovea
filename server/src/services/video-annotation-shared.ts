@@ -23,12 +23,14 @@
  * @module
  */
 
+import { deriveId } from './layers-id-map.js'
+
 import type { SpatioTemporalAnchor } from '@fovea/layers-schema'
 
 import type { BoundingBoxSequence, FoveaTrackingSource } from './layers-conversion-service.js'
 
 /** The kind of world object an object annotation's `label` references. */
-export type VideoAnnotationLinkType = 'entity' | 'event' | 'time' | 'location'
+export type VideoAnnotationLinkType = 'entity' | 'event' | 'time' | 'location' | 'entity-collection' | 'event-collection' | 'time-collection'
 
 /**
  * The `AnnotationLayer.subkind` values a video annotation lives under:
@@ -70,6 +72,7 @@ export interface VideoAnnotationInput {
   frames: BoundingBoxSequence
   confidence: number | null
   source: string
+  notes?: string
 }
 
 /**
@@ -87,6 +90,7 @@ export interface VideoAnnotationOutput {
   frames: BoundingBoxSequence
   confidence: number | null
   source: string
+  notes?: string
   linkedObjectName: string | null
   createdBy: string | null
   createdAt: string
@@ -280,7 +284,7 @@ export function applyTrackMembership(
     }))
 
   if (track !== null) {
-    const trackKey = String(track.trackId)
+    const trackKey = deriveId('track', annotationId, String(track.trackId))
     let target = clusters.find((cluster) => cluster.uuid.value === trackKey)
     if (!target) {
       target = { uuid: { value: trackKey }, members: [] }
@@ -288,9 +292,10 @@ export function applyTrackMembership(
     }
     target.members.push({ localId: { value: annotationId } })
     if (track.trackingSource !== undefined) target.canonicalLabel = track.trackingSource
-    if (track.trackingConfidence !== undefined) {
-      target.features = { entries: [{ key: TRACK_CONFIDENCE_KEY, value: String(track.trackingConfidence) }] }
-    }
+    target.features = { entries: [
+      { key: 'trackId', value: String(track.trackId) },
+      ...(track.trackingConfidence !== undefined ? [{ key: TRACK_CONFIDENCE_KEY, value: String(track.trackingConfidence) }] : []),
+    ] }
   }
 
   return clusters.filter((cluster) => cluster.members.length > 0)
@@ -326,7 +331,7 @@ export function tracksByAnnotation(clusters: unknown): Map<string, MappedTrack> 
     const confEntry = cluster.features?.entries.find((entry) => entry.key === TRACK_CONFIDENCE_KEY)
     const trackingConfidence = confEntry !== undefined ? Number(confEntry.value) : undefined
     for (const member of cluster.members) {
-      const track: MappedTrack = { trackId: cluster.uuid.value }
+      const track: MappedTrack = { trackId: cluster.features?.entries.find((entry) => entry.key === 'trackId')?.value ?? cluster.uuid.value }
       if (cluster.canonicalLabel !== undefined) {
         track.trackingSource = cluster.canonicalLabel as FoveaTrackingSource
       }

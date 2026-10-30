@@ -219,7 +219,7 @@ async function migrate(prisma: PrismaClient, options: CliOptions): Promise<numbe
   }
   await ensureStateTable(prisma)
   const state = await readState(prisma)
-  if (state?.phase === 'verified' && !options.force) {
+  if (state?.verifiedAt && !options.force) {
     out('Refusing to migrate: the copy is already verified on this database.')
     out('0.5 rows changed after the verified copy are caught up automatically when the backend starts.')
     out('A full re-run rewrites every migrated object from its 0.5 source and reverts edits made in 0.6;')
@@ -247,7 +247,7 @@ async function auto(prisma: PrismaClient, options: CliOptions): Promise<number> 
   }
   await ensureStateTable(prisma)
   const state = await readState(prisma)
-  if (state?.phase === 'verified' && state.verifiedAt) {
+  if (state?.verifiedAt) {
     // 0.5 rows written after the verified copy (a rollback to 0.5 and back)
     // are caught up object by object, so 0.6 edits to objects 0.5 did not
     // change are kept and the later contract drop loses nothing.
@@ -281,6 +281,8 @@ async function rowsChangedSince(prisma: PrismaClient, since: Date): Promise<numb
 
 /** Runs the copy, verifies it, and records the marker; returns the exit code. */
 async function copyAndVerify(prisma: PrismaClient, options: CliOptions): Promise<number> {
+  const priorState = await readState(prisma)
+  const copyStartedAt = new Date()
   out('Copying legacy data into the native layers tables...')
   const report = await runBackfill(prisma, {
     since: options.since,
@@ -293,8 +295,8 @@ async function copyAndVerify(prisma: PrismaClient, options: CliOptions): Promise
   out('Verifying the copy...')
   const verify = await runVerify(prisma, { since: options.since })
   const code = reportVerify(verify)
-  if (code === 0) {
-    await recordVerified(prisma, verify as unknown as Parameters<typeof recordVerified>[1])
+  if (code === 0 && (!options.since || priorState?.verifiedAt)) {
+    await recordVerified(prisma, verify as unknown as Parameters<typeof recordVerified>[1], copyStartedAt)
     out('Recorded migration state: verified. The legacy tables are safe to drop in the release that removes them.')
   } else {
     out('Migration state left at: backfilled. Fix the mismatches and re-run `migrate` (it is idempotent).')
@@ -307,7 +309,8 @@ async function verify(prisma: PrismaClient, options: CliOptions): Promise<number
   await ensureStateTable(prisma)
   const report = await runVerify(prisma, { since: options.since })
   const code = reportVerify(report)
-  if (code === 0) await recordVerified(prisma, report as unknown as Parameters<typeof recordVerified>[1])
+  if (code === 0 && !options.since) await recordVerified(prisma, report as unknown as Parameters<typeof recordVerified>[1])
+  if (options.since) out('Subset verification does not mark the full migration verified.')
   return code
 }
 

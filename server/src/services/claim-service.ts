@@ -41,7 +41,7 @@ import {
   reconstructClaimsViaLens,
   relationToLayersViaLens,
 } from './layers-lens/claim-lens.js'
-import { syncChildIds } from './layers-bridge/claim-bridge.js'
+import { syncChildIds, deleteRelationSpans, dereferenceClaimProse } from './layers-bridge/claim-bridge.js'
 import { LayersOntologyRepository } from '../repositories/LayersOntologyRepository.js'
 import { WorldStateService, resolvePersonalUserId } from './world-state-service.js'
 
@@ -907,9 +907,10 @@ export class ClaimService {
       // carrier skips them and only OTHER claims' prose is rewritten.
       for (const id of subtreeIds) {
         const name = nameById.get(id) ?? existing.text
-        await world.dereferenceAcrossCarriers(userId, { kind: 'claimRef', id, name }, tx)
+        await world.dereferenceAcrossCarriers(userId, { kind: 'claimRef', id, name }, tx, { skipClaims: true })
       }
-    })
+      await dereferenceClaimProse(tx, subtreeIds.map((id) => ({ kind: 'claimRef', id, name: nameById.get(id) ?? existing.text })))
+    }, { timeout: 60_000 })
   }
 
   /**
@@ -1247,7 +1248,10 @@ export class ClaimService {
     this.authorizeClaim('update', sourceClaim)
     this.authorizeClaim('update', targetClaim)
 
-    await this.graphRepo.deleteEdge(relationId)
+    await this.prisma.$transaction(async (tx) => {
+      await deleteRelationSpans(tx, summaryId, [relationId])
+      await tx.graphEdge.delete({ where: { id: relationId } })
+    })
   }
 
   /**
@@ -1277,10 +1281,14 @@ export class ClaimService {
 
     const persona = await this.prisma.persona.findUnique({
       where: { id: personaId },
-      select: { id: true, projectId: true },
+      select: { id: true, projectId: true, userId: true, isSystemGenerated: true },
     })
     if (!persona) {
       throw new NotFoundError('Persona', personaId)
+    }
+
+    if (!ability.can('read', subject('Persona', persona))) {
+      throw new ForbiddenError('Cannot create a claim under this Persona')
     }
 
     // Pre-authorize claim creation in the resolved project scope before

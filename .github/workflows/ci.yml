@@ -479,6 +479,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Verify deployment recovery and secret encoding
+        run: |
+          bash -n scripts/deploy-remote.sh
+          python3 -m unittest discover -s scripts -p 'test_deploy.py' -v
+
       - name: Validate every docker compose configuration
         run: |
           set -euo pipefail

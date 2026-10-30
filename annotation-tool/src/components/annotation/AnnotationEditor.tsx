@@ -23,7 +23,7 @@ import {
 import { User, CalendarDays, MapPin, Folder, X } from 'lucide-react'
 import { usePersonas, usePersonaOntology, useWorld, useUpdateAnnotation } from '@store/queries'
 import { useTourAnchor } from '@/tours/engine/anchorRegistry'
-import type { Annotation, ObjectAnnotation, TypeAnnotation, BoundingBoxSequence, BoundingBox, InterpolationSegment } from '@models/types'
+import type { Annotation, ObjectAnnotation, TypeAnnotation, BoundingBoxSequence } from '@models/types'
 import { getAnnotationTimeBounds } from '@models/types'
 import ObjectPicker from './ObjectPicker'
 
@@ -106,57 +106,13 @@ export default function AnnotationEditor({
   const handleSave = () => {
     if (!annotation) return
 
-    const startFrame = Math.floor(formData.startTime * videoFps)
-    const endFrame = Math.floor(formData.endTime * videoFps)
-
-    // Build keyframes array - if start and end are different, create two keyframes
-    const boxes: BoundingBox[] = startFrame === endFrame
-      ? [{
-          x: formData.x,
-          y: formData.y,
-          width: formData.width,
-          height: formData.height,
-          frameNumber: startFrame,
-          isKeyframe: true,
-        }]
-      : [
-          {
-            x: formData.x,
-            y: formData.y,
-            width: formData.width,
-            height: formData.height,
-            frameNumber: startFrame,
-            isKeyframe: true,
-          },
-          {
-            x: formData.x,
-            y: formData.y,
-            width: formData.width,
-            height: formData.height,
-            frameNumber: endFrame,
-            isKeyframe: true,
-          },
-        ]
-
-    const interpolationSegments: InterpolationSegment[] = startFrame === endFrame
-      ? []
-      : [{
-          type: 'linear',
-          startFrame,
-          endFrame,
-        }]
-
+    // Geometry fields edit the first keyframe only. Timeline controls manage
+    // time bounds, interpolation and visibility without replacing the track.
     const boundingBoxSequence: BoundingBoxSequence = {
-      boxes,
-      interpolationSegments,
-      visibilityRanges: [{
-        startFrame,
-        endFrame,
-        visible: true,
-      }],
-      totalFrames: endFrame - startFrame + 1,
-      keyframeCount: boxes.length,
-      interpolatedFrameCount: Math.max(0, endFrame - startFrame - 1),
+      ...annotation.boundingBoxSequence,
+      boxes: annotation.boundingBoxSequence.boxes.map((box, index) => index === 0
+        ? { ...box, x: formData.x, y: formData.y, width: formData.width, height: formData.height }
+        : box),
     }
 
     const now = new Date().toISOString()
@@ -176,7 +132,7 @@ export default function AnnotationEditor({
         boundingBoxSequence,
         time: annotation.time,
         confidence: annotation.confidence,
-        notes: formData.notes || undefined,
+        notes: formData.notes,
         metadata: annotation.metadata,
         createdBy: annotation.createdBy,
         createdAt: annotation.createdAt,
@@ -193,7 +149,7 @@ export default function AnnotationEditor({
         boundingBoxSequence,
         time: annotation.annotationType === 'object' ? annotation.time : undefined,
         confidence: annotation.confidence,
-        notes: formData.notes || undefined,
+        notes: formData.notes,
         metadata: annotation.metadata,
         createdBy: annotation.createdBy,
         createdAt: annotation.createdAt,
@@ -364,11 +320,13 @@ export default function AnnotationEditor({
           )}
 
           <p className="text-sm font-medium mt-4">Time Span</p>
+          <p className="text-xs text-muted-foreground">Use the timeline to edit keyframe times and visibility.</p>
           <div className="grid grid-cols-2 gap-4">
             <div>
               <Label>Start Time (seconds)</Label>
               <Input
                 type="number"
+                readOnly
                 value={formData.startTime}
                 onChange={(e) => setFormData({
                   ...formData,
@@ -383,6 +341,7 @@ export default function AnnotationEditor({
               <Label>End Time (seconds)</Label>
               <Input
                 type="number"
+                readOnly
                 value={formData.endTime}
                 onChange={(e) => setFormData({
                   ...formData,
@@ -395,7 +354,7 @@ export default function AnnotationEditor({
             </div>
           </div>
 
-          <p className="text-sm font-medium mt-4">Bounding Box</p>
+          <p className="text-sm font-medium mt-4">First Keyframe Bounding Box</p>
           <div className="grid grid-cols-4 gap-4">
             <div>
               <Label>X</Label>

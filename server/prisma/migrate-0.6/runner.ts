@@ -146,14 +146,20 @@ export async function runBackfill(
     (skip, take) =>
       prisma.claim.findMany({ where: sinceFilter, orderBy: { id: 'asc' }, skip, take }),
     batchSize,
-    async (claims) => {
-      const claimIds = claims.map((claim) => claim.id)
-      const relations = await prisma.claimRelation.findMany({
-        where: { sourceClaimId: { in: claimIds } },
-        orderBy: { id: 'asc' },
-      })
-      return backfillClaims(prisma, claims, relations)
-    },
+    (claims) => backfillClaims(prisma, claims, []),
+    report.claims,
+  )
+
+  // Relations have their own update watermark and may target claims in later pages.
+  await foldPages(
+    (skip, take) => prisma.claimRelation.findMany({
+      where: sinceFilter,
+      orderBy: { id: 'asc' },
+      skip,
+      take,
+    }),
+    batchSize,
+    (relations) => backfillClaims(prisma, [], relations),
     report.claims,
   )
 

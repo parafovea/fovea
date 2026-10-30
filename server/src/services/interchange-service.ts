@@ -217,7 +217,7 @@ export class InterchangeService {
 
     const corpus = request.corpusId
       ? await this.repository.findCorpusById(request.corpusId)
-      : await this.repository.findCorpusByName(request.corpusName!)
+      : await this.repository.findCorpusByName(request.corpusName!, this.ability ? accessibleBy(this.ability, 'read').Corpus : {})
     if (!corpus) {
       throw new NotFoundError('Corpus', request.corpusId ?? request.corpusName!)
     }

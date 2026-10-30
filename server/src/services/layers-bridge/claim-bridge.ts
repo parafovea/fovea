@@ -376,7 +376,7 @@ export async function deleteExtractedSummaryClaims(
 }
 
 /** Deletes the endpoint-span annotations of the given relation ids in a summary's layer. */
-async function deleteRelationSpans(
+export async function deleteRelationSpans(
   prisma: PrismaLike,
   summaryId: string,
   relationIds: string[],
@@ -498,16 +498,10 @@ export async function readAllClaimRefs(
  */
 async function readAllClaims(prisma: PrismaLike): Promise<StoredClaim[]> {
   const nodes = (await prisma.graphNode.findMany({ where: { nodeType: 'claim' } })).filter(isClaimNode)
-  const claims: StoredClaim[] = []
-  for (const node of nodes) {
-    const primary = await prisma.layersAnnotation.findUnique({ where: { id: claimAnnotationId(node.id) } })
-    if (!primary) continue
-    const children = await prisma.layersAnnotation.findMany({ where: { parentAnnotationId: primary.id } })
-    const refEdges = await prisma.graphEdge.findMany({ where: { sourceLocalId: node.id } })
-    const parentClaimId = await resolveParentClaimId(prisma, primary.parentAnnotationId)
-    claims.push(claimFromLayers(node, primary, { children, refEdges, parentClaimId }))
-  }
-  return claims
+  const nodeIds = nodes.map((node) => node.id)
+  const annotations = await prisma.layersAnnotation.findMany({ where: { denotesNodeId: { in: nodeIds } } })
+  const edges = await prisma.graphEdge.findMany({ where: { sourceLocalId: { in: nodeIds } } })
+  return reconstructClaimsViaLens(nodes, annotations, edges)
 }
 
 /**
@@ -520,7 +514,7 @@ async function readAllClaims(prisma: PrismaLike): Promise<StoredClaim[]> {
  * ONLY safe way to dereference claim prose / structured refs — it re-materializes
  * the standoff rather than surgically editing argRefs or deleting annotation rows.
  */
-async function rewriteClaimInPlace(prisma: PrismaLike, claim: StoredClaim): Promise<void> {
+export async function rewriteClaimInPlace(prisma: PrismaLike, claim: StoredClaim): Promise<void> {
   const projection = await claimToLayersViaLens(claim)
   const [primary, ...children] = projection.annotations
 
@@ -627,7 +621,7 @@ async function rewriteClaimInPlace(prisma: PrismaLike, claim: StoredClaim): Prom
  */
 export async function dereferenceClaimProse(
   prisma: PrismaLike,
-  target: DereferenceTarget,
+  target: DereferenceTarget | DereferenceTarget[],
   options?: { excludeClaimIds?: Set<string> },
 ): Promise<number> {
   const exclude = options?.excludeClaimIds
@@ -637,14 +631,16 @@ export async function dereferenceClaimProse(
     if (exclude?.has(claim.id)) continue
     const next: StoredClaim = { ...claim }
     let changed = false
-    for (const field of proseFields) {
-      const value = claim[field]
-      if (!Array.isArray(value)) continue
-      const { gloss, count } = dereferenceGlossItems(value as GlossItem[], target)
-      if (count > 0) {
-        next[field] = gloss
-        total += count
-        changed = true
+    for (const deleted of Array.isArray(target) ? target : [target]) {
+      for (const field of proseFields) {
+        const value = next[field]
+        if (!Array.isArray(value)) continue
+        const { gloss, count } = dereferenceGlossItems(value as GlossItem[], deleted)
+        if (count > 0) {
+          next[field] = gloss
+          total += count
+          changed = true
+        }
       }
     }
     if (changed) await rewriteClaimInPlace(prisma, next)

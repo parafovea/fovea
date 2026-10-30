@@ -77,7 +77,7 @@ import type {
 // --------------------------------------------------------------------------
 
 /** The kind of world object an object annotation's `label` references. */
-export type VideoAnnotationLinkType = 'entity' | 'event' | 'time' | 'location'
+export type VideoAnnotationLinkType = 'entity' | 'event' | 'time' | 'location' | 'entity-collection' | 'event-collection' | 'time-collection'
 
 /** The FOVEA-native context a video annotation carries beyond its own fields. */
 export interface VideoAnnotationContext {
@@ -136,6 +136,7 @@ export interface VideoAnnotationSource {
   linkType: VideoAnnotationLinkType | null
   /** Authoring source method. */
   source: string
+  notes?: string
   /** Confidence as a 0-1 float, or null. */
   confidence: number | null
   /** The video's expression id. */
@@ -207,6 +208,7 @@ export interface VideoAnnotationInput {
   frames: BoundingBoxSequence
   confidence: number | null
   source: string
+  notes?: string
 }
 
 /**
@@ -260,6 +262,7 @@ export function toVideoAnnotationSource(
     label: input.label,
     linkType: input.linkType,
     source: input.source,
+    notes: input.notes,
     confidence: input.confidence,
     expressionId: ctx.expressionId,
     ontologyId: ctx.ontologyId,
@@ -276,7 +279,8 @@ export function toVideoAnnotationSource(
     if (seq.trackingSource !== undefined) track.trackingSource = seq.trackingSource
     if (seq.trackingConfidence !== undefined) track.trackingConfidence = seq.trackingConfidence
     source.track = track
-  } else if (seq.trackingSource !== undefined || seq.trackingConfidence !== undefined) {
+  }
+  if (seq.trackingSource !== undefined || seq.trackingConfidence !== undefined) {
     const provenance: VideoTrackProvenance = {}
     if (seq.trackingSource !== undefined) provenance.trackingSource = seq.trackingSource
     if (seq.trackingConfidence !== undefined) provenance.trackingConfidence = seq.trackingConfidence
@@ -323,7 +327,7 @@ export const VIDEO_ANNOTATION_LENS_DOC = {
       compute_field: {
         target: 'temporalSpan',
         expr:
-          'if length keyframes == 0 then { start = 0, ending = 0 } else { start = fold (\\a b -> if a < b then a else b) 9000000 (map (\\k -> k.timeMs) keyframes), ending = fold (\\a b -> if a > b then a else b) 0 (map (\\k -> k.timeMs) keyframes) }',
+          'if length keyframes == 0 then { start = 0, ending = 0 } else { start = fold (\\a b -> if a < b then a else b) (head (map (\\k -> k.timeMs) keyframes)) (map (\\k -> k.timeMs) keyframes), ending = fold (\\a b -> if a > b then a else b) 0 (map (\\k -> k.timeMs) keyframes) }',
       },
     },
     {
@@ -580,6 +584,12 @@ function provenanceFeatureEntries(provenance: VideoTrackProvenance): Array<{ key
   return entries
 }
 
+/** Reads a string from an annotation's native feature map. */
+function annotationFeature(features: unknown, key: string): string | undefined {
+  const entries = (features as { entries?: Array<{ key: string; value: string }> } | null)?.entries
+  return entries?.find((entry) => entry.key === key)?.value
+}
+
 /** Decodes the provenance {@link provenanceFeatureEntries} wrote into a row's features. */
 function provenanceFromFeatures(features: unknown): VideoTrackProvenance {
   const entries = (features as { entries?: Array<{ key?: unknown; value?: unknown }> } | null)?.entries ?? []
@@ -624,7 +634,7 @@ export function composeVideoRecords(
   // persona-scoped world-instance annotation's type; a persona type-annotation and
   // an unlinked object annotation denote none.
   let graphNode: GraphNodeRecord | null = null
-  if (!personaId && source.label && source.linkType) {
+  if (!personaId && source.label && source.linkType && !source.linkType.endsWith('-collection')) {
     graphNode = {
       $type: 'pub.layers.graph.graphNode',
       nodeType: linkTypeToNodeType(source.linkType),
@@ -654,9 +664,12 @@ export function composeVideoRecords(
   if (graphNode) {
     annotation.arguments = [{ role: 'denotes', target: { recordRef: graphNode._id } }]
   }
-  if (source.untrackedProvenance) {
-    annotation.features = { entries: provenanceFeatureEntries(source.untrackedProvenance) }
-  }
+  annotation.features = { entries: [
+    { key: 'source', value: source.source },
+    ...(source.notes !== undefined ? [{ key: 'notes', value: source.notes }] : []),
+    ...(source.linkType?.endsWith('-collection') ? [{ key: 'linkType', value: source.linkType }] : []),
+    ...provenanceFeatureEntries(source.untrackedProvenance ?? {}),
+  ] }
 
   const annotationLayer: AnnotationLayerRecord = {
     $type: 'pub.layers.annotation.annotationLayer',
@@ -1096,6 +1109,12 @@ export async function layersToAnnotationViaLens(
     if (provenance.trackingConfidence !== undefined) frames.trackingConfidence = provenance.trackingConfidence
   }
 
+  if (annotationFeature(row.features, 'source') !== undefined) {
+    delete frames.trackingSource
+    delete frames.trackingConfidence
+    Object.assign(frames, provenanceFromFeatures(row.features))
+  }
+
   // An object layer's annotation is `object`; a persona layer's is a `type`
   // annotation unless it denotes a world node, when its `type` is the node's
   // instance kind (entity/event/time/location).
@@ -1103,7 +1122,7 @@ export async function layersToAnnotationViaLens(
   let linkType: VideoAnnotationLinkType | null
   if (!layer.personaId) {
     type = 'object'
-    linkType = nodeTypeToLinkType(node?.nodeType)
+    linkType = (annotationFeature(row.features, 'linkType') as VideoAnnotationLinkType | undefined) ?? nodeTypeToLinkType(node?.nodeType)
   } else if (node) {
     linkType = nodeTypeToLinkType(node.nodeType)
     type = linkType ?? 'type'
@@ -1121,7 +1140,8 @@ export async function layersToAnnotationViaLens(
     linkType,
     frames,
     confidence: view.confidence,
-    source: layer.sourceMethod,
+    source: annotationFeature(row.features, 'source') ?? layer.sourceMethod,
+    notes: annotationFeature(row.features, 'notes'),
     linkedObjectName: node?.label ?? null,
     createdBy: row.createdByUserId,
     createdAt: row.createdAt.toISOString(),
@@ -1199,6 +1219,12 @@ export function layersToAnnotation(
     if (provenance.trackingConfidence !== undefined) frames.trackingConfidence = provenance.trackingConfidence
   }
 
+  if (annotationFeature(row.features, 'source') !== undefined) {
+    delete frames.trackingSource
+    delete frames.trackingConfidence
+    Object.assign(frames, provenanceFromFeatures(row.features))
+  }
+
   // An object layer's annotation is `object`; a persona layer's is a `type`
   // annotation unless it denotes a world node, when its `type` is the node's
   // instance kind (entity/event/time/location).
@@ -1206,7 +1232,7 @@ export function layersToAnnotation(
   let linkType: VideoAnnotationLinkType | null
   if (!layer.personaId) {
     type = 'object'
-    linkType = nodeTypeToLinkType(node?.nodeType)
+    linkType = (annotationFeature(row.features, 'linkType') as VideoAnnotationLinkType | undefined) ?? nodeTypeToLinkType(node?.nodeType)
   } else if (node) {
     linkType = nodeTypeToLinkType(node.nodeType)
     type = linkType ?? 'type'
@@ -1224,7 +1250,8 @@ export function layersToAnnotation(
     linkType,
     frames,
     confidence: row.confidence != null ? (from1000(row.confidence) ?? null) : null,
-    source: layer.sourceMethod,
+    source: annotationFeature(row.features, 'source') ?? layer.sourceMethod,
+    notes: annotationFeature(row.features, 'notes'),
     linkedObjectName: node?.label ?? null,
     createdBy: row.createdByUserId,
     createdAt: row.createdAt.toISOString(),

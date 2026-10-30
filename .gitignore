@@ -146,3 +146,7 @@ model-service/uv.lock
 
 # wikibase uses pip in CI; its uv.lock is a local `uv run` artifact, not committed
 wikibase/uv.lock
+
+# Transient deployment credentials and recovery metadata
+.deploy-*.json
+.deploy.lock

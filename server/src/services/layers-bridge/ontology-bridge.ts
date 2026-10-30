@@ -244,6 +244,10 @@ export async function writeOntologyAggregate(
   meta: OntologyMeta,
   scope: OntologyLayersScope,
 ): Promise<void> {
+  if ('$transaction' in prisma) {
+    return prisma.$transaction((tx) => writeOntologyAggregate(tx, personaId, aggregate, meta, scope))
+  }
+  await prisma.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${layersOntologyForPersonaId(personaId)}, 0))`
   const { ontology, typeDefs } = await ontologyToLayersViaLens(aggregate, personaId, meta, scope)
 
   const existing = await prisma.layersOntology.findUnique({ where: { id: ontology.id } })
@@ -267,7 +271,10 @@ export async function writeOntologyAggregate(
   }
 
   const oldTypeDefs = await prisma.typeDef.findMany({ where: { ontologyId: ontology.id } })
-  for (const typeDef of oldTypeDefs) await prisma.typeDef.delete({ where: { id: typeDef.id } })
+  for (const typeDef of oldTypeDefs) {
+    await prisma.expression.deleteMany({ where: { id: glossExpressionId(typeDef.id) } })
+    await prisma.typeDef.delete({ where: { id: typeDef.id } })
+  }
 
   const rowId = (typeKind: string, originalId: string): string => typeDefRowId(ontology.id, typeKind, originalId)
 

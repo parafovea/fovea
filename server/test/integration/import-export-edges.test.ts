@@ -100,6 +100,22 @@ describe('Import/export edge cases', () => {
     })
   }
 
+  it('keeps missing-video skips after cross-user id regeneration', async () => {
+    const user = await registerAndLogin('skip-user', 'password123')
+    const lines = [
+      { type: 'metadata', data: { exporterUserId: 'foreign-user' } },
+      { type: 'entity', data: { id: 'entity-imported', name: 'Imported entity', typeAssignments: [] } },
+      { type: 'annotation', data: { id: 'missing-video-annotation', videoId: 'absent-video', annotationType: 'object', linkedEntityId: 'entity-imported',
+        boundingBoxSequence: { boxes: [{ x: 0, y: 0, width: 10, height: 10, frameNumber: 0, isKeyframe: true }],
+          interpolationSegments: [], visibilityRanges: [{ startFrame: 0, endFrame: 0, visible: true }], totalFrames: 1, keyframeCount: 1, interpolatedFrameCount: 0 } } },
+    ]
+    const response = await importAs(user, lines.map(line => JSON.stringify(line)).join('\n'))
+    expect(response.statusCode).toBe(200)
+    expect(response.json().success).toBe(true)
+    expect(response.json().summary.skippedItems.annotations).toBe(1)
+    expect(await prisma.graphNode.count({ where: { createdByUserId: user.userId, label: 'Imported entity' } })).toBe(1)
+  })
+
   // --- Empty / minimal-content inputs ---------------------------------------
 
   describe('Empty and minimal inputs', () => {

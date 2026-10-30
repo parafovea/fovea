@@ -1,4 +1,5 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest'
+import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest'
+import { videoSummarizationQueue } from '../../src/queues/setup.js'
 import { buildApp } from '../../src/app.js'
 import { hashPassword } from '../../src/lib/password.js'
 import { seedBaselinePermissions } from '../helpers/rbac-test-setup.js'
@@ -83,6 +84,20 @@ describe('Video Summaries API', () => {
     testPersonaId = persona.id
   })
 
+  it('serializes a completed summarization job result', async () => {
+    const completed = { summaryId: 'result-summary', videoId: testVideoId, personaId: testPersonaId,
+      summary: [{ type: 'text', content: 'Generated summary' }], keyFrames: [{ timestamp: 1, description: 'A frame', frame_number: 30, confidence: 0.9 }] }
+    const spy = vi.spyOn(videoSummarizationQueue, 'getJob').mockResolvedValue({
+      id: 'finished-job', data: { videoId: testVideoId, personaId: testPersonaId },
+      getState: async () => 'completed', progress: 100, returnvalue: completed,
+    } as Awaited<ReturnType<typeof videoSummarizationQueue.getJob>>)
+    try {
+      const response = await app.inject({ method: 'GET', url: '/api/jobs/finished-job', cookies: { session_token: testSessionToken } })
+      expect(response.statusCode).toBe(200)
+      expect(response.json().returnvalue).toEqual(completed)
+    } finally { spy.mockRestore() }
+  })
+
   describe('POST /api/summaries', () => {
     it('saves a summary with audio metadata fields', async () => {
       const response = await app.inject({
@@ -93,10 +108,11 @@ describe('Video Summaries API', () => {
           videoId: testVideoId,
           personaId: testPersonaId,
           summary: [{ type: 'text', content: 'Test summary with audio' }],
+          comment: 'Reviewer note',
           visualAnalysis: 'Visual analysis text',
           audioTranscript: 'This is the audio transcript',
           keyFrames: [
-            { timestamp: 1.0, description: 'Frame 1' },
+            { timestamp: 1.0, description: 'Frame 1', frame_number: 30, confidence: 0.8 },
             { timestamp: 2.0, description: 'Frame 2' },
             { timestamp: 3.0, description: 'Frame 3' }
           ],
@@ -120,6 +136,8 @@ describe('Video Summaries API', () => {
 
       expect(response.statusCode).toBe(201)
       const body = response.json()
+      expect(body.comment).toBe('Reviewer note')
+      expect(body.keyFrames[0]).toMatchObject({ frame_number: 30, confidence: 0.8 })
       expect(body.audioLanguage).toBe('en')
       expect(body.speakerCount).toBe(2)
       expect(body.audioModelUsed).toBe('whisper-v3-turbo')

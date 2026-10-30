@@ -401,6 +401,9 @@ export class LayersOntologyService {
     const ability = this.requireAbility()
     const userId = this.requireUserId()
     const ontology = await this.loadReadableOntology(ontologyId)
+    if (!ability.can('update', subject('LayersOntology', ontology))) {
+      throw new ForbiddenError('Cannot extend this LayersOntology')
+    }
     const projectId = ontology.projectId
 
     const updateExisting = async (existing: PrismaTypeDef) => {

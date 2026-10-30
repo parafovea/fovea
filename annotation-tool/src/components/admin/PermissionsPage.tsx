@@ -47,7 +47,16 @@ async function fetchPermissions(): Promise<PermissionMatrix> {
     const error = await response.json()
     throw new Error(error.message || 'Failed to fetch permissions')
   }
-  return response.json()
+  const rows: Array<{ scope: string; role: string; resourceType: string; action: string; ownOnly: boolean }> = await response.json()
+  const permissions: RolePermission[] = []
+  for (const row of rows) {
+    const role = `${row.scope}: ${row.role}`
+    let permission = permissions.find(p => p.role === role && p.resource === row.resourceType)
+    if (!permission) { permission = { role, resource: row.resourceType, actions: [] }; permissions.push(permission) }
+    permission.actions.push(`${row.action}${row.ownOnly ? ' (own)' : ''}`)
+  }
+  return { roles: [...new Set(permissions.map(p => p.role))],
+    resources: [...new Set(permissions.map(p => p.resource))], permissions }
 }
 
 /**

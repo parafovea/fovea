@@ -225,6 +225,11 @@ export interface TourContentBundleRaw {
 }
 
 async function resolveBundle(raw: TourContentBundleRaw): Promise<TourContentBundle> {
+  for (const field of ['documentId', 'documentTitle', 'documentText', 'personaName', 'personaRole', 'spanTypeName', 'relationTypeName'] as const) {
+    if (typeof raw.documentAnnotation?.[field] !== 'string' || !raw.documentAnnotation[field].trim()) {
+      throw new Error(`documentAnnotation.${field} is required`)
+    }
+  }
   const [v1, v4, v5, v6, v7] = await Promise.all([
     resolveVideoId(raw.firstAnnotation.videoFilename),
     resolveVideoId(raw.eventsRolesClaims.videoFilename),

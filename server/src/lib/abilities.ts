@@ -265,6 +265,15 @@ export function defineAbilitiesFor(
   // All authenticated users can read videos (filtered by VideoAccessService)
   rules.push({ action: 'read', subject: 'Video' })
 
+  // Owning a new row does not grant access to an unrelated project's scope.
+  const projectIds = roles.projectRoles.map((role) => role.projectId)
+  for (const contentSubject of [...layersOwnedSubjects, 'Annotation', 'Claim', 'VideoSummary', 'Persona', 'WorldState'] as SubjectName[]) {
+    rules.push({
+      action: 'create', subject: contentSubject, inverted: true,
+      conditions: { projectId: { gt: '', notIn: projectIds } },
+    })
+  }
+
   return createPrismaAbility(rules)
 }
 

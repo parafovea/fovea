@@ -64,7 +64,11 @@ exporter; the instrument names below are the OpenTelemetry
 names declared in `server/src/metrics.ts`. When exported to
 Prometheus, dots become underscores and counters gain a
 `_total` suffix (so `api.requests` surfaces as
-`api_requests_total`). The high-signal ones for operators are:
+`api_requests_total`). The collector does not add a namespace prefix.
+Histogram names also include their unit: `fovea.rbac.check.duration`
+exports `fovea_rbac_check_duration_milliseconds_bucket`. Error counters
+include `fovea_errors_total` and `fovea_errors_api_total`. The high-signal
+ones for operators are:
 
 | Metric                       | What it measures                                                |
 | ---------------------------- | --------------------------------------------------------------- |

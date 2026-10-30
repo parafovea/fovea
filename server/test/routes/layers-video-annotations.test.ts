@@ -11,6 +11,7 @@ import {
   annotationLayerId,
   expressionVideoId,
   layersOntologyForPersonaId,
+  trackClusterSetId,
 } from '../../src/services/layers-id-map.js'
 import type { BoundingBoxSequence } from '../../src/services/layers-conversion-service.js'
 
@@ -474,4 +475,48 @@ describe('Video annotations over the layers store', () => {
     // The claim span is untouched by the rejected mutations.
     expect(await prisma.layersAnnotation.findUnique({ where: { id: claimAnnotationId } })).not.toBeNull()
   })
+  it('preserves independent sources, notes, provenance and concurrent track memberships', async () => {
+    const ids = [randomUUID(), randomUUID()]
+    const responses = await Promise.all(ids.map((id, index) => app.inject({
+      method: 'POST', url: `/api/layers/videos/${videoId}/annotations`,
+      cookies: { session_token: sessionToken },
+      payload: { id, type: 'object', label: graphNodeId, linkType: 'entity',
+        source: index ? 'import' : 'manual', notes: `note ${index}`,
+        frames: { ...objectFrames, trackId: 'same-id', trackingSource: index ? 'sam2' : 'manual', trackingConfidence: index ? 0.8 : 0.4 } },
+    })))
+    for (const response of responses) expect(response.statusCode, response.body).toBe(201)
+    const read = await app.inject({ method: 'GET', url: `/api/layers/videos/${videoId}/annotations`, cookies: { session_token: sessionToken } })
+    const rows = read.json<Array<{ id: string; source: string; notes: string; frames: BoundingBoxSequence }>>()
+    for (const [index, id] of ids.entries()) {
+      const row = rows.find((item) => item.id === id)!
+      expect(row.source).toBe(index ? 'import' : 'manual')
+      expect(row.notes).toBe(`note ${index}`)
+      expect(row.frames.trackId).toBe('same-id')
+      expect(row.frames.trackingConfidence).toBe(index ? 0.8 : 0.4)
+    }
+    const update = await app.inject({ method: 'PUT', url: `/api/layers/videos/${videoId}/annotations/${ids[0]}`,
+      cookies: { session_token: sessionToken }, payload: { frames: { ...objectFrames, trackingSource: 'sam2', trackingConfidence: 0.7 } } })
+    expect(update.statusCode).toBe(200)
+    const untracked = await prisma.layersAnnotation.findUniqueOrThrow({ where: { id: ids[0] } })
+    expect(untracked.features).toMatchObject({ entries: expect.arrayContaining([{ key: 'trackingConfidence', value: '700' }]) })
+  })
+
+  it('rejects direct mutations of shared video layers and track sets', async () => {
+    const layerId = annotationLayerId(videoId, null)
+    const layerDelete = await app.inject({ method: 'DELETE', url: `/api/layers/annotation-layers/${layerId}`, cookies: { session_token: sessionToken } })
+    expect(layerDelete.statusCode).toBe(403)
+    const trackDelete = await app.inject({ method: 'DELETE', url: `/api/layers/cluster-sets/${trackClusterSetId(videoId)}`, cookies: { session_token: sessionToken } })
+    expect(trackDelete.statusCode).toBe(403)
+    expect(await prisma.annotationLayer.findUnique({ where: { id: layerId } })).not.toBeNull()
+  })
+
+  it('rejects a mismatched video URL without changing the annotation or track set', async () => {
+    for (const method of ['PUT', 'DELETE'] as const) {
+      const response = await app.inject({ method, url: `/api/layers/videos/${randomUUID()}/annotations/${typeAnnotationId}`,
+        cookies: { session_token: sessionToken }, ...(method === 'PUT' ? { payload: { source: 'wrong-video' } } : {}) })
+      expect(response.statusCode).toBe(404)
+    }
+    expect(await prisma.layersAnnotation.findUnique({ where: { id: typeAnnotationId } })).not.toBeNull()
+  })
+
 })

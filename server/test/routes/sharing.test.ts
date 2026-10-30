@@ -527,6 +527,31 @@ describe('Sharing API', () => {
   // =========================================================================
 
   describe('POST /api/sharing/:shareId/fork', () => {
+
+    it('forks world objects with fresh ids while preserving the source and recipient', async () => {
+      const ownerCookies = { session_token: ownerSessionToken }
+      const recipientCookies = { session_token: recipientSessionToken }
+      const original = await app.inject({ method: 'PUT', url: '/api/world', cookies: ownerCookies,
+        payload: { entities: [{ id: 'source-entity', name: 'Source' }], entityCollections: [{ id: 'source-collection', name: 'Group', entityIds: ['source-entity'] }] } })
+      expect(original.statusCode).toBe(200)
+      await app.inject({ method: 'PUT', url: '/api/world', cookies: recipientCookies,
+        payload: { entities: [{ id: 'recipient-entity', name: 'Existing' }] } })
+      const share = await prisma.resourceShare.create({ data: {
+        resourceType: 'world_state', resourceId: original.json().id, sharedByUserId: ownerUserId,
+        sharedWithUserId: recipientUserId, permissionLevel: 'forkable',
+      } })
+      const fork = await app.inject({ method: 'POST', url: `/api/sharing/${share.id}/fork`, cookies: recipientCookies })
+      expect(fork.statusCode, fork.body).toBe(201)
+      const source = (await app.inject({ method: 'GET', url: '/api/world', cookies: ownerCookies })).json()
+      expect(source.entities[0]).toMatchObject({ id: 'source-entity', name: 'Source' })
+      const recipient = (await app.inject({ method: 'GET', url: '/api/world', cookies: recipientCookies })).json()
+      expect(recipient.entities).toHaveLength(2)
+      const copied = recipient.entities.find((entity: { name: string }) => entity.name === 'Source')
+      expect(copied.id).not.toBe('source-entity')
+      expect(recipient.entityCollections[0].id).not.toBe('source-collection')
+      expect(recipient.entityCollections[0].entityIds).toEqual([copied.id])
+    })
+
     it('forks a persona into the recipient workspace', async () => {
       const persona = await prisma.persona.create({
         data: {

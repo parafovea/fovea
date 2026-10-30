@@ -751,45 +751,32 @@ class S3StorageProvider implements VideoStorageProvider {
     continuationToken?: string;
     isTruncated: boolean;
   }> {
-    try {
-      const command = new ListObjectsV2Command({
-        Bucket: this.bucket,
-        MaxKeys: options?.maxKeys || 1000,
-        ContinuationToken: options?.continuationToken,
-      });
+    const command = new ListObjectsV2Command({
+      Bucket: this.bucket,
+      MaxKeys: options?.maxKeys || 1000,
+      ContinuationToken: options?.continuationToken,
+    });
 
-      const response = await this.s3Client.send(command);
+    const response = await this.s3Client.send(command);
 
-      // Filter for video files only
-      const videos = (response.Contents || [])
-        .filter(obj => {
-          if (!obj.Key) return false;
-          return /\.(webm|mp4|ogg|mov|avi|mkv)$/i.test(obj.Key);
-        })
-        .map(obj => ({
-          filename: path.basename(obj.Key!),
-          path: obj.Key!,
-          size: obj.Size || 0,
-          lastModified: obj.LastModified,
-        }));
+    // Filter for video files only
+    const videos = (response.Contents || [])
+      .filter(obj => {
+        if (!obj.Key) return false;
+        return /\.(webm|mp4|ogg|mov|avi|mkv)$/i.test(obj.Key);
+      })
+      .map(obj => ({
+        filename: obj.Key!,
+        path: obj.Key!,
+        size: obj.Size || 0,
+        lastModified: obj.LastModified,
+      }));
 
-      return {
-        videos,
-        continuationToken: response.NextContinuationToken,
-        isTruncated: response.IsTruncated || false,
-      };
-    } catch (error) {
-      // If bucket doesn't exist or is inaccessible, return empty list
-      if (error && typeof error === 'object' && 'name' in error) {
-        if (error.name === 'NoSuchBucket' || error.name === 'AccessDenied') {
-          return {
-            videos: [],
-            isTruncated: false,
-          };
-        }
-      }
-      throw error;
-    }
+    return {
+      videos,
+      continuationToken: response.NextContinuationToken,
+      isTruncated: response.IsTruncated || false,
+    };
   }
 
   async readTextFile(filePath: string): Promise<string | null> {
@@ -984,8 +971,10 @@ class HybridStorageProvider implements VideoStorageProvider {
     continuationToken?: string;
     isTruncated: boolean;
   }> {
-    // Try primary storage first, fallback to secondary
-    return this.tryBothProviders((provider) => provider.listVideos(options));
+    // Sync treats this inventory as authoritative. A failed listing must abort
+    // reconciliation, since a fallback inventory would delete primary-only rows.
+    const provider = this.primaryStorage === 's3' ? this.s3Provider : this.localProvider;
+    return provider.listVideos(options);
   }
 
   async readTextFile(filePath: string): Promise<string | null> {

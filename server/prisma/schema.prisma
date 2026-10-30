@@ -1090,7 +1090,7 @@ model GraphNode {
   denotedByAnnotations LayersAnnotation[]
 
   projectId       String?
-  project         Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  project         Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
   createdByUserId String?
   layersUri       String?
 
@@ -1126,7 +1126,7 @@ model GraphEdge {
   metadata      Json?
 
   projectId       String?
-  project         Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  project         Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
   createdByUserId String?
   layersUri       String?
 
@@ -1359,7 +1359,7 @@ model CatalogCollection {
   metadata        Json?
 
   projectId       String?
-  project         Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  project         Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
   createdByUserId String?
   layersUri       String?
 
@@ -1394,7 +1394,7 @@ model CatalogMembership {
   metadata      Json?
 
   projectId       String?
-  project         Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  project         Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
   createdByUserId String?
   layersUri       String?
 

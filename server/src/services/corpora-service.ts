@@ -1,3 +1,4 @@
+import { trackClusterSetId } from './layers-id-map.js'
 import {
   Prisma,
   type Corpus as PrismaCorpus,
@@ -672,6 +673,7 @@ export class CorporaService {
     input: ClusterSetInput
   ): Promise<{ clusterSet: ClusterSetResponse; created: boolean }> {
     if (input.id) {
+      await this.assertMutableTrackSet(input.id, input.expressionId ?? null)
       const existing = await this.repository.findClusterSetById(input.id)
       if (existing) {
         return { clusterSet: await this.applyClusterSetUpdate(existing, input), created: false }
@@ -724,6 +726,7 @@ export class CorporaService {
   async deleteClusterSet(id: string): Promise<void> {
     const existing = await this.repository.findClusterSetById(id)
     if (!existing) throw new NotFoundError('ClusterSet', id)
+    await this.assertMutableTrackSet(existing.id, existing.expressionId)
     if (this.ability && !this.ability.can('delete', subject('ClusterSet', existing))) {
       throw new ForbiddenError('Cannot delete this ClusterSet')
     }
@@ -735,6 +738,7 @@ export class CorporaService {
     existing: PrismaClusterSet,
     input: ClusterSetInput | ClusterSetUpdateInput
   ): Promise<ClusterSetResponse> {
+    await this.assertMutableTrackSet(existing.id, existing.expressionId)
     if (this.ability && !this.ability.can('update', subject('ClusterSet', existing))) {
       throw new ForbiddenError('Cannot update this ClusterSet')
     }
@@ -746,6 +750,14 @@ export class CorporaService {
       layersUri: input.layersUri,
     })
     return this.mapClusterSet(updated)
+  }
+
+  /** Shared track membership is writable only through the video annotation writer. */
+  private async assertMutableTrackSet(id: string, expressionId: string | null): Promise<void> {
+    const expression = expressionId ? await this.repository.findExpressionById(expressionId) : null
+    if (expression?.videoId && id === trackClusterSetId(expression.videoId)) {
+      throw new ForbiddenError('Video track sets cannot be changed directly')
+    }
   }
 
   // --- Alignment ------------------------------------------------------------

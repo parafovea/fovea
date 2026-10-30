@@ -1,3 +1,4 @@
+import { annotationLayerId } from './layers-id-map.js'
 import { Prisma, PrismaClient, type AnnotationLayer, type LayersAnnotation, type TextAnnotationRelation } from '@prisma/client'
 import { subject } from '@casl/ability'
 import { accessibleBy } from '@casl/prisma'
@@ -385,6 +386,7 @@ export class AnnotationLayerService {
    */
   async createLayer(input: AnnotationLayerCreateInput): Promise<CreateResult<AnnotationLayerResponse>> {
     const { projectId } = await this.resolveExpressionScope(input.expressionId)
+    if (input.id) await this.assertMutableVideoLayer(input.id, input.expressionId, input.personaId ?? null)
 
     if (input.personaId) {
       const persona = await this.repository.findPersonaById(input.personaId)
@@ -395,6 +397,7 @@ export class AnnotationLayerService {
     }
 
     const updateExisting = async (existing: AnnotationLayer): Promise<CreateResult<AnnotationLayerResponse>> => {
+      await this.assertMutableVideoLayer(existing.id, existing.expressionId, existing.personaId)
       if (!this.ability.can('update', subject('AnnotationLayer', existing))) {
         throw new ForbiddenError('Cannot update this AnnotationLayer')
       }
@@ -463,10 +466,19 @@ export class AnnotationLayerService {
   async deleteLayer(id: string): Promise<void> {
     const existing = await this.repository.findLayerById(id)
     if (!existing) throw new NotFoundError('AnnotationLayer', id)
+    await this.assertMutableVideoLayer(existing.id, existing.expressionId, existing.personaId)
     if (!this.ability.can('delete', subject('AnnotationLayer', existing))) {
       throw new ForbiddenError('Cannot delete this AnnotationLayer')
     }
     await this.repository.deleteLayer(id)
+  }
+
+  /** Shared video grouping layers are managed only by the video annotation writer. */
+  private async assertMutableVideoLayer(id: string, expressionId: string, personaId: string | null): Promise<void> {
+    const expression = await this.prisma.expression.findUnique({ where: { id: expressionId } })
+    if (expression?.videoId && id === annotationLayerId(expression.videoId, personaId)) {
+      throw new ForbiddenError('Video annotation grouping layers cannot be changed directly')
+    }
   }
 
   // ---- LayersAnnotation ----------------------------------------------------

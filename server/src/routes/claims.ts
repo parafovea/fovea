@@ -199,8 +199,7 @@ const ClaimExtractionConfigSchema = Type.Object({
   extractionStrategy: Type.Union([
     Type.Literal('sentence-based'),
     Type.Literal('semantic-units'),
-    Type.Literal('hierarchical'),
-    Type.Literal('manual')
+    Type.Literal('hierarchical')
   ]),
   maxClaimsPerSummary: Type.Optional(Type.Number({ minimum: 1, maximum: 200 })),
   maxSubclaimDepth: Type.Optional(Type.Number({ minimum: 1, maximum: 5 })),

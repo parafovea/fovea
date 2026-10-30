@@ -684,6 +684,7 @@ export const claimWorker = new Worker<
 
     const { allClaims, totalClaims } = await prisma.$transaction(
       async (tx) => {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${summaryId}, 0))`;
         await deleteExtractedSummaryClaims(tx, summaryId);
 
         const saveClaim = async (

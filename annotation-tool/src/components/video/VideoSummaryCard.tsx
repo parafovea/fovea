@@ -229,7 +229,7 @@ export function VideoSummaryCard({
                             Key Frames
                           </p>
                           <p className="text-sm">
-                            Frames: {summary.keyFrames.join(', ')}
+                            Frames: {summary.keyFrames.map(frame => `${frame.timestamp}s: ${frame.description}`).join('; ')}
                           </p>
                         </div>
                       )}
@@ -350,7 +350,7 @@ export function VideoSummaryCard({
                       Key Frames
                     </p>
                     <p className="text-sm">
-                      Frames: {summary.keyFrames.join(', ')}
+                      Frames: {summary.keyFrames.map(frame => `${frame.timestamp}s: ${frame.description}`).join('; ')}
                     </p>
                   </div>
                 )}

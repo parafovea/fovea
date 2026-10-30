@@ -5,7 +5,7 @@
  * @module
  */
 
-import { useState } from 'react'
+import { Fragment, useState } from 'react'
 import {
   Plus,
   Pencil,
@@ -85,7 +85,9 @@ async function fetchGroups(): Promise<Group[]> {
     const error = await response.json()
     throw new Error(error.message || 'Failed to fetch groups')
   }
-  return response.json()
+  const groups: Array<Omit<Group, 'members'> & { members: Array<{ userId: string; role: string; user: { username: string; displayName: string } }> }> = await response.json()
+  return groups.map(group => ({ ...group, createdByUsername: group.createdBy,
+    members: group.members.map(member => ({ ...member, ...member.user })) }))
 }
 
 /**
@@ -114,7 +116,7 @@ export function GroupManagementPage(): JSX.Element {
   const [addMemberOpen, setAddMemberOpen] = useState(false)
   const [addMemberGroupId, setAddMemberGroupId] = useState<string | null>(null)
   const [newMemberUserId, setNewMemberUserId] = useState('')
-  const [newMemberRole, setNewMemberRole] = useState('member')
+  const [newMemberRole, setNewMemberRole] = useState('group_member')
 
   const createGroup = useMutation({
     mutationFn: async (data: GroupFormData) => {
@@ -280,8 +282,8 @@ export function GroupManagementPage(): JSX.Element {
             </TableRow>
           ) : (
             groups.map((group) => (
-              <>
-                <TableRow key={group.id}>
+              <Fragment key={group.id}>
+                <TableRow>
                   <TableCell>
                     <Button
                       variant="ghost"
@@ -345,7 +347,7 @@ export function GroupManagementPage(): JSX.Element {
                                   <TableCell>{member.username}</TableCell>
                                   <TableCell>{member.displayName}</TableCell>
                                   <TableCell>
-                                    <Badge variant={member.role === 'admin' ? 'default' : 'secondary'}>
+                                    <Badge variant={member.role === 'group_admin' ? 'default' : 'secondary'}>
                                       {member.role}
                                     </Badge>
                                   </TableCell>
@@ -358,7 +360,7 @@ export function GroupManagementPage(): JSX.Element {
                     </TableCell>
                   </TableRow>
                 )}
-              </>
+              </Fragment>
             ))
           )}
         </TableBody>
@@ -441,8 +443,8 @@ export function GroupManagementPage(): JSX.Element {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="member">Member</SelectItem>
-                  <SelectItem value="admin">Admin</SelectItem>
+                  <SelectItem value="group_member">Member</SelectItem>
+                  <SelectItem value="group_admin">Admin</SelectItem>
                 </SelectContent>
               </Select>
             </div>

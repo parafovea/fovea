@@ -1,7 +1,7 @@
 import { PrismaClient, type User } from '@prisma/client'
 import bcrypt from 'bcrypt'
 
-import { writeOntologyAggregate } from '../src/services/layers-bridge/ontology-bridge.js'
+import { readOntologyAggregate, writeOntologyAggregate } from '../src/services/layers-bridge/ontology-bridge.js'
 import { writeVideoAnnotation } from '../src/services/layers-bridge/annotation-bridge.js'
 import { deriveId } from '../src/services/layers-id-map.js'
 import type { BoundingBoxSequence } from '../src/services/layers-conversion-service.js'
@@ -151,10 +151,9 @@ export async function seedDatabase(prismaClient?: PrismaClient) {
     )
   }
 
-  // Create test ontology for Automated persona (for E2E tests) in the layers
-  // store. writeOntologyAggregate upserts the LayersOntology and recreates its
-  // TypeDefs, so re-seeding is idempotent.
-  await writeOntologyAggregate(
+  // Initialize the system ontology once; startup must preserve later user edits.
+  const automatedOntology = await readOntologyAggregate(prisma, automatedPersona.id)
+  if (!automatedOntology.exists) await writeOntologyAggregate(
     prisma,
     automatedPersona.id,
     {

@@ -15,7 +15,7 @@ const mockSummary: VideoSummary = {
   summary: 'Video shows three distinct whale pod interactions over 45-second period',
   visualAnalysis: 'Clear water conditions with excellent visibility of whale movements',
   audioTranscript: 'Whale vocalizations detected at timestamps 10s, 23s, and 38s',
-  keyFrames: [150, 345, 567],
+  keyFrames: [{ timestamp: 5, frame_number: 150, description: 'Opening', confidence: 0.9 }, { timestamp: 11.5, frame_number: 345, description: 'Middle' }, { timestamp: 18.9, frame_number: 567, description: 'End' }],
   confidence: 0.92,
   createdAt: '2025-10-01T10:00:00Z',
   updatedAt: '2025-10-01T10:00:00Z',
@@ -253,7 +253,7 @@ describe('VideoSummaryCard', () => {
 
       await waitFor(() => {
         expect(screen.getByText('Key Frames')).toBeInTheDocument()
-        expect(screen.getByText(/150, 345, 567/i)).toBeInTheDocument()
+        expect(screen.getByText(/5s: Opening; 11.5s: Middle; 18.9s: End/i)).toBeInTheDocument()
       })
     })
 

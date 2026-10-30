@@ -75,6 +75,8 @@ const GlossItemSchema = Type.Object({
 })
 
 const KeyFrameSchema = Type.Object({
+  frame_number: Type.Optional(Type.Integer()),
+  confidence: Type.Optional(Type.Number()),
   timestamp: Type.Number(),
   description: Type.String(),
 })
@@ -349,11 +351,15 @@ const summariesRoute: FastifyPluginAsync = async (fastify) => {
       // Summaries inherit project scope from the persona they target.
       const persona = await fastify.prisma.persona.findUnique({
         where: { id: personaId },
-        select: { projectId: true },
+        select: { projectId: true, userId: true, isSystemGenerated: true },
       })
 
       if (!persona) {
         throw new NotFoundError('Persona', personaId)
+      }
+
+      if (!request.ability.can('read', subject('Persona', persona))) {
+        throw new ForbiddenError('Cannot generate a summary under this Persona')
       }
 
       // Pre-authorize as an update in the resolved scope. The candidate
@@ -465,7 +471,12 @@ const summariesRoute: FastifyPluginAsync = async (fastify) => {
               videoId: Type.String(),
               personaId: Type.String(),
             }),
-            returnvalue: Type.Optional(Type.Union([VideoSummarySchema, Type.Null()])),
+            returnvalue: Type.Optional(Type.Union([Type.Object({
+              summaryId: Type.String(), videoId: Type.String(), personaId: Type.String(),
+              summary: Type.Array(GlossItemSchema),
+              visualAnalysis: Type.Optional(Type.String()), audioTranscript: Type.Optional(Type.String()),
+              keyFrames: Type.Optional(Type.Array(KeyFrameSchema)), confidence: Type.Optional(Type.Number()),
+            }), Type.Null()])),
             failedReason: Type.Optional(Type.Union([Type.String(), Type.Null()])),
             finishedOn: Type.Optional(Type.Union([Type.Number(), Type.Null()])),
             processedOn: Type.Optional(Type.Union([Type.Number(), Type.Null()])),
@@ -545,6 +556,7 @@ const summariesRoute: FastifyPluginAsync = async (fastify) => {
             summary: Type.Array(GlossItemSchema),
           }),
           Type.Partial(Type.Object({
+            comment: Type.Unsafe<string | null>({ type: ['string', 'null'] }),
             visualAnalysis: Type.String(),
             audioTranscript: Type.String(),
             keyFrames: Type.Array(KeyFrameSchema),
@@ -573,6 +585,7 @@ const summariesRoute: FastifyPluginAsync = async (fastify) => {
         personaId,
         summary,
         visualAnalysis,
+        comment,
         audioTranscript,
         keyFrames,
         confidence,
@@ -652,6 +665,7 @@ const summariesRoute: FastifyPluginAsync = async (fastify) => {
         update: {
           summary,
           visualAnalysis,
+          comment,
           audioTranscript,
           keyFrames: keyFrames || undefined,
           confidence,
@@ -675,6 +689,7 @@ const summariesRoute: FastifyPluginAsync = async (fastify) => {
           personaId,
           summary,
           visualAnalysis,
+          comment,
           audioTranscript,
           keyFrames: keyFrames || undefined,
           confidence,

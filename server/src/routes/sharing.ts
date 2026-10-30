@@ -29,7 +29,7 @@ import {
 import {
   readWorldAggregate,
   resolvePersonalWorldOwner,
-  writeWorldAggregate,
+  mergeWorldObjects,
 } from '../services/layers-bridge/world-bridge.js'
 import {
   readOntologyAggregate,
@@ -271,44 +271,6 @@ const NullableDatetime = Type.Unsafe<string | null>({
   type: ['string', 'null'],
   format: 'date-time',
 })
-
-/**
- * Merges the world objects of an incoming aggregate into a base aggregate,
- * appending only objects whose id is not already present in the base bucket.
- * Used to fork a world into a user who already has a personal world without
- * clobbering their existing objects.
- */
-function mergeWorldAggregates(
-  base: WorldStateAggregate,
-  incoming: WorldStateAggregate,
-): WorldStateAggregate {
-  const buckets: (keyof WorldStateAggregate)[] = [
-    'entities',
-    'events',
-    'times',
-    'entityCollections',
-    'eventCollections',
-    'timeCollections',
-    'relations',
-  ]
-  const merged = { ...base } as WorldStateAggregate
-  for (const bucket of buckets) {
-    const baseItems = (base[bucket] as Array<Record<string, unknown>>) ?? []
-    const seen = new Set(
-      baseItems
-        .map((item) => (item && typeof item === 'object' ? item.id : undefined))
-        .filter((id): id is string => typeof id === 'string'),
-    )
-    const result = [...baseItems]
-    for (const item of incoming[bucket] as Array<Record<string, unknown>>) {
-      const id = item && typeof item === 'object' ? item.id : undefined
-      if (typeof id === 'string' && seen.has(id)) continue
-      result.push(item)
-    }
-    merged[bucket] = result
-  }
-  return merged
-}
 
 /** Valid resource types that can be shared. */
 const ResourceTypeEnum = Type.Union([
@@ -1055,13 +1017,17 @@ const sharingRoute: FastifyPluginAsync = async (fastify) => {
               userId: owner,
               projectId: null,
             })
-            const { aggregate: existing } = await readWorldAggregate(db, {
-              userId,
-              projectId: null,
-            })
-            const merged = mergeWorldAggregates(existing, sourceWorld)
-            await writeWorldAggregate(db, { userId, projectId: null }, merged)
-            return { id: personalWorldStateId(userId), userId, ...merged }
+            const idMap = new Map<string, string>()
+            for (const objects of Object.values(sourceWorld)) {
+              for (const object of objects as Array<{ id?: string; times?: Array<{ id?: string }> }>) {
+                if (object.id) idMap.set(object.id, randomUUID())
+                for (const time of object.times ?? []) if (time.id) idMap.set(time.id, randomUUID())
+              }
+            }
+            const copied = remapClaimIds(sourceWorld, idMap) as WorldStateAggregate
+            await mergeWorldObjects(db, { userId, projectId: null }, copied)
+            const { aggregate } = await readWorldAggregate(db, { userId, projectId: null })
+            return { id: personalWorldStateId(userId), userId, ...aggregate }
           }
 
           default:

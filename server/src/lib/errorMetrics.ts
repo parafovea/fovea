@@ -128,9 +128,9 @@ export function recordError(options: RecordErrorOptions): void {
   // Every label value here can come from a request body (the telemetry
   // endpoint takes them from the browser), so each is admitted through a
   // bounded set to keep the series count finite.
-  const errorTypeLabel = boundedLabel('error_type', errorType)
-  const errorCodeLabel = boundedLabel('error_code', errorCode)
-  const routeValue = boundedLabel('error_route', route)
+  const errorTypeLabel = boundedLabel(`${source}:error_type`, errorType)
+  const errorCodeLabel = boundedLabel(`${source}:error_code`, errorCode)
+  const routeValue = boundedLabel(`${source}:error_route`, route)
 
   errorsTotalCounter.add(1, {
     error_type: errorTypeLabel,

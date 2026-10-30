@@ -75,12 +75,21 @@ const projectKeys = {
  * @returns Array of projects with member and video counts
  */
 async function fetchProjects(): Promise<Project[]> {
-  const response = await fetch('/api/admin/projects', { credentials: 'include' })
+  const response = await fetch('/api/projects', { credentials: 'include' })
   if (!response.ok) {
     const error = await response.json()
     throw new Error(error.message || 'Failed to fetch projects')
   }
-  return response.json()
+  const projects: Array<{ id: string }> = await response.json()
+  return Promise.all(projects.map(async ({ id }) => {
+    const detail = await fetch(`/api/projects/${id}`, { credentials: 'include' })
+    if (!detail.ok) throw new Error('Failed to load project details')
+    const project = await detail.json()
+    return { ...project, ownerType: project.ownerGroupId ? 'group' : 'user',
+      ownerId: project.ownerGroupId ?? project.ownerUserId,
+      ownerName: project.ownerGroupId ?? project.ownerUserId,
+      archived: project.isArchived, videoCount: project.videoAssignmentCount }
+  }))
 }
 
 /**
@@ -110,11 +119,11 @@ export function ProjectManagementPage(): JSX.Element {
 
   const createProject = useMutation({
     mutationFn: async (data: ProjectFormData) => {
-      const response = await fetch('/api/admin/projects', {
+      const response = await fetch('/api/projects', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify(data),
+        body: JSON.stringify({ name: data.name, slug: data.slug, ...(data.ownerId ? { ownerGroupId: data.ownerId } : {}) }),
       })
       if (!response.ok) {
         const err = await response.json()
@@ -130,11 +139,11 @@ export function ProjectManagementPage(): JSX.Element {
 
   const updateProject = useMutation({
     mutationFn: async ({ id, data }: { id: string; data: ProjectFormData }) => {
-      const response = await fetch(`/api/admin/projects/${id}`, {
+      const response = await fetch(`/api/projects/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify(data),
+        body: JSON.stringify({ name: data.name }),
       })
       if (!response.ok) {
         const err = await response.json()
@@ -150,7 +159,7 @@ export function ProjectManagementPage(): JSX.Element {
 
   const deleteProject = useMutation({
     mutationFn: async (id: string) => {
-      const response = await fetch(`/api/admin/projects/${id}`, {
+      const response = await fetch(`/api/projects/${id}`, {
         method: 'DELETE',
         credentials: 'include',
       })
@@ -168,11 +177,11 @@ export function ProjectManagementPage(): JSX.Element {
 
   const toggleArchive = useMutation({
     mutationFn: async ({ id, archived }: { id: string; archived: boolean }) => {
-      const response = await fetch(`/api/admin/projects/${id}/archive`, {
+      const response = await fetch(`/api/projects/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ archived }),
+        body: JSON.stringify({ isArchived: archived }),
       })
       if (!response.ok) {
         const err = await response.json()
@@ -197,7 +206,7 @@ export function ProjectManagementPage(): JSX.Element {
       name: project.name,
       slug: project.slug,
       ownerType: project.ownerType,
-      ownerId: project.ownerId,
+      ownerId: project.ownerType === 'group' ? project.ownerId : '',
     })
     setDialogOpen(true)
   }
@@ -351,20 +360,22 @@ export function ProjectManagementPage(): JSX.Element {
               <Label htmlFor="project-slug">Slug *</Label>
               <Input
                 id="project-slug"
+                disabled={!!editingProject}
                 value={formData.slug}
                 onChange={(e) => setFormData({ ...formData, slug: e.target.value })}
               />
               <p className="text-sm text-muted-foreground">URL-friendly identifier (e.g. my-project)</p>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="project-ownerId">Owner ID *</Label>
+              <Label htmlFor="project-ownerId">Owner Group ID (optional)</Label>
               <Input
                 id="project-ownerId"
+                disabled={!!editingProject}
                 value={formData.ownerId}
                 onChange={(e) => setFormData({ ...formData, ownerId: e.target.value })}
               />
               <p className="text-sm text-muted-foreground">
-                UUID of the {formData.ownerType} that owns this project
+                Leave blank to own the project yourself. Enter a group UUID for a group project.
               </p>
             </div>
           </div>
@@ -372,7 +383,7 @@ export function ProjectManagementPage(): JSX.Element {
             <Button variant="outline" onClick={handleCloseDialog}>Cancel</Button>
             <Button
               onClick={handleSubmit}
-              disabled={!formData.name || !formData.slug || !formData.ownerId || createProject.isPending || updateProject.isPending}
+              disabled={!formData.name || !formData.slug || createProject.isPending || updateProject.isPending}
             >
               {editingProject ? 'Save' : 'Create'}
             </Button>

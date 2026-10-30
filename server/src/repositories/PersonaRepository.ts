@@ -8,7 +8,7 @@ import {
 import { readOntologyAggregate, writeOntologyAggregate } from '../services/layers-bridge/ontology-bridge.js'
 import { mergeWorldObjects, readWorldAggregate } from '../services/layers-bridge/world-bridge.js'
 import { layersOntologyForPersonaId } from '../services/layers-id-map.js'
-import { personalWorldStateId, type WorldStateAggregate } from '../services/world-model.js'
+import { personalWorldStateId, emptyWorldState, type WorldStateAggregate } from '../services/world-model.js'
 import type { PersonaOntologyAggregate } from '../services/ontology-model.js'
 
 /**
@@ -314,6 +314,8 @@ export class PersonaRepository {
     transform: (current: PersonaOntologyRow) => OntologyBucketUpdate,
     tx?: Prisma.TransactionClient,
   ): Promise<PersonaOntologyRow> {
+    if (!tx) return this.prisma.$transaction((client) => this.updateOntologyOptimistic(personaId, transform, client))
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${layersOntologyForPersonaId(personaId)}, 0))`
     const db = tx ?? this.prisma
     const ontologyId = layersOntologyForPersonaId(personaId)
     for (let attempt = 0; attempt < 5; attempt++) {
@@ -446,8 +448,7 @@ export class PersonaRepository {
     tx?: Prisma.TransactionClient,
   ): Promise<void> {
     const db = tx ?? this.prisma
-    const { aggregate } = await readWorldAggregate(db, { userId, projectId: null })
-    const merged: WorldStateAggregate = { ...aggregate }
+    const merged = emptyWorldState()
     const buckets: (keyof WorldStatePartialUpdate & keyof WorldStateAggregate)[] = [
       'entities',
       'events',

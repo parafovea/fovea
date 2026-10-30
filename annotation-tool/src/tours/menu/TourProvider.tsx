@@ -44,6 +44,8 @@ import type { TourContentBundle } from '../content/types'
 import { TourContext, type TourContextValue } from './tour-context'
 import { TourTelemetry, type TourTelemetryEvent } from './tourTelemetry'
 import { config } from '@/config'
+import { useAuthStore } from '@store/zustand/authStore'
+import { v5 as uuidv5 } from 'uuid'
 
 /**
  * Resolve a step's per-step route to a concrete path, substituting
@@ -195,14 +197,21 @@ export function TourProvider({
   onEvent,
   contentBundle = microventContent,
 }: TourProviderProps) {
+  const userId = useAuthStore(state => state.currentUser?.id)
+  const [anonymousScope] = useState(() => crypto.randomUUID())
+  const scopedContent = useMemo(() => ({
+    ...contentBundle,
+    documentAnnotation: { ...contentBundle.documentAnnotation,
+      documentId: uuidv5(`${contentBundle.documentAnnotation.documentId}:${userId ?? anonymousScope}`, uuidv5.URL) },
+  }), [contentBundle, userId, anonymousScope])
   // Resolve the per-deployment tour catalogue from the bundle: the first-party
   // tours plus any admin override served from `public/tours/`. The first-party
   // tours are available synchronously so a launch lands immediately; the admin
   // overrides merge in once they load, and a changed bundle rebuilds the list.
-  const [tours, setTours] = useState<Tour[]>(() => getBuiltInTours(contentBundle))
+  const [tours, setTours] = useState<Tour[]>(() => getBuiltInTours(scopedContent))
   useEffect(() => {
     let cancelled = false
-    loadTours(contentBundle)
+    loadTours(scopedContent)
       .then((loaded) => {
         if (!cancelled) setTours(loaded)
       })
@@ -212,7 +221,7 @@ export function TourProvider({
     return () => {
       cancelled = true
     }
-  }, [contentBundle])
+  }, [scopedContent])
   const findTour = useCallback(
     (id: string) => tours.find((t) => t.id === id),
     [tours],

@@ -113,6 +113,14 @@ export interface SpanLabelResolvers {
   objectName?: (denotesNodeId: string) => string | undefined
 }
 
+/** Reads a collection reference without treating its catalog id as a graph node. */
+function objectRefId(row: LayersAnnotationRow): string | undefined {
+  if (row.denotesNodeId) return row.denotesNodeId
+  const features = row.features
+  if (features && typeof features === 'object' && 'collectionId' in features && typeof features.collectionId === 'string') return features.collectionId
+  return undefined
+}
+
 /**
  * Builds a display label and kind for one annotation row.
  *
@@ -124,9 +132,10 @@ function spanLabelFor(
   row: LayersAnnotationRow,
   resolvers: SpanLabelResolvers,
 ): { label: string; kind: 'type' | 'object' } {
-  if (row.denotesNodeId) {
-    const name = resolvers.objectName?.(row.denotesNodeId)
-    return { label: row.label ?? name ?? row.denotesNodeId.slice(0, 8), kind: 'object' }
+  const objectId = objectRefId(row)
+  if (objectId) {
+    const name = resolvers.objectName?.(objectId)
+    return { label: row.label ?? name ?? objectId.slice(0, 8), kind: 'object' }
   }
   if (row.ontologyTypeRefId) {
     const name = resolvers.typeName?.(row.ontologyTypeRefId)
@@ -192,12 +201,13 @@ function labelDetailFor(
   layerPersonaId: string | null,
   resolvers: SpanLabelResolvers,
 ): SpanLabelDetail | null {
-  if (row.denotesNodeId) {
+  const objectId = objectRefId(row)
+  if (objectId) {
     return {
       annotationId: row.id,
       kind: 'object',
-      refId: row.denotesNodeId,
-      name: resolvers.objectName?.(row.denotesNodeId) ?? row.label ?? row.denotesNodeId.slice(0, 8),
+      refId: objectId,
+      name: resolvers.objectName?.(objectId) ?? row.label ?? objectId.slice(0, 8),
       personaId: null,
     }
   }
@@ -253,7 +263,7 @@ export function rowsToSpanGroups(
     // persona-free base row (created on token release, no denotation), else the
     // lexicographically smallest id so the choice does not shift between renders.
     const base =
-      group.rows.find(({ row }) => !row.denotesNodeId && !row.ontologyTypeRefId) ??
+      group.rows.find(({ row }) => !objectRefId(row) && !row.ontologyTypeRefId) ??
       [...group.rows].sort((a, b) => (a.row.id < b.row.id ? -1 : 1))[0]
     const segmentSpan = fromAnnotation(
       { uuid: { value: base.row.id }, anchor: base.row.anchor ?? undefined },

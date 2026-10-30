@@ -304,10 +304,8 @@ describe('useAnnotations hooks', () => {
         ],
       })
 
-      // Note: useSaveAnnotations catches errors internally and reports them in results.errors
-      // So the mutation itself succeeds, but with errors in the results
-      await waitFor(() => expect(result.current.isSuccess).toBe(true))
-      expect(result.current.data?.results.errors.length).toBeGreaterThan(0)
+      await waitFor(() => expect(result.current.isError).toBe(true))
+      expect(result.current.error?.message).toContain('Failed to save annotation')
     })
 
     it('routes an annotation already in cache through PUT, not POST (the v0.4.2 cachedIdsRef regression)', async () => {

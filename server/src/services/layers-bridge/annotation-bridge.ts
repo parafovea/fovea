@@ -51,6 +51,11 @@ export async function writeVideoAnnotation(
   input: VideoAnnotationInput,
   scope: AnnotationScope,
 ): Promise<void> {
+  if (typeof prisma.$transaction === 'function') {
+    return prisma.$transaction((tx) => writeVideoAnnotation(tx as PrismaClient, input, scope))
+  }
+  // Serialize writers before reading shared track membership, including first creation.
+  await prisma.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${trackClusterSetId(input.videoId)}, 0))`
   const { expressionId, video } = await getOrCreateVideoExpression(prisma, input.videoId)
   const { width, height } = parseResolution(video.resolution)
   const frameRate = video.frameRate ?? 30

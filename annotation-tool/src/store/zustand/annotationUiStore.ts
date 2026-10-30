@@ -45,6 +45,7 @@ type DrawingMode = 'entity' | 'role' | 'event' | null
  * Link target type for object mode
  */
 type LinkTargetType =
+  | 'time'
   | 'entity'
   | 'event'
   | 'location'

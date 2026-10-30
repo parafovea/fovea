@@ -2,29 +2,26 @@ import { randomUUID } from 'node:crypto'
 
 import { Type } from '@sinclair/typebox'
 import { FastifyInstance, FastifyPluginAsync } from 'fastify'
-import { Prisma, type LayersAnnotation } from '@prisma/client'
+import { Prisma, type PrismaClient } from '@prisma/client'
 import { accessibleBy } from '@casl/prisma'
 import { subject } from '@casl/ability'
 
 import { NotFoundError, ForbiddenError, ConflictError } from '../../lib/errors.js'
 import {
   isVideoAnnotationSubkind,
-  applyTrackMembership,
   removeTrackMembership,
   tracksByAnnotation,
   VIDEO_ANNOTATION_SUBKINDS,
   type VideoAnnotationInput,
   type VideoAnnotationLinkType,
-  type MappedDenotesNode,
-  type MappedTrack,
 } from '../../services/video-annotation-shared.js'
-import { annotationToLayers, layersToAnnotation } from '../../services/layers-lens/video-lens.js'
+import { layersToAnnotation } from '../../services/layers-lens/video-lens.js'
 import {
   getOrCreateVideoExpression,
-  parseResolution,
 } from '../../services/video-expression-service.js'
-import { layersOntologyForPersonaId, trackClusterSetId } from '../../services/layers-id-map.js'
+import { trackClusterSetId } from '../../services/layers-id-map.js'
 import { demoLayersAnnotationReadWhere } from '../../lib/demo-rbac.js'
+import { writeVideoAnnotation, readAnnotationById } from '../../services/layers-bridge/annotation-bridge.js'
 import type { BoundingBoxSequence } from '../../services/layers-conversion-service.js'
 
 /** Nullable string response field (serializes null correctly; see fastify-typebox skill). */
@@ -47,6 +44,7 @@ const VideoAnnotationResponseSchema = Type.Object({
   frames: Type.Unknown(),
   confidence: NullableNumber,
   source: Type.String(),
+  notes: Type.Optional(Type.String()),
   linkedObjectName: Type.Optional(NullableString),
   createdBy: NullableString,
   createdAt: Type.String(),
@@ -60,6 +58,9 @@ const LinkTypeSchema = Type.Union([
   Type.Literal('event'),
   Type.Literal('time'),
   Type.Literal('location'),
+  Type.Literal('entity-collection'),
+  Type.Literal('event-collection'),
+  Type.Literal('time-collection'),
 ])
 
 /** Coerces a value to a Prisma JSON input, stripping undefined properties. */
@@ -79,74 +80,6 @@ function toJsonInput(value: unknown): Prisma.InputJsonValue {
  */
 const videoAnnotationsRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
   const prisma = fastify.prisma
-
-  /**
-   * Resolves the `LayersOntology` id to bind a type layer to, mirroring the
-   * backfill: the persona's derived ontology id when that ontology exists, else
-   * null (a soft binding, so a missing ontology does not block annotating).
-   */
-  const resolveOntologyId = async (personaId: string): Promise<string | null> => {
-    const candidate = layersOntologyForPersonaId(personaId)
-    const exists = (await prisma.layersOntology.count({ where: { id: candidate } })) > 0
-    return exists ? candidate : null
-  }
-
-  /**
-   * Resolves the denotation foreign key for an object annotation, get-or-creating
-   * the denoted world-object `GraphNode` so the link is never nulled. An existing
-   * world node keeps its fields; a not-yet-materialized object gets a minimal node
-   * of the link kind's `nodeType`, from which the read side derives `linkType`.
-   */
-  const resolveDenotesNode = async (
-    node: MappedDenotesNode | null,
-    scope: { projectId: string | null; userId: string | null },
-  ): Promise<{ id: string; nodeType: string; label: string | null } | null> => {
-    if (!node) return null
-    const saved = await prisma.graphNode.upsert({
-      where: { id: node.id },
-      create: {
-        id: node.id,
-        nodeType: node.nodeType,
-        label: node.label,
-        projectId: scope.projectId,
-        createdByUserId: scope.userId,
-      },
-      update: {},
-    })
-    return { id: saved.id, nodeType: saved.nodeType, label: saved.label }
-  }
-
-  /**
-   * Folds an annotation's track membership into the video's track `ClusterSet`,
-   * get-or-creating the set keyed by a deterministic id. The annotation is moved
-   * into its track's cluster (or detached when it carries no track); the cluster's
-   * `uuid` is the `trackId`, its `canonicalLabel` the `trackingSource`, and a
-   * cluster feature the `trackingConfidence`.
-   */
-  const upsertTrackMembership = async (
-    videoId: string,
-    expressionId: string,
-    annotationId: string,
-    track: MappedTrack | null,
-    scope: { projectId: string | null; userId: string | null },
-  ): Promise<void> => {
-    const setId = trackClusterSetId(videoId)
-    const existing = await prisma.clusterSet.findUnique({ where: { id: setId } })
-    if (!existing && track === null) return
-    const clusters = applyTrackMembership(existing?.clusters ?? null, annotationId, track)
-    await prisma.clusterSet.upsert({
-      where: { id: setId },
-      create: {
-        id: setId,
-        kind: 'clustering',
-        expressionId,
-        clusters: toJsonInput(clusters),
-        projectId: scope.projectId,
-        createdByUserId: scope.userId,
-      },
-      update: { clusters: toJsonInput(clusters) },
-    })
-  }
 
   // ---- GET -----------------------------------------------------------------
 
@@ -224,6 +157,7 @@ const videoAnnotationsRoutes: FastifyPluginAsync = async (fastify: FastifyInstan
         frames: Type.Unknown(),
         confidence: Type.Optional(Type.Number()),
         source: Type.Optional(Type.String()),
+        notes: Type.Optional(Type.String()),
       }),
       response: {
         200: VideoAnnotationResponseSchema,
@@ -241,6 +175,7 @@ const videoAnnotationsRoutes: FastifyPluginAsync = async (fastify: FastifyInstan
       frames: BoundingBoxSequence
       confidence?: number
       source?: string
+      notes?: string
     }
     if (!request.ability) throw new ForbiddenError('No abilities defined')
     const ability = request.ability
@@ -250,7 +185,6 @@ const videoAnnotationsRoutes: FastifyPluginAsync = async (fastify: FastifyInstan
     // annotations.ts: a type annotation inherits its persona's project scope and
     // the caller must be able to read that persona.
     let projectId: string | null = null
-    let ontologyId: string | null = null
     if (body.personaId) {
       const persona = await prisma.persona.findUnique({ where: { id: body.personaId } })
       if (!persona) throw new NotFoundError('Persona', body.personaId)
@@ -258,7 +192,6 @@ const videoAnnotationsRoutes: FastifyPluginAsync = async (fastify: FastifyInstan
         throw new ForbiddenError('Cannot create an annotation under this Persona')
       }
       projectId = persona.projectId
-      ontologyId = await resolveOntologyId(persona.id)
     } else {
       // Personaless object annotation: with no persona to inherit project scope
       // from, adopt the video's project only when exactly one of the caller's
@@ -279,10 +212,6 @@ const videoAnnotationsRoutes: FastifyPluginAsync = async (fastify: FastifyInstan
       }
     }
 
-    const { expressionId, video } = await getOrCreateVideoExpression(prisma, videoId)
-    const { width, height } = parseResolution(video.resolution)
-    const frameRate = video.frameRate ?? 30
-
     const annotationId = body.id ?? randomUUID()
     const input: VideoAnnotationInput = {
       id: annotationId,
@@ -294,152 +223,32 @@ const videoAnnotationsRoutes: FastifyPluginAsync = async (fastify: FastifyInstan
       frames: body.frames,
       confidence: body.confidence ?? null,
       source: body.source || 'manual',
+      notes: body.notes,
     }
-
-    const mapping = await annotationToLayers(input, {
-      expressionId,
-      ontologyId,
-      frameRate,
-      videoWidth: width ?? undefined,
-      videoHeight: height ?? undefined,
-    })
-
-    // Get-or-create the per-(video, persona) grouping layer. Derived
-    // infrastructure keyed by a deterministic id (like the video Expression), so
-    // it is upserted directly; the security boundary is the LayersAnnotation.
-    // Scope columns are set once at creation and left stable across re-runs so a
-    // layer shared with another annotator is not churned.
-    await prisma.annotationLayer.upsert({
-      where: { id: mapping.layer.id },
-      create: {
-        id: mapping.layer.id,
-        expressionId: mapping.layer.expressionId,
-        kind: mapping.layer.kind,
-        subkind: mapping.layer.subkind,
-        sourceMethod: mapping.layer.sourceMethod,
-        ontologyId: mapping.layer.ontologyId,
-        personaId: mapping.layer.personaId,
-        projectId,
-        createdByUserId: userId,
-      },
-      update: {
-        expressionId: mapping.layer.expressionId,
-        kind: mapping.layer.kind,
-        subkind: mapping.layer.subkind,
-        sourceMethod: mapping.layer.sourceMethod,
-        ontologyId: mapping.layer.ontologyId,
-        personaId: mapping.layer.personaId,
-      },
-    })
-
-    const denotesNode = await resolveDenotesNode(mapping.annotation.denotesNode, {
-      projectId,
-      userId,
-    })
-    const denotesNodeId = denotesNode?.id ?? null
-
-    // Record the annotation's tracker identity as native cluster membership. Keyed
-    // by annotationId, this holds whether the row is created below or updated in
-    // place, so it is folded once before the write branches.
-    await upsertTrackMembership(videoId, expressionId, annotationId, mapping.track, {
-      projectId,
-      userId,
-    })
-
-    const writeData = {
-      anchor: toJsonInput(mapping.annotation.anchor),
-      label: mapping.annotation.label,
-      confidence: mapping.annotation.confidence,
-      ontologyTypeRefId: mapping.annotation.ontologyTypeRefId,
-      denotesNodeId,
-      startMs: mapping.annotation.startMs,
-      endMs: mapping.annotation.endMs,
-    }
-
-    const respond = (row: LayersAnnotation, statusCode: 200 | 201) =>
-      reply.code(statusCode).send(layersToAnnotation(
-        row,
-        { personaId: input.personaId, sourceMethod: mapping.layer.sourceMethod },
-        { id: video.id, frameRate: video.frameRate },
-        denotesNode ? { nodeType: denotesNode.nodeType, label: denotesNode.label } : null,
-        mapping.track,
-      ))
-
-    // Idempotent update of an existing annotation by its client id. Authorizes
-    // against the EXISTING row's update permission so a caller cannot hijack
-    // another user's annotation by supplying its id.
-    const updateExisting = async (existing: LayersAnnotation) => {
-      if (!ability.can('update', subject('LayersAnnotation', existing))) {
-        throw new ForbiddenError('Cannot update this Annotation')
-      }
-      const updated = await prisma.layersAnnotation.update({
-        where: { id: existing.id },
-        data: writeData,
+    const result = await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${annotationId}, 0))`
+      const existing = await tx.layersAnnotation.findUnique({
+        where: { id: annotationId },
+        include: { layer: { include: { expression: true } } },
       })
-      return respond(updated, 200)
-    }
-
-    // Load a client-supplied id as an idempotent-update target only when it is a
-    // bounding-box annotation under this (video, persona) grouping layer. A row
-    // of another subkind (notably a claim text span sharing the id space) or one
-    // grouped under a different layer is treated as absent so the create path
-    // never overwrites it, mirroring the PUT/DELETE subkind guard.
-    const findUpdateTarget = async (candidateId: string): Promise<LayersAnnotation | null> => {
-      const existing = await prisma.layersAnnotation.findUnique({
-        where: { id: candidateId },
-        include: { layer: true },
-      })
-      if (
-        !existing ||
-        !isVideoAnnotationSubkind(existing.layer.subkind) ||
-        existing.layerId !== mapping.layer.id
-      ) {
-        return null
+      if (existing) {
+        if (!isVideoAnnotationSubkind(existing.layer.subkind) ||
+          existing.layer.expression.videoId !== videoId || existing.layer.personaId !== input.personaId) {
+          throw new ConflictError(`An annotation with id ${annotationId} already exists`)
+        }
+        if (!ability.can('update', subject('LayersAnnotation', existing))) {
+          throw new ForbiddenError('Cannot update this Annotation')
+        }
+      } else if (!ability.can('create', subject('LayersAnnotation', { projectId, createdByUserId: userId }))) {
+        throw new ForbiddenError('Cannot create Annotation in this scope')
       }
-      return existing
-    }
-
-    if (body.id) {
-      const existing = await findUpdateTarget(body.id)
-      if (existing) return updateExisting(existing)
-    }
-
-    const candidate = subject('LayersAnnotation', { projectId, createdByUserId: userId })
-    if (!ability.can('create', candidate)) {
-      throw new ForbiddenError('Cannot create Annotation in this scope')
-    }
-
-    try {
-      const created = await prisma.layersAnnotation.create({
-        data: {
-          id: annotationId,
-          layerId: mapping.annotation.layerId,
-          projectId,
-          createdByUserId: userId,
-          ...writeData,
-        },
+      await writeVideoAnnotation(tx as PrismaClient, input, {
+        projectId: existing ? existing.projectId : projectId,
+        userId: existing ? existing.createdByUserId : userId,
       })
-      return respond(created, 201)
-    } catch (error) {
-      // Concurrent-create race: a parallel request with the same client id won
-      // the insert. Fall back to the idempotent update path so no duplicate
-      // materializes.
-      if (
-        body.id &&
-        error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === 'P2002'
-      ) {
-        const existing = await findUpdateTarget(annotationId)
-        if (existing) return updateExisting(existing)
-        // The client-supplied id already belongs to a row that is not an
-        // updatable bounding-box annotation under this grouping layer (e.g. a
-        // claim text span sharing the id space, or an annotation under another
-        // layer). It cannot be adopted as an update target, so the collision is
-        // a genuine conflict rather than a server fault.
-        throw new ConflictError(`An annotation with id ${annotationId} already exists`)
-      }
-      throw error
-    }
+      return { created: !existing, annotation: await readAnnotationById(tx as PrismaClient, annotationId) }
+    })
+    return reply.code(result.created ? 201 : 200).send(result.annotation)
   })
 
   // ---- PUT -----------------------------------------------------------------
@@ -462,6 +271,7 @@ const videoAnnotationsRoutes: FastifyPluginAsync = async (fastify: FastifyInstan
         frames: Type.Optional(Type.Unknown()),
         confidence: Type.Optional(Type.Number()),
         source: Type.Optional(Type.String()),
+        notes: Type.Optional(Type.String()),
       }),
       response: { 200: VideoAnnotationResponseSchema },
     },
@@ -474,104 +284,39 @@ const videoAnnotationsRoutes: FastifyPluginAsync = async (fastify: FastifyInstan
       frames?: BoundingBoxSequence
       confidence?: number
       source?: string
+      notes?: string
     }
     if (!request.ability) throw new ForbiddenError('No abilities defined')
     const ability = request.ability
 
-    const existing = await prisma.layersAnnotation.findUnique({
-      where: { id },
-      include: { layer: true, denotesNode: true },
+    const result = await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${id}, 0))`
+      const existing = await tx.layersAnnotation.findUnique({
+        where: { id },
+        include: { layer: { include: { expression: true } } },
+      })
+      if (!existing || !isVideoAnnotationSubkind(existing.layer.subkind) || existing.layer.expression.videoId !== videoId) {
+        throw new NotFoundError('Annotation', id)
+      }
+      if (!ability.can('update', subject('LayersAnnotation', existing))) {
+        throw new ForbiddenError('Cannot update this Annotation')
+      }
+      const current = await readAnnotationById(tx as PrismaClient, id)
+      if (!current) throw new NotFoundError('Annotation', id)
+      const input: VideoAnnotationInput = {
+        ...current,
+        ...body,
+        id,
+        videoId,
+        personaId: existing.layer.personaId,
+      }
+      await writeVideoAnnotation(tx as PrismaClient, input, {
+        projectId: existing.projectId,
+        userId: existing.createdByUserId,
+      })
+      return readAnnotationById(tx as PrismaClient, id)
     })
-    // Treat a non-video-annotation row (e.g. a claim span sharing the
-    // Expression) as absent so this route only ever mutates bounding-box
-    // annotations.
-    if (!existing || !isVideoAnnotationSubkind(existing.layer.subkind)) {
-      throw new NotFoundError('Annotation', id)
-    }
-    if (!ability.can('update', subject('LayersAnnotation', existing))) {
-      throw new ForbiddenError('Cannot update this Annotation')
-    }
-
-    const video = await prisma.video.findUnique({ where: { id: videoId } })
-    if (!video) throw new NotFoundError('Video', videoId)
-    const { width, height } = parseResolution(video.resolution)
-    const frameRate = video.frameRate ?? 30
-
-    // The annotation's existing track (its video track ClusterSet membership), so
-    // a frames-only PUT keeps the tracker identity rather than dropping it.
-    const existingTrackSet = await prisma.clusterSet.findUnique({
-      where: { id: trackClusterSetId(videoId) },
-    })
-    const existingTrack = tracksByAnnotation(existingTrackSet?.clusters ?? null).get(id) ?? null
-
-    // Reconstruct the current legacy shape, then overlay the provided fields, so
-    // an omitted field (e.g. linkType, which the frontend never sends on PUT)
-    // keeps its stored value.
-    const current = layersToAnnotation(
-      existing,
-      { personaId: existing.layer.personaId, sourceMethod: existing.layer.sourceMethod },
-      { id: video.id, frameRate: video.frameRate },
-      existing.denotesNode
-        ? { nodeType: existing.denotesNode.nodeType, label: existing.denotesNode.label }
-        : null,
-      existingTrack,
-    )
-
-    const input: VideoAnnotationInput = {
-      id: existing.id,
-      videoId,
-      personaId: existing.layer.personaId,
-      type: body.type ?? current.type,
-      label: body.label ?? current.label,
-      linkType: body.linkType ?? current.linkType,
-      frames: body.frames ?? current.frames,
-      confidence: body.confidence !== undefined ? body.confidence : current.confidence,
-      source: body.source || current.source,
-    }
-
-    const mapping = await annotationToLayers(input, {
-      expressionId: existing.layer.expressionId,
-      ontologyId: existing.layer.ontologyId,
-      frameRate,
-      videoWidth: width ?? undefined,
-      videoHeight: height ?? undefined,
-    })
-    const denotesNode = await resolveDenotesNode(mapping.annotation.denotesNode, {
-      projectId: existing.projectId,
-      userId: existing.createdByUserId,
-    })
-
-    const updated = await prisma.layersAnnotation.update({
-      where: { id },
-      data: {
-        anchor: toJsonInput(mapping.annotation.anchor),
-        label: mapping.annotation.label,
-        confidence: mapping.annotation.confidence,
-        ontologyTypeRefId: mapping.annotation.ontologyTypeRefId,
-        denotesNodeId: denotesNode?.id ?? null,
-        startMs: mapping.annotation.startMs,
-        endMs: mapping.annotation.endMs,
-      },
-    })
-
-    // Refresh the layer's source method (the annotation's authoring source) and
-    // re-fold the annotation's tracker identity into the video's track ClusterSet.
-    await prisma.annotationLayer.update({
-      where: { id: existing.layerId },
-      data: { sourceMethod: mapping.layer.sourceMethod },
-    })
-    await upsertTrackMembership(videoId, existing.layer.expressionId, id, mapping.track, {
-      projectId: existing.projectId,
-      userId: existing.createdByUserId,
-    })
-
-    return reply.send(layersToAnnotation(
-      updated,
-      { personaId: existing.layer.personaId, sourceMethod: mapping.layer.sourceMethod },
-      { id: video.id, frameRate: video.frameRate },
-      denotesNode ? { nodeType: denotesNode.nodeType, label: denotesNode.label } : null,
-      mapping.track,
-    ))
+    return reply.send(result)
   })
 
   // ---- DELETE --------------------------------------------------------------
@@ -592,33 +337,27 @@ const videoAnnotationsRoutes: FastifyPluginAsync = async (fastify: FastifyInstan
     const { videoId, id } = request.params as { videoId: string; id: string }
     if (!request.ability) throw new ForbiddenError('No abilities defined')
 
-    const existing = await prisma.layersAnnotation.findUnique({
-      where: { id },
-      include: { layer: true },
-    })
-    // Treat a non-video-annotation row (e.g. a claim span sharing the
-    // Expression) as absent so this route only ever deletes bounding-box
-    // annotations.
-    if (!existing || !isVideoAnnotationSubkind(existing.layer.subkind)) {
-      throw new NotFoundError('Annotation', id)
-    }
-    if (!request.ability.can('delete', subject('LayersAnnotation', existing))) {
-      throw new ForbiddenError('Cannot delete this Annotation')
-    }
-
-    await prisma.layersAnnotation.delete({ where: { id } })
-
-    // Detach the annotation from the video's track ClusterSet.
-    const trackSet = await prisma.clusterSet.findUnique({
-      where: { id: trackClusterSetId(videoId) },
-    })
-    if (trackSet) {
-      const clusters = removeTrackMembership(trackSet.clusters, id)
-      await prisma.clusterSet.update({
-        where: { id: trackSet.id },
-        data: { clusters: toJsonInput(clusters) },
+    await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${id}, 0))`
+      const existing = await tx.layersAnnotation.findUnique({
+        where: { id },
+        include: { layer: { include: { expression: true } } },
       })
-    }
+      if (!existing || !isVideoAnnotationSubkind(existing.layer.subkind) || existing.layer.expression.videoId !== videoId) {
+        throw new NotFoundError('Annotation', id)
+      }
+      if (!request.ability!.can('delete', subject('LayersAnnotation', existing))) {
+        throw new ForbiddenError('Cannot delete this Annotation')
+      }
+      const setId = trackClusterSetId(videoId)
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${setId}, 0))`
+      await tx.layersAnnotation.delete({ where: { id } })
+      const trackSet = await tx.clusterSet.findUnique({ where: { id: setId } })
+      if (trackSet) await tx.clusterSet.update({
+        where: { id: setId },
+        data: { clusters: toJsonInput(removeTrackMembership(trackSet.clusters, id)) },
+      })
+    })
 
     return reply.code(204).send()
   })

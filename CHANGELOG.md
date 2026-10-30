@@ -73,6 +73,13 @@ The 0.6.0 release is a single coordinated landing that moves Fovea's annotations
 
 ### Fixed
 
+- Resolve the 78 findings in the 0.6.0 release audit: protect shared video layers and track sets, require project membership and destination authorization for imports, and keep world forks and collection writes within their owners' scopes.
+- Preserve video keyframes, interpolation, visibility gaps, notes, collection links, and tracker provenance through editing and persistence. Auto-save awaits requests and retains unsaved edits for retry.
+- Make the legacy copy parent-first and repeatable, preserve its last verified checkpoint across failed catch-ups, and copy changed relations independently. Ontology writes use scoped type IDs and serialize concurrent edits.
+- Clean dependent claim and world records when their summary, persona, video, user, or project is removed. Preserve summary comments and complete keyframe metadata, and serialize completed job results correctly.
+- Align admin pages with the project, group, permission, and assignment APIs; allow corpus import bodies up to 100 MiB. Keep document selections and collection labels stable, scope tour documents to each user, validate tour content, and cancel inactive tour drivers.
+- Abort storage reconciliation when the primary listing fails and retain complete S3 keys. Recover the previous application after a failed upgrade, preserve Redis data, encode deployment secrets literally, bind internal service ports to loopback, and align alerts with exported metric names.
+
 #### Native layers integration
 
 - World-authored nodes are distinguished from video-denotation stubs, so pruning the world leaves a live annotation's link to the node it denotes intact (`server/src/services/layers-lens/world-lens.ts`, `server/src/services/layers-bridge/world-store.ts`).

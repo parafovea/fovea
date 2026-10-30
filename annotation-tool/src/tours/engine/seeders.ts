@@ -36,7 +36,6 @@
 
 import { anchorCatalog } from './anchorCatalog'
 import type { AnchorId, AnchorMeta } from './anchorCatalog'
-import type { AnchorRegistry } from './anchorRegistry'
 import { registerCapability } from './capabilities'
 import type { TourCapability, TourCapabilityContext } from './capabilities'
 
@@ -54,22 +53,27 @@ function findControl(ctx: TourCapabilityContext, id: AnchorId): HTMLElement | nu
  * Resolve once an element registers for `id`, waking on the registry's change
  * notification. Resolves with null when nothing registers within `SURFACE_WAIT_MS`.
  */
-function waitForSurface(registry: AnchorRegistry, id: AnchorId): Promise<HTMLElement | null> {
+function waitForSurface(ctx: TourCapabilityContext, id: AnchorId): Promise<HTMLElement | null> {
+  ctx.signal.throwIfAborted()
+  const { registry, signal } = ctx
   const existing = registry.get(id)
   if (existing) return Promise.resolve(existing)
 
-  return new Promise<HTMLElement | null>((resolve) => {
+  return new Promise<HTMLElement | null>((resolve, reject) => {
     let settled = false
     const finish = (element: HTMLElement | null) => {
       if (settled) return
       settled = true
       unsubscribe()
+      signal.removeEventListener('abort', abort)
       window.clearTimeout(deadline)
       resolve(element)
     }
     const unsubscribe = registry.subscribe((changedId) => {
       if (changedId === id) finish(registry.get(id))
     })
+    const abort = () => { reject(signal.reason); finish(null) }
+    signal.addEventListener('abort', abort, { once: true })
     const deadline = window.setTimeout(() => finish(null), SURFACE_WAIT_MS)
   })
 }
@@ -102,7 +106,7 @@ async function reachSurface(
     if (!(openerId in anchorCatalog)) continue
     await clickControl(ctx, openerId as AnchorId)
   }
-  return waitForSurface(ctx.registry, target)
+  return waitForSurface(ctx, target)
 }
 
 /** The active annotation-workspace video id, read from the current route. */
@@ -129,10 +133,12 @@ async function selectedPersonaId(): Promise<string | null> {
 registerCapability('select-first-video', async (ctx) => {
   if (currentVideoId()) return
   ctx.navigate('/app')
-  const card = await waitForSurface(ctx.registry, 'video-browser-card-first')
+  const card = await waitForSurface(ctx, 'video-browser-card-first')
+  ctx.signal.throwIfAborted()
   if (!card) return
   card.click()
-  await waitForSurface(ctx.registry, 'drawing-canvas')
+  await waitForSurface(ctx, 'drawing-canvas')
+  ctx.signal.throwIfAborted()
 })
 
 // ---------------------------------------------------------------------------
@@ -146,19 +152,24 @@ registerCapability('select-first-video', async (ctx) => {
  * one-keyframe type annotation under the selected persona through the same save
  * path the editor uses, then invalidates the cache so the workspace renders it.
  */
-registerCapability('ensure-annotation-exists', async () => {
+registerCapability('ensure-annotation-exists', async (ctx) => {
   const videoId = currentVideoId()
   if (!videoId) return
 
   const { api } = await import('@services/api')
+  ctx.signal.throwIfAborted()
   const existing = await api.getAnnotations(videoId)
+  ctx.signal.throwIfAborted()
   if (existing.length > 0) return
 
   const personaId = await selectedPersonaId()
+  ctx.signal.throwIfAborted()
   if (!personaId) return
 
   const { generateId } = await import('@utils/uuid')
+  ctx.signal.throwIfAborted()
   const now = new Date().toISOString()
+  ctx.signal.throwIfAborted()
   await api.saveAnnotation({
     id: generateId(),
     videoId,
@@ -179,8 +190,11 @@ registerCapability('ensure-annotation-exists', async () => {
   })
 
   const { queryClient } = await import('@/main')
+  ctx.signal.throwIfAborted()
   const { annotationKeys } = await import('@store/queries/useAnnotations')
+  ctx.signal.throwIfAborted()
   await queryClient.invalidateQueries({ queryKey: annotationKeys.video(videoId) })
+  ctx.signal.throwIfAborted()
 })
 
 // ---------------------------------------------------------------------------
@@ -194,6 +208,7 @@ registerCapability('ensure-annotation-exists', async () => {
  */
 registerCapability('open-summary-editor', async (ctx) => {
   await reachSurface(ctx, 'video-summary-editor')
+  ctx.signal.throwIfAborted()
 })
 
 // ---------------------------------------------------------------------------
@@ -208,12 +223,17 @@ registerCapability('open-summary-editor', async (ctx) => {
  */
 registerCapability('open-claim-editor-with-gloss', async (ctx) => {
   const editor = await reachSurface(ctx, 'video-summary-editor')
+  ctx.signal.throwIfAborted()
   if (!editor) return
   await clickControl(ctx, 'summary-tab-claims')
+  ctx.signal.throwIfAborted()
   await clickControl(ctx, 'add-manual-claim-button')
-  const claimEditor = await waitForSurface(ctx.registry, 'claim-editor')
+  ctx.signal.throwIfAborted()
+  const claimEditor = await waitForSurface(ctx, 'claim-editor')
+  ctx.signal.throwIfAborted()
   if (!claimEditor) return
-  await waitForSurface(ctx.registry, 'gloss-editor')
+  await waitForSurface(ctx, 'gloss-editor')
+  ctx.signal.throwIfAborted()
 })
 
 // ---------------------------------------------------------------------------
@@ -228,8 +248,11 @@ registerCapability('open-claim-editor-with-gloss', async (ctx) => {
  */
 registerCapability('run-detection', async (ctx) => {
   await reachSurface(ctx, 'detect-dialog')
+  ctx.signal.throwIfAborted()
   await clickControl(ctx, 'detect-dialog-run-button')
-  await waitForSurface(ctx.registry, 'annotation-candidates-list')
+  ctx.signal.throwIfAborted()
+  await waitForSurface(ctx, 'annotation-candidates-list')
+  ctx.signal.throwIfAborted()
 })
 
 // ---------------------------------------------------------------------------
@@ -276,22 +299,29 @@ registerCapability('open-type-editor', async (ctx, params) => {
   ctx.navigate('/app/ontology')
 
   const store = await import('@/store/zustand/annotationUiStore')
+  ctx.signal.throwIfAborted()
   const state = store.useAnnotationUiStore.getState()
   if (!state.ontologySelectedPersonaId) {
     const persona = (await selectedPersonaId()) ?? (await firstPersonaId())
+    ctx.signal.throwIfAborted()
     if (persona) state.setOntologySelectedPersonaId(persona)
   }
   state.setOntologyTabIndex(target.tabIndex)
 
-  await waitForSurface(ctx.registry, 'ontology-workspace-tabs')
+  await waitForSurface(ctx, 'ontology-workspace-tabs')
+  ctx.signal.throwIfAborted()
   await clickControl(ctx, 'ontology-add-type-button')
-  const editor = await waitForSurface(ctx.registry, target.editor)
+  ctx.signal.throwIfAborted()
+  const editor = await waitForSurface(ctx, target.editor)
+  ctx.signal.throwIfAborted()
   if (!editor) return
 
   const modeTarget = mode ? TYPE_EDITOR_BY_MODE[mode] : undefined
   if (modeTarget) {
     await clickControl(ctx, modeTarget.toggle)
-    await waitForSurface(ctx.registry, modeTarget.surface)
+    ctx.signal.throwIfAborted()
+    await waitForSurface(ctx, modeTarget.surface)
+    ctx.signal.throwIfAborted()
   }
 })
 
@@ -321,12 +351,17 @@ async function firstPersonaId(): Promise<string | null> {
 function worldEditorOpener(tab: AnchorId, add: AnchorId, target: AnchorId): TourCapability {
   return async (ctx) => {
     ctx.navigate('/app/objects')
-    await waitForSurface(ctx.registry, 'world-panel-tabs')
+    await waitForSurface(ctx, 'world-panel-tabs')
+    ctx.signal.throwIfAborted()
     if (ctx.getAnchor(target)) return
     await clickControl(ctx, tab)
-    await waitForSurface(ctx.registry, add)
+    ctx.signal.throwIfAborted()
+    await waitForSurface(ctx, add)
+    ctx.signal.throwIfAborted()
     await clickControl(ctx, add)
-    await waitForSurface(ctx.registry, target)
+    ctx.signal.throwIfAborted()
+    await waitForSurface(ctx, target)
+    ctx.signal.throwIfAborted()
   }
 }
 
@@ -365,6 +400,7 @@ registerCapability(
  */
 registerCapability('open-import-dialog', async (ctx) => {
   await reachSurface(ctx, 'import-dialog')
+  ctx.signal.throwIfAborted()
 })
 
 // ---------------------------------------------------------------------------
@@ -377,9 +413,12 @@ registerCapability('open-import-dialog', async (ctx) => {
  */
 registerCapability('open-project-video-assignment', async (ctx) => {
   ctx.navigate('/app/admin')
-  await waitForSurface(ctx.registry, 'admin-tab-video-access')
+  await waitForSurface(ctx, 'admin-tab-video-access')
+  ctx.signal.throwIfAborted()
   await clickControl(ctx, 'admin-tab-video-access')
-  await waitForSurface(ctx.registry, 'project-video-assignment')
+  ctx.signal.throwIfAborted()
+  await waitForSurface(ctx, 'project-video-assignment')
+  ctx.signal.throwIfAborted()
 })
 
 // ---------------------------------------------------------------------------
@@ -394,6 +433,7 @@ registerCapability('open-project-video-assignment', async (ctx) => {
  */
 registerCapability('run-transcription', async (ctx) => {
   await reachSurface(ctx, 'transcript-dialog')
+  ctx.signal.throwIfAborted()
 })
 
 // ---------------------------------------------------------------------------
@@ -427,8 +467,10 @@ function demoDocumentParams(params?: Record<string, unknown>): DemoDocumentParam
  * create access), leaving the step to surface its skip affordance rather than
  * fabricate a document.
  */
-async function ensureDemoDocument(p: DemoDocumentParams): Promise<boolean> {
+async function ensureDemoDocument(p: DemoDocumentParams, signal: AbortSignal): Promise<boolean> {
+  signal.throwIfAborted()
   const response = await fetch('/api/layers/documents', {
+    signal,
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
@@ -453,8 +495,10 @@ registerCapability('ensure-demo-document', async (ctx, params) => {
   const p = demoDocumentParams(params)
   if (!p) return
   ctx.navigate('/app/documents')
-  await ensureDemoDocument(p)
-  await waitForSurface(ctx.registry, 'document-card-first')
+  await ensureDemoDocument(p, ctx.signal)
+  ctx.signal.throwIfAborted()
+  await waitForSurface(ctx, 'document-card-first')
+  ctx.signal.throwIfAborted()
 })
 
 /**
@@ -465,9 +509,11 @@ registerCapability('ensure-demo-document', async (ctx, params) => {
 registerCapability('open-demo-document', async (ctx, params) => {
   const p = demoDocumentParams(params)
   if (!p) return
-  await ensureDemoDocument(p)
+  await ensureDemoDocument(p, ctx.signal)
+  ctx.signal.throwIfAborted()
   ctx.navigate(`/app/documents/${encodeURIComponent(p.documentId)}`)
-  await waitForSurface(ctx.registry, 'span-annotator')
+  await waitForSurface(ctx, 'span-annotator')
+  ctx.signal.throwIfAborted()
 })
 
 /**
@@ -480,19 +526,23 @@ registerCapability('open-demo-document', async (ctx, params) => {
 registerCapability('select-token-span', async (ctx, params) => {
   const p = demoDocumentParams(params)
   if (!p) return
-  await ensureDemoDocument(p)
+  await ensureDemoDocument(p, ctx.signal)
+  ctx.signal.throwIfAborted()
   ctx.navigate(`/app/documents/${encodeURIComponent(p.documentId)}`)
 
-  const annotator = await waitForSurface(ctx.registry, 'span-annotator')
+  const annotator = await waitForSurface(ctx, 'span-annotator')
+  ctx.signal.throwIfAborted()
   if (!annotator) return
   await ctx.sleep(SETTLE_MS)
+  ctx.signal.throwIfAborted()
 
   const content = annotator.querySelector<HTMLElement>('[data-annotator-content]') ?? annotator
   const token = content.querySelector<HTMLElement>('[data-token]')
   if (!token) return
 
   selectTokenViaPointer(content, token)
-  await waitForSurface(ctx.registry, 'span-label-picker')
+  await waitForSurface(ctx, 'span-label-picker')
+  ctx.signal.throwIfAborted()
 })
 
 /** Dispatch a pointerdown/pointerup pair that commits `token` as a one-token selection. */

@@ -222,7 +222,7 @@ describe('Ontology API', () => {
       // Type kinds are projected onto the layers vocabulary.
       const kinds = await prisma.typeDef.findMany({
         where: { ontologyId: analystOntologyId },
-        select: { name: true, typeKind: true, parentTypeId: true }
+        select: { id: true, name: true, typeKind: true, parentTypeId: true }
       })
       const byName = new Map(kinds.map(k => [k.name, k]))
       expect(byName.get('Person')!.typeKind).toBe('entity-type')
@@ -230,7 +230,7 @@ describe('Ontology API', () => {
       expect(byName.get('Action')!.typeKind).toBe('situation-type')
       expect(byName.get('knows')!.typeKind).toBe('relation-type')
       // The child event type's parent ref is projected onto the layers self-relation.
-      expect(byName.get('Meeting')!.parentTypeId).toBe('evt-action')
+      expect(byName.get('Meeting')!.parentTypeId).toBe(byName.get('Action')!.id)
     })
 
     it('updates an existing ontology in place, merging by id without pruning omitted types', async () => {

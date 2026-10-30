@@ -68,6 +68,7 @@ export async function writeWorldAggregate(
   scope: WorldScope,
   aggregate: WorldStateAggregate,
 ): Promise<void> {
+  if ('$transaction' in prisma) return prisma.$transaction((tx) => writeWorldAggregate(tx, scope, aggregate))
   const layers = layersScope(scope)
   await pruneWorldRows(prisma, layers)
   await createWorldProjection(prisma, await worldStateToLayersViaLens(aggregate, layers))
@@ -94,7 +95,7 @@ export async function mergeWorldObjects(
   aggregate: WorldStateAggregate,
 ): Promise<void> {
   const layers = layersScope(scope)
-  await upsertWorldProjection(prisma, layers, await worldStateToLayersViaLens(aggregate, layers), 1)
+  await upsertWorldProjection(prisma, layers, await worldStateToLayersViaLens(aggregate, layers))
 }
 
 /**

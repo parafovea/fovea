@@ -123,6 +123,7 @@ const KF = {
   confidence: 'confidence',
   /** Per-keyframe visibility flag; absent means visible. */
   visible: 'visible',
+  visibilityRanges: 'visibilityRanges',
   /** The interpolation mode of the segment that begins at this keyframe. */
   interpolation: 'interpolation',
   /** JSON control points for the segment beginning at this keyframe. */
@@ -234,7 +235,7 @@ export function boundingBoxSequenceToSpatioTemporalAnchor(
   const segmentByStart = new Map<number, FoveaInterpolationSegment>()
   for (const segment of seq.interpolationSegments) segmentByStart.set(segment.startFrame, segment)
 
-  const keyframes: Keyframe[] = seq.boxes.map((box) => {
+  const keyframes: Keyframe[] = seq.boxes.map((box, index) => {
     const timeMs = Math.round((box.frameNumber / frameRate) * 1000)
 
     // A positive box rounds up to a one-pixel floor so a sub-pixel dimension
@@ -248,6 +249,7 @@ export function boundingBoxSequenceToSpatioTemporalAnchor(
     }
 
     const entries: Feature[] = []
+    if (index === 0) entries.push({ key: KF.visibilityRanges, value: JSON.stringify(seq.visibilityRanges) })
     if (box.confidence !== undefined) {
       entries.push({ key: KF.confidence, value: String(to1000(box.confidence)) })
     }
@@ -278,8 +280,8 @@ export function boundingBoxSequenceToSpatioTemporalAnchor(
     return keyframe
   })
 
-  const firstMs = keyframes.length > 0 ? keyframes[0].timeMs : 0
-  const lastMs = keyframes.length > 0 ? keyframes[keyframes.length - 1].timeMs : 0
+  const firstMs = keyframes.length > 0 ? Math.min(...keyframes.map((frame) => frame.timeMs)) : 0
+  const lastMs = keyframes.length > 0 ? Math.max(...keyframes.map((frame) => frame.timeMs)) : 0
   const temporalSpan: TemporalSpan = { start: firstMs, ending: lastMs }
 
   const leadType =
@@ -413,6 +415,19 @@ export function spatioTemporalAnchorToBoundingBoxSequence(
       endFrame: boxes[boxes.length - 1].frameNumber,
       visible: runVisible,
     })
+  }
+
+  const storedVisibility = featureIndex(anchor.keyframes?.[0]?.features).get(KF.visibilityRanges)
+  if (storedVisibility !== undefined) {
+    try {
+      const ranges: unknown = JSON.parse(storedVisibility)
+      if (Array.isArray(ranges) && ranges.every((range) =>
+        typeof range === 'object' && range !== null &&
+        Number.isInteger(range.startFrame) && Number.isInteger(range.endFrame) &&
+        typeof range.visible === 'boolean')) {
+        visibilityRanges.splice(0, visibilityRanges.length, ...ranges)
+      }
+    } catch { /* Imported features may contain malformed JSON. */ }
   }
 
   const keyframeCount = boxes.length

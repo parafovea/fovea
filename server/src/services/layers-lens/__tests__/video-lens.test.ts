@@ -267,10 +267,23 @@ describe('video-lens forward annotation-core lens', () => {
       ]),
     )
 
-    // A featureless single keyframe carries no feature map; the conditional
-    // passthrough omits the field rather than emitting an empty entries list.
+    // A single keyframe retains the full visibility ranges in its features.
     const plain = projectAnnotationCore(lens, toVideoAnnotationSource(CORPUS[2].input, CTX))
-    expect(plain.keyframes[0].features).toBeUndefined()
+    expect(plain.keyframes[0].features?.entries).toContainEqual({
+      key: 'visibilityRanges', value: JSON.stringify(CORPUS[2].input.frames.visibilityRanges),
+    })
+  })
+
+  it('keeps spans after 2.5 hours and visibility gaps between keyframes', async () => {
+    const source = structuredClone(CORPUS[0].input)
+    source.frames.boxes = source.frames.boxes.map((box) => ({ ...box, frameNumber: box.frameNumber + 324000 }))
+    source.frames.visibilityRanges = [{ startFrame: 324005, endFrame: 324015, visible: false }]
+    const mapped = await foveaAnnotationToLayersRows(source, CTX)
+    expect(mapped.annotation.startMs).toBe(10800000)
+    const anchor = mapped.annotation.anchor.spatioTemporalAnchor
+    expect(anchor.keyframes?.[0].features?.entries).toContainEqual({
+      key: 'visibilityRanges', value: JSON.stringify(source.frames.visibilityRanges),
+    })
   })
 
   it('folds the temporal span from the keyframe times and scales the confidence', async () => {

@@ -36,10 +36,11 @@ export interface BackendAnnotation {
   /// Object-annotation link kind: 'entity' | 'event' | 'time' | 'location'.
   /// NULL for type annotations and for legacy object annotations created
   /// before the column existed (frontend defaults those to entity-linked).
-  linkType: 'entity' | 'event' | 'time' | 'location' | null
+  linkType: 'entity' | 'event' | 'time' | 'location' | 'entity-collection' | 'event-collection' | 'time-collection' | null
   frames: BoundingBoxSequence
   confidence: number | null
   source: string
+  notes?: string | null
   /// Display name of the linked world object, resolved server-side from the
   /// annotation owner's world. Present only on object annotations the server
   /// could resolve; absent or null otherwise.
@@ -62,6 +63,7 @@ export function transformBackendToFrontend(backendAnnotation: BackendAnnotation)
     videoId: backendAnnotation.videoId,
     boundingBoxSequence: backendAnnotation.frames,
     confidence: backendAnnotation.confidence ?? undefined,
+    notes: backendAnnotation.notes ?? undefined,
     // Carry the server-resolved linked object name through so the overlay can
     // fall back to it when the local world lacks the linked object (a reviewer
     // reading another annotator's annotation).
@@ -93,6 +95,10 @@ export function transformBackendToFrontend(backendAnnotation: BackendAnnotation)
     // NULL linkType is treated as entity-linked for back-compat with
     // annotations created before the column existed.
     const linkType = backendAnnotation.linkType ?? 'entity'
+    if (linkType === 'entity-collection' || linkType === 'event-collection' || linkType === 'time-collection') {
+      return { ...base, annotationType: 'object', linkedCollectionId: backendAnnotation.label,
+        linkedCollectionType: linkType === 'entity-collection' ? 'entity' : linkType === 'event-collection' ? 'event' : 'time' }
+    }
     if (linkType === 'event') {
       return { ...base, annotationType: 'object' as const, linkedEventId: backendAnnotation.label }
     }
@@ -120,14 +126,15 @@ export function transformFrontendToBackend(annotation: Annotation): {
   personaId: string | null
   type: string
   label: string
-  linkType: 'entity' | 'event' | 'time' | 'location' | null
+  linkType: 'entity' | 'event' | 'time' | 'location' | 'entity-collection' | 'event-collection' | 'time-collection' | null
   frames: BoundingBoxSequence | undefined
   confidence?: number
   source: string
+  notes?: string | null
 } {
   let personaId: string | null
   let label: string
-  let linkType: 'entity' | 'event' | 'time' | 'location' | null = null
+  let linkType: 'entity' | 'event' | 'time' | 'location' | 'entity-collection' | 'event-collection' | 'time-collection' | null = null
 
   if (annotation.annotationType === 'type') {
     // Type annotations require personaId (persona-scoped ontology assignments)
@@ -150,6 +157,9 @@ export function transformFrontendToBackend(annotation: Annotation): {
     } else if (annotation.linkedLocationId) {
       label = annotation.linkedLocationId
       linkType = 'location'
+    } else if (annotation.linkedCollectionId && annotation.linkedCollectionType) {
+      label = annotation.linkedCollectionId
+      linkType = `${annotation.linkedCollectionType}-collection`
     } else {
       label = 'unlabeled'
     }
@@ -168,7 +178,8 @@ export function transformFrontendToBackend(annotation: Annotation): {
     linkType,
     frames: annotation.boundingBoxSequence,
     confidence: annotation.confidence,
-    source: 'manual'
+    source: typeof annotation.metadata?.source === 'string' ? annotation.metadata.source : 'manual',
+    notes: annotation.notes ?? null
   }
 }
 
@@ -222,7 +233,9 @@ export const api = {
       label: fullPayload.label,
       frames: fullPayload.frames,
       confidence: fullPayload.confidence,
-      source: fullPayload.source
+      source: fullPayload.source,
+      linkType: fullPayload.linkType,
+      notes: fullPayload.notes
     }
 
     const response = await axios.put<BackendAnnotation>(

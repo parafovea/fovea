@@ -23,9 +23,8 @@ import { validateLine } from './line-parser.js'
 import { AnnotationData } from './types.js'
 import type { WorldStateAggregate } from '../world-model.js'
 import { writeOntologyAggregate } from '../layers-bridge/ontology-bridge.js'
-import { readClaimById, writeClaim, writeClaimRelation, type ClaimSummaryContext } from '../layers-bridge/claim-bridge.js'
+import { readClaimById, writeClaim, writeClaimRelation, rewriteClaimInPlace, deleteRelationSpans, type ClaimSummaryContext } from '../layers-bridge/claim-bridge.js'
 import { writeVideoAnnotation } from '../layers-bridge/annotation-bridge.js'
-import { nodeToClaimViaLens } from '../layers-lens/claim-lens.js'
 import type {
   VideoAnnotationInput,
   VideoAnnotationLinkType,
@@ -412,6 +411,12 @@ export class EntityImporter {
         return
       }
 
+      const persona = await tx.persona.findUnique({ where: { id: line.data.personaId as string } })
+      if (!persona) throw new NotFoundError('Persona', line.data.personaId as string)
+      if (this.ability && !this.ability.can('read', subject('Persona', persona))) {
+        throw new ForbiddenError('Cannot import a summary under this persona')
+      }
+
       // Check if summary already exists
       const existingSummary = await tx.videoSummary.findUnique({ where: { id: summaryId } })
 
@@ -553,6 +558,17 @@ export class EntityImporter {
         throw new NotFoundError('Summary', summaryId)
       }
 
+      if (this.ability && !this.ability.can('update', subject('VideoSummary', summary))) {
+        throw new ForbiddenError('Cannot import claims into this summary')
+      }
+      if (line.data.parentClaimId) {
+        const parent = await readClaimById(tx, line.data.parentClaimId as string)
+        if (!parent || parent.summaryId !== summaryId) throw new ValidationError('Parent claim must belong to the same summary')
+        if (this.ability && !this.ability.can('update', subject('Claim', parent))) {
+          throw new ForbiddenError('Cannot attach to this parent claim')
+        }
+      }
+
       // Read the existing claim (if any) so a replace authorizes against it.
       const existingClaim = await readClaimById(tx, claimId)
 
@@ -627,9 +643,8 @@ export class EntityImporter {
       // left untouched (skip-if-exists).
       if (existingClaim) {
         if (resolution?.action === 'replace') {
-          await tx.layersAnnotation.deleteMany({ where: { denotesNodeId: claimId } })
-          await tx.graphNode.delete({ where: { id: claimId } })
-          await writeClaim(tx, summaryCtx, claim)
+          if (existingClaim.summaryId !== summaryId) throw new ValidationError('Cannot move a claim to another summary')
+          await rewriteClaimInPlace(tx, claim)
         }
       } else {
         await writeClaim(tx, summaryCtx, claim)
@@ -709,10 +724,16 @@ export class EntityImporter {
       }
 
       // Resolve the source claim's summary and project scope for edge denormalization.
-      const sourceNode = await tx.graphNode.findUnique({ where: { id: sourceClaimId } })
-      const sourceClaim = sourceNode ? nodeToClaimViaLens(sourceNode) : null
-      const summaryId = sourceClaim?.summaryId ?? ''
-      const projectId = sourceClaim?.projectId ?? this.projectId
+      const sourceClaim = await readClaimById(tx, sourceClaimId)
+      const targetClaim = await readClaimById(tx, relation.targetClaimId)
+      if (!sourceClaim || !targetClaim) throw new ValidationError('Both relation endpoints must exist')
+      for (const endpoint of [sourceClaim, targetClaim]) {
+        if (this.ability && !this.ability.can('update', subject('Claim', endpoint))) {
+          throw new ForbiddenError('Cannot import a relation on this claim')
+        }
+      }
+      const summaryId = sourceClaim.summaryId
+      const projectId = sourceClaim.projectId ?? null
 
       const existingEdge = await tx.graphEdge.findUnique({ where: { id: relationId } })
       if (existingEdge && resolution?.action === 'replace') {
@@ -723,24 +744,12 @@ export class EntityImporter {
         // ClaimService.createRelation), so authorize update on the existing
         // relation's source claim. Without this an import line carrying another
         // user's relation id would clobber their relation (IDOR).
-        const existingSourceNode = existingEdge.sourceLocalId
-          ? await tx.graphNode.findUnique({ where: { id: existingEdge.sourceLocalId } })
-          : null
-        const existingSourceClaim = existingSourceNode ? nodeToClaimViaLens(existingSourceNode) : null
-        if (
-          this.ability &&
-          (!existingSourceClaim || !this.ability.can('update', subject('Claim', existingSourceClaim)))
-        ) {
-          result.errors.push({
-            line: line.lineNumber,
-            type: 'authorization',
-            message: `Not authorized to replace claim relation ${relationId}`,
-            data: line.data
-          })
-          if (options.transaction.atomic) {
+        for (const endpointId of [existingEdge.sourceLocalId, existingEdge.targetLocalId]) {
+          const endpoint = endpointId ? await readClaimById(tx, endpointId) : null
+          if (!endpoint || (this.ability && !this.ability.can('update', subject('Claim', endpoint)))) {
             throw new ForbiddenError(`Not authorized to replace claim relation ${relationId}`)
           }
-          return
+          await deleteRelationSpans(tx, endpoint.summaryId, [relationId])
         }
         await tx.graphEdge.delete({ where: { id: relationId } })
         await writeClaimRelation(tx, relation, summaryId, projectId)

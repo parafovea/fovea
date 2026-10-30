@@ -1,4 +1,6 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+import { recordError, errorsTotalCounter } from '../../src/lib/errorMetrics.js'
 
 import {
   boundedLabel,
@@ -12,6 +14,17 @@ import {
 
 describe('metric labels', () => {
   beforeEach(() => resetBoundedLabels())
+
+  it('isolates backend labels from a saturated browser budget', () => {
+    const add = vi.spyOn(errorsTotalCounter, 'add')
+    try {
+      for (let i = 0; i <= MAX_VALUES_PER_LABEL; i++) {
+        recordError({ source: 'frontend', severity: 'error', errorType: `client-${i}`, errorCode: `code-${i}`, route: `/client-${i}` })
+      }
+      recordError({ source: 'api', severity: 'error', errorType: 'DatabaseError', errorCode: 'P2028', route: '/api/world' })
+      expect(add).toHaveBeenLastCalledWith(1, expect.objectContaining({ error_type: 'DatabaseError', error_code: 'P2028', route: '/api/world' }))
+    } finally { add.mockRestore() }
+  })
 
   it('labels a matched request with its route template', () => {
     expect(routeLabel({ routeOptions: { url: '/api/videos/:videoId' } })).toBe('/api/videos/:videoId')

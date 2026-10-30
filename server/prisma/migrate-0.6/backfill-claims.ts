@@ -17,12 +17,16 @@ import type { PrismaClient, Claim, ClaimRelation } from '@prisma/client'
 import {
   writeClaim,
   writeClaimRelation,
+  rewriteClaimInPlace,
+  deleteRelationSpans,
   type ClaimSummaryContext,
 } from '../../src/services/layers-bridge/claim-bridge.js'
 import type { StoredClaim, StoredRelation } from '../../src/services/claim-model.js'
 
 import type { StepStats } from './helpers.js'
 import { reuseClaimNodeId, reuseClaimRelationEdgeId } from './id-map.js'
+import { claimAnnotationId } from '../../src/services/layers-id-map.js'
+import { ValidationError } from '../../src/lib/errors.js'
 
 /** Maps a legacy Claim row onto the StoredClaim view-model (dates to ISO). */
 function storedClaimOf(row: Claim): StoredClaim {
@@ -88,11 +92,25 @@ export async function backfillClaims(
   const stats: StepStats = { created: 0, updated: 0 }
   const summaryContext = new Map<string, ClaimSummaryContext>()
 
-  for (const claim of claims) {
+  const visiting = new Set<string>()
+  const copied = new Set<string>()
+  const copyClaim = async (claim: Claim): Promise<void> => {
+    if (copied.has(claim.id)) return
+    if (visiting.has(claim.id)) throw new ValidationError('Claim hierarchy contains a cycle')
+    visiting.add(claim.id)
+    if (claim.parentClaimId) {
+      const parentPrimary = await prisma.layersAnnotation.findUnique({
+        where: { id: claimAnnotationId(claim.parentClaimId) },
+      })
+      if (!parentPrimary) {
+        const parent = await prisma.claim.findUnique({ where: { id: claim.parentClaimId } })
+        if (parent) await copyClaim(parent)
+      }
+    }
     let context = summaryContext.get(claim.summaryId)
     if (!context) {
       const summary = await prisma.videoSummary.findUnique({ where: { id: claim.summaryId } })
-      if (!summary) continue
+      if (!summary) return
       context = {
         id: summary.id,
         videoId: summary.videoId,
@@ -101,28 +119,31 @@ export async function backfillClaims(
       }
       summaryContext.set(claim.summaryId, context)
     }
-    // Idempotency: clear any rows a prior run produced for this claim
-    // (its denoting annotations and its node) before the non-idempotent
-    // bridge writer recreates them under the same deterministic ids.
     const claimNodeId = reuseClaimNodeId(claim.id)
     const existed = (await prisma.graphNode.count({ where: { id: claimNodeId } })) > 0
-    await prisma.layersAnnotation.deleteMany({ where: { denotesNodeId: claimNodeId } })
-    await prisma.graphNode.deleteMany({ where: { id: claimNodeId } })
-    await writeClaim(prisma, context, storedClaimOf(claim))
+    if (existed) {
+      await rewriteClaimInPlace(prisma, storedClaimOf(claim))
+    } else {
+      await writeClaim(prisma, context, storedClaimOf(claim))
+    }
+    visiting.delete(claim.id)
+    copied.add(claim.id)
     existed ? (stats.updated += 1) : (stats.created += 1)
   }
 
-  const projectByClaim = new Map(claims.map((c) => [c.id, c.projectId] as const))
+  for (const claim of claims) await copyClaim(claim)
   for (const relation of relations) {
-    const source = claims.find((c) => c.id === relation.sourceClaimId)
+    const source = await prisma.claim.findUnique({ where: { id: relation.sourceClaimId } })
+    if (!source) continue
+    await deleteRelationSpans(prisma, source.summaryId, [relation.id])
     const edgeId = reuseClaimRelationEdgeId(relation.id)
     const existed = (await prisma.graphEdge.count({ where: { id: edgeId } })) > 0
     await prisma.graphEdge.deleteMany({ where: { id: edgeId } })
     await writeClaimRelation(
       prisma,
       storedRelationOf(relation),
-      source?.summaryId ?? '',
-      projectByClaim.get(relation.sourceClaimId) ?? null,
+      source.summaryId,
+      source.projectId,
     )
     existed ? (stats.updated += 1) : (stats.created += 1)
   }

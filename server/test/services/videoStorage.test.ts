@@ -9,6 +9,7 @@ import {
   VideoStorageProvider,
   VideoStorageConfig,
 } from '../../src/services/videoStorage.js'
+import { S3Client } from '@aws-sdk/client-s3'
 import { RangeNotSatisfiableError } from '../../src/lib/errors.js'
 
 describe('Video Storage Providers', () => {
@@ -366,5 +367,24 @@ describe('parseByteRange', () => {
     expect(parseByteRange('bytes=-', SIZE)).toBeNull()
     expect(parseByteRange('bytes=0-100,200-300', SIZE)).toBeNull()
     expect(parseByteRange('items=0-100', SIZE)).toBeNull()
+  })
+})
+
+
+describe('authoritative storage inventories', () => {
+  afterEach(() => vi.restoreAllMocks())
+
+  it('keeps full S3 keys when basenames collide', async () => {
+    vi.spyOn(S3Client.prototype, 'send').mockResolvedValue({ Contents: [
+      { Key: 'one/clip.mp4', Size: 10 }, { Key: 'two/clip.mp4', Size: 20 },
+    ] } as never)
+    const storage = createVideoStorageProvider({ type: 's3', s3: { bucket: 'test', region: 'us-east-1' } })
+    expect((await storage.listVideos()).videos.map(video => video.filename)).toEqual(['one/clip.mp4', 'two/clip.mp4'])
+  })
+
+  it.each(['s3', 'hybrid'] as const)('rejects incomplete %s inventories on access failure', async (type) => {
+    vi.spyOn(S3Client.prototype, 'send').mockRejectedValue(Object.assign(new Error('denied'), { name: 'AccessDenied' }))
+    const storage = createVideoStorageProvider({ type, localPath: os.tmpdir(), s3: { bucket: 'test', region: 'us-east-1' } })
+    await expect(storage.listVideos()).rejects.toThrow('denied')
   })
 })

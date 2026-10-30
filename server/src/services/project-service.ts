@@ -254,6 +254,7 @@ export class ProjectService {
    * @returns the related projects as list items
    */
   async list(userId: string, scope: ListScope): Promise<ProjectListItem[]> {
+    const allProjects = scope === 'all' && this.ability?.can('manage', 'all')
     const conditions: Prisma.ProjectWhereInput[] = []
 
     if (scope === 'personal' || scope === 'all') {
@@ -271,11 +272,11 @@ export class ProjectService {
       conditions.push({ members: { some: { userId } } })
     }
 
-    if (conditions.length === 0) {
+    if (conditions.length === 0 && !allProjects) {
       return []
     }
 
-    const projects = await this.repository.findManyForList({ OR: conditions }, userId)
+    const projects = await this.repository.findManyForList(allProjects ? {} : { OR: conditions }, userId)
 
     // Deduplicate (a project can match multiple conditions).
     const seen = new Set<string>()

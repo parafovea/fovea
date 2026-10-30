@@ -127,6 +127,18 @@ describe('useTokenSelection', () => {
     expect(store.getState().gestureInProgress).toBe(false)
   })
 
+  it('starts a still click from its own token after an earlier drag', () => {
+    const { handlers, store } = renderTokenSelection()
+    act(() => {
+      handlers.onPointerDown(pointerEvent(tokenEls[0], 0))
+      handlers.onPointerMove(pointerEvent(null, 5))
+      handlers.onPointerUp(pointerEvent(null, 5))
+      handlers.onPointerDown(pointerEvent(tokenEls[2], 2))
+      handlers.onPointerUp(pointerEvent(null, 2))
+    })
+    expect(store.getState().committedSelection).toEqual({ [ELEMENT_NAME]: [2] })
+  })
+
   it('commits a single-token click with no intervening move', () => {
     const { handlers, store } = renderTokenSelection()
 

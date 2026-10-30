@@ -36,7 +36,7 @@ services:
       dockerfile: server/Dockerfile
     command: sh -c "./node_modules/.bin/prisma migrate deploy && node prisma/migrate-0.6/cli.cjs auto && node prisma/seed.cjs && node dist/index.js"
     ports:
-      - "3001:3001"
+      - "127.0.0.1:3001:3001"
     environment:
       - NODE_ENV=${NODE_ENV:-production}
       - FOVEA_MODE=${FOVEA_MODE:-multi-user}
@@ -122,7 +122,7 @@ services:
         DEVICE: cpu
         PRELOAD_MODELS: ${PRELOAD_MODELS:-false}
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     environment:
       - TRANSFORMERS_CACHE=/models
       - HF_TOKEN=${HF_TOKEN:-}
@@ -192,7 +192,7 @@ services:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-fovea_password}
       - POSTGRES_DB=fovea
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
     networks:
@@ -213,7 +213,7 @@ services:
     image: redis:7-alpine
     command: redis-server --appendonly yes
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     volumes:
       - redis-data:/data
     networks:
@@ -236,9 +236,9 @@ services:
     volumes:
       - ./otel-collector-config.yaml:/etc/otel-collector-config.yaml
     ports:
-      - "4317:4317"   # OTLP gRPC
-      - "4318:4318"   # OTLP HTTP
-      - "8889:8889"   # Prometheus metrics exporter
+      - "127.0.0.1:4317:4317"   # OTLP gRPC
+      - "127.0.0.1:4318:4318"   # OTLP HTTP
+      - "127.0.0.1:8889:8889"   # Prometheus metrics exporter
     networks:
       - fovea-network
     restart: unless-stopped
@@ -262,7 +262,7 @@ services:
       - ./prometheus-alerts.yml:/etc/prometheus/alerts/fovea-alerts.yml
       - prometheus-data:/prometheus
     ports:
-      - "9090:9090"
+      - "127.0.0.1:9090:9090"
     networks:
       - fovea-network
     restart: unless-stopped
@@ -281,7 +281,7 @@ services:
       - grafana-data:/var/lib/grafana
       - ./grafana-dashboards:/etc/grafana/provisioning/dashboards
     ports:
-      - "3002:3000"
+      - "127.0.0.1:3002:3000"
     networks:
       - fovea-network
     restart: unless-stopped

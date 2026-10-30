@@ -2,7 +2,7 @@ import { Prisma, PrismaClient, type Persona } from '@prisma/client'
 import { subject } from '@casl/ability'
 
 import type { AppAbility } from '../lib/abilities.js'
-import { NotFoundError, UnauthorizedError, InternalError, ForbiddenError, ConflictError } from '../lib/errors.js'
+import { NotFoundError, UnauthorizedError, InternalError, ForbiddenError } from '../lib/errors.js'
 import { config } from '../config.js'
 import {
   dereferenceGlossItems,
@@ -33,18 +33,8 @@ import {
   emptyOntology,
   type PersonaOntologyAggregate,
 } from './ontology-model.js'
-import { layersToOntologyViaLens, ontologyToLayersViaLens } from './layers-lens/ontology-lens.js'
-import { readGlossMap, writeGlossStandoff } from './layers-bridge/ontology-bridge.js'
-
-/**
- * Coerces a value to Prisma.InputJsonValue for a JSON column, omitting the field
- * for null/undefined so the column stays NULL. Round-tripping through JSON also
- * strips undefined object properties so stored JSON compares equal on read.
- */
-function toJson(value: unknown): Prisma.InputJsonValue | undefined {
-  if (value === undefined || value === null) return undefined
-  return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue
-}
+import { layersToOntologyViaLens } from './layers-lens/ontology-lens.js'
+import { readGlossMap, writeOntologyAggregate } from './layers-bridge/ontology-bridge.js'
 
 /** Coerces a JSON column to an array of records, tolerating null/non-array. */
 function asRecords(value: unknown): Record<string, unknown>[] {
@@ -281,8 +271,10 @@ export class WorldStateService {
       }
     }
 
-    await pruneWorldRows(this.prisma, scope)
-    await createWorldProjection(this.prisma, projection)
+    await this.prisma.$transaction(async (tx) => {
+      await pruneWorldRows(tx, scope)
+      await createWorldProjection(tx, projection)
+    })
   }
 
   /**
@@ -303,14 +295,13 @@ export class WorldStateService {
    * a lockVersion compare-and-swap when it already exists). Rows the aggregate
    * does not mention are left in place, so a partial write never drops a
    * concurrently-added object; removal is explicit (the DELETE routes). On a CAS
-   * miss the whole reconcile retries against a fresh read so a concurrent
-   * same-object edit is not silently clobbered.
+   * miss the transaction rolls back and reports a conflict to the caller.
    *
    * @param userId - the owning user id
    * @param projectId - the project scope (null for personal state)
    * @param aggregate - the world objects to upsert
    * @throws {ForbiddenError} when create access to the scope is denied
-   * @throws {ConflictError} when the write keeps conflicting after retries
+   * @throws {ConflictError} when an object changes during the write
    */
   private async upsertWorldObjects(
     userId: string,
@@ -329,7 +320,7 @@ export class WorldStateService {
       }
     }
 
-    await upsertWorldProjection(this.prisma, scope, projection, 5)
+    await upsertWorldProjection(this.prisma, scope, projection)
   }
 
   /**
@@ -342,18 +333,14 @@ export class WorldStateService {
    * @param userId - the owning user id
    * @param world - the world buckets to merge (omitted buckets are untouched)
    * @throws {ForbiddenError} when create access to the scope is denied
-   * @throws {ConflictError} when the write keeps conflicting after retries
+   * @throws {ConflictError} when an object changes during the write
    */
   async mergePersonalWorld(userId: string, world: Partial<WorldStateAggregate>): Promise<void> {
-    const { aggregate } = await this.readPersonalWorld(userId)
-    const merged: WorldStateAggregate = { ...aggregate }
+    const incoming = emptyWorldState()
     for (const key of WORLD_BUCKET_KEYS) {
-      const value = world[key]
-      if (value !== undefined) {
-        merged[key] = mergeById(aggregate[key] as unknown as Prisma.JsonValue, value) as unknown as unknown[]
-      }
+      if (world[key] !== undefined) incoming[key] = world[key]!
     }
-    await this.upsertWorldObjects(userId, null, merged)
+    await this.upsertWorldObjects(userId, null, incoming)
   }
 
   /**
@@ -513,7 +500,7 @@ export class WorldStateService {
    * @param persona - the owning persona
    * @param buckets - the type buckets to merge (omitted buckets are untouched)
    * @param tx - optional transaction client to run the guarded write inside
-   * @throws {ConflictError} when the write keeps conflicting after retries
+   * @throws {ConflictError} when an object changes during the write
    */
   async writePersonaOntology(
     persona: Persona,
@@ -529,95 +516,24 @@ export class WorldStateService {
     const ontologyId = layersOntologyForPersonaId(persona.id)
 
     const write = async (client: Prisma.TransactionClient): Promise<void> => {
+      await client.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${ontologyId}, 0))`
       const repo = this.ontologyRepoFor(client)
-      const mergeBucket = (base: unknown[], incoming: unknown[] | undefined): unknown[] =>
-        incoming === undefined
-          ? base
-          : (mergeById(base as unknown as Prisma.JsonValue, incoming) as unknown as unknown[])
-
-      for (let attempt = 0; attempt < 5; attempt++) {
-        const existing = await repo.findOntologyById(ontologyId)
-        let current = emptyOntology()
-        if (existing) {
-          const currentTypeDefs = await repo.findAccessibleTypeDefs({}, { ontologyId })
-          const currentGloss = await readGlossMap(client, currentTypeDefs)
-          current = layersToOntologyViaLens(currentTypeDefs, currentGloss)
-        }
-        const merged: PersonaOntologyAggregate = {
-          entityTypes: mergeBucket(current.entityTypes, buckets.entityTypes),
-          eventTypes: mergeBucket(current.eventTypes, buckets.eventTypes),
-          roleTypes: mergeBucket(current.roleTypes, buckets.roleTypes),
-          relationTypes: mergeBucket(current.relationTypes, buckets.relationTypes),
-        }
-        const { ontology, typeDefs } = await ontologyToLayersViaLens(merged, persona.id, meta, scope)
-
-        if (existing) {
-          // Compare-and-swap the ontology version before rewriting its types; on a
-          // miss a concurrent writer advanced it, so retry against a fresh read.
-          const guard = await client.layersOntology.updateMany({
-            where: { id: ontologyId, lockVersion: existing.lockVersion },
-            data: {
-              name: ontology.name,
-              description: ontology.description,
-              domain: ontology.domain,
-              lockVersion: { increment: 1 },
-            },
-          })
-          if (guard.count !== 1) continue
-        } else {
-          try {
-            await repo.createOntology({
-              id: ontology.id,
-              name: ontology.name,
-              description: ontology.description,
-              domain: ontology.domain,
-              personaId: ontology.personaId,
-              projectId: ontology.projectId,
-              createdByUserId: ontology.createdByUserId,
-            })
-          } catch (error) {
-            // A concurrent first save created the row; retry onto the guarded path.
-            if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') continue
-            throw error
-          }
-        }
-
-        // The merged aggregate carries every surviving type, so recreate the full
-        // set: prune the current rows and re-insert. Insert types parent-free first,
-        // then set parent refs that resolve to a sibling type, so a self-relation FK
-        // never references a not-yet-inserted row.
-        const oldTypeDefs = await repo.findAccessibleTypeDefs({}, { ontologyId })
-        for (const typeDef of oldTypeDefs) await repo.deleteTypeDef(typeDef.id)
-
-        const createdIds = new Set<string>()
-        for (const typeDef of typeDefs) {
-          await repo.createTypeDef({
-            id: typeDef.id,
-            ontologyId: typeDef.ontologyId,
-            name: typeDef.name,
-            typeKind: typeDef.typeKind,
-            gloss: typeDef.gloss,
-            parentTypeId: null,
-            allowedRoles: toJson(typeDef.allowedRoles),
-            allowedValues: toJson(typeDef.allowedValues),
-            knowledgeRefs: toJson(typeDef.knowledgeRefs),
-            features: toJson(typeDef.features),
-            projectId: typeDef.projectId,
-            createdByUserId: typeDef.createdByUserId,
-          })
-          createdIds.add(typeDef.id)
-          // The TypeDef row id in this path is the original type id, so the gloss
-          // stand-off rows key off it directly.
-          await writeGlossStandoff(client, typeDef.id, typeDef.glossItems, ontologyId, persona.id, scope)
-        }
-        for (const typeDef of typeDefs) {
-          if (typeDef.parentTypeId && createdIds.has(typeDef.parentTypeId)) {
-            await repo.updateTypeDef(typeDef.id, { parentTypeId: typeDef.parentTypeId })
-          }
-        }
-        return
+      const existing = await repo.findOntologyById(ontologyId)
+      let current = emptyOntology()
+      if (existing) {
+        const types = await repo.findAccessibleTypeDefs({}, { ontologyId })
+        current = layersToOntologyViaLens(types, await readGlossMap(client, types))
       }
-      throw new ConflictError('Ontology update conflicted after retries')
+      const mergeBucket = (base: unknown[], incoming: unknown[] | undefined): unknown[] =>
+        incoming === undefined ? base : mergeById(base as unknown as Prisma.JsonValue, incoming) as unknown as unknown[]
+      const merged: PersonaOntologyAggregate = {
+        entityTypes: mergeBucket(current.entityTypes, buckets.entityTypes),
+        eventTypes: mergeBucket(current.eventTypes, buckets.eventTypes),
+        roleTypes: mergeBucket(current.roleTypes, buckets.roleTypes),
+        relationTypes: mergeBucket(current.relationTypes, buckets.relationTypes),
+      }
+      await writeOntologyAggregate(client, persona.id, merged, meta, scope)
+      await client.layersOntology.update({ where: { id: ontologyId }, data: { lockVersion: { increment: 1 } } })
     }
 
     if (tx) {
@@ -797,7 +713,7 @@ export class WorldStateService {
     const scope = { createdByUserId: userId, projectId: null }
     const partial: WorldStateAggregate = { ...emptyWorldState(), ...changed }
     const projection = await worldStateToLayersViaLens(partial, scope)
-    await upsertWorldProjection(tx ?? this.prisma, scope, projection, 1)
+    await upsertWorldProjection(tx ?? this.prisma, scope, projection)
     return total
   }
 
@@ -825,13 +741,14 @@ export class WorldStateService {
     userId: string,
     target: DereferenceTarget,
     tx?: Prisma.TransactionClient,
+    options?: { skipClaims?: boolean },
   ): Promise<number> {
     const client = tx ?? this.prisma
     let total = 0
     total += await this.dereferenceOntologyGlosses(userId, target, tx)
     total += await this.dereferenceWorldDescriptions(userId, target, tx)
     total += await dereferenceSummaries(client, target)
-    total += await dereferenceClaimProse(client, target)
+    if (!options?.skipClaims) total += await dereferenceClaimProse(client, target)
     return total
   }
 

@@ -139,6 +139,7 @@ export function useTokenSelection(
       const token = tokenFromNode(event.target as Element)
       if (!token) return
       event.preventDefault()
+      pointRef.current = null
 
       const container = containerRef.current
       const store = storeApi.getState()
@@ -234,6 +235,7 @@ export function useTokenSelection(
       // the final tokens of a fast drag are not dropped when their scheduled frame
       // is canceled on release.
       processMove()
+      pointRef.current = null
 
       store.setGesture(false)
 

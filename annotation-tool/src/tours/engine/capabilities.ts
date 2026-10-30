@@ -15,6 +15,8 @@ import type { AnchorRegistry } from './anchorRegistry'
 
 /** What a capability is handed when it runs. */
 export interface TourCapabilityContext {
+  /** Cancels side effects when the step changes or the tour closes. */
+  signal: AbortSignal
   /** Navigate the app to a route path. */
   navigate: (path: string) => void
   /** The shared anchor registry for the running tour. */
