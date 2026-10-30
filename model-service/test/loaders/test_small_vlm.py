@@ -21,8 +21,6 @@ from src.infrastructure.adapters.outbound.models.vlm.loader import (
     create_vlm_loader,
 )
 
-pytestmark = pytest.mark.requires_models
-
 
 @pytest.fixture
 def small_vlm_config() -> VLMConfig:
@@ -121,6 +119,33 @@ class TestSmallVLMLoader:
 
         assert result == "A beautiful landscape"
         mock_processor.decode.assert_called_once()
+
+    @pytest.mark.parametrize("architecture", [SmolVLM(), Moondream()])
+    def test_generate_uses_every_sampled_frame(
+        self, architecture: SmolVLM | Moondream, small_vlm_config: VLMConfig
+    ) -> None:
+        from PIL import Image
+
+        loader = SmallVLMLoader(architecture, small_vlm_config)
+        processor = MagicMock()
+        processor.return_value = {"input_ids": torch.tensor([[1, 2]])}
+        processor.decode.return_value = "Frame description"
+        loader._processor = processor
+        loader._model = MagicMock()
+        loader._model.generate.return_value = torch.tensor([[1, 2, 3]])
+        images = [Image.new("RGB", (16, 16), color) for color in ("red", "blue")]
+
+        result = loader.generate(images, "Describe the sequence")
+
+        assert "Frame description" in result
+        if isinstance(architecture, SmolVLM):
+            assert processor.call_args.kwargs["images"] == images
+            assert processor.call_args.kwargs["do_image_splitting"] is False
+            messages = processor.apply_chat_template.call_args.args[0]
+            assert [item["type"] for item in messages[0]["content"]] == ["image", "image", "text"]
+        else:
+            assert [call.kwargs["images"] for call in processor.call_args_list] == images
+            assert "Frame 1:" in result and "Frame 2:" in result
 
     def test_unload_clears_model_and_processor(
         self, smolvlm_arch: SmolVLM, small_vlm_config: VLMConfig

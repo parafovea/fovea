@@ -73,6 +73,8 @@ The 0.6.0 release is a single coordinated landing that moves Fovea's annotations
 
 ### Fixed
 
+- Pass every sampled frame to SmolVLM summaries and process each frame for single-image Moondream models, instead of silently discarding all but the first frame.
+
 - Keep model-service requests responsive during detection and tracking. Honor the tracking option with the configured tracker, preserve object identities across frames, and remove unsupported per-request tracker controls from the detection dialog.
 - Constrain the audio decoder to PyAV versions compatible with faster-whisper, share generated thumbnails with the backend in the real-model stack, and correct persona selectors, thumbnail checks, and frame ranges in browser journeys.
 
