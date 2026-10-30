@@ -204,7 +204,7 @@ export class ObjectWorkspacePage extends BasePage {
     await this.clickDeleteButton(name)
   }
 
-  async linkEventToType(eventName: string, typeName: string) {
+  async linkEventToType(eventName: string, typeName: string, personaName: string) {
     await this.selectTab('events')
     await this.clickEditButton(eventName)
     await this.wait(500)
@@ -232,15 +232,8 @@ export class ObjectWorkspacePage extends BasePage {
     const personaListbox = this.page.getByRole('listbox').first()
     await personaListbox.waitFor({ state: 'visible', timeout: 5000 })
 
-    // Skip the leading "_none" placeholder option ("Select Persona") so
-    // we actually select a real persona and the Event Type combobox
-    // renders (it is gated on selectedPersonaId being truthy).
-    const firstPersonaOption = personaListbox
-      .getByRole('option')
-      .filter({ hasNotText: /^Select Persona$/ })
-      .first()
-    await firstPersonaOption.waitFor({ state: 'visible', timeout: 5000 })
-    await firstPersonaOption.click({ timeout: 5000 })
+    const personaOption = personaListbox.getByRole('option', { name: personaName, exact: true })
+    await personaOption.click({ timeout: 5000 })
     await this.wait(500)
 
     // Wait for listbox to close

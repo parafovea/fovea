@@ -6,6 +6,7 @@ The caller (an infrastructure adapter) extracts frames and decodes masks.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 import uuid
@@ -77,6 +78,10 @@ class TrackObjectsUseCase:
         TrackingError
             If tracking fails or inputs are invalid.
         """
+        return await asyncio.to_thread(self._execute, input)
+
+    def _execute(self, input: TrackObjectsExecutionInput) -> TrackObjectsResponseDTO:
+        """Run blocking model operations outside the HTTP event loop."""
         request = input.request
 
         with tracer.start_as_current_span("track_objects_use_case") as span:

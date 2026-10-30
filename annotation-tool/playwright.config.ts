@@ -199,6 +199,7 @@ export default defineConfig({
       workers: 1,
       use: {
         ...devices['Desktop Chrome'],
+        actionTimeout: 30_000,
         viewport: { width: 1280, height: 720 }
       }
     }

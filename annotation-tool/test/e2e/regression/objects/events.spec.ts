@@ -122,7 +122,7 @@ test.describe('Event Management', () => {
   }) => {
     await objectWorkspace.navigateTo()
     await objectWorkspace.createEvent('Test Event', 'A test event')
-    await objectWorkspace.linkEventToType('Test Event', testEventType.name)
+    await objectWorkspace.linkEventToType('Test Event', testEventType.name, testPersona.name)
     await objectWorkspace.expectEventExists('Test Event')
   })
 

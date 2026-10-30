@@ -14,7 +14,7 @@ from PIL import Image
 
 from src.application.ports.outbound.tracking_model import ITrackingModel
 from src.domain.entities import TrackingMask
-from src.domain.value_objects import ConfidenceScore
+from src.domain.value_objects import ConfidenceScore, NormalizedBBox
 from src.infrastructure.observability.telemetry import record_inference
 
 if TYPE_CHECKING:
@@ -75,11 +75,22 @@ class TrackingLoaderAdapter(ITrackingModel):
             frame_map: dict[int, TrackingMask] = {}
             for mask in tframe.masks:
                 rle: dict[str, Any] = mask.to_rle()
+                rows, columns = np.nonzero(mask.mask)
+                height, width = mask.mask.shape
+                bounding_box = None
+                if len(rows):
+                    bounding_box = NormalizedBBox(
+                        x=float(columns.min()) / width,
+                        y=float(rows.min()) / height,
+                        width=float(columns.max() - columns.min() + 1) / width,
+                        height=float(rows.max() - rows.min() + 1) / height,
+                    )
                 frame_map[mask.object_id] = TrackingMask(
                     object_id=mask.object_id,
                     mask_rle=rle,
                     confidence=ConfidenceScore(float(mask.confidence)),
                     is_occluded=tframe.occlusions.get(mask.object_id, False),
+                    bounding_box=bounding_box,
                 )
             results.append(frame_map)
         return results

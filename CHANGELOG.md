@@ -73,6 +73,9 @@ The 0.6.0 release is a single coordinated landing that moves Fovea's annotations
 
 ### Fixed
 
+- Keep model-service requests responsive during detection and tracking. Honor the tracking option with the configured tracker, preserve object identities across frames, and remove unsupported per-request tracker controls from the detection dialog.
+- Constrain the audio decoder to PyAV versions compatible with faster-whisper, share generated thumbnails with the backend in the real-model stack, and correct persona selectors, thumbnail checks, and frame ranges in browser journeys.
+
 - Restore the real-model browser workflow profile across health checks and cleanup; correct Linux summary replacement and live-region assertions in browser tests.
 
 - Close the follow-up release audit findings: filter nested expression reads by ownership, gate native video annotations on video access, authorize world-node creation before writes, and create documents and tokenizations atomically.

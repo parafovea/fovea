@@ -726,6 +726,7 @@ function VideoCard({
 
   return (
     <Card
+      data-video-id={video.id}
       // The first tile carries the first-card anchor so a tour can
       // spotlight a tangible video card without depending on which clip
       // renders first.

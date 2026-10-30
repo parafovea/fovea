@@ -31,7 +31,7 @@
  *   5. Claim extraction             AnnotationWorkspace > Edit Summary
  *                                   > Claims tab > Extract Claims
  *                                   > ClaimsExtractionDialog > ClaimsViewer.
- *   6. Thumbnail generation         VideoBrowser card thumbnail <img>
+ *   6. Thumbnail generation         VideoBrowser card thumbnail background
  *                                   that renders only when the
  *                                   backend's GET /api/videos/:id/
  *                                   thumbnail successfully returns a
@@ -324,22 +324,17 @@ test.describe('Per-task user journeys against real model-service', () => {
     await selectPersonaInWorkspace(page, testPersona.name)
 
     const dialog = await openDetectionDialog(page)
-    // Switch frame mode to "Frame Range" so the Enable Tracking
-    // checkbox unlocks (DetectionDialog.tsx:361 wraps the tracking
-    // section behind frameMode !== 'current'). Start frame defaults
-    // to current frame; end frame defaults to current + 5 seconds
-    // worth of frames; leave both alone so the range is small enough
-    // to stay inside the CPU-only budget.
+    // Five frames exercise tracking within the CPU inference budget.
     const frameModeSelect = dialog.getByRole('combobox').first()
     await frameModeSelect.click()
     await page.getByRole('option', { name: /frame range/i }).click()
+    await dialog.getByRole('spinbutton', { name: 'End Frame', exact: true }).fill('4')
 
     const enableTrackingLabel = dialog.locator('label').filter({ hasText: /^Enable Tracking$/ })
     await expect(enableTrackingLabel).toBeVisible({ timeout: FAST_UI_WAIT_MS })
     await enableTrackingLabel.click()
 
-    // SAMURAI is the default tracking model selection; do not change
-    // it. Run detection and wait for the Detection Results dialog.
+    // The service selects the tracker from its model configuration.
     const resultsDialog = await runDetectionAndWaitForResults(page, dialog)
     await expect(resultsDialog).toContainText(/Found \d+ objects for query:/i, {
       timeout: FAST_UI_WAIT_MS,
@@ -362,7 +357,7 @@ test.describe('Per-task user journeys against real model-service', () => {
     // Pick the test persona in the video browser toolbar so the
     // Summarize button enables (VideoBrowser.tsx:744 disables it
     // until activePersonaId is set).
-    const personaSelect = page.getByRole('combobox').first()
+    const personaSelect = page.locator('#video-browser-root').getByRole('combobox')
     await expect(personaSelect).toBeVisible({ timeout: FAST_UI_WAIT_MS })
     await personaSelect.click()
     const escaped = testPersona.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -370,15 +365,13 @@ test.describe('Per-task user journeys against real model-service', () => {
       .getByRole('option')
       .filter({ hasText: new RegExp(`${escaped}`) })
       .first()
-      .click()
+      .click({ timeout: FAST_UI_WAIT_MS })
 
     // Locate the card for the test video. Cards carry data-slot=
     // "card"; filter by the video filename text which renders in
     // the card.
     const videoCard = page
-      .locator('[data-slot="card"]')
-      .filter({ hasText: testVideo.filename })
-      .first()
+      .locator(`[data-video-id="${testVideo.id}"]`)
     await expect(videoCard).toBeVisible({ timeout: FAST_UI_WAIT_MS })
 
     // Click the Summarize button on this card. The button is
@@ -529,29 +522,21 @@ test.describe('Per-task user journeys against real model-service', () => {
     // Thumbnails are produced by the model-service via POST
     // /api/thumbnails/generate, persisted to a shared mount, and
     // served by the backend's GET /api/videos/:id/thumbnail. The
-    // VideoBrowser renders the thumbnail as a plain <img> whose src
-    // is that endpoint; we drive the user-journey assertion by
-    // waiting for the img element to load (naturalWidth > 0).
+    // VideoBrowser uses a CSS background; verify both its URL and the JPEG response.
     await page.goto('/', { timeout: FAST_UI_WAIT_MS })
 
     const videoCard = page
-      .locator('[data-slot="card"]')
-      .filter({ hasText: testVideo.filename })
-      .first()
+      .locator(`[data-video-id="${testVideo.id}"]`)
     await expect(videoCard).toBeVisible({ timeout: FAST_UI_WAIT_MS })
 
-    const thumbnailImg = videoCard.locator('img').first()
-    await expect(thumbnailImg).toBeVisible({ timeout: SHORT_INFERENCE_WAIT_MS })
-
-    // naturalWidth > 0 confirms the browser successfully decoded
-    // the bytes the backend served. A broken thumbnail load leaves
-    // naturalWidth at 0.
-    await expect(async () => {
-      const naturalWidth = await thumbnailImg.evaluate(
-        (el) => (el as HTMLImageElement).naturalWidth,
-      )
-      expect(naturalWidth, 'thumbnail img must decode to non-zero width').toBeGreaterThan(0)
-    }).toPass({ timeout: SHORT_INFERENCE_WAIT_MS })
+    const thumbnail = videoCard.locator('div[style*="background-image"]').first()
+    await expect(thumbnail).toHaveCSS('background-image', new RegExp(`/api/videos/${testVideo.id}/thumbnail`))
+    const response = await page.request.get(`/api/videos/${testVideo.id}/thumbnail?size=medium`, {
+      timeout: SHORT_INFERENCE_WAIT_MS,
+    })
+    expect(response.ok(), response.ok() ? '' : await response.text()).toBe(true)
+    expect(response.headers()['content-type']).toContain('image/jpeg')
+    expect((await response.body()).length).toBeGreaterThan(0)
   })
 
   test('user transcribes audio via Transcribe Audio and sees timed segments', async ({
@@ -746,6 +731,7 @@ test.describe.serial('Multi-service knowledge-extraction journey', () => {
     const frameModeSelect = detectionDialogTracking.getByRole('combobox').first()
     await frameModeSelect.click()
     await page.getByRole('option', { name: /frame range/i }).click()
+    await detectionDialogTracking.getByRole('spinbutton', { name: 'End Frame', exact: true }).fill('4')
     await detectionDialogTracking
       .locator('label')
       .filter({ hasText: /^Enable Tracking$/ })

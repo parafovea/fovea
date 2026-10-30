@@ -5,13 +5,14 @@ Thin FastAPI wrapper that delegates to :class:`DetectObjectsUseCase`.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import TYPE_CHECKING, cast
 
 import cv2
 
 if TYPE_CHECKING:
-    from src.domain.entities.architectures import DetectionArchitecture
+    from src.domain.entities.architectures import DetectionArchitecture, TrackingArchitecture
 import numpy as np
 from fastapi import APIRouter, HTTPException
 from opentelemetry import trace
@@ -114,49 +115,73 @@ async def detect_objects(
                     ),
                 )
 
+            tracking_model = None
+            if request.enable_tracking:
+                tracking_task = manager.tasks.get("video_tracking")
+                if tracking_task is None:
+                    raise HTTPException(
+                        status_code=500, detail="Video tracking task not configured"
+                    )
+                tracking_config = tracking_task.get_selected_config()
+                if tracking_config.architecture is None:
+                    raise HTTPException(
+                        status_code=500, detail="Tracking architecture not configured"
+                    )
+                tracking_model = container.tracking_model(
+                    architecture=cast("TrackingArchitecture", tracking_config.architecture),
+                    model_id=tracking_config.model_id,
+                    framework=tracking_config.framework,
+                )
+
             use_case = container.build_detect_objects_use_case(
                 architecture=cast("DetectionArchitecture", architecture),
                 model_id=selected_model_config.model_id,
                 framework=selected_model_config.framework,
                 confidence_threshold=request.confidence_threshold,
+                tracking_model=tracking_model,
             )
 
-            cap = cv2.VideoCapture(str(video_path))
-            try:
-                if not cap.isOpened():
-                    raise HTTPException(
-                        status_code=400,
-                        detail=f"Failed to open video for decoding: {request.video_id}",
-                    )
-
-                fps = cap.get(cv2.CAP_PROP_FPS)
-                total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-                video_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-                video_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-
-                frame_numbers = list(request.frame_numbers)
-                if not frame_numbers:
-                    frame_numbers = [0, total_frames // 2, max(total_frames - 1, 0)]
-
-                frame_inputs: list[DetectObjectsFrameInput] = []
-                for frame_num in frame_numbers:
-                    if frame_num >= total_frames:
-                        continue
-                    cap.set(cv2.CAP_PROP_POS_FRAMES, frame_num)
-                    ret, frame = cap.read()
-                    if not ret:
-                        continue
-                    frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB).astype(np.uint8)
-                    timestamp = frame_num / fps if fps > 0 else 0.0
-                    frame_inputs.append(
-                        DetectObjectsFrameInput(
-                            frame_number=frame_num,
-                            timestamp=timestamp,
-                            image=frame_rgb,
+            def extract_frames() -> tuple[int, int, list[DetectObjectsFrameInput]]:
+                cap = cv2.VideoCapture(str(video_path))
+                try:
+                    if not cap.isOpened():
+                        raise HTTPException(
+                            status_code=400,
+                            detail=f"Failed to open video for decoding: {request.video_id}",
                         )
-                    )
-            finally:
-                cap.release()
+
+                    fps = cap.get(cv2.CAP_PROP_FPS)
+                    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+                    video_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+                    video_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
+                    frame_numbers = list(request.frame_numbers)
+                    if not frame_numbers:
+                        frame_numbers = [0, total_frames // 2, max(total_frames - 1, 0)]
+
+                    frame_inputs: list[DetectObjectsFrameInput] = []
+                    for frame_num in frame_numbers:
+                        if frame_num >= total_frames:
+                            continue
+                        cap.set(cv2.CAP_PROP_POS_FRAMES, frame_num)
+                        ret, frame = cap.read()
+                        if not ret:
+                            continue
+                        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB).astype(np.uint8)
+                        timestamp = frame_num / fps if fps > 0 else 0.0
+                        frame_inputs.append(
+                            DetectObjectsFrameInput(
+                                frame_number=frame_num,
+                                timestamp=timestamp,
+                                image=frame_rgb,
+                            )
+                        )
+                finally:
+                    cap.release()
+
+                return video_width, video_height, frame_inputs
+
+            video_width, video_height, frame_inputs = await asyncio.to_thread(extract_frames)
 
             dto_request = DetectObjectsRequestDTO(
                 video_id=request.video_id,

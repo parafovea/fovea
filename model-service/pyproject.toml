@@ -110,6 +110,9 @@ sam2 = [
 audio = [
     "openai-whisper>=20240930 ; python_version < '3.14'",
     "faster-whisper>=1.1.0",
+    # faster-whisper 1.2.1 passes metadata_errors to av.open; PyAV 19 removed it.
+    # Keep fresh Docker audio installs compatible until an upstream release fixes it.
+    "av>=11,<19",
     # pyannote.audio 3.x calls hf_hub_download with the removed
     # `use_auth_token` kwarg under huggingface_hub 1.x; pin >=4.0 so
     # the pipeline loads against the current Hub client.

@@ -388,6 +388,7 @@ class Container:
         model_id: str,
         framework: str = "pytorch",
         confidence_threshold: float = 0.3,
+        tracking_model: ITrackingModel | None = None,
     ) -> DetectObjectsUseCase:
         """Build a :class:`DetectObjectsUseCase` for a given architecture."""
         from src.application.use_cases.detect_objects import DetectObjectsUseCase  # noqa: PLC0415
@@ -399,6 +400,7 @@ class Container:
                 framework=framework,
                 confidence_threshold=confidence_threshold,
             ),
+            tracking_model=tracking_model,
         )
 
     def build_track_objects_use_case(
