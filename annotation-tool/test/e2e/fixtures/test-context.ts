@@ -138,12 +138,10 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
   /**
    * Annotation workspace page object.
    * Automatically created for each test.
-   * Depends on testUser to ensure authentication is set up.
+   * Uses the test's own persona so parallel admin sessions cannot select another worker's.
    */
-  // @ts-expect-error - testUser parameter establishes fixture dependency but is not used in function body
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  annotationWorkspace: async ({ page, testUser }, use) => {
-    const workspace = new AnnotationWorkspacePage(page)
+  annotationWorkspace: async ({ page, testPersona }, use) => {
+    const workspace = new AnnotationWorkspacePage(page, testPersona.name)
     await use(workspace)
   },
 

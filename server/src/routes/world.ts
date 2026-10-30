@@ -21,12 +21,12 @@ import { WorldStateService, WorldStateUpdateInput } from '../services/world-stat
  * references to text.
  *
  * Routes:
- * - GET /api/world - Get current user's world state
- * - PUT /api/world - Update current user's world state
- * - DELETE /api/admin/world/:userId - Clear specific user's world state (admin only)
- * - GET/DELETE /api/world/entities/:entityId[/deletion-preview]
- * - GET/DELETE /api/world/events/:eventId[/deletion-preview]
- * - GET/DELETE /api/world/times/:timeId[/deletion-preview]
+ * - GET `/api/world` - Get current user's world state
+ * - PUT `/api/world` - Update current user's world state
+ * - DELETE `/api/admin/world/:userId` - Clear specific user's world state (admin only)
+ * - GET/DELETE `/api/world/entities/:entityId[/deletion-preview]`
+ * - GET/DELETE `/api/world/events/:eventId[/deletion-preview]`
+ * - GET/DELETE `/api/world/times/:timeId[/deletion-preview]`
  */
 const worldRoute: FastifyPluginAsync = async (fastify) => {
   // Request-independent: repositories for the plugin's lifetime.

@@ -21,6 +21,8 @@ jobs:
           node-version-file: '.nvmrc'
       - name: Audit the production lockfile
         run: make audit-dependencies
+      - name: Audit the documentation lockfile
+        run: make audit-docs-dependencies
 
   # Frontend jobs run in parallel
   lint-frontend:
@@ -255,10 +257,7 @@ jobs:
         run: mypy src/
 
       - name: Audit installed model-service base and development dependencies
-        working-directory: model-service
-        run: |
-          pip install pip-audit
-          pip-audit --skip-editable
+        run: make audit-model-service-ci
 
   test-model-service:
     name: Model Service / Unit Tests

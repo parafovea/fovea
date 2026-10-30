@@ -16,7 +16,7 @@ export class AnnotationWorkspacePage extends BasePage {
   readonly video: VideoPlayerComponent
   readonly timeline: TimelineComponent
 
-  constructor(page: Page) {
+  constructor(page: Page, private readonly defaultPersonaName: string) {
     super(page)
     this.video = new VideoPlayerComponent(page)
     this.timeline = new TimelineComponent(page)
@@ -130,7 +130,7 @@ export class AnnotationWorkspacePage extends BasePage {
    * Draw a simple bounding box with default coordinates.
    * Useful for quick test setup.
    */
-  async selectPersona(personaName?: string): Promise<void> {
+  async selectPersona(personaName = this.defaultPersonaName): Promise<void> {
     const personaSelect = this.page.getByRole('combobox', { name: /select persona/i })
     await expect(personaSelect).toBeVisible({ timeout: 10000 })
     await expect(personaSelect).toBeEnabled({ timeout: 10000 })
@@ -141,12 +141,9 @@ export class AnnotationWorkspacePage extends BasePage {
 
     // Under parallel workers an admin session sees every worker's persona,
     // so `.first()` could pick another worker's. Caller passes its own name.
-    const personaOption = personaName
-      ? this.page
-          .getByRole('option')
-          .filter({ hasText: new RegExp('^' + personaName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ' \\(') })
-          .first()
-      : personaListbox.getByRole('option').filter({ hasNotText: /^None$/i }).first()
+    const personaOption = this.page
+      .getByRole('option')
+      .filter({ hasText: new RegExp('^' + personaName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ' \\(') })
     await expect(personaOption).toBeVisible({ timeout: 5000 })
     await personaOption.click()
     await expect(personaListbox).toBeHidden({ timeout: 5000 }).catch(() => {})

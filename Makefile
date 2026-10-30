@@ -7,10 +7,10 @@
 # Run `make` or `make help` to list targets.
 
 .DEFAULT_GOAL := help
-.PHONY: help install install-model-service-ci generate gen-contract \
+.PHONY: help install install-model-service-ci audit-model-service-ci generate gen-contract \
 	lint lint-frontend lint-backend lint-model-service lint-wikibase \
 	typecheck test test-frontend test-backend test-model-service test-wikibase \
-	build audit-dependencies dev-infra stop
+	build audit-dependencies audit-docs-dependencies dev-infra stop
 
 help: ## List available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -22,9 +22,13 @@ install: ## Install all dependencies (pnpm workspace + uv for the Python service
 	cd wikibase && uv sync
 
 install-model-service-ci: ## Install model-service test tools with CPU wheels on Linux CI
-	python -m pip install --upgrade pip
+	python -m pip install --upgrade pip "setuptools>=84.1.0"
 	python -m pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu
 	python -m pip install --no-cache-dir -e "./model-service[dev]"
+
+audit-model-service-ci: ## Audit installed Python packages, including public versions of CPU wheels
+	python -m pip install pip-audit
+	python model-service/scripts/audit_dependencies.py
 
 generate: ## Generate the Prisma client (needed before backend typecheck/test)
 	pnpm --filter @fovea/server exec prisma generate
@@ -78,6 +82,10 @@ test-wikibase: ## Wikibase loader tests
 
 audit-dependencies: ## Audit production Node dependencies for published advisories
 	pnpm audit --prod --audit-level low
+
+audit-docs-dependencies: ## Audit docs dependencies with the documented deepmerge exception
+	node --test scripts/audit-docs-dependencies.test.mjs
+	node scripts/audit-docs-dependencies.mjs
 
 build: generate ## Build the frontend and backend
 	pnpm --filter @fovea/annotation-tool build

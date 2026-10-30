@@ -107,6 +107,18 @@ Keep it disabled when extending these loaders, and restrict model-volume
 write access to the service and trusted operators. This advisory remains in
 scans that include the CPU extra; the base-dependency CI audit excludes that extra.
 
+## Documentation build dependency advisory
+
+The documentation build includes deepmerge 4.3.1 through SVGR. Its
+[low-severity prototype-poisoning advisory](https://github.com/advisories/GHSA-gcqx-w48m-w2h4)
+has no patched release. This package belongs to the documentation compiler;
+the deployed site serves static files. The installed SVGR plugin declares
+deepmerge as a dependency but does not import it in its compiled entry point.
+
+`make audit-docs-dependencies` permits this specific low-severity advisory
+and reports it explicitly. Other advisories, a severity increase, and scanner
+failures block CI. Review this exception when updating the documentation toolchain.
+
 ## What to plan for
 
 - [Backup and restore](backup-restore.md) for Postgres and the
