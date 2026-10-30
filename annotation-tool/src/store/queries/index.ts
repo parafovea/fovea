@@ -136,7 +136,6 @@ export {
   useUpdatePersona,
   useDeletePersona,
   usePersonaDeletionPreview,
-  useSavePersonaOntology,
   useAddEntityToPersona,
   useUpdateEntityInPersona,
   useDeleteEntityFromPersona,

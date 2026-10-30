@@ -40,7 +40,6 @@ import {
   useDeleteRoleFromPersona,
   useDeleteEventFromPersona,
   useDeleteRelationTypeFromPersona,
-  useSavePersonaOntology,
   useWorld,
 } from '@store/queries'
 import { OntologyAugmenter } from '@components/ontology/OntologyAugmenter'
@@ -88,7 +87,6 @@ export default function OntologyWorkspace() {
   const { mutate: addRoleMutation } = useAddRoleToPersona()
   const { mutate: addEventMutation } = useAddEventToPersona()
   const { mutate: addRelationTypeMutation } = useAddRelationTypeToPersona()
-  const { mutate: saveOntologyMutation } = useSavePersonaOntology()
 
   // Use preferences for smart defaults
   const {
@@ -182,20 +180,6 @@ export default function OntologyWorkspace() {
       setSelectedPersonaIdStore(personas[0].id)
     }
   }, [selectedPersonaId, personas, setSelectedPersonaIdStore])
-
-  // Auto-save persona ontology on changes (debounced 1 second)
-  useEffect(() => {
-    if (!selectedPersonaId || !selectedOntology) return
-
-    const timeoutId = setTimeout(() => {
-      saveOntologyMutation({
-        personaId: selectedPersonaId,
-        ontology: selectedOntology
-      })
-    }, 1000)
-
-    return () => clearTimeout(timeoutId)
-  }, [selectedPersonaId, selectedOntology, saveOntologyMutation])
 
   /**
    * Filters ontology type items by search term.

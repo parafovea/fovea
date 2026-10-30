@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { http, HttpResponse } from 'msw'
@@ -352,6 +352,7 @@ function preSelectPersona(personaId: string) {
 describe('OntologyWorkspace', () => {
   beforeEach(() => {
     server.resetHandlers()
+    useAnnotationUiStore.getState().resetAllState()
     // Reset model config mock to default GPU-available state
     mockUseModelConfig.mockReturnValue({
       data: { cudaAvailable: true, modelsAvailable: true, cpuModelsAvailable: false },
@@ -368,6 +369,24 @@ describe('OntologyWorkspace', () => {
   })
 
   describe('Initial Rendering', () => {
+    it('does not write an ontology when opening it for reading', async () => {
+      setupDefaultHandlers()
+      const saveOntology = vi.fn(() => HttpResponse.json({
+        ...mockOntologies['persona-urban-planner'],
+        updatedAt: new Date().toISOString(),
+      }))
+      server.use(http.put('/api/personas/:personaId/ontology', saveOntology))
+      preSelectPersona('persona-urban-planner')
+      render(<OntologyWorkspace />, { wrapper: createWrapper() })
+
+      expect(await screen.findByText('Vehicle')).toBeInTheDocument()
+      await act(async () => {
+        await new Promise(resolve => setTimeout(resolve, 1100))
+      })
+
+      expect(saveOntology).not.toHaveBeenCalled()
+    })
+
     it('renders persona browser by default (no auto-select)', async () => {
       setupDefaultHandlers()
       render(<OntologyWorkspace />, { wrapper: createWrapper() })

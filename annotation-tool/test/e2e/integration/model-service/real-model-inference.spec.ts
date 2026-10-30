@@ -50,9 +50,8 @@
  *   4. With the same persona and a multi-frame range, run Detect
  *      Objects again with Enable Tracking checked so the model-service
  *      returns tracked candidates.
- *   5. Generate the VLM video summary via the Edit Summary dialog
- *      (the editor enqueues a backend summarize job that the worker
- *      forwards to the real model-service).
+ *   5. Generate the VLM video summary through the video card's
+ *      Summarize action and open the stored summary for editing.
  *   6. From the summary editor's Claims tab, run Extract Claims and
  *      wait for at least one claim row to render.
  *   7. Reload the page and confirm the persisted summary text +
@@ -691,30 +690,21 @@ test.describe.serial('Multi-service knowledge-extraction journey', () => {
     })
     await expect(addSelectedButton).toBeEnabled({ timeout: FAST_UI_WAIT_MS })
 
-    // Wait for the persona-ontology PUT that the Add Selected click
-    // triggers so the assertion below sees the persisted types.
-    const ontologyPutPromise = page.waitForResponse(
-      (resp) =>
-        resp.url().includes(`/api/personas/${createdPersona.id}/ontology`) &&
-        resp.request().method() === 'PUT' &&
-        resp.status() < 400,
-      { timeout: SHORT_INFERENCE_WAIT_MS },
-    )
     await addSelectedButton.click()
-    await ontologyPutPromise
 
-    // Verify persisted entity-type count >= 1 against the canonical
-    // server view (UI-driven steps can be flaky on layout; this is
-    // a read-only sanity gate after the UI mutation completed).
-    const ontologyRes = await page.request.get(
-      `/api/personas/${createdPersona.id}/ontology`,
-    )
-    expect(ontologyRes.status()).toBe(200)
-    const ontology = (await ontologyRes.json()) as PersonaOntologyResponse
-    expect(
-      ontology.entities.length,
-      'persona ontology must hold the accepted suggestions after the augmenter UI flow',
-    ).toBeGreaterThanOrEqual(1)
+    // Each accepted suggestion has its own mutation. Verify the complete
+    // selection in the canonical server view before leaving the workspace.
+    await expect.poll(async () => {
+      const ontologyRes = await page.request.get(
+        `/api/personas/${createdPersona.id}/ontology`,
+      )
+      expect(ontologyRes.status()).toBe(200)
+      const ontology = (await ontologyRes.json()) as PersonaOntologyResponse
+      return ontology.entities.length
+    }, {
+      message: 'persona ontology must persist every accepted suggestion',
+      timeout: FAST_UI_WAIT_MS,
+    }).toBe(toAccept)
 
     // STEP 3: Navigate to the annotation workspace for the test
     // video. Pick the journey persona in the workspace toolbar and
