@@ -71,11 +71,11 @@ test.describe('Relation Type References in Summaries', () => {
     const dialog = page.getByRole('dialog')
     await expect(dialog).toBeVisible()
 
-    // Select the (only) persona option — shadcn's Select has no disabled placeholder
+    // Select this test's persona; other workers may create additional options.
     const personaSelect = dialog.getByLabel(/select persona/i)
     await personaSelect.click()
     await page.waitForTimeout(300)
-    const personaOption = page.getByRole('option').first()
+    const personaOption = page.getByRole('option', { name: `${testPersona.name} (${testPersona.role})`, exact: true })
     await personaOption.click()
     await page.waitForTimeout(500)
 
@@ -142,11 +142,11 @@ test.describe('Relation Type References in Summaries', () => {
     const dialog = page.getByRole('dialog')
     await expect(dialog).toBeVisible()
 
-    // Select the (only) persona option — shadcn's Select has no disabled placeholder
+    // Select this test's persona; other workers may create additional options.
     const personaSelect = dialog.getByLabel(/select persona/i)
     await personaSelect.click()
     await page.waitForTimeout(300)
-    const personaOption = page.getByRole('option').first()
+    const personaOption = page.getByRole('option', { name: `${testPersona.name} (${testPersona.role})`, exact: true })
     await personaOption.click()
     await page.waitForTimeout(500)
 
@@ -214,7 +214,7 @@ test.describe('Relation Type References in Summaries', () => {
     const personaSelect2 = dialog2.getByLabel(/select persona/i)
     await personaSelect2.click()
     await page.waitForTimeout(300)
-    const personaOption2 = page.getByRole('option').first()
+    const personaOption2 = page.getByRole('option', { name: `${testPersona.name} (${testPersona.role})`, exact: true })
     await personaOption2.click()
 
     await summariesLoaded
@@ -255,11 +255,11 @@ test.describe('Relation Type References in Summaries', () => {
     const dialog = page.getByRole('dialog')
     await expect(dialog).toBeVisible()
 
-    // Select the (only) persona option — shadcn's Select has no disabled placeholder
+    // Select this test's persona; other workers may create additional options.
     const personaSelect = dialog.getByLabel(/select persona/i)
     await personaSelect.click()
     await page.waitForTimeout(300)
-    const personaOption = page.getByRole('option').first()
+    const personaOption = page.getByRole('option', { name: `${testPersona.name} (${testPersona.role})`, exact: true })
     await personaOption.click()
 
     // Wait for ontology to load
@@ -332,11 +332,11 @@ test.describe('Relation Type References in Summaries', () => {
     const dialog = page.getByRole('dialog')
     await expect(dialog).toBeVisible()
 
-    // Select the (only) persona option — shadcn's Select has no disabled placeholder
+    // Select this test's persona; other workers may create additional options.
     const personaSelect = dialog.getByLabel(/select persona/i)
     await personaSelect.click()
     await page.waitForTimeout(300)
-    const personaOption = page.getByRole('option').first()
+    const personaOption = page.getByRole('option', { name: `${testPersona.name} (${testPersona.role})`, exact: true })
     await personaOption.click()
 
     // Wait for ontology to load
