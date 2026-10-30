@@ -27,6 +27,14 @@ TEST_LOCALHOST_URL = "http://localhost:8080/video.mp4"
 class TestDownloadVideoIfNeeded:
     """Tests for download_video_if_needed function."""
 
+    @pytest.fixture(autouse=True)
+    def resolve_test_origin(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Keep mocked downloads independent of live S3 DNS and network access."""
+        monkeypatch.setattr(
+            "src.infrastructure.adapters.outbound.video.downloader._resolve_host_addresses",
+            lambda _host: ["93.184.216.34"],
+        )
+
     @pytest.mark.asyncio
     async def test_local_file_path_no_download(self):
         """Test that local file paths are returned unchanged."""

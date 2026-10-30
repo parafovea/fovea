@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Deploy after building, retain data, and recover the previous application on failure.
 set -Eeuo pipefail
+# Rollback files contain the previous container environment, including secrets.
+umask 077
 cd "${1:?deployment directory is required}"
 DEMO_MODE=${2:-false}
 exec 9>.deploy.lock
@@ -202,16 +204,29 @@ if [ -n "$PREVIOUS_BACKEND" ]; then RESTORE_SERVICES+=(backend); fi
 if [ -n "$PREVIOUS_FRONTEND" ]; then RESTORE_SERVICES+=(frontend); fi
 python3 - "$PREVIOUS_BACKEND" "$PREVIOUS_FRONTEND" <<'PYROLLBACK'
 import json
+import os
 import subprocess
 import sys
+
+def compose_literal(value: object) -> object:
+    """Escape Compose interpolation in inspected environment and command values."""
+    if isinstance(value, str):
+        return value.replace("$", "$$")
+    if isinstance(value, list):
+        return [compose_literal(item) for item in value]
+    return value
+
 services = {}
 for service, container in zip(("backend", "frontend"), sys.argv[1:]):
     if container:
         previous = json.loads(subprocess.check_output(["docker", "inspect", container], text=True))[0]
         tag = "fovea-rollback-" + service
         subprocess.run(["docker", "tag", previous["Image"], tag], check=True)
-        services[service] = {"image": tag, "pull_policy": "never", "command": previous["Config"]["Cmd"], "entrypoint": previous["Config"]["Entrypoint"]}
-with open(".deploy-rollback.json", "w") as output:
+        environment = dict(entry.split("=", 1) for entry in previous["Config"]["Env"])
+        services[service] = {"image": tag, "pull_policy": "never", "command": compose_literal(previous["Config"]["Cmd"]), "entrypoint": compose_literal(previous["Config"]["Entrypoint"]), "environment": {key: compose_literal(value) for key, value in environment.items()}}
+descriptor = os.open(".deploy-rollback.json", os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+with os.fdopen(descriptor, "w") as output:
+    os.fchmod(output.fileno(), 0o600)
     json.dump({"services": services}, output)
 PYROLLBACK
 
@@ -349,6 +364,21 @@ if [ "$BACKEND_HEALTHY" != "true" ]; then
   docker compose logs --tail=300 backend || true
   echo '--- model-service logs ---'
   docker compose logs --tail=100 model-service || true
+  exit 1
+fi
+
+echo 'Waiting for the frontend to serve the application...'
+FRONTEND_HEALTHY=false
+for i in {1..30}; do
+  if curl -sf http://localhost:3000/ > /dev/null 2>&1; then
+    FRONTEND_HEALTHY=true
+    break
+  fi
+  sleep 2
+done
+if [ "$FRONTEND_HEALTHY" != true ]; then
+  echo 'Frontend did not become healthy; restoring the previous application.'
+  docker compose logs --tail=100 frontend || true
   exit 1
 fi
 

@@ -124,6 +124,8 @@ jobs:
             --exclude node_modules \
             --exclude .git \
             --exclude .env \
+            --exclude '.deploy-*' \
+            --exclude .deploy.lock \
             --exclude /data \
             --exclude /videos \
             --exclude dist \
@@ -197,7 +199,7 @@ jobs:
 
   deploy-docs:
     name: Deploy Documentation
-    needs: test
+    needs: [test, deploy]
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
 

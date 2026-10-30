@@ -241,6 +241,49 @@ describe('useAnnotations hooks', () => {
   })
 
   describe('useSaveAnnotations', () => {
+    it('saves only edited annotations when the video includes read-only annotations', async () => {
+      const frames = { boxes: [], interpolationSegments: [], visibilityRanges: [], totalFrames: 0, keyframeCount: 0, interpolatedFrameCount: 0 }
+      const writes: string[] = []
+      server.use(
+        http.get('/api/layers/videos/:videoId/annotations', () => HttpResponse.json(['mine', 'read-only'].map(id => ({
+          id, videoId: 'video-1', type: 'object', label: 'entity-1', linkType: 'entity', frames, notes: 'Original', createdAt: 'now', updatedAt: 'now',
+        })))),
+        http.put('/api/layers/videos/:videoId/annotations/:id', async ({ params, request }) => {
+          writes.push(String(params.id))
+          return params.id === 'read-only'
+            ? HttpResponse.json({ message: 'Forbidden' }, { status: 403 })
+            : HttpResponse.json({ id: params.id, videoId: 'video-1', ...await request.json() as object })
+        }),
+      )
+      const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
+      const wrapper = ({ children }: { children: ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>
+      const { result } = renderHook(() => ({ annotations: useAnnotations('video-1'), save: useSaveAnnotations() }), { wrapper })
+      await waitFor(() => expect(result.current.annotations.isSuccess).toBe(true))
+      const edited = result.current.annotations.data!.map(annotation => annotation.id === 'mine' ? { ...annotation, notes: 'Edited' } : annotation)
+      client.setQueryData(['annotations', 'video-1'], edited)
+      await result.current.save.mutateAsync({ videoId: 'video-1', annotations: edited })
+      await result.current.save.mutateAsync({ videoId: 'video-1', annotations: edited })
+      expect(writes).toEqual(['mine'])
+    })
+
+    it('keeps newer local edits when an older save snapshot is retried', async () => {
+      const client = new QueryClient({ defaultOptions: { mutations: { retry: false } } })
+      const annotation: Annotation = {
+        id: 'retry-annotation', videoId: 'video-1', annotationType: 'object', linkedEntityId: 'entity-1',
+        notes: 'Earlier edit', createdAt: 'now', updatedAt: 'now',
+        boundingBoxSequence: { boxes: [], interpolationSegments: [], visibilityRanges: [], totalFrames: 0, keyframeCount: 0, interpolatedFrameCount: 0 },
+      }
+      client.setQueryData(['annotations', 'video-1'], [annotation])
+      server.use(http.put('/api/layers/videos/:videoId/annotations/:id', () => HttpResponse.json({ message: 'Unavailable' }, { status: 503 })))
+      const wrapper = ({ children }: { children: ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>
+      const { result } = renderHook(() => useSaveAnnotations(), { wrapper })
+      await expect(result.current.mutateAsync({ videoId: 'video-1', annotations: [annotation] })).rejects.toThrow()
+      const latest = { ...annotation, notes: 'Newer edit while retrying' }
+      client.setQueryData(['annotations', 'video-1'], [latest])
+      await expect(result.current.mutateAsync({ videoId: 'video-1', annotations: [annotation] })).rejects.toThrow()
+      expect(client.getQueryData(['annotations', 'video-1'])).toEqual([latest])
+    })
+
     it('saves multiple annotations', async () => {
       const { result } = renderHook(() => useSaveAnnotations(), {
         wrapper: createWrapper(),
@@ -308,17 +351,8 @@ describe('useAnnotations hooks', () => {
       expect(result.current.error?.message).toContain('Failed to save annotation')
     })
 
-    it('routes an annotation already in cache through PUT, not POST (the v0.4.2 cachedIdsRef regression)', async () => {
-      // v0.4.1 shipped useSaveAnnotations with cachedIdsRef as a plain
-      // { current: new Set() } literal. The literal was reconstructed on
-      // every render, so onMutate's setQueryData triggered a re-render
-      // that emptied the ref before mutationFn read it. Every existing
-      // annotation then routed through api.saveAnnotation (POST = create),
-      // which is what produced the "Add Keyframe duplicates every
-      // annotation on the canvas" behaviour the user observed. v0.4.2
-      // converts cachedIdsRef to useRef so the .current write made by
-      // onMutate survives the optimistic-update re-render and mutationFn
-      // sees the populated set. This test pins the fix.
+    it('updates cached annotations without minting new IDs', async () => {
+      // Reading cached identities must remain stable across mutation renders.
       const postCalls: unknown[] = []
       const putCalls: Array<{ id: string; body: unknown }> = []
       server.use(
@@ -342,8 +376,7 @@ describe('useAnnotations hooks', () => {
         defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
       })
 
-      // Seed the cache with one existing annotation so onMutate's snapshot
-      // captures its id as the "previous" set the mutationFn must respect.
+      // Seed a cached annotation whose identity must survive the save.
       queryClient.setQueryData(['annotations', 'video-1'], [
         {
           id: 'existing-1',

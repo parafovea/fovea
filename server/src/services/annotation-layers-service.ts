@@ -498,6 +498,14 @@ export class AnnotationLayerService {
   async createAnnotation(
     input: LayersAnnotationCreateInput,
   ): Promise<CreateResult<LayersAnnotationResponse>> {
+    if (typeof this.prisma.$transaction === 'function') {
+      return this.prisma.$transaction(async tx => {
+        // A client id identifies one write, including concurrent retries.
+        if (input.id) await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${input.id}, 0))`
+        const client = tx as PrismaClient
+        return new AnnotationLayerService(new AnnotationLayerRepository(client), this.ability, this.userId, client).createAnnotation(input)
+      })
+    }
     const layer = await this.loadReadableLayer(input.layerId)
     const projectId = layer.projectId
     const { startMs, endMs } = deriveTemporalExtent(input.anchor)
@@ -507,23 +515,20 @@ export class AnnotationLayerService {
       input.denotesNodeId,
     )
 
-    // Get-or-create the denoted world node so the write cannot lose to a race
-    // with the world-object save that creates it. A span may denote an object the
-    // client created milliseconds earlier; the two are separate requests, so the
-    // node may not be committed yet when this annotation write runs, tripping the
-    // `denotesNodeId` foreign key. An EXISTING node keeps all of its fields (empty
-    // update); a stub minted here is filled in with the object's real type and
-    // label when the world save's own id-keyed upsert lands.
-    if (denotesNodeId) {
+    // Authorize the annotation first. Node creation and the annotation write
+    // share a transaction so validation failures cannot leave a partial stub.
+    const ensureDenotation = async (): Promise<void> => {
+      if (!denotesNodeId) return
+      const existing = await this.prisma.graphNode.findUnique({ where: { id: denotesNodeId } })
+      if (existing && !this.ability.can('read', subject('GraphNode', existing))) {
+        throw new ForbiddenError('Cannot link this GraphNode')
+      }
+      if (!existing && !this.ability.can('create', subject('GraphNode', { projectId, createdByUserId: this.userId }))) {
+        throw new ForbiddenError('Cannot create GraphNode in this scope')
+      }
       await this.prisma.graphNode.upsert({
         where: { id: denotesNodeId },
-        create: {
-          id: denotesNodeId,
-          nodeType: 'entity',
-          label: input.label ?? null,
-          projectId,
-          createdByUserId: this.userId,
-        },
+        create: { id: denotesNodeId, nodeType: 'entity', label: input.label ?? null, projectId, createdByUserId: this.userId },
         update: {},
       })
     }
@@ -534,6 +539,7 @@ export class AnnotationLayerService {
       if (!this.ability.can('update', subject('LayersAnnotation', existing))) {
         throw new ForbiddenError('Cannot update this LayersAnnotation')
       }
+      await ensureDenotation()
       // Rewrite the denormalized extent only when the anchor is supplied, so a
       // re-POST that omits the anchor preserves both the stored anchor and its
       // derived startMs/endMs rather than clobbering the extent to null.
@@ -573,6 +579,8 @@ export class AnnotationLayerService {
     if (!this.ability.can('create', candidate)) {
       throw new ForbiddenError('Cannot create LayersAnnotation in this scope')
     }
+
+    await ensureDenotation()
 
     try {
       const created = await this.repository.createAnnotation({

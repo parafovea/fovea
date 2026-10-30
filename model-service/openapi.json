@@ -566,6 +566,7 @@
           "frame_numbers": {
             "description": "Specific frames to process",
             "items": {
+              "minimum": 0,
               "type": "integer"
             },
             "title": "Frame Numbers",

@@ -288,6 +288,19 @@ export class TextExpressionService {
     const detail = await this.repository.findExpressionDetail(id)
     if (!detail) throw new NotFoundError('Expression', id)
     this.authorize('read', detail)
+    if (this.ability) {
+      const ability = this.ability
+      detail.segmentations = detail.segmentations.filter(row => ability.can('read', subject('Segmentation', row)))
+      const segmentationIds = new Set(detail.segmentations.map(row => row.id))
+      detail.tokenizations = detail.tokenizations.filter(row => !row.segmentationId || segmentationIds.has(row.segmentationId))
+      detail.annotationLayers = detail.annotationLayers
+        .filter(row => ability.can('read', subject('AnnotationLayer', row)))
+        .map(layer => ({
+          ...layer,
+          annotations: layer.annotations.filter(row => ability.can('read', subject('LayersAnnotation', row))),
+          relations: layer.relations.filter(row => ability.can('read', subject('TextAnnotationRelation', row))),
+        }))
+    }
     return this.mapDetail(detail)
   }
 
@@ -643,17 +656,31 @@ export class TextExpressionService {
     const { tokens, language } = await this.tokenizeViaModelService(text, input.languages?.[0])
 
     try {
-      await this.repository.createExpression({
-        id,
-        layersId: id,
-        kind: 'document',
-        text,
-        sourceDigest: digest,
-        sourceKind: 'document',
-        languages: [language],
-        features: features !== undefined ? toJson(features) : undefined,
-        createdByUserId: userId,
-        projectId,
+      await this.repository.withTransaction(async repository => {
+        await repository.createExpression({
+          id,
+          layersId: id,
+          kind: 'document',
+          text,
+          sourceDigest: digest,
+          sourceKind: 'document',
+          languages: [language],
+          features: features !== undefined ? toJson(features) : undefined,
+          createdByUserId: userId,
+          projectId,
+        })
+        const segmentation = await repository.createSegmentation({
+          expressionId: id,
+          createdByUserId: userId,
+          projectId,
+        })
+        await repository.createTokenization({
+          segmentationId: segmentation.id,
+          expressionId: id,
+          kind: 'custom',
+          isCanonical: true,
+          tokens: toJson(tokens),
+        })
       })
     } catch (error) {
       // Concurrent-create race on the client id: fall back to returning the
@@ -671,19 +698,6 @@ export class TextExpressionService {
       }
       throw error
     }
-
-    const segmentation = await this.repository.createSegmentation({
-      expressionId: id,
-      createdByUserId: userId,
-      projectId,
-    })
-    await this.repository.createTokenization({
-      segmentationId: segmentation.id,
-      expressionId: id,
-      kind: 'custom',
-      isCanonical: true,
-      tokens: toJson(tokens),
-    })
 
     const reloaded = await this.repository.findExpressionWithTokens(id)
     if (!reloaded) throw new NotFoundError('Expression', id)

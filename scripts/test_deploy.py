@@ -14,9 +14,9 @@ SCRIPTS = Path(__file__).resolve().parent
 class DeploymentRecoveryTest(unittest.TestCase):
     """Ensure failed preparation restores service without deleting data."""
 
-    def test_failed_migration_and_copy_restart_the_previous_backend(self) -> None:
-        """Both upgrade failures retain and restart the original containers."""
-        for failure in ("migration", "copy", "redis"):
+    def test_failed_deploy_restores_the_previous_application(self) -> None:
+        """Preparation and startup failures restore the original application."""
+        for failure in ("migration", "copy", "redis", "startup", "frontend"):
             with self.subTest(failure=failure), tempfile.TemporaryDirectory() as directory:
                 root = Path(directory)
                 (root / "scripts").mkdir()
@@ -37,16 +37,20 @@ command = ' '.join(args)
 if args[:3] == ['compose', 'ps', '-q']:
     print('previous-' + args[3])
 elif args[0] == 'inspect':
-    print(json.dumps([{'Image': 'sha256:previous', 'Config': {'Cmd': ['old-server'], 'Entrypoint': None}}]))
+    print(json.dumps([{'Image': 'sha256:previous', 'Config': {'Cmd': ['sh', '-c', 'exec old-server "$SESSION_SECRET"'], 'Entrypoint': None, 'Env': ['FOVEA_DEMO_MODE=false', 'SESSION_SECRET=previous-$literal-secret']}}]))
 elif 'redis-cli ping' in command:
     print('PONG' if os.environ['FAIL_AT'] != 'redis' else 'FAILED')
 elif 'pg_dump' in command:
     print('synthetic backup')
 elif ('prisma migrate deploy' in command and os.environ['FAIL_AT'] == 'migration') or ('cli.cjs auto' in command and os.environ['FAIL_AT'] == 'copy'):
     sys.exit(1)
+elif '--force-recreate' in args and os.environ['FAIL_AT'] == 'startup':
+    sys.exit(1)
+elif args[0] == 'start' and os.environ['FAIL_AT'] in ('startup', 'frontend'):
+    sys.exit(1)
 ''')
                 docker.chmod(0o755)
-                for name, body in {"sleep": "exit 0", "flock": "exit 0", "df": "echo 999999999", "curl": "exit 0"}.items():
+                for name, body in {"sleep": "exit 0", "flock": "exit 0", "df": "echo 999999999", "curl": 'case "$*" in *localhost:3000*) [ "$FAIL_AT" != frontend ];; *) exit 0;; esac'}.items():
                     script = binary / name
                     script.write_text("#!/bin/sh\n" + body + "\n")
                     script.chmod(0o755)
@@ -61,7 +65,18 @@ elif ('prisma migrate deploy' in command and os.environ['FAIL_AT'] == 'migration
                 self.assertIn("start previous-backend", commands, result.stderr)
                 self.assertNotIn("volume rm", commands)
                 self.assertNotIn("compose down", commands)
-                self.assertNotIn("--force-recreate", commands)
+                if failure not in ("frontend", "startup"):
+                    self.assertNotIn("--force-recreate", commands)
+                else:
+                    self.assertIn("--force-recreate", commands, result.stdout + result.stderr)
+                    self.assertIn("compose -f docker-compose.yml -f .deploy-rollback.json up -d --no-deps --no-build backend frontend", commands)
+                if failure == "frontend":
+                    self.assertIn("Frontend did not become healthy", result.stdout, result.stderr)
+                rollback = root / ".deploy-rollback.json"
+                previous = json.loads(rollback.read_text())["services"]["backend"]
+                self.assertEqual(previous["environment"]["SESSION_SECRET"], "previous-$$literal-secret")
+                self.assertEqual(previous["command"], ['sh', '-c', 'exec old-server "$$SESSION_SECRET"'])
+                self.assertEqual(rollback.stat().st_mode & 0o777, 0o600)
                 self.assertFalse((root / ".deploy-secrets.json").exists())
 
     def test_environment_and_login_encoding_preserves_literal_values(self) -> None:

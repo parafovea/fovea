@@ -15719,7 +15719,8 @@
                   "frameNumbers": {
                     "type": "array",
                     "items": {
-                      "type": "number"
+                      "minimum": 0,
+                      "type": "integer"
                     }
                   },
                   "enableTracking": {

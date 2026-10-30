@@ -43,6 +43,17 @@ describe('video editing preserves tracks', () => {
     expect(save).toHaveBeenCalledWith(expect.objectContaining({ notes: 'Revised', boundingBoxSequence: annotation.boundingBoxSequence }))
   })
 
+  it('allows editing a time-linked annotation without dropping its target', () => {
+    const client = new QueryClient()
+    const timeAnnotation = { ...annotation, linkedEntityId: undefined, linkedTimeId: 'time-1' }
+    render(<QueryClientProvider client={client}><AnnotationEditor open onClose={() => {}} annotation={timeAnnotation} /></QueryClientProvider>)
+    fireEvent.change(screen.getByPlaceholderText('Optional notes about this annotation'), { target: { value: 'Revised time note' } })
+    const button = screen.getByRole('button', { name: /save/i })
+    expect(button).toBeEnabled()
+    fireEvent.click(button)
+    expect(save).toHaveBeenCalledWith(expect.objectContaining({ linkedTimeId: 'time-1', notes: 'Revised time note' }))
+  })
+
   it('adds a keyframe on an interpolated drag and commits once on release', () => {
     const client = new QueryClient()
     client.setQueryData(annotationKeys.video(annotation.videoId), [annotation])

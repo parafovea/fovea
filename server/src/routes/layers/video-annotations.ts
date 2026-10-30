@@ -23,6 +23,7 @@ import { trackClusterSetId } from '../../services/layers-id-map.js'
 import { demoLayersAnnotationReadWhere } from '../../lib/demo-rbac.js'
 import { writeVideoAnnotation, readAnnotationById } from '../../services/layers-bridge/annotation-bridge.js'
 import type { BoundingBoxSequence } from '../../services/layers-conversion-service.js'
+import { VideoAccessService } from '../../services/video-access-service.js'
 
 /** Nullable string response field (serializes null correctly; see fastify-typebox skill). */
 const NullableString = Type.Unsafe<string | null>({ type: ['string', 'null'] })
@@ -80,6 +81,16 @@ function toJsonInput(value: unknown): Prisma.InputJsonValue {
  */
 const videoAnnotationsRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
   const prisma = fastify.prisma
+  const videoAccess = new VideoAccessService(prisma)
+
+  // Check the source before materializing shared rows or reading annotations.
+  fastify.addHook('preHandler', async request => {
+    const { videoId } = request.params as { videoId: string }
+    const accessible = await videoAccess.getAccessibleVideoIds(request.user!.id, request.user!.systemRole || 'user')
+    if (accessible !== 'all' && !accessible.includes(videoId)) {
+      throw new NotFoundError('Video', videoId)
+    }
+  })
 
   // ---- GET -----------------------------------------------------------------
 

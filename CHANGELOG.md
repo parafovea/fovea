@@ -73,6 +73,11 @@ The 0.6.0 release is a single coordinated landing that moves Fovea's annotations
 
 ### Fixed
 
+- Restore the real-model browser workflow profile across health checks and cleanup; correct Linux summary replacement and live-region assertions in browser tests.
+
+- Close the follow-up release audit findings: filter nested expression reads by ownership, gate native video annotations on video access, authorize world-node creation before writes, and create documents and tokenizations atomically.
+- Preserve newer local edits during annotation-save retries, write only changed annotations, and retain time and time-collection targets in the annotation editor. Reject invalid detection/tracking frame indices and compute text token offsets in linear time.
+- Restore the previous application environment during deployment rollback, check frontend health before declaring success, and serialize documentation deployment after application sync. Keep downloader unit tests independent of live DNS.
 - Resolve the 78 findings in the 0.6.0 release audit: protect shared video layers and track sets, require project membership and destination authorization for imports, and keep world forks and collection writes within their owners' scopes.
 - Preserve video keyframes, interpolation, visibility gaps, notes, collection links, and tracker provenance through editing and persistence. Auto-save awaits requests and retains unsaved edits for retry.
 - Make the legacy copy parent-first and repeatable, preserve its last verified checkpoint across failed catch-ups, and copy changed relations independently. Ontology writes use scoped type IDs and serialize concurrent edits.

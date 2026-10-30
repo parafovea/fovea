@@ -283,6 +283,13 @@ describe('Videos API - Detection', () => {
       expect(result.query).toBe('person wearing red shirt')
     })
 
+    it.each([-1, 0.5])('rejects invalid detection frame index %s before inference', async (frameNumber) => {
+      await createTestVideo()
+      const response = await app.inject({ method: 'POST', url: '/api/videos/test-video-id/detect',
+        cookies: { session_token: testSessionToken }, payload: { manualQuery: 'person', frameNumbers: [frameNumber] } })
+      expect(response.statusCode).toBe(400)
+    })
+
     it('handles persona not found error', async () => {
       const response = await app.inject({
         method: 'POST',

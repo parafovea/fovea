@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest'
+import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest'
 import { FastifyInstance } from 'fastify'
 import { PrismaClient } from '@prisma/client'
 
@@ -8,6 +8,7 @@ import { buildApp } from '../../src/app.js'
 import { hashPassword } from '../../src/lib/password.js'
 import { reseedOwnershipBaseline } from '../integration/_rbac-baseline.js'
 import { expressionVideoId } from '../../src/services/layers-id-map.js'
+import { ExpressionRepository } from '../../src/repositories/ExpressionRepository.js'
 
 /**
  * Route-level authorization regressions over the layers store. These pin three
@@ -139,6 +140,79 @@ describe('Layers authorization regressions', () => {
     userBId = await createUser(usernameB, passwordB)
     userATokenValue = await login(username, passwordA)
     userBTokenValue = await login(usernameB, passwordB)
+  })
+
+  it('filters private descendants from an otherwise readable expression', async () => {
+    const expression = await prisma.expression.create({ data: {
+      layersId: randomUUID(), kind: 'document', sourceKind: 'document', createdByUserId: userAId,
+    } })
+    const visibleLayer = await prisma.annotationLayer.create({ data: {
+      expressionId: expression.id, kind: 'span', createdByUserId: userAId,
+    } })
+    const privateLayer = await prisma.annotationLayer.create({ data: {
+      expressionId: expression.id, kind: 'span', createdByUserId: userBId,
+    } })
+    const visible = await prisma.layersAnnotation.create({ data: { layerId: visibleLayer.id, label: 'public', createdByUserId: userAId } })
+    const privateAnnotation = await prisma.layersAnnotation.create({ data: { layerId: visibleLayer.id, label: 'secret', createdByUserId: userBId } })
+    await prisma.textAnnotationRelation.create({ data: {
+      layerId: visibleLayer.id, sourceAnnotationId: visible.id, targetAnnotationId: privateAnnotation.id,
+      relationTypeRef: {}, createdByUserId: userBId,
+    } })
+    await prisma.segmentation.create({ data: { expressionId: expression.id, createdByUserId: userBId } })
+    const result = await app.inject({ method: 'GET', url: `/api/layers/expressions/${expression.id}`, cookies: { session_token: userATokenValue } })
+    expect(result.statusCode).toBe(200)
+    const body = result.json()
+    expect(body.annotationLayers.map((layer: { id: string }) => layer.id)).toEqual([visibleLayer.id])
+    expect(body.annotationLayers[0].annotations.map((row: { id: string }) => row.id)).toEqual([visible.id])
+    expect(body.annotationLayers[0].relations).toEqual([])
+    expect(body.segmentations).toEqual([])
+    expect(result.body).not.toContain(privateLayer.id)
+    expect(result.body).not.toContain(privateAnnotation.id)
+  })
+
+  it('does not create a world node when an annotation overwrite is forbidden', async () => {
+    const expression = await prisma.expression.create({ data: {
+      layersId: randomUUID(), kind: 'document', sourceKind: 'document', createdByUserId: userAId,
+    } })
+    const layer = await prisma.annotationLayer.create({ data: {
+      expressionId: expression.id, kind: 'span', createdByUserId: userAId,
+    } })
+    const other = await prisma.layersAnnotation.create({ data: { layerId: layer.id, createdByUserId: userBId } })
+    const nodeId = randomUUID()
+    const result = await app.inject({ method: 'POST', url: '/api/layers/annotations', cookies: { session_token: userATokenValue },
+      payload: { id: other.id, layerId: layer.id, denotesNodeId: nodeId, label: 'unauthorized stub' } })
+    expect(result.statusCode).toBe(403)
+    expect(await prisma.graphNode.findUnique({ where: { id: nodeId } })).toBeNull()
+  })
+
+  it('rolls back a document when saving its tokenization fails, then permits a complete retry', async () => {
+    const id = randomUUID()
+    const failure = vi.spyOn(ExpressionRepository.prototype, 'createTokenization').mockRejectedValueOnce(new Error('Tokenization write failed'))
+    try {
+      const result = await app.inject({ method: 'POST', url: '/api/layers/documents', cookies: { session_token: userATokenValue }, payload: { id, text: 'A complete document' } })
+      expect(result.statusCode).toBe(500)
+      expect(await prisma.expression.findUnique({ where: { id } })).toBeNull()
+      expect(await prisma.segmentation.count({ where: { expressionId: id } })).toBe(0)
+    } finally {
+      failure.mockRestore()
+    }
+    const retry = await app.inject({ method: 'POST', url: '/api/layers/documents', cookies: { session_token: userATokenValue }, payload: { id, text: 'A complete document' } })
+    expect(retry.statusCode).toBe(201)
+    expect(retry.json().tokenizations).toHaveLength(1)
+    expect(retry.json().tokenizations[0].tokens).toHaveLength(3)
+  })
+
+  it('does not read or create annotations on an inaccessible video', async () => {
+    const video = await prisma.video.create({ data: { filename: 'restricted.mp4', path: '/restricted.mp4' } })
+    const project = await prisma.project.create({ data: { name: 'Restricted', slug: `restricted-${randomUUID()}`, ownerUserId: userBId, createdBy: userBId } })
+    await prisma.projectVideoAssignment.create({ data: { projectId: project.id, videoId: video.id, assignedBy: userBId } })
+    const get = await app.inject({ method: 'GET', url: `/api/layers/videos/${video.id}/annotations`, cookies: { session_token: userATokenValue } })
+    expect(get.statusCode).toBe(404)
+    const post = await app.inject({ method: 'POST', url: `/api/layers/videos/${video.id}/annotations`, cookies: { session_token: userATokenValue }, payload: {
+      type: 'object', label: '', frames: { boxes: [], interpolationSegments: [], visibilityRanges: [], totalFrames: 0, keyframeCount: 0, interpolatedFrameCount: 0 },
+    } })
+    expect(post.statusCode).toBe(404)
+    expect(await prisma.expression.count({ where: { videoId: video.id } })).toBe(0)
   })
 
   describe('GET /api/layers/videos/:videoId/text-expressions', () => {

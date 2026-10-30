@@ -131,7 +131,7 @@ class DetectionRequest(dx.Model):
     video_id: NonEmptyStr = dx.field(description="Unique identifier for the video")
     query: NonEmptyStr = dx.field(description="Text query describing objects to detect")
     video_path: str | None = dx.field(default=None, description="Optional full path to video file")
-    frame_numbers: tuple[int, ...] = dx.field(
+    frame_numbers: tuple[NonNegativeInt, ...] = dx.field(
         default_factory=tuple, description="Specific frames to process"
     )
     confidence_threshold: ConfidenceScore = dx.field(
@@ -192,7 +192,7 @@ class TrackingRequest(dx.Model):
         description="Base64-encoded initial masks for frame 0 (numpy arrays)"
     )
     object_ids: tuple[int, ...] = dx.field(description="Object IDs to track")
-    frame_numbers: tuple[int, ...] = dx.field(
+    frame_numbers: tuple[NonNegativeInt, ...] = dx.field(
         default_factory=tuple, description="Specific frames to process (empty = all)"
     )
 

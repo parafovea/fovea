@@ -81,9 +81,9 @@ describe('Personaless annotation project scope', () => {
     expect(ann?.projectId).toBe(projectId)
   })
 
-  it('stays null when the video is assigned to a project the caller is not a member of', async () => {
-    await prisma.projectVideoAssignment.create({ data: { projectId, videoId, assignedBy: userId } })
-    // No membership for the caller in that project.
+  it('stays personal for a directly assigned video without project membership', async () => {
+    await prisma.projectVideoAssignment.create({ data: { projectId, videoId, assignedBy: userId, assignedUserId: userId } })
+    // Direct video access does not grant membership in its project's scope.
 
     expect((await postObjectAnnotation()).statusCode).toBe(201)
     const ann = await findObjectAnnotation()

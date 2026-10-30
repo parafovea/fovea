@@ -39,6 +39,9 @@ jobs:
       github.event_name == 'schedule' ||
       (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'e2e-models'))
     timeout-minutes: 60
+    env:
+      # Apply the profile to health checks, logs, and cleanup as well as startup.
+      COMPOSE_PROFILES: with-models
 
     steps:
       - uses: actions/checkout@v4

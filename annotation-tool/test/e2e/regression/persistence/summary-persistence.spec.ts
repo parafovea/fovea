@@ -161,15 +161,13 @@ test.describe('Summary Persistence', () => {
       { timeout: 10000 },
     )
 
-    await summaryTextarea.click()
     const firstSave = summaryPost()
-    await summaryTextarea.pressSequentially(originalText, { delay: 10 })
+    await summaryTextarea.fill(originalText)
     await firstSave
 
-    await summaryTextarea.click()
-    await page.keyboard.press('Meta+a')
     const secondSave = summaryPost()
-    await summaryTextarea.pressSequentially(editedText, { delay: 10 })
+    await summaryTextarea.fill(editedText)
+    await expect(summaryTextarea).toHaveValue(editedText)
     await secondSave
 
     // Close and reload

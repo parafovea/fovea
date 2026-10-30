@@ -57,6 +57,16 @@ export class ExpressionRepository {
   constructor(private readonly prisma: PrismaClient) {}
 
   /**
+   * Runs dependent expression writes in one transaction.
+   *
+   * @param operation - writes using the transaction-scoped repository
+   * @returns the operation result after commit
+   */
+  async withTransaction<T>(operation: (repository: ExpressionRepository) => Promise<T>): Promise<T> {
+    return this.prisma.$transaction(tx => operation(new ExpressionRepository(tx as PrismaClient)))
+  }
+
+  /**
    * Loads an expression with the full detail graph: tokenizations,
    * segmentations (with their tokenizations), and annotation layers (with their
    * annotations and relations).

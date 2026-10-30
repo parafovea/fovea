@@ -20,7 +20,7 @@ import {
   SelectContent,
   SelectItem,
 } from '@/components/ui/select'
-import { User, CalendarDays, MapPin, Folder, X } from 'lucide-react'
+import { User, CalendarDays, MapPin, Folder, Clock, X } from 'lucide-react'
 import { usePersonas, usePersonaOntology, useWorld, useUpdateAnnotation } from '@store/queries'
 import { useTourAnchor } from '@/tours/engine/anchorRegistry'
 import type { Annotation, ObjectAnnotation, TypeAnnotation, BoundingBoxSequence } from '@models/types'
@@ -59,6 +59,7 @@ export default function AnnotationEditor({
   const events = worldData?.events ?? []
   const entityCollections = worldData?.entityCollections ?? []
   const eventCollections = worldData?.eventCollections ?? []
+  const timeCollections = worldData?.timeCollections ?? []
 
   const [formData, setFormData] = useState({
     typeCategory: 'entity' as 'entity' | 'role' | 'event',
@@ -66,6 +67,7 @@ export default function AnnotationEditor({
     linkedEntityId: '',
     linkedEventId: '',
     linkedLocationId: '',
+    linkedTimeId: '',
     linkedCollectionId: '',
     linkedCollectionType: '' as '' | 'entity' | 'event' | 'time',
     startTime: 0,
@@ -90,6 +92,7 @@ export default function AnnotationEditor({
         linkedEntityId: annotation.annotationType === 'object' ? (annotation.linkedEntityId || '') : '',
         linkedEventId: annotation.annotationType === 'object' ? (annotation.linkedEventId || '') : '',
         linkedLocationId: annotation.annotationType === 'object' ? (annotation.linkedLocationId || '') : '',
+        linkedTimeId: annotation.annotationType === 'object' ? (annotation.linkedTimeId || '') : '',
         linkedCollectionId: annotation.annotationType === 'object' ? (annotation.linkedCollectionId || '') : '',
         linkedCollectionType: annotation.annotationType === 'object' ? (annotation.linkedCollectionType || '') : '',
         startTime: bounds?.startTime || 0,
@@ -159,6 +162,7 @@ export default function AnnotationEditor({
         ...(formData.linkedEntityId && { linkedEntityId: formData.linkedEntityId }),
         ...(formData.linkedEventId && { linkedEventId: formData.linkedEventId }),
         ...(formData.linkedLocationId && { linkedLocationId: formData.linkedLocationId }),
+        ...(formData.linkedTimeId && { linkedTimeId: formData.linkedTimeId }),
         ...(formData.linkedCollectionId && {
           linkedCollectionId: formData.linkedCollectionId,
           linkedCollectionType: formData.linkedCollectionType as 'entity' | 'event' | 'time' | undefined,
@@ -207,7 +211,7 @@ export default function AnnotationEditor({
           <p className="text-sm font-medium">Annotation Target</p>
 
           {/* Show linked object if present */}
-          {(formData.linkedEntityId || formData.linkedEventId || formData.linkedLocationId || formData.linkedCollectionId) && (
+          {(formData.linkedEntityId || formData.linkedEventId || formData.linkedLocationId || formData.linkedTimeId || formData.linkedCollectionId) && (
             <Alert ref={worldReferenceAnchor} className="mb-4">
               <AlertDescription>
                 <div className="flex flex-col gap-2">
@@ -239,12 +243,23 @@ export default function AnnotationEditor({
                       </button>
                     </Badge>
                   )}
+                  {formData.linkedTimeId && (
+                    <Badge variant="outline" className="w-fit">
+                      <Clock className="size-3 mr-1" />
+                      Linked Time
+                      <button aria-label="Unlink time" onClick={() => setFormData({ ...formData, linkedTimeId: '' })} className="ml-1">
+                        <X className="size-3" />
+                      </button>
+                    </Badge>
+                  )}
                   {formData.linkedCollectionId && (
                     <Badge variant="outline" className="w-fit">
                       <Folder className="size-3 mr-1" />
                       {formData.linkedCollectionType === 'entity'
                         ? entityCollections.find(c => c.id === formData.linkedCollectionId)?.name || 'Unknown Collection'
-                        : eventCollections.find(c => c.id === formData.linkedCollectionId)?.name || 'Unknown Collection'}
+                        : formData.linkedCollectionType === 'time'
+                          ? timeCollections.find(c => c.id === formData.linkedCollectionId)?.name || 'Unknown Collection'
+                          : eventCollections.find(c => c.id === formData.linkedCollectionId)?.name || 'Unknown Collection'}
                       <button onClick={() => setFormData({ ...formData, linkedCollectionId: '', linkedCollectionType: '' })} className="ml-1">
                         <X className="size-3" />
                       </button>
@@ -256,7 +271,7 @@ export default function AnnotationEditor({
           )}
 
           {/* Object picker buttons */}
-          {!formData.linkedEntityId && !formData.linkedEventId && !formData.linkedLocationId && !formData.linkedCollectionId && (
+          {!formData.linkedEntityId && !formData.linkedEventId && !formData.linkedLocationId && !formData.linkedTimeId && !formData.linkedCollectionId && (
             <div className="flex flex-row gap-2">
               <Button variant="outline" size="sm" onClick={() => { setObjectPickerType('entity'); setObjectPickerOpen(true) }}>
                 <User className="size-4 mr-1" /> Link Entity
@@ -417,7 +432,7 @@ export default function AnnotationEditor({
               !formData.typeId &&
               !formData.linkedEntityId &&
               !formData.linkedEventId &&
-              !formData.linkedLocationId &&
+              !formData.linkedLocationId && !formData.linkedTimeId &&
               !formData.linkedCollectionId
             }
           >
@@ -436,8 +451,9 @@ export default function AnnotationEditor({
             linkedEntityId: '',
             linkedEventId: '',
             linkedLocationId: '',
+            linkedTimeId: '',
             linkedCollectionId: '',
-            linkedCollectionType: '' as '' | 'entity' | 'event',
+            linkedCollectionType: '' as '' | 'entity' | 'event' | 'time',
           }
 
           // Set the appropriate field based on object type
@@ -449,6 +465,8 @@ export default function AnnotationEditor({
             setFormData({ ...clearedFormData, linkedLocationId: object.id })
           } else if (object.type === 'entity-collection') {
             setFormData({ ...clearedFormData, linkedCollectionId: object.id, linkedCollectionType: 'entity' })
+          } else if (object.type === 'time-collection') {
+            setFormData({ ...clearedFormData, linkedCollectionId: object.id, linkedCollectionType: 'time' })
           } else if (object.type === 'event-collection') {
             setFormData({ ...clearedFormData, linkedCollectionId: object.id, linkedCollectionType: 'event' })
           }

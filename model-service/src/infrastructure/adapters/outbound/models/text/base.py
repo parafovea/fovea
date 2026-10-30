@@ -89,17 +89,28 @@ def build_tokens(text: str, spans: list[tuple[int, int]]) -> list[TokenDTO]:
     """
     tokens: list[TokenDTO] = []
     encoded = text.encode("utf-8")
+    # Build prefix offsets once. Encoding the whole prefix for every token
+    # makes long-document tokenization quadratic in the source length.
+    byte_offsets = [0]
+    char_offsets = [0]
+    for character in text:
+        codepoint = ord(character)
+        byte_width = (
+            1 if codepoint < 0x80 else 2 if codepoint < 0x800 else 3 if codepoint < 0x10000 else 4
+        )
+        byte_offsets.append(byte_offsets[-1] + byte_width)
+        char_offsets.append(char_offsets[-1] + (2 if codepoint > 0xFFFF else 1))
     for token_index, (cp_start, cp_end) in enumerate(spans):
-        byte_start = len(text[:cp_start].encode("utf-8"))
-        byte_end = len(text[:cp_end].encode("utf-8"))
+        byte_start = byte_offsets[cp_start]
+        byte_end = byte_offsets[cp_end]
         tokens.append(
             TokenDTO(
                 token_index=token_index,
                 text=encoded[byte_start:byte_end].decode("utf-8"),
                 byte_start=byte_start,
                 byte_end=byte_end,
-                char_start=utf16_units(text, cp_start),
-                char_end=utf16_units(text, cp_end),
+                char_start=char_offsets[cp_start],
+                char_end=char_offsets[cp_end],
             )
         )
     return tokens
