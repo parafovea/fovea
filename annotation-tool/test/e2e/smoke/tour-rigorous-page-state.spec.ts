@@ -24,6 +24,21 @@
  */
 import { test, expect, type Page } from '@playwright/test'
 
+const MODEL_SERVICE_UNAVAILABLE_TEXT = 'needs the model service'
+
+/**
+ * Whether the deployment runs a model service, judged as the tour provider
+ * does: the config request succeeds and reports CPU or CUDA models.
+ */
+async function modelServiceAvailable(page: Page): Promise<boolean> {
+  return page.evaluate(async () => {
+    const response = await fetch('/api/models/config', { credentials: 'include' })
+    if (!response.ok) return false
+    const body = (await response.json()) as { cudaAvailable?: boolean; cpuModelsAvailable?: boolean }
+    return Boolean(body.cudaAvailable || body.cpuModelsAvailable)
+  })
+}
+
 const BASE_URL = process.env.E2E_BASE_URL ?? 'https://demo.fovea.video'
 const CATALOGUE_PATH = '/'
 const STEP_CARD_SELECTOR = '[data-fovea-tour-step-card]'
@@ -336,17 +351,48 @@ test.describe('Tour rigorous page-state walkthrough', () => {
 
       const nextBtn = page.getByRole('button', { name: 'Next', exact: true })
       const finishBtn = page.getByRole('button', { name: 'Finish', exact: true })
+      const skipBtn = page.getByRole('button', { name: 'Skip', exact: true })
+      const modelServiceNote = page
+        .locator(STEP_CARD_SELECTOR)
+        .getByRole('status')
+        .filter({ hasText: MODEL_SERVICE_UNAVAILABLE_TEXT })
+      const modelsAvailable = await modelServiceAvailable(page)
 
       for (let i = 0; i < 40; i++) {
-        // Read step-counter for label
+        // Read step-counter for label. Scope to the tour card: the video
+        // player's frame-step buttons also carry "Step …" aria-labels.
         const counter = await page
           .evaluate(() => {
-            const el = document.querySelector('[aria-label^="Step "]') as HTMLElement | null
+            const el = document.querySelector(
+              '[data-fovea-tour-step-card] [aria-label^="Step "]',
+            ) as HTMLElement | null
             const m = (el?.getAttribute('aria-label') ?? '').match(/Step (\d+) of (\d+)/)
             return m ? { i: parseInt(m[1]!, 10), n: parseInt(m[2]!, 10) } : null
           })
           .catch(() => null)
         const stepLabel = counter ? `step ${counter.i}/${counter.n}` : `step ${i + 1}`
+
+        // A step whose anchor only a model service produces is skipped, with
+        // the card saying why, on a deployment without one.
+        await expect
+          .poll(
+            async () =>
+              (await nextBtn.count()) +
+              (await finishBtn.count()) +
+              (await modelServiceNote.count()),
+            { message: `${tourId} ${stepLabel}: must surface a CTA`, timeout: 10_000 },
+          )
+          .toBeGreaterThan(0)
+        if ((await modelServiceNote.count()) > 0) {
+          expect(
+            modelsAvailable,
+            `${tourId} ${stepLabel}: reports the model service missing, but the deployment has one`,
+          ).toBe(false)
+          await skipBtn.click()
+          await page.waitForTimeout(120)
+          continue
+        }
+
         await assertStepHealthy({ tourId, stepLabel, page })
 
         if ((await finishBtn.count()) > 0) {
