@@ -40,11 +40,11 @@ export const DEMO_PERSONA_READ_SCOPE: Prisma.PersonaWhereInput = {
 /**
  * Builds the persona list WHERE for the demo-mode catalogue branch.
  *
- * In demo mode the persona list exposes every system persona (hidden or not),
+ * In demo mode the persona list adds every system persona (hidden or not),
  * regardless of the caller's CASL ability, so the public tour catalogue can
- * enumerate them. With demo off, this returns null and the caller applies its
- * normal `hidden: false AND accessibleBy(...)` filter instead, leaving a
- * self-hoster's per-user RBAC intact.
+ * enumerate them; the caller ORs it with its normal `hidden: false AND
+ * accessibleBy(...)` filter, so callers still see their own personas. With
+ * demo off this returns null, leaving a self-hoster's per-user RBAC intact.
  *
  * @returns the demo-only persona list WHERE, or null when demo mode is off
  */

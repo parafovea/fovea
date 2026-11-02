@@ -1,8 +1,10 @@
 import { randomUUID } from 'node:crypto'
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest'
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest'
 import { buildApp } from '../../src/app.js'
 import { hashPassword } from '../../src/lib/password.js'
 import { seedBaselinePermissions } from '../helpers/rbac-test-setup.js'
+import { seedPermissions } from '../../prisma/seed-permissions.js'
+import { invalidatePermissionCache } from '../../src/middleware/abilities.js'
 import { FastifyInstance } from 'fastify'
 import { PrismaClient, type Persona } from '@prisma/client'
 
@@ -230,6 +232,50 @@ describe('Personas API', () => {
       expect(personas[0]).toHaveProperty('id')
       expect(personas[0]).toHaveProperty('createdAt')
       expect(personas[0]).toHaveProperty('updatedAt')
+    })
+  })
+
+  describe('GET /api/personas in demo mode', () => {
+    const originalDemoMode = process.env.FOVEA_DEMO_MODE
+
+    beforeEach(async () => {
+      // Production permissions: persona reads come only from ownership and
+      // project roles, as on a deployed demo.
+      await prisma.rolePermission.deleteMany()
+      await seedPermissions(prisma)
+      invalidatePermissionCache()
+      process.env.FOVEA_DEMO_MODE = 'true'
+    })
+
+    afterEach(() => {
+      invalidatePermissionCache()
+      if (originalDemoMode === undefined) delete process.env.FOVEA_DEMO_MODE
+      else process.env.FOVEA_DEMO_MODE = originalDemoMode
+    })
+
+    it('lists the caller\'s own personas alongside the seeded system personas', async () => {
+      const other = await prisma.user.create({
+        data: { username: 'otheruser', email: 'other@example.com', displayName: 'Other User', passwordHash: 'x', isAdmin: false },
+      })
+      await prisma.persona.create({
+        data: { name: 'Seeded Analyst', role: 'Analyst', informationNeed: 'Seeded', userId: other.id, isSystemGenerated: true },
+      })
+      await prisma.persona.create({
+        data: { name: 'My Analyst', role: 'Analyst', informationNeed: 'Mine', userId: testUserId },
+      })
+      await prisma.persona.create({
+        data: { name: 'Their Analyst', role: 'Analyst', informationNeed: 'Theirs', userId: other.id },
+      })
+
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/personas',
+        cookies: { session_token: testSessionToken },
+      })
+
+      expect(response.statusCode).toBe(200)
+      const names = (response.json() as Array<{ name: string }>).map((p) => p.name).sort()
+      expect(names).toEqual(['My Analyst', 'Seeded Analyst'])
     })
   })
 

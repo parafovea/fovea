@@ -147,11 +147,11 @@ export class PersonaService {
   /**
    * Lists the personas visible to the caller.
    *
-   * Applies the four mode branches in order:
+   * Applies the three mode branches in order:
    * - single-user mode: every non-hidden persona;
    * - unauthenticated: non-hidden system personas;
-   * - demo mode: every system persona (hidden or not);
-   * - authenticated: non-hidden personas the caller may read (CASL).
+   * - authenticated: non-hidden personas the caller may read (CASL), plus,
+   *   in demo mode, every system persona (hidden or not).
    *
    * @returns the visible personas, newest first
    */
@@ -164,20 +164,22 @@ export class PersonaService {
       return this.repository.findManyForList({ isSystemGenerated: true, hidden: false })
     }
 
-    // Demo mode exposes every system persona (hidden or not) to the public
-    // tour catalogue; demoPersonaListWhere returns that filter in demo mode
-    // and null otherwise (see lib/demo-rbac.ts).
-    const demoWhere = demoPersonaListWhere()
-    if (demoWhere) {
-      return this.repository.findManyForList(demoWhere)
-    }
-
-    return this.repository.findManyForList({
+    const readable: Prisma.PersonaWhereInput = {
       AND: [
         { hidden: false },
         accessibleBy(this.ability, 'read').Persona
       ]
-    })
+    }
+
+    // Demo mode adds every system persona (hidden or not) for the public tour
+    // catalogue; demoPersonaListWhere returns that filter in demo mode and
+    // null otherwise (see lib/demo-rbac.ts).
+    const demoWhere = demoPersonaListWhere()
+    if (demoWhere) {
+      return this.repository.findManyForList({ OR: [demoWhere, readable] })
+    }
+
+    return this.repository.findManyForList(readable)
   }
 
   /**
