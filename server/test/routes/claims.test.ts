@@ -1,9 +1,10 @@
 import { randomUUID } from 'node:crypto'
-import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest'
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from 'vitest'
 import { buildApp } from '../../src/app.js'
 import { hashPassword } from '../../src/lib/password.js'
 import { seedBaselinePermissions } from '../helpers/rbac-test-setup.js'
 import { seedPermissions } from '../../prisma/seed-permissions.js'
+import { invalidatePermissionCache } from '../../src/middleware/abilities.js'
 import { FastifyInstance } from 'fastify'
 import { PrismaClient } from '@prisma/client'
 import { claimExtractionQueue, claimSynthesisQueue } from '../../src/queues/setup.js'
@@ -254,6 +255,11 @@ describe('Claims API', () => {
     beforeEach(async () => {
       await prisma.rolePermission.deleteMany()
       await seedPermissions(prisma)
+      invalidatePermissionCache()
+    })
+
+    afterEach(() => {
+      invalidatePermissionCache()
     })
 
     afterAll(() => {
