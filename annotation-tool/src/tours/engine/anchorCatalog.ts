@@ -55,7 +55,7 @@ export const anchorCatalog = {
   'role-assignment-panel': { description: 'The role-assignment panel for an event.', surface: '/app/annotate/:videoId', conditional: true },
   'show-timeline-button': { description: 'The button that expands the annotation timeline.', surface: '/app/annotate/:videoId', conditional: true },
   'timeline': { description: 'The annotation timeline (expanded).', surface: '/app/annotate/:videoId', conditional: true, reachedBy: ['show-timeline-button'] },
-  'timeline-panel': { description: 'The timeline panel container.', surface: '/app/annotate/:videoId', conditional: true },
+  'timeline-panel': { description: 'The timeline panel container.', surface: '/app/annotate/:videoId', conditional: true, reachedBy: ['show-timeline-button'] },
   'save-indicator': { description: 'The auto-save status indicator.', surface: '/app/annotate/:videoId' },
   'annotation-list-first': { description: 'The first annotation in the annotation list.', surface: '/app/annotate/:videoId', conditional: true },
   'detect-objects-button': { description: 'The "Detect Objects" model-in-the-loop button.', surface: '/app/annotate/:videoId', conditional: true },

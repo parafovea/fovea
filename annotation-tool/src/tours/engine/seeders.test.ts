@@ -23,4 +23,19 @@ describe('tour driver cancellation', () => {
     expect(click).not.toHaveBeenCalled()
     expect(navigate).toHaveBeenCalledTimes(1)
   })
+  it('waits for a summary opener that mounts after navigation', async () => {
+    const registry = new AnchorRegistry()
+    const controller = new AbortController()
+    const pending = getCapability('open-summary-editor')!({
+      registry, signal: controller.signal, navigate: vi.fn(),
+      getAnchor: id => registry.get(id), sleep: async () => {},
+    })
+    const control = document.createElement('button')
+    const editor = document.createElement('div')
+    control.onclick = () => registry.register('video-summary-editor', editor)
+    registry.register('edit-summary-button', control)
+    await pending
+    expect(registry.get('video-summary-editor')).toBe(editor)
+  })
+
 })

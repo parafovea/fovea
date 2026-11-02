@@ -80,7 +80,8 @@ function waitForSurface(ctx: TourCapabilityContext, id: AnchorId): Promise<HTMLE
 
 /** Click a workspace control and settle so the surface it opens can mount. */
 async function clickControl(ctx: TourCapabilityContext, id: AnchorId): Promise<boolean> {
-  const control = findControl(ctx, id)
+  const control = findControl(ctx, id) ?? await waitForSurface(ctx, id)
+  ctx.signal.throwIfAborted()
   if (!control) return false
   control.click()
   await ctx.sleep(SETTLE_MS)

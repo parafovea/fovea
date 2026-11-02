@@ -60,6 +60,17 @@ interface TourRunnerProps {
 
 const sleep = (ms: number) => new Promise<void>((r) => window.setTimeout(r, ms))
 
+/**
+ * Whether `element` is laid out but has no area, like a panel collapsed to
+ * zero height. Such an anchor is in the DOM yet not usable, so its openers
+ * still need to run. An element with no layout box at all is not counted.
+ */
+function isCollapsed(element: HTMLElement): boolean {
+  if (element.getClientRects().length === 0) return false
+  const rect = element.getBoundingClientRect()
+  return rect.width === 0 || rect.height === 0
+}
+
 /** The live element a component tagged with `data-tour-anchor`, outside the registry. */
 function queryAnchorElement(anchor: AnchorId): HTMLElement | null {
   if (typeof document === 'undefined') return null
@@ -289,8 +300,9 @@ export function TourRunner({ tour, startIndex = 0, onEvent, onClose, onPause }: 
 /**
  * Resolve the element for `anchor`: click each catalog `reachedBy` opener that
  * is registered, settling briefly between clicks, then await the anchor through
- * the registry. The openers are skipped when the anchor is already registered,
- * so stepping forward inside an already-open dialog does not toggle it closed.
+ * the registry. The openers are skipped when the anchor is already registered
+ * and laid out, so stepping forward inside an already-open dialog does not
+ * toggle it closed, while an anchor collapsed to zero area is still opened.
  */
 async function resolveAnchor(
   registry: ReturnType<typeof useAnchorRegistry>,
@@ -299,16 +311,25 @@ async function resolveAnchor(
 ): Promise<HTMLElement | null> {
   // Prefer the registered element; fall back to any element a component tagged
   // with the matching `data-tour-anchor` but did not register through the hook.
-  const already = registry.get(anchor) ?? queryAnchorElement(anchor)
-  if (already) return already
-
   const meta: AnchorMeta = anchorCatalog[anchor]
   const reachedBy = meta.reachedBy ?? []
+  const present = () => {
+    const element = registry.get(anchor) ?? queryAnchorElement(anchor)
+    return element && !(reachedBy.length > 0 && isCollapsed(element)) ? element : null
+  }
+  const already = present()
+  if (already) return already
+
   for (const openerId of reachedBy) {
     if (signal.aborted) return null
-    if (registry.get(anchor) ?? queryAnchorElement(anchor)) break
+    if (present()) break
     if (!isAnchorId(openerId)) continue
-    const opener = registry.get(openerId)
+    // Navigation can mount the opener after this effect starts. Wait for it
+    // before waiting for the dialog that only its click can open.
+    const opener = registry.get(openerId) ?? await new Promise<HTMLElement | null>((resolve) => {
+      waitForRegisteredAnchor(registry, openerId, ANCHOR_WAIT_MS, signal, resolve)
+    })
+    if (signal.aborted) return null
     if (!opener) continue
     opener.click()
     await sleep(OPENER_SETTLE_MS)
