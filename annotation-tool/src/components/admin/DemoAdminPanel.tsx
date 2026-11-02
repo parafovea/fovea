@@ -1,28 +1,20 @@
 /**
- * DemoAdminPanel — a fully STATIC, zero-fetch render of the admin panel
- * for VITE_DEMO_PUBLIC=1 visitors who are not signed-in admins.
+ * A fully static, zero-fetch render of the admin panel for
+ * VITE_DEMO_PUBLIC=1 visitors who are not signed-in admins.
  *
- * Why this exists: the live demo at demo.fovea.video previously rendered
- * the REAL AdminPanel as a guided-preview so the Admin tour had anchors
- * to spotlight. That dropped the auth gate but kept the underlying
- * components mounted, which meant every UserManagementPage /
- * SessionManagementPage / PermissionsPage / GroupManagementPage child
- * issued its own /api/admin/* fetch and SUCCEEDED (the backend's
- * DEMO_MODE branch widened the read scope), so a passing demo visitor
- * could see real admin usernames, real session rows, and real role
- * assignments on the production deployment. That is a data leak.
+ * The live AdminPanel mounts UserManagementPage, SessionManagementPage,
+ * PermissionsPage, GroupManagementPage, and so on, each of which issues
+ * its own /api/admin/* fetch. Rendering it for a demo visitor would
+ * expose real admin usernames, session rows, and role assignments, so
+ * AdminPanel renders this component instead whenever DEMO_PUBLIC is on
+ * and the visitor is not an authenticated admin. Every tab is a
+ * hardcoded synthetic table that registers the same tour anchors the
+ * Admin tour expects, so the tour walks through normally while no live
+ * data is fetched or displayed.
  *
- * Fix: when DEMO_PUBLIC is on and the visitor is not an authenticated
- * admin, render THIS component instead of the real AdminPanel. Every
- * tab is a fully-hardcoded synthetic table with the same data-tour-id
- * anchors the Admin tour expects, so the tour walks through normally
- * but no live data is ever fetched or displayed. Real admins logging
- * in via /login still see the real AdminPanel because the guard in
- * AdminPanel.tsx checks isAdmin BEFORE swapping over.
- *
- * The synthetic content is deliberately schematic, not realistic — fake
- * names like "Demo Operator" and "Test User" make it visually obvious
- * to any presenter or visitor that the data is mocked.
+ * The synthetic content is deliberately schematic; fake names like
+ * "Demo Operator" and "Test User" make it visually obvious that the
+ * data is mocked.
  */
 
 import {
@@ -39,6 +31,7 @@ import {
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { useTourAnchor } from '@/tours/engine/anchorRegistry'
 
 const SYNTHETIC_USERS = [
   { id: 'demo-u1', name: 'Demo Operator', email: 'operator@demo.example', role: 'admin' },
@@ -87,8 +80,26 @@ const VRAM_USED = SYNTHETIC_TASKS.reduce((sum, t) => sum + t.vramGb, 0)
 const VRAM_PCT = Math.min(100, Math.round((VRAM_USED / TOTAL_VRAM_GB) * 100))
 
 export function DemoAdminPanel(): JSX.Element {
+  const panelAnchor = useTourAnchor('admin-panel')
+  const usersTabAnchor = useTourAnchor('admin-tab-users')
+  const groupsTabAnchor = useTourAnchor('admin-tab-groups')
+  const projectsTabAnchor = useTourAnchor('admin-tab-projects')
+  const videoAccessTabAnchor = useTourAnchor('admin-tab-video-access')
+  const permissionsTabAnchor = useTourAnchor('admin-tab-permissions')
+  const sessionsTabAnchor = useTourAnchor('admin-tab-sessions')
+  const modelsTabAnchor = useTourAnchor('admin-tab-models')
+  const systemConfigTabAnchor = useTourAnchor('admin-tab-system-config')
+  const settingsTabAnchor = useTourAnchor('admin-tab-settings')
+  const permissionsPageAnchor = useTourAnchor('permissions-page')
+  const modelPageAnchor = useTourAnchor('model-management-page')
+  const modelMemoryAnchor = useTourAnchor('model-memory-validation')
+  const systemConfigPanelAnchor = useTourAnchor('system-config-panel')
+  const userManagementAnchor = useTourAnchor('user-management-page')
+  const groupManagementAnchor = useTourAnchor('group-management-page')
+  const videoAssignmentAnchor = useTourAnchor('project-video-assignment')
+  const sessionManagementAnchor = useTourAnchor('session-management-page')
   return (
-    <div className="mx-auto max-w-screen-xl py-8 px-4" data-tour-id="admin-panel">
+    <div className="mx-auto max-w-screen-xl py-8 px-4" ref={panelAnchor}>
       <div className="mb-6">
         <h1 className="text-3xl font-bold tracking-tight mb-1">Admin Panel</h1>
         <p className="text-muted-foreground">
@@ -101,38 +112,38 @@ export function DemoAdminPanel(): JSX.Element {
 
       <Tabs defaultValue="users" className="w-full">
         <TabsList className="grid w-full grid-cols-9">
-          <TabsTrigger value="users" data-tour-id="admin-tab-users">
+          <TabsTrigger value="users" ref={usersTabAnchor}>
             <Users className="size-4 mr-1" /> Users
           </TabsTrigger>
-          <TabsTrigger value="groups" data-tour-id="admin-tab-groups">
+          <TabsTrigger value="groups" ref={groupsTabAnchor}>
             <Group className="size-4 mr-1" /> Groups
           </TabsTrigger>
-          <TabsTrigger value="projects" data-tour-id="admin-tab-projects">
+          <TabsTrigger value="projects" ref={projectsTabAnchor}>
             <Folder className="size-4 mr-1" /> Projects
           </TabsTrigger>
-          <TabsTrigger value="video-access" data-tour-id="admin-tab-video-access">
+          <TabsTrigger value="video-access" ref={videoAccessTabAnchor}>
             <Video className="size-4 mr-1" /> Video Access
           </TabsTrigger>
-          <TabsTrigger value="permissions" data-tour-id="admin-tab-permissions">
+          <TabsTrigger value="permissions" ref={permissionsTabAnchor}>
             <Shield className="size-4 mr-1" /> Permissions
           </TabsTrigger>
-          <TabsTrigger value="sessions" data-tour-id="admin-tab-sessions">
+          <TabsTrigger value="sessions" ref={sessionsTabAnchor}>
             <Lock className="size-4 mr-1" /> Sessions
           </TabsTrigger>
-          <TabsTrigger value="models" data-tour-id="admin-tab-models">
+          <TabsTrigger value="models" ref={modelsTabAnchor}>
             <Cpu className="size-4 mr-1" /> Models
           </TabsTrigger>
-          <TabsTrigger value="system-config" data-tour-id="admin-tab-system-config">
+          <TabsTrigger value="system-config" ref={systemConfigTabAnchor}>
             <Sliders className="size-4 mr-1" /> System Config
           </TabsTrigger>
-          <TabsTrigger value="settings" data-tour-id="admin-tab-settings">
+          <TabsTrigger value="settings" ref={settingsTabAnchor}>
             <Settings className="size-4 mr-1" /> Settings
           </TabsTrigger>
         </TabsList>
 
         <TabsContent value="users" className="py-6">
           <Section
-            anchor="user-management-page"
+            anchorRef={userManagementAnchor}
             title="User management"
             description="Create accounts, assign roles, deactivate, or impersonate."
             rows={SYNTHETIC_USERS.map((u) => ({
@@ -146,7 +157,7 @@ export function DemoAdminPanel(): JSX.Element {
 
         <TabsContent value="groups" className="py-6">
           <Section
-            anchor="group-management-page"
+            anchorRef={groupManagementAnchor}
             title="Groups"
             description="Reusable membership sets that gate project membership and video access."
             rows={SYNTHETIC_GROUPS.map((g) => ({
@@ -159,7 +170,6 @@ export function DemoAdminPanel(): JSX.Element {
 
         <TabsContent value="projects" className="py-6">
           <Section
-            anchor="project-management-page"
             title="Projects"
             description="Bundles of videos, personas, and members under one shared workspace."
             rows={SYNTHETIC_PROJECTS.map((p) => ({
@@ -172,7 +182,7 @@ export function DemoAdminPanel(): JSX.Element {
 
         <TabsContent value="video-access" className="py-6">
           <Section
-            anchor="project-video-assignment"
+            anchorRef={videoAssignmentAnchor}
             title="Video assignment rules"
             description="Automatically route freshly-uploaded clips to specific annotators based on configurable strategies."
             rows={SYNTHETIC_VIDEO_RULES.map((r) => ({
@@ -184,7 +194,7 @@ export function DemoAdminPanel(): JSX.Element {
         </TabsContent>
 
         <TabsContent value="permissions" className="py-6">
-          <div className="p-6" data-tour-id="permissions-page">
+          <div className="p-6" ref={permissionsPageAnchor}>
             <div className="mb-6">
               <h3 className="text-lg font-semibold">Role permissions</h3>
               <p className="text-sm text-muted-foreground">
@@ -226,7 +236,7 @@ export function DemoAdminPanel(): JSX.Element {
 
         <TabsContent value="sessions" className="py-6">
           <Section
-            anchor="session-management-page"
+            anchorRef={sessionManagementAnchor}
             title="Active sessions"
             description="Every active sign-in is listed here. Admins can force-logout from this view."
             rows={SYNTHETIC_SESSIONS.map((s) => ({
@@ -238,7 +248,7 @@ export function DemoAdminPanel(): JSX.Element {
         </TabsContent>
 
         <TabsContent value="models" className="py-6">
-          <div className="p-6" data-tour-id="model-management-page">
+          <div className="p-6" ref={modelPageAnchor}>
             <div className="mb-6">
               <h3 className="text-lg font-semibold">Model configuration</h3>
               <p className="text-sm text-muted-foreground">
@@ -269,7 +279,7 @@ export function DemoAdminPanel(): JSX.Element {
                 </tbody>
               </table>
             </div>
-            <Card data-tour-id="model-memory-validation">
+            <Card ref={modelMemoryAnchor}>
               <CardHeader>
                 <CardTitle className="text-base">VRAM budget</CardTitle>
               </CardHeader>
@@ -292,7 +302,7 @@ export function DemoAdminPanel(): JSX.Element {
         </TabsContent>
 
         <TabsContent value="system-config" className="py-6">
-          <div className="p-6" data-tour-id="system-config-panel">
+          <div className="p-6" ref={systemConfigPanelAnchor}>
             <div className="mb-6">
               <h3 className="text-lg font-semibold">System configuration</h3>
               <p className="text-sm text-muted-foreground">
@@ -342,18 +352,18 @@ interface SectionRow {
 }
 
 function Section({
-  anchor,
+  anchorRef,
   title,
   description,
   rows,
 }: {
-  anchor: string
+  anchorRef?: (element: HTMLElement | null) => void
   title: string
   description: string
   rows: SectionRow[]
 }) {
   return (
-    <div className="p-6" data-tour-id={anchor}>
+    <div className="p-6" ref={anchorRef}>
       <div className="mb-6">
         <h3 className="text-lg font-semibold">{title}</h3>
         <p className="text-sm text-muted-foreground">{description}</p>

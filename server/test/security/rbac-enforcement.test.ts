@@ -568,12 +568,7 @@ describe('Import CASL enforcement', () => {
     expect(ability.can('create', candidate)).toBe(true)
   })
 
-  it('Ability denies create into a project the user is not a member of when not the candidate creator', () => {
-    // Same v0.4.1 nuance: the project-scoped annotator grant lets the
-    // caller create in proj-1 with any createdByUserId; the baseline
-    // grant additionally lets them create their own anywhere; the
-    // denial path is the intersection of "not your candidate" AND
-    // "not your project".
+  it('denies project creation to non-members even when they own the candidate', () => {
     const perms: RolePermissionRow[] = [
       { scope: 'project', role: 'annotator', resourceType: 'annotation', action: 'create', ownOnly: false },
     ]
@@ -590,8 +585,8 @@ describe('Import CASL enforcement', () => {
 
     // Annotator role grants create in proj-1.
     expect(ability.can('create', inProject)).toBe(true)
-    // Baseline self-owned create works even outside their projects.
-    expect(ability.can('create', ownInWrongProject)).toBe(true)
+    // Ownership does not grant membership in the destination project.
+    expect(ability.can('create', ownInWrongProject)).toBe(false)
     // Neither own nor in-project: denied.
     expect(ability.can('create', foreignInWrongProject)).toBe(false)
   })

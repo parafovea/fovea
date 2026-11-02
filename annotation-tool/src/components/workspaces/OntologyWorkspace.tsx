@@ -19,6 +19,7 @@ import { Input } from '@/components/ui/input'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
+import { useTourAnchor } from '@/tours/engine/anchorRegistry'
 import PersonaBrowser from '../browsers/PersonaBrowser'
 import PersonaEditor from '@components/persona/PersonaEditor'
 import EntityTypeEditor from '@components/ontology/EntityTypeEditor'
@@ -39,7 +40,6 @@ import {
   useDeleteRoleFromPersona,
   useDeleteEventFromPersona,
   useDeleteRelationTypeFromPersona,
-  useSavePersonaOntology,
   useWorld,
 } from '@store/queries'
 import { OntologyAugmenter } from '@components/ontology/OntologyAugmenter'
@@ -87,7 +87,6 @@ export default function OntologyWorkspace() {
   const { mutate: addRoleMutation } = useAddRoleToPersona()
   const { mutate: addEventMutation } = useAddEventToPersona()
   const { mutate: addRelationTypeMutation } = useAddRelationTypeToPersona()
-  const { mutate: saveOntologyMutation } = useSavePersonaOntology()
 
   // Use preferences for smart defaults
   const {
@@ -102,6 +101,13 @@ export default function OntologyWorkspace() {
   const setSelectedPersonaIdStore = useAnnotationUiStore((state) => state.setOntologySelectedPersonaId)
   const tabValue = useAnnotationUiStore((state) => state.ontologyTabIndex)
   const setTabValue = useAnnotationUiStore((state) => state.setOntologyTabIndex)
+
+  const workspaceTabsAnchor = useTourAnchor('ontology-workspace-tabs')
+  const tabEntitiesAnchor = useTourAnchor('ontology-tab-entities')
+  const tabRolesAnchor = useTourAnchor('ontology-tab-roles')
+  const tabEventsAnchor = useTourAnchor('ontology-tab-events')
+  const tabRelationsAnchor = useTourAnchor('ontology-tab-relations')
+  const addTypeAnchor = useTourAnchor('ontology-add-type-button')
 
   // Wrapper to also save to preferences when selecting a persona
   const setSelectedPersonaId = (id: string | null) => {
@@ -174,20 +180,6 @@ export default function OntologyWorkspace() {
       setSelectedPersonaIdStore(personas[0].id)
     }
   }, [selectedPersonaId, personas, setSelectedPersonaIdStore])
-
-  // Auto-save persona ontology on changes (debounced 1 second)
-  useEffect(() => {
-    if (!selectedPersonaId || !selectedOntology) return
-
-    const timeoutId = setTimeout(() => {
-      saveOntologyMutation({
-        personaId: selectedPersonaId,
-        ontology: selectedOntology
-      })
-    }, 1000)
-
-    return () => clearTimeout(timeoutId)
-  }, [selectedPersonaId, selectedOntology, saveOntologyMutation])
 
   /**
    * Filters ontology type items by search term.
@@ -541,20 +533,20 @@ export default function OntologyWorkspace() {
         onValueChange={(val) => setTabValue(tabKeys.indexOf(val))}
         className="flex-1 flex flex-col"
       >
-        <TabsList className="mx-4 mt-2" data-tour-id="ontology-workspace-tabs">
-          <TabsTrigger value="entities" data-tour-id="ontology-tab-entities">
+        <TabsList className="mx-4 mt-2" ref={workspaceTabsAnchor}>
+          <TabsTrigger value="entities" ref={tabEntitiesAnchor}>
             <Blocks className="size-4 mr-1" />
             Entity Types ({filteredEntities.length}/{selectedOntology?.entities.length || 0})
           </TabsTrigger>
-          <TabsTrigger value="roles" data-tour-id="ontology-tab-roles">
+          <TabsTrigger value="roles" ref={tabRolesAnchor}>
             <Users className="size-4 mr-1" />
             Role Types ({filteredRoles.length}/{selectedOntology?.roles.length || 0})
           </TabsTrigger>
-          <TabsTrigger value="events" data-tour-id="ontology-tab-events">
+          <TabsTrigger value="events" ref={tabEventsAnchor}>
             <CalendarDays className="size-4 mr-1" />
             Event Types ({filteredEvents.length}/{selectedOntology?.events.length || 0})
           </TabsTrigger>
-          <TabsTrigger value="relations" data-tour-id="ontology-tab-relations">
+          <TabsTrigger value="relations" ref={tabRelationsAnchor}>
             <Share2 className="size-4 mr-1" />
             Relation Types ({filteredRelations.length}/{selectedOntology?.relationTypes.length || 0})
           </TabsTrigger>
@@ -619,10 +611,10 @@ export default function OntologyWorkspace() {
           <TooltipTrigger
             render={
               <Button
+                ref={addTypeAnchor}
                 size="icon-lg"
                 className="absolute bottom-4 right-4 rounded-full shadow-lg"
                 aria-label="add type"
-                data-tour-id="ontology-add-type-button"
                 onClick={handleAddType}
               />
             }

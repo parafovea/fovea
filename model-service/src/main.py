@@ -6,14 +6,16 @@ AI models. Serves as the composition root, wiring the dependency injection
 container to the FastAPI application.
 """
 
-from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
+from didactic.fastapi import register_validation_handler
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from . import __version__
 from .infrastructure.adapters.inbound.fastapi.routes import router
 from .infrastructure.config.container import (
     ContainerConfig,
@@ -22,6 +24,9 @@ from .infrastructure.config.container import (
 )
 from .infrastructure.config.settings import get_settings
 from .infrastructure.observability import configure_observability, instrument_app
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
 
 
 @asynccontextmanager
@@ -64,9 +69,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 app = FastAPI(
     title="Fovea Model Service",
     description="AI model inference service for video annotation",
-    version="0.1.0",
+    version=__version__,
     lifespan=lifespan,
 )
+
+# Map didactic ValidationError raised inside a route to a 422 response shaped
+# like FastAPI's own validation-error body.
+register_validation_handler(app)
 
 # Configure OpenTelemetry instrumentation
 instrument_app(app)
@@ -114,7 +123,7 @@ async def root() -> JSONResponse:
     return JSONResponse(
         content={
             "service": "Fovea Model Service",
-            "version": "0.1.0",
+            "version": __version__,
             "docs": "/docs",
         }
     )

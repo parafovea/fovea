@@ -10,6 +10,20 @@ env:
   PYTHON_VERSION: '3.12'
 
 jobs:
+  audit-dependencies:
+    name: Security / Production Dependencies
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+      - name: Audit the production lockfile
+        run: make audit-dependencies
+      - name: Audit the documentation lockfile
+        run: make audit-docs-dependencies
+
   # Frontend jobs run in parallel
   lint-frontend:
     name: Frontend / Lint
@@ -225,15 +239,10 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: ${{ env.PYTHON_VERSION }}
-          cache: 'pip'
-          cache-dependency-path: model-service/pyproject.toml
+          python-version: '3.14'
 
-      - name: Install dependencies
-        working-directory: model-service
-        run: |
-          pip install --upgrade pip
-          pip install -e ".[dev]"
+      - name: Install model-service with CPU dependencies
+        run: make install-model-service-ci
 
       - name: Run ruff check
         working-directory: model-service
@@ -247,6 +256,9 @@ jobs:
         working-directory: model-service
         run: mypy src/
 
+      - name: Audit installed model-service base and development dependencies
+        run: make audit-model-service-ci
+
   test-model-service:
     name: Model Service / Unit Tests
     runs-on: ubuntu-latest
@@ -256,15 +268,10 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: ${{ env.PYTHON_VERSION }}
-          cache: 'pip'
-          cache-dependency-path: model-service/pyproject.toml
+          python-version: '3.14'
 
-      - name: Install dependencies
-        working-directory: model-service
-        run: |
-          pip install --upgrade pip
-          pip install --no-cache-dir -e ".[dev]"
+      - name: Install model-service with CPU dependencies
+        run: make install-model-service-ci
 
       - name: Run tests
         working-directory: model-service
@@ -423,22 +430,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # The contract spec is emitted WITHOUT importing the ML stack, so this job
-      # installs the model-service the same lint-only way as lint-model-service
-      # (pip install -e ".[dev]"); it never needs the multi-gigabyte inference
-      # extras.
+      # Use the same CPU installation as lint and unit tests. The base package
+      # includes torch, though contract generation does not load model weights.
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: ${{ env.PYTHON_VERSION }}
-          cache: 'pip'
-          cache-dependency-path: model-service/pyproject.toml
+          python-version: '3.14'
 
-      - name: Install model-service (dev extra only, no ML extras)
-        working-directory: model-service
-        run: |
-          pip install --upgrade pip
-          pip install -e ".[dev]"
+      - name: Install model-service with CPU dependencies
+        run: make install-model-service-ci
 
       - uses: pnpm/action-setup@v4
 
@@ -479,6 +479,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Verify deployment recovery and secret encoding
+        run: |
+          bash -n scripts/deploy-remote.sh
+          python3 -m unittest discover -s scripts -p 'test_deploy.py' -v
+
       - name: Validate every docker compose configuration
         run: |
           set -euo pipefail
@@ -498,6 +503,7 @@ jobs:
     name: Quality Gate
     runs-on: ubuntu-latest
     needs:
+      - audit-dependencies
       - lint-frontend
       - test-frontend
       - build-frontend
@@ -521,6 +527,7 @@ jobs:
         run: |
           {
             echo "## Quality Gate Results"
+            echo "- Production dependencies: ${{ needs.audit-dependencies.result }}"
             echo ""
             echo "### Frontend"
             echo "- Lint: ${{ needs.lint-frontend.result }}"
@@ -549,6 +556,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
           # Fail if any required job failed
+          AUDIT_DEPENDENCIES="${{ needs.audit-dependencies.result }}"
           LINT_FRONTEND="${{ needs.lint-frontend.result }}"
           TEST_FRONTEND="${{ needs.test-frontend.result }}"
           BUILD_FRONTEND="${{ needs.build-frontend.result }}"
@@ -562,7 +570,8 @@ jobs:
           CONTRACT_DRIFT="${{ needs.contract-drift.result }}"
           CONTRACT_DRIFT_MODEL="${{ needs.contract-drift-model-service.result }}"
 
-          if [ "$LINT_FRONTEND" != "success" ] || \
+          if [ "$AUDIT_DEPENDENCIES" != "success" ] || \
+             [ "$LINT_FRONTEND" != "success" ] || \
              [ "$TEST_FRONTEND" != "success" ] || \
              [ "$BUILD_FRONTEND" != "success" ] || \
              [ "$LINT_BACKEND" != "success" ] || \

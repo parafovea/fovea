@@ -787,6 +787,7 @@ const groupsRoute: FastifyPluginAsync = async (fastify) => {
             createdBy: Type.String(),
             createdAt: Type.String({ format: 'date-time' }),
             updatedAt: Type.String({ format: 'date-time' }),
+            members: Type.Array(GroupMemberSchema),
             _count: Type.Object({
               members: Type.Number(),
             }),
@@ -800,6 +801,7 @@ const groupsRoute: FastifyPluginAsync = async (fastify) => {
       const groups = await fastify.prisma.userGroup.findMany({
         include: {
           _count: { select: { members: true } },
+          members: { include: { user: { select: { id: true, username: true, displayName: true, email: true } } } },
         },
         orderBy: { createdAt: 'desc' },
       })

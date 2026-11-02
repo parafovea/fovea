@@ -38,7 +38,7 @@ persistence and queue layers.
 
 ## What the model service adds
 
-- FastAPI + Python 3.12 + PyTorch + Transformers, plus
+- FastAPI + Python 3.14 + PyTorch + Transformers, plus
   llama.cpp and ONNX Runtime for CPU inference.
 - A Clean Architecture layout (domain / application /
   infrastructure); see [Clean Architecture](clean-architecture.md).

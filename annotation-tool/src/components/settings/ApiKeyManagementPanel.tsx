@@ -12,6 +12,7 @@ import {
   ToggleLeft,
   ToggleRight,
 } from 'lucide-react'
+import { useTourAnchor } from '@/tours/engine/anchorRegistry'
 import { useAuthStore } from '@store/zustand/authStore'
 import { useAllApiKeys, useDeleteApiKey, useUpdateApiKey, ApiKey } from '@store/queries/useApiKeys'
 import { Button } from '@/components/ui/button'
@@ -35,6 +36,7 @@ import { ConfirmDialog } from '../shared/ConfirmDialog'
  * Displays list of user API keys and admin keys with management options.
  */
 export default function ApiKeyManagementPanel() {
+  const apiKeysAnchorRef = useTourAnchor('api-keys-page')
   const currentUser = useAuthStore(state => state.currentUser)
   const { data: apiKeys = [], isLoading, error } = useAllApiKeys(currentUser?.isAdmin || false)
   const deleteApiKey = useDeleteApiKey()
@@ -149,7 +151,7 @@ export default function ApiKeyManagementPanel() {
   }
 
   return (
-    <div className="flex flex-col gap-4" data-tour-id="api-keys-page">
+    <div className="flex flex-col gap-4" ref={apiKeysAnchorRef}>
       {/* Header */}
       <div className="flex items-center justify-between">
         <p className="text-sm text-muted-foreground">
@@ -219,46 +221,46 @@ export default function ApiKeyManagementPanel() {
                   ) : (
                     <div className="flex justify-end gap-1">
                       <Tooltip>
-                        <TooltipTrigger>
+                        <TooltipTrigger render={
                           <Button
                             variant="ghost"
                             size="icon-sm"
                             onClick={() => handleToggleActive(key)}
                             aria-label="toggle active status"
-                          >
-                            {key.isActive
-                              ? <ToggleRight className="size-4" />
-                              : <ToggleLeft className="size-4" />
-                            }
-                          </Button>
+                          />
+                        }>
+                          {key.isActive
+                            ? <ToggleRight className="size-4" />
+                            : <ToggleLeft className="size-4" />
+                          }
                         </TooltipTrigger>
                         <TooltipContent>
                           {key.isActive ? 'Deactivate' : 'Activate'}
                         </TooltipContent>
                       </Tooltip>
                       <Tooltip>
-                        <TooltipTrigger>
+                        <TooltipTrigger render={
                           <Button
                             variant="ghost"
                             size="icon-sm"
                             onClick={() => handleEdit(key)}
                             aria-label="edit key"
-                          >
-                            <Pencil className="size-4" />
-                          </Button>
+                          />
+                        }>
+                          <Pencil className="size-4" />
                         </TooltipTrigger>
                         <TooltipContent>Edit</TooltipContent>
                       </Tooltip>
                       <Tooltip>
-                        <TooltipTrigger>
+                        <TooltipTrigger render={
                           <Button
                             variant="ghost"
                             size="icon-sm"
                             onClick={() => handleDeleteClick(key)}
                             aria-label="delete key"
-                          >
-                            <Trash2 className="size-4" />
-                          </Button>
+                          />
+                        }>
+                          <Trash2 className="size-4" />
                         </TooltipTrigger>
                         <TooltipContent>Delete</TooltipContent>
                       </Tooltip>

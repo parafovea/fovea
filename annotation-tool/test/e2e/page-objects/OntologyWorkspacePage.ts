@@ -355,16 +355,13 @@ export class OntologyWorkspacePage extends BasePage {
     const dialog = this.page.locator('[role="dialog"]')
     await dialog.waitFor({ state: 'visible', timeout: 5000 })
 
-    // Fill name field. The shadcn Input is a base-ui Field.Control which
-    // is React-controlled, so Playwright's .fill() on a prefilled input
-    // doesn't always propagate. Click → clear → fill works for create
-    // and rename flows; if that ever falls back to the old MUI behavior
-    // we'll switch to pressSequentially.
+    // Use keyboard input for the controlled Base UI field and verify the
+    // replacement survives the subsequent definition edit before saving.
     const nameInput = dialog.getByRole('textbox', { name: /^name/i }).first()
     await nameInput.waitFor({ state: 'visible', timeout: 5000 })
     await nameInput.click()
-    await nameInput.fill('')
-    await nameInput.fill(name)
+    await nameInput.press('ControlOrMeta+A')
+    await nameInput.pressSequentially(name)
     await nameInput.blur()
 
     // Fill definition/gloss field
@@ -372,6 +369,9 @@ export class OntologyWorkspacePage extends BasePage {
     await defInput.waitFor({ state: 'visible', timeout: 5000 })
     await defInput.click()
     await defInput.fill(definition)
+    await defInput.blur()
+    await expect(nameInput).toHaveValue(name)
+    await expect(defInput).toHaveValue(definition)
   }
 
   private async fillRelationTypeForm(name: string, definition: string) {
@@ -412,9 +412,7 @@ export class OntologyWorkspacePage extends BasePage {
     await saveButton.click()
 
     // Wait for dialog to close
-    await this.page.waitForSelector('[role="dialog"]', { state: 'hidden', timeout: 10000 }).catch(() => {
-      // Dialog might have closed very quickly
-    })
+    await expect(dialog).toBeHidden({ timeout: 10000 })
 
     // Wait for network to settle (API calls + cache invalidation refetches)
     await this.page.waitForLoadState('networkidle', { timeout: 10000 })

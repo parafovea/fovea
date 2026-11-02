@@ -45,7 +45,6 @@ describe('Manifest-driven sync', () => {
     await prisma.project.deleteMany()
     await prisma.userGroup.deleteMany()
     await prisma.videoSummary.deleteMany()
-    await prisma.annotation.deleteMany()
     await prisma.video.deleteMany()
     await prisma.session.deleteMany()
     await prisma.user.deleteMany()

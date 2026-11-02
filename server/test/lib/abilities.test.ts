@@ -46,6 +46,14 @@ const basePermissions: RolePermissionRow[] = [
 ]
 
 describe('defineAbilitiesFor', () => {
+  it('cannot create self-owned content in a project without membership', () => {
+    const ability = defineAbilitiesFor('user-1', { systemRole: 'user', groupRoles: [], projectRoles: [] }, basePermissions)
+    for (const kind of ['Corpus', 'GraphNode', 'GraphEdge', 'LayersOntology', 'LayersAnnotation'] as const) {
+      expect(ability.can('create', subject(kind, { projectId: 'someone-elses-project', createdByUserId: 'user-1' }))).toBe(false)
+      expect(ability.can('create', subject(kind, { projectId: null, createdByUserId: 'user-1' }))).toBe(true)
+    }
+  })
+
   it('system_admin can manage all resources', () => {
     const roles: UserRoles = {
       systemRole: 'system_admin',

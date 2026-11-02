@@ -6,12 +6,12 @@
  * to personas, entities, events, and other world objects.
  */
 
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { useCallback, useRef } from 'react'
+import { useQuery, useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query'
+import { useCallback } from 'react'
 import axios from 'axios'
 import { toast } from 'sonner'
 import { Annotation, BoundingBox, InterpolationType, InterpolationSegment } from '@models/types'
-import { api } from '@services/api'
+import { api, transformFrontendToBackend } from '@services/api'
 import { generateId } from '@utils/uuid'
 import { BoundingBoxInterpolator } from '@utils/interpolation'
 
@@ -39,11 +39,36 @@ export const annotationKeys = {
   video: (videoId: string) => [...annotationKeys.all, videoId] as const,
 }
 
+// Baselines live as long as their query. Cache eviction or logout releases the
+// query and its snapshots without retaining another user's annotation content.
+const persistedSnapshots = new WeakMap<object, Map<string, string>>()
+
+/** Returns the last acknowledged wire values for this video's cached query. */
+function snapshotsFor(client: QueryClient, videoId: string): Map<string, string> | undefined {
+  const query = client.getQueryCache().find({ queryKey: annotationKeys.video(videoId), exact: true })
+  if (!query) return undefined
+  let snapshots = persistedSnapshots.get(query)
+  if (!snapshots) {
+    snapshots = new Map()
+    persistedSnapshots.set(query, snapshots)
+  }
+  return snapshots
+}
+
+/** Compares only fields that the annotation API persists. */
+function wireSnapshot(annotation: Annotation): string {
+  return JSON.stringify(transformFrontendToBackend(annotation))
+}
+
 /**
  * Fetch annotations for a video from the API.
  */
-async function fetchAnnotations(videoId: string): Promise<Annotation[]> {
-  return api.getAnnotations(videoId)
+async function fetchAnnotations(client: QueryClient, videoId: string): Promise<Annotation[]> {
+  const annotations = await api.getAnnotations(videoId)
+  const snapshots = snapshotsFor(client, videoId)
+  snapshots?.clear()
+  for (const annotation of annotations) snapshots?.set(annotation.id, wireSnapshot(annotation))
+  return annotations
 }
 
 /**
@@ -58,9 +83,10 @@ async function fetchAnnotations(videoId: string): Promise<Annotation[]> {
  * ```
  */
 export function useAnnotations(videoId: string | null | undefined) {
+  const queryClient = useQueryClient()
   return useQuery({
     queryKey: annotationKeys.video(videoId ?? ''),
-    queryFn: () => fetchAnnotations(videoId!),
+    queryFn: () => fetchAnnotations(queryClient, videoId!),
     enabled: !!videoId,
     staleTime: 5 * 60 * 1000, // Consider fresh for 5 minutes
   })
@@ -99,6 +125,7 @@ export function useAddAnnotation() {
         annotationKeys.video(videoId),
         (old = []) => [...old, savedAnnotation]
       )
+      snapshotsFor(queryClient, videoId)?.set(savedAnnotation.id, wireSnapshot(savedAnnotation))
     },
     onError: notifyAnnotationWriteError,
   })
@@ -130,6 +157,7 @@ export function useUpdateAnnotation() {
         annotationKeys.video(videoId),
         (old = []) => old.map(a => a.id === annotation.id ? annotation : a)
       )
+      snapshotsFor(queryClient, videoId)?.set(annotation.id, wireSnapshot(annotation))
     },
     onError: notifyAnnotationWriteError,
   })
@@ -160,6 +188,7 @@ export function useDeleteAnnotation() {
         annotationKeys.video(videoId),
         (old = []) => old.filter(a => a.id !== annotationId)
       )
+      snapshotsFor(queryClient, videoId)?.delete(annotationId)
     },
     onError: notifyAnnotationWriteError,
   })
@@ -169,9 +198,8 @@ export function useDeleteAnnotation() {
  * Hook to save multiple annotations at once (batch save).
  * Handles distinguishing between create and update operations.
  *
- * Uses optimistic updates for immediate UI feedback. If the save fails,
- * the cache is rolled back to the previous state. After success or failure,
- * the cache is invalidated to ensure consistency with the server.
+ * Persists the snapshot already held by the editor. Retries never write that
+ * snapshot back into the cache, which may contain newer local edits.
  *
  * @returns Mutation for batch saving annotations
  *
@@ -184,26 +212,15 @@ export function useDeleteAnnotation() {
 export function useSaveAnnotations() {
   const queryClient = useQueryClient()
 
-  // Store cachedIds before optimistic update so mutationFn can access them.
-  // MUST be useRef, not a plain { current: new Set() } literal: the literal
-  // is reconstructed on every render, and onMutate's `queryClient.setQueryData`
-  // call triggers a synchronous re-render that races with mutationFn (which
-  // fires after onMutate awaits). With the plain-literal form, mutationFn's
-  // closure resolved against the re-rendered (empty) cachedIdsRef, so every
-  // annotation was treated as new and routed through api.saveAnnotation
-  // (POST = create). The visible symptom was Add Keyframe duplicating every
-  // existing annotation on the canvas — N annotations in, N new rows out.
-  // useRef gives a stable ref object whose .current write survives the
-  // intermediate re-render that onMutate kicks off.
-  const cachedIdsRef = useRef<Set<string>>(new Set<string>())
-
   return useMutation({
     mutationFn: async ({ videoId, annotations }: {
       videoId: string
       annotations: Annotation[]
     }) => {
-      // Use cachedIds captured before optimistic update
-      const existingIds = cachedIdsRef.current
+      // Cache reads are local to this invocation, including overlapping saves.
+      const cached = queryClient.getQueryData<Annotation[]>(annotationKeys.video(videoId))
+      const existingIds = new Set((cached ?? []).map(annotation => annotation.id))
+      const snapshots = snapshotsFor(queryClient, videoId)
 
       const results: { created: number; updated: number; errors: string[] } = {
         created: 0,
@@ -213,6 +230,10 @@ export function useSaveAnnotations() {
 
       for (const annotation of annotations) {
         try {
+          const snapshot = wireSnapshot(annotation)
+          // A readable project annotation need not be writable. Persist only
+          // local edits, preserving other annotators' unchanged rows.
+          if (snapshots?.get(annotation.id) === snapshot) continue
           const isNew = !existingIds.has(annotation.id)
 
           if (isNew) {
@@ -222,6 +243,7 @@ export function useSaveAnnotations() {
             await api.updateAnnotation(annotation)
             results.updated++
           }
+          snapshots?.set(annotation.id, snapshot)
         } catch (error) {
           results.errors.push(
             `Failed to save annotation ${annotation.id}: ${error instanceof Error ? error.message : 'Unknown error'}`
@@ -229,42 +251,14 @@ export function useSaveAnnotations() {
         }
       }
 
+      if (results.errors.length > 0) throw new Error(results.errors.join('; '))
       return { videoId, annotations, results }
     },
-    onSuccess: ({ results }) => {
-      // mutationFn collects per-annotation failures rather than rejecting,
-      // so a partial failure resolves here instead of hitting onError. Surface
-      // those collected failures to the user.
-      if (results.errors.length > 0) {
-        toast.error(`Failed to save ${results.errors.length} annotation change(s)`)
-      }
-    },
-    onMutate: async ({ videoId, annotations }) => {
-      // Cancel any outgoing refetches to avoid overwriting optimistic update
+    onMutate: async ({ videoId }) => {
       await queryClient.cancelQueries({ queryKey: annotationKeys.video(videoId) })
-
-      // Snapshot the previous value for rollback
-      const previous = queryClient.getQueryData<Annotation[]>(annotationKeys.video(videoId))
-
-      // Capture cachedIds before optimistic update so mutationFn can distinguish new vs existing
-      cachedIdsRef.current = new Set((previous ?? []).map(a => a.id))
-
-      // Optimistically update to the new value
-      queryClient.setQueryData(annotationKeys.video(videoId), annotations)
-
-      // Return context with previous value for rollback
-      return { previous, videoId }
     },
-    onError: (_err, _variables, context) => {
-      // Rollback on failure
-      if (context?.previous) {
-        queryClient.setQueryData(annotationKeys.video(context.videoId), context.previous)
-      }
-    },
-    onSettled: (_data, _error, { videoId }) => {
-      // Always refetch after error or success to ensure consistency
-      queryClient.invalidateQueries({ queryKey: annotationKeys.video(videoId) })
-    },
+    // Keep local edits while saves settle. A refetch or rollback here can erase
+    // changes made during the request; auto-save retries the retained snapshot.
   })
 }
 
@@ -347,6 +341,8 @@ export function useAddKeyframe() {
         updatedSequence.boxes[keyframeIndex] = {
           ...updatedSequence.boxes[keyframeIndex],
           ...box,
+          frameNumber,
+          isKeyframe: true,
         }
       }
 

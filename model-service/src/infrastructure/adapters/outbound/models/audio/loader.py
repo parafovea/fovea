@@ -38,6 +38,7 @@ from src.domain.entities.architectures import (
     Whisper,
     WhisperX,
 )
+from src.domain.exceptions import AudioProcessingError
 from src.infrastructure.adapters.outbound.models.audio.base import (
     AudioFramework,
     AudioTranscriptionLoader,
@@ -247,6 +248,12 @@ class FasterWhisperLoader(AudioTranscriptionLoader):
         """Transcribe audio file using faster-whisper."""
         if self.model is None:
             raise RuntimeError("Model not loaded. Call load() first.")
+
+        import av
+
+        with av.open(audio_path) as container:
+            if not container.streams.audio:
+                raise AudioProcessingError(audio_path, "The file contains no audio stream")
 
         try:
             segments_iter, info = self.model.transcribe(

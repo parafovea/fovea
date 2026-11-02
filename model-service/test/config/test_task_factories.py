@@ -8,6 +8,10 @@ the factory threads through.
 
 from __future__ import annotations
 
+import pytest
+
+pytest.importorskip("torch")  # requires the ML backend; skipped in the torch-free venv
+
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -66,6 +70,7 @@ class TestRegistry:
             "audio_transcription",
             "speaker_diarization",
             "voice_activity_detection",
+            "text_tokenization",
             "object_detection",
             "object_tracking",
         }
@@ -216,6 +221,42 @@ class TestVADFactory:
         silero_cls.assert_called_once()
         loader.load.assert_called_once()
         assert config_cls.call_args.kwargs["model_id"] == "snakers4/silero-vad"
+
+
+class TestTextTokenizationFactory:
+    """Tokenizer factory dispatches through the architecture-keyed registry."""
+
+    def test_constructs_tokenizer_loader(self) -> None:
+        from src.domain.entities.architectures import SpacyTokenizer
+
+        loader = MagicMock()
+        config_cls = MagicMock()
+        create_fn = MagicMock(return_value=loader)
+        with patch.dict(
+            "sys.modules",
+            {
+                "src.infrastructure.adapters.outbound.models.text.loader": MagicMock(
+                    TokenizerConfig=config_cls,
+                    create_tokenizer_loader=create_fn,
+                )
+            },
+        ):
+            registry = build_default_task_factories()
+            architecture = SpacyTokenizer(languages=("en", "ar"))
+            returned = registry["text_tokenization"](
+                _make_model_config(
+                    framework="spacy",
+                    model_id="spacy/blank:multi",
+                    architecture=architecture,
+                )
+            )
+
+        assert returned is loader
+        loader.load.assert_called_once()
+        assert config_cls.call_args.kwargs["model_id"] == "spacy/blank:multi"
+        # The parsed architecture must be threaded to the registry-backed
+        # factory; never inspect model_id for dispatch.
+        assert create_fn.call_args.args[0] is architecture
 
 
 class TestObjectDetectionFactory:

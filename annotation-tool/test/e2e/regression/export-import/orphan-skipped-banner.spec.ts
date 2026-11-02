@@ -60,8 +60,10 @@ test.describe('Import result dialog — orphan-skipped banner', () => {
       if (await menuButton.isVisible({ timeout: 2000 })) {
         await menuButton.click()
       }
-      const importButton = page.getByRole('button', { name: /import/i })
-        .or(page.getByRole('menuitem', { name: /import/i }))
+      // Match the exact "Import" name so the locator does not also resolve
+      // the adjacent "Import Corpus" (layers) toolbar button.
+      const importButton = page.getByRole('button', { name: 'Import', exact: true })
+        .or(page.getByRole('menuitem', { name: 'Import', exact: true }))
       await importButton.click()
 
       // Upload the orphan fixture.

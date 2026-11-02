@@ -49,7 +49,7 @@ export const DetectionRequestSchema = Type.Object({
   manualQuery: Type.Optional(Type.String()),
   queryOptions: Type.Optional(DetectionQueryOptionsSchema),
   confidenceThreshold: Type.Optional(Type.Number({ minimum: 0, maximum: 1, default: 0.3 })),
-  frameNumbers: Type.Optional(Type.Array(Type.Number())),
+  frameNumbers: Type.Optional(Type.Array(Type.Integer({ minimum: 0 }))),
   enableTracking: Type.Optional(Type.Boolean({ default: false })),
 })
 

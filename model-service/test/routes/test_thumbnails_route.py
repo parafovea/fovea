@@ -29,7 +29,7 @@ def client() -> TestClient:
 
 
 @pytest.fixture
-def patched_video_helpers() -> Generator[dict[str, MagicMock], None, None]:
+def patched_video_helpers() -> Generator[dict[str, MagicMock]]:
     """Patch the two video helpers called by the thumbnails route.
 
     Yields a dict of the patched call mocks so each test can assert on

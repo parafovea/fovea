@@ -509,17 +509,10 @@ describe('VideoSummaryEditor', () => {
         { wrapper: createWrapper() }
       )
 
-      await waitFor(() => {
-        // Switch to Claims tab
-        const claimsTab = screen.getByRole('tab', { name: /claims/i })
-        userEvent.setup().click(claimsTab)
-      })
+      await userEvent.setup().click(screen.getByRole('tab', { name: /claims/i }))
 
       await waitFor(() => {
-        // base-ui Tooltip render prop creates two matching button elements;
-        // query only the one with data-slot="button" (the actual Button component).
-        const extractButtons = screen.getAllByRole('button', { name: /extract claims/i })
-        const extractButton = extractButtons.find(btn => btn.getAttribute('data-slot') === 'button')!
+        const extractButton = screen.getByRole('button', { name: /extract claims/i })
         expect(extractButton).toBeDisabled()
       })
     })
@@ -557,14 +550,10 @@ describe('VideoSummaryEditor', () => {
         { wrapper: createWrapper() }
       )
 
-      await waitFor(() => {
-        const claimsTab = screen.getByRole('tab', { name: /claims/i })
-        userEvent.setup().click(claimsTab)
-      })
+      await userEvent.setup().click(screen.getByRole('tab', { name: /claims/i }))
 
       await waitFor(() => {
-        const extractButtons = screen.getAllByRole('button', { name: /extract claims/i })
-        const extractButton = extractButtons.find(btn => btn.getAttribute('data-slot') === 'button')!
+        const extractButton = screen.getByRole('button', { name: /extract claims/i })
         expect(extractButton).not.toBeDisabled()
       })
     })
@@ -602,14 +591,10 @@ describe('VideoSummaryEditor', () => {
         { wrapper: createWrapper() }
       )
 
-      await waitFor(() => {
-        const claimsTab = screen.getByRole('tab', { name: /claims/i })
-        userEvent.setup().click(claimsTab)
-      })
+      await userEvent.setup().click(screen.getByRole('tab', { name: /claims/i }))
 
       await waitFor(() => {
-        const extractButtons = screen.getAllByRole('button', { name: /extract claims/i })
-        const extractButton = extractButtons.find(btn => btn.getAttribute('data-slot') === 'button')!
+        const extractButton = screen.getByRole('button', { name: /extract claims/i })
         expect(extractButton).not.toBeDisabled()
       })
     })

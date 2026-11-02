@@ -49,11 +49,7 @@ export VITE_FOVEA_DEMO_MODE=true
 # Anthropic / OpenAI / Google API key paths when configured via .env.
 export MODEL_BUILD_MODE="${MODEL_BUILD_MODE:-minimal}"
 export DEVICE="${DEVICE:-cpu}"
-# PRELOAD_MODELS at build time hits an Ubuntu 24.04 / pip layout mismatch
-# (preload_models.py tries to `import yaml` but the production stage's
-# COPY --from=builder-base /usr/local/lib/python3.12 misses pyyaml's
-# install location). Default off — models cold-start on first /detect
-# or /thumbnail call (~10-30 s) but the build itself completes.
+# Fetch model weights on first use so the image build needs no model-host credentials.
 export PRELOAD_MODELS="${PRELOAD_MODELS:-false}"
 export MODEL_SERVICE_URL="${MODEL_SERVICE_URL:-http://localhost:8000}"
 

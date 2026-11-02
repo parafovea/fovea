@@ -1,0 +1,47 @@
+{
+  "lexicon": 1,
+  "id": "pub.layers.resource.collectionMembership",
+  "defs": {
+    "main": {
+      "type": "record",
+      "description": "Links an entry to a collection. Separate record enables many-to-many relationships (an entry can belong to multiple collections) and decentralized curation (anyone can propose membership).",
+      "key": "any",
+      "record": {
+        "type": "object",
+        "required": ["collectionRef", "entryRef", "createdAt"],
+        "properties": {
+          "collectionRef": {
+            "type": "string",
+            "format": "at-uri",
+            "description": "AT-URI of the collection."
+          },
+          "entryRef": {
+            "type": "string",
+            "format": "at-uri",
+            "description": "AT-URI of the entry."
+          },
+          "ordinal": {
+            "type": "integer",
+            "description": "Optional ordering position within the collection.",
+            "minimum": 0
+          },
+          "metadata": {
+            "type": "ref",
+            "ref": "pub.layers.defs#annotationMetadata",
+            "description": "Provenance: who added this entry to this collection, when, with what tool."
+          },
+          "features": {
+            "type": "ref",
+            "ref": "pub.layers.defs#featureMap",
+            "description": "Open-ended features describing this membership: curation confidence, ordering rationale, etc."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "datetime",
+            "description": "When this membership record was created."
+          }
+        }
+      }
+    }
+  }
+}

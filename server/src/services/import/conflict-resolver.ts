@@ -88,6 +88,7 @@ export interface ExistingDataWithRelations extends ExistingData {
  */
 export function detectConflicts(lines: ImportLine[], existingData: ExistingDataWithRelations, userId: string): Conflict[] {
   const conflicts: Conflict[] = []
+  const incomingEntityIds = new Set(lines.filter(line => line.type === 'entity').map(line => line.data.id))
 
   // Identify foreign persona IDs from import data: personas whose userId
   // differs from the importing user. These need new UUIDs even if their IDs
@@ -167,7 +168,7 @@ export function detectConflicts(lines: ImportLine[], existingData: ExistingDataW
           })
         }
 
-        if (annotationData.linkedEntityId && !existingData.entityIds.has(annotationData.linkedEntityId)) {
+        if (annotationData.linkedEntityId && !existingData.entityIds.has(annotationData.linkedEntityId) && !incomingEntityIds.has(annotationData.linkedEntityId)) {
           conflicts.push({
             type: 'missing-dependency',
             line: line.lineNumber,

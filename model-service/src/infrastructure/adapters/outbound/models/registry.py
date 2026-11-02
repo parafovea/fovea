@@ -27,12 +27,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, TypeVar
 
-from pydantic import BaseModel
+import didactic.api as dx
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-ArchT = TypeVar("ArchT", bound=BaseModel)
+ArchT = TypeVar("ArchT", bound=dx.Model)
 LoaderT = TypeVar("LoaderT")
 
 
@@ -41,7 +41,7 @@ class UnknownArchitectureError(LookupError):
 
     Attributes
     ----------
-    architecture : type[BaseModel]
+    architecture : type[dx.Model]
         The architecture class the caller passed.
     family : str
         Which loader family this registry belongs to.
@@ -52,7 +52,7 @@ class UnknownArchitectureError(LookupError):
     def __init__(
         self,
         *,
-        architecture: type[BaseModel],
+        architecture: type[dx.Model],
         family: str,
         registered: list[str],
     ) -> None:
@@ -75,7 +75,7 @@ class DuplicateArchitectureError(ValueError):
     def __init__(
         self,
         *,
-        architecture: type[BaseModel],
+        architecture: type[dx.Model],
         family: str,
         existing: type[Any],
         attempted: type[Any],
@@ -92,7 +92,7 @@ class DuplicateArchitectureError(ValueError):
         )
 
 
-class LoaderRegistry[ArchT: BaseModel, LoaderT]:
+class LoaderRegistry[ArchT: dx.Model, LoaderT]:
     """Architecture-keyed loader registry for one model family.
 
     Parameters
@@ -129,7 +129,7 @@ class LoaderRegistry[ArchT: BaseModel, LoaderT]:
         if not family or not isinstance(family, str):
             raise TypeError(f"family must be a non-empty string, got {family!r}")
         self._family = family
-        self._loaders: dict[type[BaseModel], type[LoaderT]] = {}
+        self._loaders: dict[type[dx.Model], type[LoaderT]] = {}
 
     @property
     def family(self) -> str:
@@ -137,7 +137,7 @@ class LoaderRegistry[ArchT: BaseModel, LoaderT]:
         return self._family
 
     @property
-    def registered_architectures(self) -> list[type[BaseModel]]:
+    def registered_architectures(self) -> list[type[dx.Model]]:
         """Architecture classes currently registered (insertion order)."""
         return list(self._loaders.keys())
 
@@ -164,9 +164,9 @@ class LoaderRegistry[ArchT: BaseModel, LoaderT]:
         # Cast to Any so the check is not pruned as unreachable by the
         # static analyser.
         candidate: object = architecture
-        if not (isinstance(candidate, type) and issubclass(candidate, BaseModel)):
+        if not (isinstance(candidate, type) and issubclass(candidate, dx.Model)):
             raise TypeError(
-                f"@{self._family}_registry.register expected a Pydantic model class, "
+                f"@{self._family}_registry.register expected a didactic Model class, "
                 f"got {architecture!r}"
             )
 
@@ -184,7 +184,7 @@ class LoaderRegistry[ArchT: BaseModel, LoaderT]:
 
         return decorator
 
-    def lookup(self, architecture: type[BaseModel]) -> type[LoaderT]:
+    def lookup(self, architecture: type[dx.Model]) -> type[LoaderT]:
         """Return the loader class registered for one architecture.
 
         Raises

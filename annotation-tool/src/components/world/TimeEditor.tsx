@@ -30,6 +30,7 @@ import { TypeObjectBadge } from '../shared/TypeObjectToggle'
 import WikidataSearch from '@components/shared/WikidataSearch'
 import { generateId } from '@utils/uuid'
 import { useUnsavedChangesPrompt } from '../../hooks/data'
+import { useTourAnchor } from '@/tours/engine/anchorRegistry'
 
 /** Granularity options for vagueness */
 type VaguenessGranularity = 'millisecond' | 'second' | 'minute' | 'hour' | 'day' | 'week' | 'month' | 'year'
@@ -58,6 +59,8 @@ export default function TimeEditor({ open, onClose, time }: TimeEditorProps) {
   const { data: videos = [] } = useVideos()
   const { mutateAsync: addTime } = useAddTime()
   const { mutateAsync: updateTime } = useUpdateTime()
+  const editorRef = useTourAnchor('time-editor')
+  const labelInputRef = useTourAnchor('time-label-input')
 
   const [importMode, setImportMode] = useState<'manual' | 'wikidata'>('manual')
   const [timeType, setTimeType] = useState<'instant' | 'interval'>('instant')
@@ -238,7 +241,7 @@ export default function TimeEditor({ open, onClose, time }: TimeEditorProps) {
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) handleCancel() }}>
-      <DialogContent data-tour-id="time-editor" className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent ref={editorRef} className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Clock className="size-5 text-secondary" />
@@ -339,8 +342,8 @@ export default function TimeEditor({ open, onClose, time }: TimeEditorProps) {
           <div className="space-y-1">
             <Label htmlFor="time-label">Label</Label>
             <Input
+              ref={labelInputRef}
               id="time-label"
-              data-tour-id="time-label-input"
               value={label}
               onChange={(e) => setLabel(e.target.value)}
               placeholder="e.g., Apollo 11 Launch, Summer 2024"

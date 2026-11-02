@@ -16,7 +16,7 @@ export class AnnotationWorkspacePage extends BasePage {
   readonly video: VideoPlayerComponent
   readonly timeline: TimelineComponent
 
-  constructor(page: Page) {
+  constructor(page: Page, private readonly defaultPersonaName: string) {
     super(page)
     this.video = new VideoPlayerComponent(page)
     this.timeline = new TimelineComponent(page)
@@ -130,7 +130,7 @@ export class AnnotationWorkspacePage extends BasePage {
    * Draw a simple bounding box with default coordinates.
    * Useful for quick test setup.
    */
-  async selectPersona(personaName?: string): Promise<void> {
+  async selectPersona(personaName = this.defaultPersonaName): Promise<void> {
     const personaSelect = this.page.getByRole('combobox', { name: /select persona/i })
     await expect(personaSelect).toBeVisible({ timeout: 10000 })
     await expect(personaSelect).toBeEnabled({ timeout: 10000 })
@@ -141,12 +141,9 @@ export class AnnotationWorkspacePage extends BasePage {
 
     // Under parallel workers an admin session sees every worker's persona,
     // so `.first()` could pick another worker's. Caller passes its own name.
-    const personaOption = personaName
-      ? this.page
-          .getByRole('option')
-          .filter({ hasText: new RegExp('^' + personaName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ' \\(') })
-          .first()
-      : personaListbox.getByRole('option').filter({ hasNotText: /^None$/i }).first()
+    const personaOption = this.page
+      .getByRole('option')
+      .filter({ hasText: new RegExp('^' + personaName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ' \\(') })
     await expect(personaOption).toBeVisible({ timeout: 5000 })
     await personaOption.click()
     await expect(personaListbox).toBeHidden({ timeout: 5000 }).catch(() => {})
@@ -230,7 +227,7 @@ export class AnnotationWorkspacePage extends BasePage {
    */
   private async waitForSaveSuccess(): Promise<void> {
     await this.page.waitForResponse(
-      resp => resp.url().includes('/api/annotations') && resp.status() === 200,
+      resp => resp.url().includes('/annotations') && resp.status() === 200,
       { timeout: 5000 }
     ).catch(() => {
       // Ignore timeout - save might not trigger API call in test environment
@@ -245,7 +242,7 @@ export class AnnotationWorkspacePage extends BasePage {
    * seeks the playhead to the annotation's start.
    */
   async selectFirstAnnotation(): Promise<void> {
-    const firstRow = this.page.locator('[data-tour-id="annotation-list-first"]')
+    const firstRow = this.page.locator('[data-tour-anchor="annotation-list-first"]')
     await expect(firstRow).toBeVisible({ timeout: 10000 })
     await firstRow.click()
     await this.page.waitForTimeout(300)
@@ -341,7 +338,7 @@ export class AnnotationWorkspacePage extends BasePage {
       (response) => {
         const url = response.url()
         const method = response.request().method()
-        const isAnnotationEndpoint = url.includes('/api/annotations')
+        const isAnnotationEndpoint = url.includes('/annotations')
         const isSuccessStatus = response.status() === 200 || response.status() === 201
         const isSaveMethod = method === 'POST' || method === 'PUT'
         return isAnnotationEndpoint && isSuccessStatus && isSaveMethod

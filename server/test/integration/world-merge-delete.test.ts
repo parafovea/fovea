@@ -28,7 +28,10 @@ describe('World-state merge-by-id and explicit deletes', () => {
 
   beforeEach(async () => {
     await prisma.loginAttempt.deleteMany()
-    await prisma.worldState.deleteMany()
+    await prisma.graphEdge.deleteMany()
+    await prisma.graphNode.deleteMany()
+    await prisma.catalogMembership.deleteMany()
+    await prisma.catalogCollection.deleteMany()
     await prisma.session.deleteMany()
     await prisma.rolePermission.deleteMany()
     await prisma.user.deleteMany()
@@ -91,4 +94,36 @@ describe('World-state merge-by-id and explicit deletes', () => {
     const collections = (await getWorld()).json().entityCollections as Array<{ id: string }>
     expect(collections).toHaveLength(0)
   })
+
+  it('preserves concurrent writes to different objects', async () => {
+    await putWorld({ entities: [{ id: 'first', name: 'Before' }] })
+    const responses = await Promise.all([
+      putWorld({ entities: [{ id: 'first', name: 'After' }] }),
+      putWorld({ entities: [{ id: 'second', name: 'Added' }] }),
+    ])
+    expect(responses.map(response => response.statusCode)).toEqual([200, 200])
+    const entities = (await getWorld()).json().entities
+    expect(entities).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'first', name: 'After' }),
+      expect.objectContaining({ id: 'second', name: 'Added' }),
+    ]))
+  })
+
+  it("rejects another owner's collection id without changing its description or members", async () => {
+    const other = await createRegularTestUser(prisma, { username: 'other', email: 'other@example.com' })
+    const ownerWrite = await app.inject({ method: 'PUT', url: '/api/world', cookies: { session_token: other.sessionToken },
+      payload: { entityCollections: [{ id: 'owned-collection', name: 'Original', description: [{ type: 'text', content: 'Keep me' }] }] } })
+    expect(ownerWrite.statusCode).toBe(200)
+    const response = await putWorld({ entityCollections: [{ id: 'owned-collection', name: 'Hijacked' }] })
+    expect(response.statusCode).toBe(409)
+    const ownerRead = await app.inject({ method: 'GET', url: '/api/world', cookies: { session_token: other.sessionToken } })
+    expect(ownerRead.json().entityCollections).toEqual([expect.objectContaining({ name: 'Original', description: [{ type: 'text', content: 'Keep me' }] })])
+  })
+
+  it('clears collection descriptions instead of reviving old stand-off rows', async () => {
+    expect((await putWorld({ entityCollections: [{ id: 'c1', name: 'Collection', description: [{ type: 'text', content: 'Old' }] }] })).statusCode).toBe(200)
+    expect((await putWorld({ entityCollections: [{ id: 'c1', name: 'Collection', description: [] }] })).statusCode).toBe(200)
+    expect((await getWorld()).json().entityCollections[0].description).toEqual([])
+  })
+
 })

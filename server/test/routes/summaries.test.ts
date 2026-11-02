@@ -1,7 +1,10 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest'
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from 'vitest'
+import { videoSummarizationQueue } from '../../src/queues/setup.js'
 import { buildApp } from '../../src/app.js'
 import { hashPassword } from '../../src/lib/password.js'
 import { seedBaselinePermissions } from '../helpers/rbac-test-setup.js'
+import { seedPermissions } from '../../prisma/seed-permissions.js'
+import { invalidatePermissionCache } from '../../src/middleware/abilities.js'
 import { FastifyInstance } from 'fastify'
 import { PrismaClient } from '@prisma/client'
 
@@ -30,10 +33,8 @@ describe('Video Summaries API', () => {
     // Clean database in dependency order
     await prisma.apiKey.deleteMany()
     await prisma.session.deleteMany()
-    await prisma.annotation.deleteMany()
     await prisma.videoSummary.deleteMany()
     await prisma.video.deleteMany()
-    await prisma.ontology.deleteMany()
     await prisma.persona.deleteMany()
     await prisma.user.deleteMany()
     await prisma.rolePermission.deleteMany()
@@ -85,6 +86,20 @@ describe('Video Summaries API', () => {
     testPersonaId = persona.id
   })
 
+  it('serializes a completed summarization job result', async () => {
+    const completed = { summaryId: 'result-summary', videoId: testVideoId, personaId: testPersonaId,
+      summary: [{ type: 'text', content: 'Generated summary' }], keyFrames: [{ timestamp: 1, description: 'A frame', frame_number: 30, confidence: 0.9 }] }
+    const spy = vi.spyOn(videoSummarizationQueue, 'getJob').mockResolvedValue({
+      id: 'finished-job', data: { videoId: testVideoId, personaId: testPersonaId },
+      getState: async () => 'completed', progress: 100, returnvalue: completed,
+    } as Awaited<ReturnType<typeof videoSummarizationQueue.getJob>>)
+    try {
+      const response = await app.inject({ method: 'GET', url: '/api/jobs/finished-job', cookies: { session_token: testSessionToken } })
+      expect(response.statusCode).toBe(200)
+      expect(response.json().returnvalue).toEqual(completed)
+    } finally { spy.mockRestore() }
+  })
+
   describe('POST /api/summaries', () => {
     it('saves a summary with audio metadata fields', async () => {
       const response = await app.inject({
@@ -95,10 +110,11 @@ describe('Video Summaries API', () => {
           videoId: testVideoId,
           personaId: testPersonaId,
           summary: [{ type: 'text', content: 'Test summary with audio' }],
+          comment: 'Reviewer note',
           visualAnalysis: 'Visual analysis text',
           audioTranscript: 'This is the audio transcript',
           keyFrames: [
-            { timestamp: 1.0, description: 'Frame 1' },
+            { timestamp: 1.0, description: 'Frame 1', frame_number: 30, confidence: 0.8 },
             { timestamp: 2.0, description: 'Frame 2' },
             { timestamp: 3.0, description: 'Frame 3' }
           ],
@@ -122,6 +138,8 @@ describe('Video Summaries API', () => {
 
       expect(response.statusCode).toBe(201)
       const body = response.json()
+      expect(body.comment).toBe('Reviewer note')
+      expect(body.keyFrames[0]).toMatchObject({ frame_number: 30, confidence: 0.8 })
       expect(body.audioLanguage).toBe('en')
       expect(body.speakerCount).toBe(2)
       expect(body.audioModelUsed).toBe('whisper-v3-turbo')
@@ -214,6 +232,63 @@ describe('Video Summaries API', () => {
       expect(body.audioLanguage).toBe('es')
       expect(body.speakerCount).toBe(1)
       expect(body.audioModelUsed).toBe('faster-whisper-large-v3')
+    })
+  })
+
+  describe('POST /api/summaries persona authorization', () => {
+    /** Creates a persona owned by another user, system-seeded or private. */
+    async function otherUsersPersona(isSystemGenerated: boolean): Promise<string> {
+      const owner = await prisma.user.create({
+        data: { username: `owner-${isSystemGenerated}`, email: `owner-${isSystemGenerated}@example.com`, displayName: 'Owner', isAdmin: false },
+      })
+      const persona = await prisma.persona.create({
+        data: { name: 'Seeded', role: 'r', informationNeed: 'i', userId: owner.id, isSystemGenerated },
+      })
+      return persona.id
+    }
+
+    function postSummary(personaId: string) {
+      return app.inject({
+        method: 'POST',
+        url: '/api/summaries',
+        cookies: { session_token: testSessionToken },
+        payload: { videoId: testVideoId, personaId, summary: [{ type: 'text', content: 'Tour summary' }] },
+      })
+    }
+
+    // The shared helper grants broad read access; these cases need the
+    // production permission matrix, where reading a persona requires owning it
+    // or a project role in its project.
+    beforeEach(async () => {
+      await prisma.rolePermission.deleteMany()
+      await seedPermissions(prisma)
+      invalidatePermissionCache()
+    })
+
+    afterEach(() => {
+      invalidatePermissionCache()
+    })
+
+    afterAll(() => {
+      delete process.env.FOVEA_DEMO_MODE
+    })
+
+    it('lets demo visitors summarize under a system-seeded persona', async () => {
+      process.env.FOVEA_DEMO_MODE = 'true'
+      const response = await postSummary(await otherUsersPersona(true))
+      expect(response.statusCode).toBe(201)
+    })
+
+    it('still refuses another user\'s private persona in demo mode', async () => {
+      process.env.FOVEA_DEMO_MODE = 'true'
+      const response = await postSummary(await otherUsersPersona(false))
+      expect(response.statusCode).toBe(403)
+    })
+
+    it('refuses another user\'s system persona when demo mode is off', async () => {
+      delete process.env.FOVEA_DEMO_MODE
+      const response = await postSummary(await otherUsersPersona(true))
+      expect(response.statusCode).toBe(403)
     })
   })
 

@@ -3,7 +3,7 @@
  * earlier smoke tests missed, asserted at every step of every tour.
  *
  * The earlier `tour-demo-launch-all.spec.ts` ran in a stub-only local
- * preview where every data-tour-id anchor happened to mount on every
+ * preview where every data-tour-anchor anchor happened to mount on every
  * route (no real backend → empty data → all components rendered
  * their empty states without lazy-loading), so the engine's
  * waitForAnchor never failed. Shipped to demo.fovea.video the same
@@ -63,6 +63,9 @@
  * exercise the bug-exposing assertions through pure UI clicks).
  */
 import { test, expect, type Page, type Locator } from '@playwright/test'
+import { findTour } from '../../../src/tours/scripts/index'
+import { anchorCatalog } from '../../../src/tours/engine/anchorCatalog'
+import type { AnchorMeta } from '../../../src/tours/engine/anchorCatalog'
 
 const CANNOT_RESOLVE_TEXT = "Couldn't find this UI element"
 const SPOTLIGHT_SELECTOR = '[data-fovea-tour-spotlight]'
@@ -108,33 +111,34 @@ async function getStepCardRect(
   }, STEP_CARD_SELECTOR)
 }
 
-/**
- * Read the spotlight overlay's outline-rect bounding box. The
- * SpotlightOverlay renders an SVG with four backdrop rectangles
- * around a central highlight rect. We look at the dashed outline
- * rect — the LAST <rect> inside the spotlight SVG with stroke-
- * dasharray set — and read its x/y/width/height. Returns null if
- * the overlay isn't mounted or has zero size.
- */
+/** Verify the anchor layout and the outline or full-page backdrop it requires. */
 async function getSpotlightRect(
   page: Page,
+  anchorId: string,
 ): Promise<{ x: number; y: number; width: number; height: number } | null> {
-  return page.evaluate((sel) => {
-    const svg = document.querySelector(sel) as SVGSVGElement | null
-    if (!svg) return null
-    // The outline rect is the one with strokeDasharray. The backdrop
-    // rects are filled; the corner handles are small (width 8) and
-    // filled white. The outline is fill=none + stroke=hsl(...).
+  return page.evaluate(({ selector, anchorId }) => {
+    const svg = document.querySelector(selector)
+    const anchor = document.querySelector(`[data-tour-anchor="${anchorId}"]`)
+    if (!svg || !anchor) return null
+    const bounds = anchor.getBoundingClientRect()
+    if (bounds.width <= 0 || bounds.height <= 0) return null
     const rects = Array.from(svg.querySelectorAll('rect'))
-    const outline = rects.find((r) => r.getAttribute('stroke-dasharray'))
-    if (!outline) return null
-    const x = Number(outline.getAttribute('x') ?? '0')
-    const y = Number(outline.getAttribute('y') ?? '0')
-    const width = Number(outline.getAttribute('width') ?? '0')
-    const height = Number(outline.getAttribute('height') ?? '0')
-    if (width === 0 || height === 0) return null
+    const outline = rects.find((r) => r.hasAttribute('stroke-dasharray'))
+    const rect = outline ?? (rects.length === 1 ? rects[0] : null)
+    if (!rect) return null
+    const x = Number(rect.getAttribute('x'))
+    const y = Number(rect.getAttribute('y'))
+    const width = Number(rect.getAttribute('width'))
+    const height = Number(rect.getAttribute('height'))
+    if (width <= 0 || height <= 0) return null
+    if (!outline) {
+      // Large anchors deliberately dim the full viewport instead of drawing
+      // an outline. A missing anchor must not pass through this branch.
+      if ((bounds.width + 8) * (bounds.height + 8) <= innerWidth * innerHeight * 0.7) return null
+      if (x !== 0 || y !== 0 || width !== innerWidth || height !== innerHeight) return null
+    }
     return { x, y, width, height }
-  }, SPOTLIGHT_SELECTOR)
+  }, { selector: SPOTLIGHT_SELECTOR, anchorId })
 }
 
 async function clickStart(page: Page, tourId: string): Promise<void> {
@@ -185,10 +189,11 @@ async function assertStepHealthy(
     page.locator(SPOTLIGHT_SELECTOR),
     `${label}: SpotlightOverlay must be in the DOM`,
   ).toBeAttached({ timeout: 4_000 })
-  const spotRect = await getSpotlightRect(page)
-  expect(
-    spotRect,
-    `${label}: SpotlightOverlay outline rect must have non-zero size (anchor existed but had no layout)`,
+  const anchorId = findTour(tourId)?.steps[stepNumber - 1]?.anchor
+  expect(anchorId, `${label}: expected tour anchor must exist`).toBeTruthy()
+  await expect.poll(
+    () => getSpotlightRect(page, anchorId!),
+    { message: `${label}: anchor and spotlight must have valid geometry`, timeout: 5_000 },
   ).not.toBeNull()
 
   // (d) StepCard fully inside viewport — no clipping off any edge.
@@ -238,9 +243,35 @@ async function findPrimaryCTA(
  * many steps the tour declares without having to import the source
  * scripts. The counter is rendered with aria-label `Step N of M`.
  */
+/**
+ * Whether the deployment runs a model service, judged as the tour provider
+ * does: the config request succeeds and reports CPU or CUDA models.
+ */
+async function modelServiceAvailable(page: Page): Promise<boolean> {
+  return page.evaluate(async () => {
+    const response = await fetch('/api/models/config', { credentials: 'include' })
+    if (!response.ok) return false
+    const body = (await response.json()) as { cudaAvailable?: boolean; cpuModelsAvailable?: boolean }
+    return Boolean(body.cudaAvailable || body.cpuModelsAvailable)
+  })
+}
+
+/**
+ * The element simulated typing writes into: the anchor itself when it is a
+ * field, otherwise its first visible input or textarea, as the engine chooses.
+ */
+async function typingTarget(anchor: Locator): Promise<Locator> {
+  const isField = await anchor.evaluate((el) => el.matches('input, textarea'))
+  return isField ? anchor : anchor.locator('input:visible, textarea:visible').first()
+}
+
 async function readStepCounter(page: Page): Promise<{ index: number; total: number } | null> {
   return page.evaluate(() => {
-    const span = document.querySelector('[aria-label^="Step "]') as HTMLElement | null
+    // Scope to the tour card: the video player's frame-step buttons also carry
+    // "Step …" aria-labels.
+    const span = document.querySelector(
+      '[data-fovea-tour-step-card] [aria-label^="Step "]',
+    ) as HTMLElement | null
     if (!span) return null
     const m = (span.getAttribute('aria-label') ?? '').match(/Step (\d+) of (\d+)/)
     if (!m) return null
@@ -272,12 +303,15 @@ test.describe('Tour rigorous walkthrough', () => {
         'Catalogue not present — target is not a VITE_DEMO_PUBLIC=1 deployment',
       )
 
+      const modelsAvailable = await modelServiceAvailable(page)
+
       await clickStart(page, tourId)
       await waitForStepCardPainted(page)
 
       // Walk every step. Hard cap at 40 as an infinite-loop backstop.
       let priorIndex = 0
       for (let i = 0; i < 40; i++) {
+        await expect.poll(() => readStepCounter(page)).not.toBeNull()
         const counter = await readStepCounter(page)
         if (!counter) throw new Error(`${tourId}: step counter missing on step ${i + 1}`)
         const { index, total } = counter
@@ -289,12 +323,39 @@ test.describe('Tour rigorous walkthrough', () => {
         }
         priorIndex = index
 
+        // A step whose anchor only a model service can produce cannot complete
+        // on a deployment without one. The engine must say so and offer Skip,
+        // and nothing else may stand in for that.
+        const currentStep = findTour(tourId)?.steps[index - 1]
+        const currentMeta: AnchorMeta | undefined = currentStep
+          ? anchorCatalog[currentStep.anchor as keyof typeof anchorCatalog]
+          : undefined
+        if (currentMeta?.requiresModelService && !modelsAvailable) {
+          const card = page.locator(STEP_CARD_SELECTOR)
+          await expect(
+            card.getByRole('status'),
+            `${tourId} step ${index}/${total}: must explain that the model service is unavailable`,
+          ).toContainText('needs the model service', { timeout: 5_000 })
+          await card.getByRole('button', { name: 'Skip', exact: true }).click()
+          await page.waitForTimeout(80)
+          continue
+        }
+
         await assertStepHealthy(page, {
           tourId,
           stepNumber: index,
           totalSteps: total,
         })
 
+        // Typing steps feed the next autocomplete step. Await the demonstrated
+        // text before advancing, since Next cancels in-flight simulated input.
+        const step = findTour(tourId)?.steps[index - 1]
+        if (step?.expectAction === 'type' && step.typeText) {
+          const editor = await typingTarget(page.locator(`[data-tour-anchor="${step.anchor}"]`).last())
+          // Simulated typing appends to whatever an earlier step entered.
+          const escaped = step.typeText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+          await expect(editor).toHaveValue(new RegExp(`${escaped}$`), { timeout: 10_000 })
+        }
         const cta = await findPrimaryCTA(page)
         if (!cta) throw new Error(`${tourId}: no primary CTA at step ${index}/${total}`)
 

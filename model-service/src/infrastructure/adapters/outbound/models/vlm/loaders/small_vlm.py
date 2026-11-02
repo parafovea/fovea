@@ -92,21 +92,31 @@ class SmallVLMLoader(VLMLoader):
             msg = "Model not loaded. Call load() first."
             raise RuntimeError(msg)
 
-        # SmolVLM and Moondream both require the prompt to embed image
-        # placeholder tokens matching the number of supplied images.
-        # SmolVLM's processor uses `<image>` per image; the older
-        # AutoProcessor flow raises "number of images in the text [0]
-        # and images [1] should be the same" when the prompt is plain
-        # text. Use the chat template path so the processor inserts the
-        # correct token(s) for the model family, then fall back to
-        # plain text if the model doesn't ship a chat template.
-        image = images[0] if images else None
-        if image is not None and hasattr(self._processor, "apply_chat_template"):
+        # Moondream's single-image interface needs one generation per sampled frame.
+        if isinstance(self.arch, Moondream) and len(images) > 1:
+            return "\n".join(
+                f"Frame {index + 1}: {self.generate([image], prompt, max_new_tokens, temperature)}"
+                for index, image in enumerate(images)
+            )
+
+        # SmolVLM supports multiple images in one prompt. Each image needs its
+        # own placeholder, in the same order as the sampled video frames.
+        image_input = (
+            (images or None) if isinstance(self.arch, SmolVLM) else (images[0] if images else None)
+        )
+        # Use one image per frame for a sequence; splitting each frame into
+        # tiles multiplies video context and CPU memory without adding time coverage.
+        processor_options = (
+            {"do_image_splitting": False}
+            if isinstance(self.arch, SmolVLM) and len(images) > 1
+            else {}
+        )
+        if images and hasattr(self._processor, "apply_chat_template"):
             messages = [
                 {
                     "role": "user",
                     "content": [
-                        {"type": "image"},
+                        *({"type": "image"} for _ in images),
                         {"type": "text", "text": prompt},
                     ],
                 },
@@ -115,15 +125,17 @@ class SmallVLMLoader(VLMLoader):
                 messages, add_generation_prompt=True
             )
             inputs = self._processor(
-                images=image,
+                images=image_input,
                 text=templated_prompt,
                 return_tensors="pt",
+                **processor_options,
             )
         else:
             inputs = self._processor(
-                images=image,
+                images=image_input,
                 text=prompt,
                 return_tensors="pt",
+                **processor_options,
             )
 
         output = self._model.generate(

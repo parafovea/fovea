@@ -444,7 +444,7 @@ describe('Browser-Specific Authentication Edge Cases', () => {
       let requestReceived = false
 
       server.use(
-        http.post('http://localhost:3001/api/annotations', () => {
+        http.post('http://localhost:3001/api/layers/videos/test-id/annotations', () => {
           requestReceived = true
           return HttpResponse.json({ id: 'test-id' })
         })
@@ -454,7 +454,7 @@ describe('Browser-Specific Authentication Edge Cases', () => {
       const client = new ApiClient({ baseURL: 'http://localhost:3001' })
 
       // @ts-expect-error accessing private property for testing
-      await client.client.post('/api/annotations', { data: 'test' })
+      await client.client.post('/api/layers/videos/test-id/annotations', { data: 'test' })
 
       expect(requestReceived).toBe(true)
     })
@@ -482,7 +482,7 @@ describe('Browser-Specific Authentication Edge Cases', () => {
       let requestReceived = false
 
       server.use(
-        http.delete('http://localhost:3001/api/annotations/:id', () => {
+        http.delete('http://localhost:3001/api/layers/videos/test-id/annotations/:id', () => {
           requestReceived = true
           return HttpResponse.json({ success: true })
         })
@@ -492,7 +492,7 @@ describe('Browser-Specific Authentication Edge Cases', () => {
       const client = new ApiClient({ baseURL: 'http://localhost:3001' })
 
       // @ts-expect-error accessing private property for testing
-      await client.client.delete('/api/annotations/test-id')
+      await client.client.delete('/api/layers/videos/test-id/annotations/test-id')
 
       expect(requestReceived).toBe(true)
     })

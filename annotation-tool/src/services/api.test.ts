@@ -17,6 +17,17 @@ describe('API Transformation Functions', () => {
     interpolatedFrameCount: 0
   })
 
+  it.each(['entity', 'event', 'time'] as const)('round-trips %s collections and notes', (linkedCollectionType) => {
+    const annotation: ObjectAnnotation = { id: 'a', videoId: 'v', annotationType: 'object',
+      linkedCollectionId: 'collection-id', linkedCollectionType, notes: 'Keep this note',
+      boundingBoxSequence: createBoundingBoxSequence(), createdAt: 'now', updatedAt: 'now' }
+    const payload = transformFrontendToBackend(annotation)
+    const returned = transformBackendToFrontend({ ...payload, frames: annotation.boundingBoxSequence,
+      confidence: null, createdAt: 'now', updatedAt: 'now' })
+    expect(returned).toMatchObject({ linkedCollectionId: 'collection-id', linkedCollectionType, notes: 'Keep this note' })
+    expect(transformFrontendToBackend({ ...annotation, notes: '' }).notes).toBe('')
+  })
+
   describe('transformFrontendToBackend', () => {
     it('forwards the client id so the create POST keeps it', () => {
       const objectAnnotation: ObjectAnnotation = {

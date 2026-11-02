@@ -271,7 +271,7 @@ export class DatabaseHelper {
     },
     sessionToken: string
   ): Promise<Annotation> {
-    const response = await fetch(`${this.apiURL}/api/annotations`, {
+    const response = await fetch(`${this.apiURL}/api/layers/videos/${data.videoId}/annotations`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -301,7 +301,7 @@ export class DatabaseHelper {
    * @param sessionToken - Session token for authentication
    */
   async deleteAnnotation(videoId: string, annotationId: string, sessionToken: string): Promise<void> {
-    await fetch(`${this.apiURL}/api/annotations/${videoId}/${annotationId}`, {
+    await fetch(`${this.apiURL}/api/layers/videos/${videoId}/annotations/${annotationId}`, {
       method: 'DELETE',
       headers: {
         'Cookie': `session_token=${sessionToken}`
@@ -316,7 +316,7 @@ export class DatabaseHelper {
    * @returns Array of annotations
    */
   async getAnnotations(videoId: string, sessionToken: string): Promise<Annotation[]> {
-    const response = await fetch(`${this.apiURL}/api/annotations/${videoId}`, {
+    const response = await fetch(`${this.apiURL}/api/layers/videos/${videoId}/annotations`, {
       headers: {
         'Cookie': `session_token=${sessionToken}`
       }
@@ -636,6 +636,135 @@ export class DatabaseHelper {
       headers: this.authHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify(ontology)
     })
+  }
+
+  /**
+   * Create a standalone layers document expression from pasted text.
+   *
+   * POSTs to `/api/layers/documents`; the mock model-service tokenizes the text
+   * on whitespace so the returned document carries a canonical tokenization the
+   * span annotator can render. Mirrors the error handling of `createEntityType`.
+   *
+   * @param text - the document body to tokenize and store
+   * @param opts - optional title and language override (`languages` defaults to `['en']`)
+   * @param sessionToken - optional session token; falls back to the helper's own token
+   * @returns the parsed document JSON (carries `id`)
+   */
+  async createDocument(
+    text: string,
+    opts?: { title?: string; languages?: string[] },
+    sessionToken?: string,
+  ): Promise<{ id: string; text: string; [key: string]: unknown }> {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+    if (sessionToken) {
+      headers['Cookie'] = `session_token=${sessionToken}`
+    } else if (this.sessionToken) {
+      headers['Cookie'] = `session_token=${this.sessionToken}`
+    }
+
+    const response = await fetch(`${this.apiURL}/api/layers/documents`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        text,
+        title: opts?.title,
+        languages: opts?.languages ?? ['en'],
+      }),
+    })
+
+    if (!response.ok) {
+      const error = await response.text()
+      throw new Error(`Failed to create document: ${response.status} ${error}`)
+    }
+
+    return response.json()
+  }
+
+  /**
+   * Fetch the current user's world state (entities, events, times, collections,
+   * relations). Used by span-annotation specs to assert a world object was
+   * created (e.g. a Wikidata-imported location lands in `entities` with a
+   * `locationType`).
+   *
+   * @param sessionToken - optional session token; falls back to the helper's own token
+   * @returns the parsed world state
+   */
+  async getWorldState(sessionToken?: string): Promise<{
+    entities: Array<{ id: string; name: string; locationType?: unknown; [key: string]: unknown }>
+    events: Array<{ id: string; name: string }>
+    times: Array<{ id: string; label?: string }>
+    [key: string]: unknown
+  }> {
+    const headers: Record<string, string> = {}
+    if (sessionToken) headers['Cookie'] = `session_token=${sessionToken}`
+    else if (this.sessionToken) headers['Cookie'] = `session_token=${this.sessionToken}`
+    const response = await fetch(`${this.apiURL}/api/world`, { headers })
+    if (!response.ok) {
+      throw new Error(`Failed to fetch world state: ${response.status}`)
+    }
+    return response.json()
+  }
+
+  /**
+   * Delete a world entity through the graceful world API
+   * (`DELETE /api/world/entities/:id`). The server clears references
+   * carrier-aware: a document span that denoted the object keeps its base
+   * placeholder (the span carrier) while its object-denotation annotation is
+   * removed. Used by the carrier-preservation spec.
+   *
+   * @param entityId - the world entity to delete
+   * @param sessionToken - optional session token; falls back to the helper's own token
+   */
+  async deleteWorldEntity(entityId: string, sessionToken?: string): Promise<void> {
+    const headers: Record<string, string> = {}
+    if (sessionToken) headers['Cookie'] = `session_token=${sessionToken}`
+    else if (this.sessionToken) headers['Cookie'] = `session_token=${this.sessionToken}`
+    const response = await fetch(`${this.apiURL}/api/world/entities/${entityId}`, {
+      method: 'DELETE',
+      headers,
+    })
+    if (!response.ok && response.status !== 404) {
+      const error = await response.text()
+      throw new Error(`Failed to delete world entity: ${response.status} ${error}`)
+    }
+  }
+
+  /**
+   * Seed a video's ASR-transcript source so the layers text-expression
+   * materializer projects a Transcript text expression for it. Writes a
+   * `VideoSummary` with a `transcriptJson` carrying one segment per line; the
+   * `GET /api/layers/videos/:videoId/text-expressions` route then tokenizes it
+   * per segment. This is the one seedable path to a video-associated text
+   * expression (no direct create-text-expression endpoint exists).
+   *
+   * @param videoId - the source video
+   * @param personaId - the persona the summary is owned under
+   * @param segments - transcript segments (text + start/end seconds)
+   * @param sessionToken - the session token to authenticate the write
+   */
+  async seedVideoTranscript(
+    videoId: string,
+    personaId: string,
+    segments: Array<{ start: number; end: number; text: string }>,
+    sessionToken: string,
+  ): Promise<void> {
+    const response = await fetch(`${this.apiURL}/api/summaries`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Cookie': `session_token=${sessionToken}`,
+      },
+      body: JSON.stringify({
+        videoId,
+        personaId,
+        summary: [{ type: 'text', content: 'E2E seeded transcript summary' }],
+        transcriptJson: { segments, language: 'en' },
+      }),
+    })
+    if (!response.ok) {
+      const error = await response.text()
+      throw new Error(`Failed to seed video transcript: ${response.status} ${error}`)
+    }
   }
 
   /**

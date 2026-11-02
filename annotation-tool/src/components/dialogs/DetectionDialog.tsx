@@ -30,6 +30,7 @@ import {
 } from '@/components/ui/select'
 import { usePersonas } from '@store/queries'
 import { useAnnotationUiStore } from '@store/zustand'
+import { useTourAnchor } from '@/tours/engine/anchorRegistry'
 
 /**
  * Detection query options for persona-based detection.
@@ -56,8 +57,6 @@ export interface DetectionQueryOptions {
 /**
  * Request payload for object detection.
  */
-export type TrackingModel = 'samurai' | 'sam2long' | 'sam2' | 'yolo11seg'
-
 export interface DetectionRequest {
   videoId: string
   personaId?: string
@@ -66,8 +65,6 @@ export interface DetectionRequest {
   frameNumbers?: number[]
   confidenceThreshold?: number
   enableTracking?: boolean
-  trackingModel?: TrackingModel
-  trackSingleObject?: boolean
 }
 
 /**
@@ -103,6 +100,8 @@ export function DetectionDialog({
   isLoading = false,
   error = null,
 }: DetectionDialogProps) {
+  const dialogAnchorRef = useTourAnchor('detect-dialog')
+  const runButtonAnchorRef = useTourAnchor('detect-dialog-run-button')
   const selectedPersonaId = useAnnotationUiStore((state) => state.selectedPersonaId)
   const { data: personas = [] } = usePersonas()
 
@@ -115,8 +114,6 @@ export function DetectionDialog({
 
   // Tracking options
   const [enableTracking, setEnableTracking] = useState(false)
-  const [trackingModel, setTrackingModel] = useState<TrackingModel>('samurai')
-  const [trackSingleObject, setTrackSingleObject] = useState(false)
 
   // Query options state (default: only entity types, no glosses)
   const [queryOptions, setQueryOptions] = useState<DetectionQueryOptions>({
@@ -168,8 +165,6 @@ export function DetectionDialog({
       frameNumbers,
       confidenceThreshold,
       enableTracking: enableTracking && frameMode !== 'current',
-      trackingModel: enableTracking ? trackingModel : undefined,
-      trackSingleObject: enableTracking ? trackSingleObject : undefined,
     }
 
     if (queryMode === 'persona') {
@@ -187,7 +182,7 @@ export function DetectionDialog({
 
   return (
     <Dialog open={open} onOpenChange={(val) => { if (!val) onClose() }}>
-      <DialogContent className="sm:max-w-2xl" data-tour-id="detect-dialog">
+      <DialogContent className="sm:max-w-2xl" ref={dialogAnchorRef}>
         <DialogHeader>
           <DialogTitle>Detect Objects</DialogTitle>
         </DialogHeader>
@@ -376,29 +371,6 @@ export function DetectionDialog({
 
               {enableTracking && (
                 <div className="flex flex-col gap-4">
-                  <div>
-                    <Label className="mb-2">Tracking Model</Label>
-                    <Select value={trackingModel} onValueChange={(v) => setTrackingModel(v as TrackingModel)}>
-                      <SelectTrigger className="w-full">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="samurai">SAMURAI (Recommended)</SelectItem>
-                        <SelectItem value="sam2long">SAM2Long (Long videos)</SelectItem>
-                        <SelectItem value="sam2">SAM2 (Fast)</SelectItem>
-                        <SelectItem value="yolo11seg">YOLO11n-seg (Segmentation)</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <Checkbox
-                      checked={trackSingleObject}
-                      onCheckedChange={(checked) => setTrackSingleObject(checked === true)}
-                    />
-                    <span className="text-sm">Track Single Object Only</span>
-                  </label>
-
                   <Alert>
                     <AlertDescription>
                       Tracking will generate candidate annotations that you can preview and accept/reject.
@@ -423,7 +395,7 @@ export function DetectionDialog({
           <Button
             onClick={handleDetect}
             disabled={isLoading || !canDetect}
-            data-tour-id="detect-dialog-run-button"
+            ref={runButtonAnchorRef}
           >
             {isLoading ? (
               <Spinner className="mr-2 h-4 w-4" />

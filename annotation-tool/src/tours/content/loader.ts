@@ -219,11 +219,17 @@ export interface TourContentBundleRaw {
   summariesAndClaims: Omit<TourContentBundle['summariesAndClaims'], 'videoId'> & {
     videoFilename: string
   }
+  documentAnnotation: TourContentBundle['documentAnnotation']
   collaboration: TourContentBundle['collaboration']
   importExport: TourContentBundle['importExport']
 }
 
 async function resolveBundle(raw: TourContentBundleRaw): Promise<TourContentBundle> {
+  for (const field of ['documentId', 'documentTitle', 'documentText', 'personaName', 'personaRole', 'spanTypeName', 'relationTypeName'] as const) {
+    if (typeof raw.documentAnnotation?.[field] !== 'string' || !raw.documentAnnotation[field].trim()) {
+      throw new Error(`documentAnnotation.${field} is required`)
+    }
+  }
   const [v1, v4, v5, v6, v7] = await Promise.all([
     resolveVideoId(raw.firstAnnotation.videoFilename),
     resolveVideoId(raw.eventsRolesClaims.videoFilename),
@@ -239,6 +245,7 @@ async function resolveBundle(raw: TourContentBundleRaw): Promise<TourContentBund
     worldLayer: { ...raw.worldLayer, videoId: v5 } as unknown as TourContentBundle['worldLayer'],
     modelInTheLoop: { ...raw.modelInTheLoop, videoId: v6 } as unknown as TourContentBundle['modelInTheLoop'],
     summariesAndClaims: { ...raw.summariesAndClaims, videoId: v7 } as unknown as TourContentBundle['summariesAndClaims'],
+    documentAnnotation: raw.documentAnnotation,
     collaboration: raw.collaboration,
     importExport: raw.importExport,
   }

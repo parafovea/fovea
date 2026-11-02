@@ -13,7 +13,7 @@
   <a href="https://github.com/parafovea/fovea/releases/latest"><img src="https://img.shields.io/github/v/release/parafovea/fovea?style=flat-square&label=Release" alt="Latest Release"></a>
   <a href="https://github.com/parafovea/fovea/blob/main/LICENSE"><img src="https://img.shields.io/github/license/parafovea/fovea?style=flat-square" alt="License"></a>
   <a href="https://www.typescriptlang.org/"><img src="https://img.shields.io/badge/TypeScript-5.x-blue?style=flat-square&logo=typescript" alt="TypeScript"></a>
-  <a href="https://www.python.org/"><img src="https://img.shields.io/badge/Python-3.12-blue?style=flat-square&logo=python" alt="Python"></a>
+  <a href="https://www.python.org/"><img src="https://img.shields.io/badge/Python-3.14-blue?style=flat-square&logo=python" alt="Python"></a>
 </p>
 
 <p align="center">
@@ -35,7 +35,7 @@ The platform combines manual annotation with AI-supported features including vid
 |---|---|
 | Frontend | React 18, TypeScript, shadcn-ui, Tailwind CSS v4, TanStack Query, Zustand, Vite |
 | Backend | Node.js 22, Fastify 5, Prisma 6, BullMQ 5, TypeBox |
-| Model Service | Python 3.12, FastAPI, PyTorch, Transformers, SGLang, vLLM, llama.cpp, ONNX Runtime |
+| Model Service | Python 3.14, FastAPI, PyTorch, Transformers, SGLang, vLLM, llama.cpp, ONNX Runtime |
 | Databases | PostgreSQL 16, Redis 7 |
 | Infrastructure | Docker, OpenTelemetry, Prometheus, Grafana |
 | Testing | Vitest, Playwright, pytest, MSW |
@@ -160,19 +160,21 @@ fovea/
 
 ### Manual setup
 
+Install Node.js 22, pnpm 10.15, Python 3.14, and uv. Configure
+`server/.env` from `server/.env.example` with the local database credentials,
+then run from the repository root:
+
 ```bash
-# Start databases
-docker compose up -d postgres redis
+make install
+make dev-infra
+make generate
+pnpm --filter @fovea/server exec prisma migrate dev
 
-# Backend
-cd server && npm install && npx prisma migrate dev && npx prisma db seed && npm run dev
-
-# Frontend (new terminal)
-cd annotation-tool && npm install && npm run dev
+# Backend and frontend
+pnpm run dev:services
 
 # Model service (new terminal, optional)
-cd model-service && python3.12 -m venv venv && source venv/bin/activate
-pip install -e . && uvicorn src.main:app --reload --port 8000
+cd model-service && uv run uvicorn src.main:app --reload --port 8000
 ```
 
 ### Dev mode with hot reload

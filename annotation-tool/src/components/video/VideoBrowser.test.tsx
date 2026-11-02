@@ -737,10 +737,23 @@ describe('VideoBrowser', () => {
         expect(screen.getByText('3 videos')).toBeInTheDocument()
       })
 
+      const submitted: string[] = []
+      server.use(
+        http.post('/api/videos/summaries/generate', async ({ request }) => {
+          const body = (await request.json()) as { videoId: string }
+          submitted.push(body.videoId)
+          return HttpResponse.json({ jobId: `job-${body.videoId}`, status: 'queued' })
+        })
+      )
+
       const batchButton = screen.getByText(/summarize all/i)
       await user.click(batchButton)
 
-      // Should trigger job submissions (implementation details tested via integration)
+      // The batch submits one job per video, then re-enables the button.
+      await waitFor(() => {
+        expect(submitted).toHaveLength(3)
+        expect(screen.getByText('Summarize All Videos')).toBeInTheDocument()
+      })
     })
   })
 

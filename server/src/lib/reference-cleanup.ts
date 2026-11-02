@@ -13,6 +13,7 @@ import type {
   Entity,
   Event,
 } from '@models/types.js'
+import type { Prisma } from '@prisma/client'
 
 /**
  * Minimal interface for types that have a gloss field.
@@ -189,6 +190,182 @@ export function countObjectRefsInGlosses(
       ) {
         count++
       }
+    }
+  }
+  return count
+}
+
+/**
+ * A deleted thing whose inline gloss mentions must be frozen to its display name.
+ * `kind` selects the GlossItem variant to match; `id` is the referenced id; `name`
+ * is the human-readable text that replaces each mention. `refPersonaId`/`refType`
+ * narrow a typeRef/objectRef match when supplied (a typeRef is persona-scoped).
+ */
+export interface DereferenceTarget {
+  kind: 'typeRef' | 'objectRef' | 'claimRef' | 'annotationRef'
+  id: string
+  name: string
+  refPersonaId?: string | null
+  refType?: GlossItem['refType']
+}
+
+/** Whether a gloss item is an inline reference to the deleted target. */
+function glossItemMatches(item: GlossItem, target: DereferenceTarget): boolean {
+  if (item.type !== target.kind) return false
+  switch (target.kind) {
+    case 'typeRef':
+      return (
+        item.content === target.id &&
+        (target.refType === undefined || item.refType === target.refType) &&
+        (target.refPersonaId === undefined || item.refPersonaId === target.refPersonaId)
+      )
+    case 'objectRef':
+      return (
+        item.content === target.id &&
+        (target.refType === undefined || item.refType === target.refType)
+      )
+    case 'annotationRef':
+      return item.content === target.id
+    case 'claimRef':
+      return item.refClaimId === target.id || item.content === target.id
+  }
+}
+
+/**
+ * Replaces every inline mention of a deleted thing in one gloss with its frozen
+ * human-readable name, returning the rewritten gloss and the number of hits. This
+ * is the single matcher the four kind-specific converters and the cross-carrier
+ * sweep share, so the policy "a deleted thing mentioned in text becomes its name"
+ * is enforced identically everywhere.
+ *
+ * @param gloss - the gloss items to rewrite
+ * @param target - the deleted thing and its replacement name
+ * @returns the rewritten gloss and the count of replaced mentions
+ */
+export function dereferenceGlossItems(
+  gloss: GlossItem[],
+  target: DereferenceTarget,
+): { gloss: GlossItem[]; count: number } {
+  let count = 0
+  const rewritten = gloss.map((item) => {
+    if (glossItemMatches(item, target)) {
+      count++
+      return { type: 'text' as const, content: target.name }
+    }
+    return item
+  })
+  return { gloss: rewritten, count }
+}
+
+/**
+ * Freezes every inline mention of a deleted thing in VideoSummary.summary to its
+ * display name. Unlike glosses/descriptions/claim-prose, VideoSummary.summary is a
+ * plain GlossItem[] JSON column (not standoff), so this is a direct
+ * read-rewrite-write rather than a standoff-regenerating aggregate rewrite.
+ *
+ * Candidate rows are prefiltered in the database: a matching GlossItem carries the
+ * deleted id either in `content` (typeRef / objectRef / annotationRef) or in
+ * `refClaimId` (claimRef). Prisma's `array_contains` compiles to the Postgres jsonb
+ * `@>` operator, which matches when any array element contains the probe object, so
+ * probing both keys selects every candidate. The precise, kind-aware match then runs
+ * in memory via {@link dereferenceGlossItems}, so an over-selected row is harmless
+ * and is left unwritten (its rewrite count is zero).
+ *
+ * Runs on the caller's transaction client so the rewrite commits — or rolls back —
+ * atomically with the delete that drives it.
+ *
+ * @param tx - the transaction client the driving delete runs on
+ * @param target - the deleted thing and the display name to freeze its mentions to
+ * @returns the total number of summary mentions frozen to text
+ */
+export async function dereferenceSummaries(
+  tx: Prisma.TransactionClient,
+  target: DereferenceTarget,
+): Promise<number> {
+  const candidates = await tx.videoSummary.findMany({
+    where: {
+      OR: [
+        { summary: { array_contains: [{ content: target.id }] } },
+        { summary: { array_contains: [{ refClaimId: target.id }] } },
+      ],
+    },
+    select: { id: true, summary: true },
+  })
+
+  let total = 0
+  for (const row of candidates) {
+    if (!Array.isArray(row.summary)) continue
+    const { gloss, count } = dereferenceGlossItems(row.summary as unknown as GlossItem[], target)
+    if (count === 0) continue
+    total += count
+    await tx.videoSummary.update({
+      where: { id: row.id },
+      data: { summary: gloss as unknown as Prisma.InputJsonValue },
+    })
+  }
+  return total
+}
+
+/**
+ * Converts claimRef items in a gloss to plain text when the referenced claim is
+ * deleted, mirroring {@link convertObjectRefsToText}.
+ *
+ * @param gloss - the gloss items
+ * @param deletedClaimId - id of the deleted claim
+ * @param claimName - the claim's human-readable name/text used as replacement
+ * @returns the gloss with matching claimRefs frozen to text
+ */
+export function convertClaimRefsToText(
+  gloss: GlossItem[],
+  deletedClaimId: string,
+  claimName: string,
+): GlossItem[] {
+  return dereferenceGlossItems(gloss, { kind: 'claimRef', id: deletedClaimId, name: claimName }).gloss
+}
+
+/**
+ * Converts annotationRef items in a gloss to plain text when the referenced
+ * annotation is deleted, mirroring {@link convertObjectRefsToText}.
+ *
+ * @param gloss - the gloss items
+ * @param deletedAnnotationId - id of the deleted annotation
+ * @param annotationLabel - the annotation's human-readable label used as replacement
+ * @returns the gloss with matching annotationRefs frozen to text
+ */
+export function convertAnnotationRefsToText(
+  gloss: GlossItem[],
+  deletedAnnotationId: string,
+  annotationLabel: string,
+): GlossItem[] {
+  return dereferenceGlossItems(gloss, {
+    kind: 'annotationRef',
+    id: deletedAnnotationId,
+    name: annotationLabel,
+  }).gloss
+}
+
+/** Counts claimRef mentions of a claim across the given glosses, for previews. */
+export function countClaimRefsInGlosses(glosses: Array<GlossItem[] | undefined>, claimId: string): number {
+  let count = 0
+  for (const gloss of glosses) {
+    if (!gloss) continue
+    for (const item of gloss) {
+      if (item.type === 'claimRef' && (item.refClaimId === claimId || item.content === claimId)) count++
+    }
+  }
+  return count
+}
+
+/** Counts annotationRef mentions of an annotation across the given glosses, for previews. */
+export function countAnnotationRefsInGlosses(
+  glosses: Array<GlossItem[] | undefined>,
+  annotationId: string,
+): number {
+  let count = 0
+  for (const gloss of glosses) {
+    if (!gloss) continue
+    for (const item of gloss) {
+      if (item.type === 'annotationRef' && item.content === annotationId) count++
     }
   }
   return count

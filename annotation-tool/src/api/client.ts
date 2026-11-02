@@ -25,7 +25,7 @@ export interface VideoSummary {
   summary: GlossItem[]
   visualAnalysis: string | null
   audioTranscript: string | null
-  keyFrames: number[] | null
+  keyFrames: Array<{ timestamp: number; description: string; frame_number?: number; confidence?: number }> | null
   confidence: number | null
   createdAt: string
   updatedAt: string
@@ -62,7 +62,7 @@ export interface SaveSummaryRequest {
   summary: GlossItem[]
   visualAnalysis?: string
   audioTranscript?: string
-  keyFrames?: number[]
+  keyFrames?: Array<{ timestamp: number; description: string; frame_number?: number; confidence?: number }>
   confidence?: number
   transcriptJson?: TranscriptJson
   audioLanguage?: string

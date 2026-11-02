@@ -3,12 +3,16 @@
 This module defines the interface for object detection model adapters.
 """
 
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
+from typing import TYPE_CHECKING
 
-import numpy as np
-from numpy.typing import NDArray
+if TYPE_CHECKING:
+    import numpy as np
+    from numpy.typing import NDArray
 
-from src.domain.entities import Detection
+    from src.domain.entities import Detection
 
 
 class IDetectionModel(ABC):

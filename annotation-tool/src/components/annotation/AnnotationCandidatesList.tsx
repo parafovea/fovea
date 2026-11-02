@@ -13,7 +13,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
 import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
-import { useAddAnnotation } from '@store/queries'
+import { useAddAnnotation, useVideo } from '@store/queries'
+import { useTourAnchor } from '@/tours/engine/anchorRegistry'
 import type { Detection, FrameDetections } from '@api/client'
 import { v4 as uuidv4 } from 'uuid'
 
@@ -136,6 +137,8 @@ export function AnnotationCandidatesList({
   initialConfidenceThreshold = 0.3,
 }: AnnotationCandidatesListProps) {
   const { mutate: addAnnotation } = useAddAnnotation()
+  const { data: video } = useVideo(videoId)
+  const candidatesListAnchor = useTourAnchor('annotation-candidates-list')
   const [candidates, setCandidates] = useState<CandidateItem[]>(() => {
     // Flatten all detections into candidate items
     return frames.flatMap((frame) =>
@@ -174,7 +177,7 @@ export function AnnotationCandidatesList({
    */
   const handleAccept = (index: number) => {
     const candidate = filteredCandidates[index]
-    if (!candidate) return
+    if (!candidate || !video?.width || !video.height) return
 
     // Update candidate status
     setCandidates((prev) =>
@@ -185,7 +188,9 @@ export function AnnotationCandidatesList({
 
     // Create annotation
     const annotationId = uuidv4()
-    const bbox = candidate.detection.boundingBox
+    const normalized = candidate.detection.boundingBox
+    const bbox = { x: normalized.x * video.width, y: normalized.y * video.height,
+      width: normalized.width * video.width, height: normalized.height * video.height }
 
     if (personaId && typeId && typeCategory) {
       // Type annotation
@@ -299,7 +304,7 @@ export function AnnotationCandidatesList({
   }
 
   return (
-    <div data-tour-id="annotation-candidates-list">
+    <div ref={candidatesListAnchor}>
       {/* Statistics Bar */}
       <div className="mb-4 p-4 bg-card rounded-lg ring-1 ring-foreground/10">
         <div className="flex flex-row gap-4 items-center">

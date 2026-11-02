@@ -1,0 +1,108 @@
+{
+  "lexicon": 1,
+  "id": "pub.layers.resource.entry",
+  "defs": {
+    "main": {
+      "type": "record",
+      "description": "A linguistic resource entry: a lexical item, frame element filler, morphological paradigm cell, or any atomic unit in a structured linguistic collection. Abstract enough to represent bead LexicalItems, FrameNet lexical units, PropBank rolesets, WordNet synset members, morphological paradigm cells, etc.",
+      "key": "any",
+      "record": {
+        "type": "object",
+        "required": [
+          "form",
+          "createdAt"
+        ],
+        "properties": {
+          "lemma": {
+            "type": "string",
+            "description": "Canonical/citation form.",
+            "maxLength": 1024
+          },
+          "form": {
+            "type": "string",
+            "description": "Surface form or string representation.",
+            "maxLength": 4096
+          },
+          "ontologyTypeRef": {
+            "type": "string",
+            "format": "at-uri",
+            "description": "Reference to a pub.layers.ontology#typeDef classifying this entry."
+          },
+          "knowledgeRefs": {
+            "type": "array",
+            "description": "Knowledge graph groundings (WordNet synset, FrameNet lexical unit, Wikidata, etc.).",
+            "maxLength": 32,
+            "items": {
+              "type": "ref",
+              "ref": "pub.layers.defs#knowledgeRef"
+            }
+          },
+          "features": {
+            "type": "ref",
+            "ref": "pub.layers.defs#featureMap",
+            "description": "Open-ended features: pos, morphological features, frequency, register, etc."
+          },
+          "components": {
+            "type": "array",
+            "description": "For multi-word expressions: the component words.",
+            "maxLength": 32,
+            "items": {
+              "type": "ref",
+              "ref": "pub.layers.resource.defs#mweComponent"
+            }
+          },
+          "mweKindUri": {
+            "type": "string",
+            "format": "at-uri",
+            "description": "AT-URI of the MWE kind definition node. Community-expandable via knowledge graph."
+          },
+          "mweKind": {
+            "type": "string",
+            "description": "MWE kind slug (fallback when mweKindUri unavailable).",
+            "knownValues": [
+              "compound",
+              "phrasal-verb",
+              "idiom",
+              "light-verb",
+              "named-entity",
+              "collocation",
+              "custom"
+            ],
+            "maxLength": 128
+          },
+          "sourceRef": {
+            "type": "string",
+            "format": "at-uri",
+            "description": "AT-URI of the source record this entry was derived from (e.g., an annotation, another entry)."
+          },
+          "metadata": {
+            "type": "ref",
+            "ref": "pub.layers.defs#annotationMetadata",
+            "description": "Provenance: who created this entry, with what tool, under what persona."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "datetime",
+            "description": "When this entry record was created."
+          },
+          "languages": {
+            "type": "array",
+            "description": "BCP-47 language tags this record covers. Empty when language is unspecified or unknown.",
+            "items": {
+              "type": "string",
+              "maxLength": 32
+            }
+          },
+          "languageRefs": {
+            "type": "array",
+            "description": "Structured language references (canonical BCP-47 tag plus optional script, region, variety, and role) grounding the languages this record covers.",
+            "items": {
+              "type": "ref",
+              "ref": "pub.layers.defs#languageRef"
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,19 +1,15 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { QueryClientProvider } from '@tanstack/react-query'
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
-import axios from 'axios'
 import { ThemeProvider } from 'next-themes'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { Toaster } from '@/components/ui/sonner'
-import App from './App'
 import { config } from '@/config'
-import { DemoShell } from './demo/DemoShell'
-import { isDemoModeEnabled } from './demo/config'
-import { TourProvider } from './tours'
-import { loadTourContentBundle } from './tours/content/loader'
-import type { TourContentBundle } from './tours/content/types'
+import { Root } from './Root'
+import { queryClient } from '@/queryClient'
+import { AnchorRegistryProvider, AnchorInspector } from './tours/engine'
 import './index.css'
 
 // Initialize command registry before React renders (must be before component mount effects)
@@ -193,94 +189,14 @@ async function maybeBootstrapDemoSession(): Promise<void> {
   }
 }
 
-/**
- * TanStack Query client configuration.
- * Manages caching, refetching, and background updates for API requests.
- */
-// Exported so DemoShell's onBeforeLaunch can invalidate cached queries
-// after seeding the demo user's WorldState — without this the
-// GlossEditor's useWorld() returns the stale empty cache for up to
-// staleTime=5 min and the @-popup keeps reading "No objects found"
-// even though the backend was just populated.
-export const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      // Do not retry client errors (4xx, including 429 rate limits); a retry
-      // cannot fix a bad request and only amplifies request fan-out. For other
-      // failures (network, 5xx) allow a single retry.
-      retry: (failureCount, error) => {
-        const status = axios.isAxiosError(error) ? error.response?.status : undefined
-        if (status && status >= 400 && status < 500) return false
-        return failureCount < 1
-      },
-      // Refetching on window focus multiplies request volume across the app
-      // and is not needed given staleTime + explicit invalidation on mutations.
-      refetchOnWindowFocus: false,
-      staleTime: 5 * 60 * 1000, // 5 minutes
-    },
-  },
-})
-
-// Boot-time fetch of the deployment's tour content bundle from
-// /tour-content.json (the admin's editable config). NO silent
-// fallback: if the file is missing or malformed, render a visible
-// banner and mount the app WITHOUT TourProvider so the admin can fix
-// the JSON without an opaque "tours just don't work" failure mode.
-function Root() {
-  type LoadState =
-    | { kind: 'loading' }
-    | { kind: 'ready'; bundle: TourContentBundle }
-    | { kind: 'error'; message: string }
-  const [state, setState] = React.useState<LoadState>({ kind: 'loading' })
-  React.useEffect(() => {
-    loadTourContentBundle()
-      .then((bundle) => setState({ kind: 'ready', bundle }))
-      .catch((err: unknown) => {
-        const message = err instanceof Error ? err.message : String(err)
-        console.error('[tours] content bundle load failed:', message)
-        setState({ kind: 'error', message })
-      })
-  }, [])
-
-  if (isDemoModeEnabled()) return <DemoShell />
-
-  // Always wrap <App /> in <TourProvider>: the demo-public catalogue
-  // (TourCataloguePage at /) calls useTour() to launch tours, and
-  // dropping the provider in the loading or error branch made the
-  // hook throw "useTour must be used inside <TourProvider>" the moment
-  // a VITE_DEMO_PUBLIC=1 visitor hit /. TourProvider defaults
-  // contentBundle to microventContent when none is supplied, so the
-  // provider is happy with no real bundle while we wait for the
-  // boot-time fetch; once the fetch resolves we swap in the real
-  // bundle and TourProvider re-derives the catalogue.
-  const bundle = state.kind === 'ready' ? state.bundle : undefined
-  const errorBanner =
-    state.kind === 'error' ? (
-      <div
-        role="alert"
-        style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          background: '#b91c1c',
-          color: 'white',
-          padding: '12px 16px',
-          zIndex: 9999,
-          fontSize: 13,
-        }}
-      >
-        <strong>Tours disabled: content config error.</strong>{' '}
-        {state.message} See <code>docs/tour-customization.md</code>.
-      </div>
-    ) : null
-  return (
-    <TourProvider contentBundle={bundle}>
-      {errorBanner}
-      <App />
-    </TourProvider>
-  )
-}
+// Re-exported so seeders that dynamically import '@/main' keep resolving the
+// single shared client that both the QueryClientProvider below and DemoShell's
+// onBeforeLaunch invalidation operate on. The client itself is defined in
+// '@/queryClient' so the provider and DemoShell share one instance — without a
+// single instance an onBeforeLaunch invalidation fires on a client the app's
+// useWorld() never subscribes to, and the @-popup keeps reading "No objects
+// found" against the stale empty cache for staleTime (5 min).
+export { queryClient } from '@/queryClient'
 
 // The MSW worker registration is fire-and-forget for the bundle to
 // remain compatible with esbuild's default target (top-level await
@@ -309,40 +225,49 @@ void maybeBootstrapDemoSession().then(() => {
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
-        <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-          <TooltipProvider>
-            {/*
-              Demo deployments render <DemoShell />, which provides its
-              own TourProvider with the seed-on-launch hook wrapped
-              around App. Stock builds mount TourProvider here so the
-              tour engine is available to <App /> directly (anchored
-              mode against the user's real workspace). Either way the
-              TourProvider is mounted EXACTLY ONCE. Nesting it would
-              shadow the outer state and the runner would never paint.
+    {/*
+      AnchorRegistryProvider wraps the whole app so any component can
+      publish its element under a tour anchor id and the tour engine
+      reads the live element for a step. AnchorInspector renders inside
+      it as the author-mode overlay that badges every registered anchor.
+    */}
+    <AnchorRegistryProvider>
+      <QueryClientProvider client={queryClient}>
+        <BrowserRouter>
+          <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+            <TooltipProvider>
+              {/*
+                Demo deployments render <DemoShell />, which provides its
+                own TourProvider with the seed-on-launch hook wrapped
+                around App. Stock builds mount TourProvider here so the
+                tour engine is available to <App /> directly (anchored
+                mode against the user's real workspace). Either way the
+                TourProvider is mounted EXACTLY ONCE. Nesting it would
+                shadow the outer state and the runner would never paint.
 
-              The tour content bundle comes from /tour-content.json
-              (admin-editable JSON, loaded at boot via Root above).
-              Edit that file to retheme the tour catalogue for your
-              own domain. See docs/tour-customization.md.
+                The tour content bundle comes from /tour-content.json
+                (admin-editable JSON, loaded at boot via Root above).
+                Edit that file to retheme the tour catalogue for your
+                own domain. See docs/tour-customization.md.
+              */}
+              <Root />
+              <Toaster position="bottom-right" />
+            </TooltipProvider>
+            {/*
+              The TanStack Query devtools toggle button is fixed to the
+              bottom-right corner with a large invisible hit area; the
+              annotation-workspace and ontology-workspace FABs sit at the
+              same corner and the devtools intercept their clicks. Skip in
+              test/E2E (NODE_ENV=test or VITE_E2E=1) so Playwright can hit
+              the FABs.
             */}
-            <Root />
-            <Toaster position="bottom-right" />
-          </TooltipProvider>
-          {/*
-            The TanStack Query devtools toggle button is fixed to the
-            bottom-right corner with a large invisible hit area; the
-            annotation-workspace and ontology-workspace FABs sit at the
-            same corner and the devtools intercept their clicks. Skip in
-            test/E2E (NODE_ENV=test or VITE_E2E=1) so Playwright can hit
-            the FABs.
-          */}
-          {config.env.mode !== 'test' && !config.deploymentMode.e2e && (
-            <ReactQueryDevtools initialIsOpen={false} />
-          )}
-        </ThemeProvider>
-      </BrowserRouter>
-    </QueryClientProvider>
+            {config.env.mode !== 'test' && !config.deploymentMode.e2e && (
+              <ReactQueryDevtools initialIsOpen={false} />
+            )}
+          </ThemeProvider>
+        </BrowserRouter>
+      </QueryClientProvider>
+      <AnchorInspector />
+    </AnchorRegistryProvider>
   </React.StrictMode>,
 )

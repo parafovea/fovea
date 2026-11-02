@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import { Badge } from '@/components/ui/badge'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
-import { useAddKeyframe, useUpdateKeyframe, useUpdateAnnotation } from '@store/queries'
+import { useAddKeyframe, useUpdateKeyframe } from '@store/queries'
 import { BoundingBox, Annotation, TypeAnnotation, ObjectAnnotation } from '@models/types'
 import { BoundingBoxHUD } from './BoundingBoxHUD'
 import { useBoundingBoxKeyboard } from './useBoundingBoxKeyboard'
@@ -96,7 +96,6 @@ export default function InteractiveBoundingBox({
   // TanStack Query mutations for annotation operations
   const addKeyframe = useAddKeyframe()
   const updateKeyframe = useUpdateKeyframe()
-  const { mutate: updateAnnotationMutation } = useUpdateAnnotation()
 
   const [hovering, setHovering] = useState(false)
   const [interactionMode, setInteractionMode] = useState<InteractionMode>('none')
@@ -416,20 +415,14 @@ export default function InteractiveBoundingBox({
         box: newBox,
       })
     } else {
-      // Fallback to updating annotation - update the first keyframe in the sequence
-      const updatedSequence = {
-        ...annotation.boundingBoxSequence,
-        boxes: annotation.boundingBoxSequence.boxes.map((box, idx) =>
-          idx === 0 ? { ...box, ...newBox } : box
-        ),
-      }
-      updateAnnotationMutation({
-        ...annotation,
-        boundingBoxSequence: updatedSequence,
-        updatedAt: new Date().toISOString(),
+      latestEditedAnnotationsRef.current = addKeyframe({
+        videoId: annotation.videoId,
+        annotationId: annotation.id,
+        frameNumber: currentFrame,
+        box: { ...newBox, frameNumber: currentFrame, isKeyframe: true },
       })
     }
-  }, [interactionMode, activeHandle, dragStart, originalBox, annotation, videoWidth, videoHeight, updateKeyframe, updateAnnotationMutation, onUpdate, mode, currentFrame])
+  }, [interactionMode, activeHandle, dragStart, originalBox, annotation, videoWidth, videoHeight, updateKeyframe, addKeyframe, onUpdate, mode, currentFrame])
 
   // Handle mouse up
   const handleMouseUp = useCallback(() => {

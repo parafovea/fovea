@@ -92,7 +92,12 @@ class DetectObjectsRequestDTO:
 
 @dataclass
 class DetectObjectsResponseDTO:
-    """Aggregated detection result."""
+    """Aggregated detection result.
+
+    ``video_width`` and ``video_height`` are the source frame dimensions in
+    pixels, needed to convert normalized bounding boxes to the pixel-integer
+    coordinates the layers ``boundingBox`` model requires.
+    """
 
     id: str
     video_id: str
@@ -100,3 +105,5 @@ class DetectObjectsResponseDTO:
     frames: list[FrameDetectionsDTO]
     total_detections: int
     processing_time: float
+    video_width: int
+    video_height: int

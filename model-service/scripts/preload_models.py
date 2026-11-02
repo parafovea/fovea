@@ -24,6 +24,14 @@ HF_FRAMEWORKS = {"transformers", "llama_cpp", "ctranslate2", "onnx", "ultralytic
 # Frameworks that are external APIs (no download needed)
 SKIP_FRAMEWORKS = {"external_api"}
 
+# Text-tokenizer frameworks. spaCy blank pipelines ship their data in the
+# wheel (no download); Stanza needs its tokenize models baked at build time.
+TOKENIZER_FRAMEWORKS = {"spacy", "stanza"}
+
+# No-whitespace scripts whose Stanza tokenize models are baked at build time.
+# Kept in sync with STANZA_LANGUAGES in the tokenizer loader.
+STANZA_TOKENIZE_LANGUAGES = ("zh", "ja", "th")
+
 
 def load_config(config_path: str) -> dict:
     """Load model configuration from YAML file."""
@@ -66,6 +74,36 @@ def get_default_models(config: dict) -> list[dict]:
     return models
 
 
+def preload_tokenizers() -> bool:
+    """Preload the text-tokenizer engines.
+
+    spaCy blank pipelines and py3langid ship their data in the wheel, so this
+    only confirms they import. Stanza needs its tokenize models downloaded to
+    STANZA_RESOURCES_DIR at build time so the runtime pipeline can load them
+    offline. Returns True on success, False on failure.
+    """
+    stanza_dir = os.environ.get("STANZA_RESOURCES_DIR", "/models/stanza")
+    try:
+        import py3langid  # noqa: F401
+        import spacy  # noqa: F401
+
+        print("  spaCy + py3langid import OK (data ships in the wheel, no download)")
+
+        import stanza
+
+        Path(stanza_dir).mkdir(parents=True, exist_ok=True)
+        for lang in STANZA_TOKENIZE_LANGUAGES:
+            print(f"  Downloading Stanza tokenize model: {lang} -> {stanza_dir}")
+            stanza.download(lang, processors="tokenize", model_dir=stanza_dir, verbose=False)
+
+        print("  OK: text tokenizers")
+        return True
+
+    except Exception as e:
+        print(f"  FAILED: text tokenizers: {e}")
+        return False
+
+
 def download_model(model: dict, cache_dir: str) -> bool:
     """Download a single model to the cache directory.
 
@@ -82,6 +120,9 @@ def download_model(model: dict, cache_dir: str) -> bool:
     print(f"{'=' * 60}")
 
     try:
+        if framework in TOKENIZER_FRAMEWORKS:
+            return preload_tokenizers()
+
         if framework in ("transformers", "llama_cpp", "ctranslate2", "onnx"):
             from huggingface_hub import snapshot_download
 

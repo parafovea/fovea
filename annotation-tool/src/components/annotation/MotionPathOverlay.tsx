@@ -4,8 +4,9 @@
  * Shows trajectory through all keyframes with interpolation.
  */
 
-import React, { useMemo } from 'react'
+import React, { useCallback, useMemo } from 'react'
 import { Annotation, BoundingBox } from '@models/types'
+import { useTourAnchor } from '@/tours/engine/anchorRegistry'
 
 /**
  * @interface MotionPathPoint
@@ -63,6 +64,16 @@ export const MotionPathOverlay: React.FC<MotionPathOverlayProps> = ({
   annotation,
   visible,
 }) => {
+  const registerMotionPathAnchor = useTourAnchor('motion-path-overlay')
+  // The anchor registry positions spotlights from a node's bounding rect, which
+  // every Element exposes, so the SVG group node feeds the same registry as the
+  // HTML-element anchors.
+  const motionPathAnchor = useCallback(
+    (element: SVGGElement | null) =>
+      registerMotionPathAnchor(element as Element as HTMLElement | null),
+    [registerMotionPathAnchor],
+  )
+
   // Compute motion path from annotation's bounding box sequence
   const motionPath = useMemo(
     () => computeMotionPath(annotation),
@@ -115,7 +126,7 @@ export const MotionPathOverlay: React.FC<MotionPathOverlayProps> = ({
     .join(' ')
 
   return (
-    <g data-testid="motion-path-overlay" data-tour-id="motion-path-overlay" style={{ pointerEvents: 'none' }}>
+    <g ref={motionPathAnchor} data-testid="motion-path-overlay" style={{ pointerEvents: 'none' }}>
       {/* Path line */}
       <path
         d={pathData}

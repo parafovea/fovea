@@ -20,12 +20,14 @@ import { Slider } from '@/components/ui/slider'
 import type { PersonaInferenceOverrides } from '@/api/client'
 import { useModelDefaults } from '@/store/queries/useModelConfig'
 import { usePersonaPreferences } from '@/store/preferences/useInferencePreferences'
+import { useTourAnchor } from '@/tours/engine/anchorRegistry'
 
 interface Props {
   personaId: string
 }
 
 export function PersonaPreferencesSection({ personaId }: Props) {
+  const sectionAnchorRef = useTourAnchor('persona-preferences-section')
   const { data: defaults } = useModelDefaults()
   const { overrides, isLoading, setOverrides, resetAll } = usePersonaPreferences(personaId)
   const [expanded, setExpanded] = useState(false)
@@ -52,7 +54,7 @@ export function PersonaPreferencesSection({ personaId }: Props) {
   }
 
   return (
-    <div className="space-y-3" data-tour-id="persona-preferences-section">
+    <div className="space-y-3" ref={sectionAnchorRef}>
       <button
         type="button"
         className="flex items-center gap-2 text-sm font-medium select-none"

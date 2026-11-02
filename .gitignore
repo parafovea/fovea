@@ -123,6 +123,7 @@ docker-compose.override.yml
 # Database
 *.sql
 !server/prisma/migrations/**/*.sql
+!server/prisma/migrate-0.6/*.sql
 *.sql.gz
 *.rdb
 
@@ -136,6 +137,8 @@ docs/planning/
 notes/
 /tutorial/
 .claude/
+.agents/
+.codex/
 .venv/
 model-service/uv.lock
 .demo-local/
@@ -143,3 +146,7 @@ model-service/uv.lock
 
 # wikibase uses pip in CI; its uv.lock is a local `uv run` artifact, not committed
 wikibase/uv.lock
+
+# Transient deployment credentials and recovery metadata
+.deploy-*.json
+.deploy.lock

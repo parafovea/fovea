@@ -31,7 +31,7 @@
  *   5. Claim extraction             AnnotationWorkspace > Edit Summary
  *                                   > Claims tab > Extract Claims
  *                                   > ClaimsExtractionDialog > ClaimsViewer.
- *   6. Thumbnail generation         VideoBrowser card thumbnail <img>
+ *   6. Thumbnail generation         VideoBrowser card thumbnail background
  *                                   that renders only when the
  *                                   backend's GET /api/videos/:id/
  *                                   thumbnail successfully returns a
@@ -50,9 +50,8 @@
  *   4. With the same persona and a multi-frame range, run Detect
  *      Objects again with Enable Tracking checked so the model-service
  *      returns tracked candidates.
- *   5. Generate the VLM video summary via the Edit Summary dialog
- *      (the editor enqueues a backend summarize job that the worker
- *      forwards to the real model-service).
+ *   5. Generate the VLM video summary through the video card's
+ *      Summarize action and open the stored summary for editing.
  *   6. From the summary editor's Claims tab, run Extract Claims and
  *      wait for at least one claim row to render.
  *   7. Reload the page and confirm the persisted summary text +
@@ -142,7 +141,7 @@ async function openAnnotationWorkspace(page: Page, videoId: string): Promise<voi
 /**
  * Pick a persona inside the AnnotationWorkspace toolbar's persona
  * combobox by exact display name. The combobox renders options as
- * "<name> - <role>" so the match anchors on a "<name> -" prefix to
+ * "<name> (<role>)" so the match anchors on the name and opening parenthesis to
  * avoid colliding with a worker-parallel persona of the same role.
  */
 async function selectPersonaInWorkspace(page: Page, personaName: string): Promise<void> {
@@ -155,7 +154,7 @@ async function selectPersonaInWorkspace(page: Page, personaName: string): Promis
   const escaped = personaName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   const option = page
     .getByRole('option')
-    .filter({ hasText: new RegExp(`^${escaped} -`) })
+    .filter({ hasText: new RegExp(`^${escaped} \\(`) })
     .first()
   await expect(option).toBeVisible({ timeout: FAST_UI_WAIT_MS })
   await option.click()
@@ -324,22 +323,17 @@ test.describe('Per-task user journeys against real model-service', () => {
     await selectPersonaInWorkspace(page, testPersona.name)
 
     const dialog = await openDetectionDialog(page)
-    // Switch frame mode to "Frame Range" so the Enable Tracking
-    // checkbox unlocks (DetectionDialog.tsx:361 wraps the tracking
-    // section behind frameMode !== 'current'). Start frame defaults
-    // to current frame; end frame defaults to current + 5 seconds
-    // worth of frames; leave both alone so the range is small enough
-    // to stay inside the CPU-only budget.
+    // Five frames exercise tracking within the CPU inference budget.
     const frameModeSelect = dialog.getByRole('combobox').first()
     await frameModeSelect.click()
     await page.getByRole('option', { name: /frame range/i }).click()
+    await dialog.getByRole('spinbutton', { name: 'End Frame', exact: true }).fill('4')
 
     const enableTrackingLabel = dialog.locator('label').filter({ hasText: /^Enable Tracking$/ })
     await expect(enableTrackingLabel).toBeVisible({ timeout: FAST_UI_WAIT_MS })
     await enableTrackingLabel.click()
 
-    // SAMURAI is the default tracking model selection; do not change
-    // it. Run detection and wait for the Detection Results dialog.
+    // The service selects the tracker from its model configuration.
     const resultsDialog = await runDetectionAndWaitForResults(page, dialog)
     await expect(resultsDialog).toContainText(/Found \d+ objects for query:/i, {
       timeout: FAST_UI_WAIT_MS,
@@ -362,7 +356,7 @@ test.describe('Per-task user journeys against real model-service', () => {
     // Pick the test persona in the video browser toolbar so the
     // Summarize button enables (VideoBrowser.tsx:744 disables it
     // until activePersonaId is set).
-    const personaSelect = page.getByRole('combobox').first()
+    const personaSelect = page.locator('#video-browser-root').getByRole('combobox')
     await expect(personaSelect).toBeVisible({ timeout: FAST_UI_WAIT_MS })
     await personaSelect.click()
     const escaped = testPersona.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -370,15 +364,13 @@ test.describe('Per-task user journeys against real model-service', () => {
       .getByRole('option')
       .filter({ hasText: new RegExp(`${escaped}`) })
       .first()
-      .click()
+      .click({ timeout: FAST_UI_WAIT_MS })
 
     // Locate the card for the test video. Cards carry data-slot=
     // "card"; filter by the video filename text which renders in
     // the card.
     const videoCard = page
-      .locator('[data-slot="card"]')
-      .filter({ hasText: testVideo.filename })
-      .first()
+      .locator(`[data-video-id="${testVideo.id}"]`)
     await expect(videoCard).toBeVisible({ timeout: FAST_UI_WAIT_MS })
 
     // Click the Summarize button on this card. The button is
@@ -461,7 +453,7 @@ test.describe('Per-task user journeys against real model-service', () => {
     const escaped = testPersona.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
     await page
       .getByRole('option')
-      .filter({ hasText: new RegExp(`^${escaped} -`) })
+      .filter({ hasText: new RegExp(`^${escaped} \\(`) })
       .first()
       .click()
 
@@ -529,29 +521,21 @@ test.describe('Per-task user journeys against real model-service', () => {
     // Thumbnails are produced by the model-service via POST
     // /api/thumbnails/generate, persisted to a shared mount, and
     // served by the backend's GET /api/videos/:id/thumbnail. The
-    // VideoBrowser renders the thumbnail as a plain <img> whose src
-    // is that endpoint; we drive the user-journey assertion by
-    // waiting for the img element to load (naturalWidth > 0).
+    // VideoBrowser uses a CSS background; verify both its URL and the JPEG response.
     await page.goto('/', { timeout: FAST_UI_WAIT_MS })
 
     const videoCard = page
-      .locator('[data-slot="card"]')
-      .filter({ hasText: testVideo.filename })
-      .first()
+      .locator(`[data-video-id="${testVideo.id}"]`)
     await expect(videoCard).toBeVisible({ timeout: FAST_UI_WAIT_MS })
 
-    const thumbnailImg = videoCard.locator('img').first()
-    await expect(thumbnailImg).toBeVisible({ timeout: SHORT_INFERENCE_WAIT_MS })
-
-    // naturalWidth > 0 confirms the browser successfully decoded
-    // the bytes the backend served. A broken thumbnail load leaves
-    // naturalWidth at 0.
-    await expect(async () => {
-      const naturalWidth = await thumbnailImg.evaluate(
-        (el) => (el as HTMLImageElement).naturalWidth,
-      )
-      expect(naturalWidth, 'thumbnail img must decode to non-zero width').toBeGreaterThan(0)
-    }).toPass({ timeout: SHORT_INFERENCE_WAIT_MS })
+    const thumbnail = videoCard.locator('div[style*="background-image"]').first()
+    await expect(thumbnail).toHaveCSS('background-image', new RegExp(`/api/videos/${testVideo.id}/thumbnail`))
+    const response = await page.request.get(`/api/videos/${testVideo.id}/thumbnail?size=medium`, {
+      timeout: SHORT_INFERENCE_WAIT_MS,
+    })
+    expect(response.ok(), response.ok() ? '' : await response.text()).toBe(true)
+    expect(response.headers()['content-type']).toContain('image/jpeg')
+    expect((await response.body()).length).toBeGreaterThan(0)
   })
 
   test('user transcribes audio via Transcribe Audio and sees timed segments', async ({
@@ -563,7 +547,13 @@ test.describe('Per-task user journeys against real model-service', () => {
     // gated behind an HF agreement and may not be configured in every
     // booth), click Transcribe Audio, and assert the dialog renders at
     // least one timed segment with a clickable timestamp pill.
-    await openAnnotationWorkspace(page, testVideo.id)
+    // The worker-striped dust-storm fixture has no audio track.
+    const videosResponse = await page.request.get('/api/videos')
+    expect(videosResponse.ok()).toBe(true)
+    const videos = await videosResponse.json() as Array<{ id: string; filename: string }>
+    const audioVideo = videos.find((video) => video.filename === 'mummy-dust.webm')
+    expect(audioVideo, 'the committed transcription fixture must contain audio').toBeDefined()
+    await openAnnotationWorkspace(page, audioVideo!.id)
 
     const transcribeButton = page.getByTestId('transcribe-audio-button')
     await expect(transcribeButton).toBeVisible({ timeout: FAST_UI_WAIT_MS })
@@ -700,30 +690,21 @@ test.describe.serial('Multi-service knowledge-extraction journey', () => {
     })
     await expect(addSelectedButton).toBeEnabled({ timeout: FAST_UI_WAIT_MS })
 
-    // Wait for the persona-ontology PUT that the Add Selected click
-    // triggers so the assertion below sees the persisted types.
-    const ontologyPutPromise = page.waitForResponse(
-      (resp) =>
-        resp.url().includes(`/api/personas/${createdPersona.id}/ontology`) &&
-        resp.request().method() === 'PUT' &&
-        resp.status() < 400,
-      { timeout: SHORT_INFERENCE_WAIT_MS },
-    )
     await addSelectedButton.click()
-    await ontologyPutPromise
 
-    // Verify persisted entity-type count >= 1 against the canonical
-    // server view (UI-driven steps can be flaky on layout; this is
-    // a read-only sanity gate after the UI mutation completed).
-    const ontologyRes = await page.request.get(
-      `/api/personas/${createdPersona.id}/ontology`,
-    )
-    expect(ontologyRes.status()).toBe(200)
-    const ontology = (await ontologyRes.json()) as PersonaOntologyResponse
-    expect(
-      ontology.entities.length,
-      'persona ontology must hold the accepted suggestions after the augmenter UI flow',
-    ).toBeGreaterThanOrEqual(1)
+    // Each accepted suggestion has its own mutation. Verify the complete
+    // selection in the canonical server view before leaving the workspace.
+    await expect.poll(async () => {
+      const ontologyRes = await page.request.get(
+        `/api/personas/${createdPersona.id}/ontology`,
+      )
+      expect(ontologyRes.status()).toBe(200)
+      const ontology = (await ontologyRes.json()) as PersonaOntologyResponse
+      return ontology.entities.length
+    }, {
+      message: 'persona ontology must persist every accepted suggestion',
+      timeout: FAST_UI_WAIT_MS,
+    }).toBe(toAccept)
 
     // STEP 3: Navigate to the annotation workspace for the test
     // video. Pick the journey persona in the workspace toolbar and
@@ -746,6 +727,7 @@ test.describe.serial('Multi-service knowledge-extraction journey', () => {
     const frameModeSelect = detectionDialogTracking.getByRole('combobox').first()
     await frameModeSelect.click()
     await page.getByRole('option', { name: /frame range/i }).click()
+    await detectionDialogTracking.getByRole('spinbutton', { name: 'End Frame', exact: true }).fill('4')
     await detectionDialogTracking
       .locator('label')
       .filter({ hasText: /^Enable Tracking$/ })
@@ -760,29 +742,15 @@ test.describe.serial('Multi-service knowledge-extraction journey', () => {
     await detectionResultsDialog.getByRole('button', { name: /^close$/i }).first().click()
     await expect(detectionResultsDialog).toBeHidden({ timeout: FAST_UI_WAIT_MS })
 
-    // STEP 5: Open the Edit Summary dialog, pick the journey persona,
-    // and let the VideoSummaryEditor generate the VLM summary. The
-    // editor auto-kicks a summarize job when no summary exists for
-    // the (video, persona) pair; we wait for the editor to render
-    // real summary text.
-    await page.getByRole('button', { name: /^edit summary$/i }).click()
-    const summaryDialog = page.getByRole('dialog').filter({ hasText: 'Edit Video Summary' })
-    await expect(summaryDialog).toBeVisible({ timeout: FAST_UI_WAIT_MS })
+    // STEP 5: Generate through the browser's explicit Summarize action.
+    // The editor only edits stored summaries; opening it does not run inference.
+    await page.goto('/', { timeout: FAST_UI_WAIT_MS })
+    await page.locator('#video-browser-root').getByRole('combobox').click()
+    await page.getByRole('option').filter({ hasText: journeyPersonaName }).click()
+    const journeyCard = page.locator(`[data-video-id="${testVideo.id}"]`)
+    await journeyCard.getByRole('button', { name: /^summarize$/i }).click()
 
-    const summaryPersonaSelect = summaryDialog.getByRole('combobox')
-    await summaryPersonaSelect.click()
-    const escapedPersona = journeyPersonaName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    await page
-      .getByRole('option')
-      .filter({ hasText: new RegExp(`^${escapedPersona} -`) })
-      .first()
-      .click()
-
-    // Wait for either the in-editor summary text to render OR a
-    // saved-status indicator to flip. The editor's Summary tab
-    // renders the gloss content inside a textarea / contenteditable
-    // region; the cleanest cross-implementation wait is for the
-    // backend summarize job to land. Bound by LONG_INFERENCE_WAIT_MS.
+    // Wait for the generated summary to persist before opening its editor.
     await expect(async () => {
       const summariesRes = await page.request.get(
         `/api/videos/${testVideo.id}/summaries`,
@@ -795,6 +763,20 @@ test.describe.serial('Multi-service knowledge-extraction journey', () => {
         'real VLM summary for the journey persona must persist with non-trivial content',
       ).toBe(true)
     }).toPass({ timeout: LONG_INFERENCE_WAIT_MS, intervals: [5_000, 15_000, 30_000] })
+
+    await openAnnotationWorkspace(page, testVideo.id)
+    await page.getByRole('button', { name: /^edit summary$/i }).click()
+    const summaryDialog = page.getByRole('dialog').filter({ hasText: 'Edit Video Summary' })
+    await expect(summaryDialog).toBeVisible({ timeout: FAST_UI_WAIT_MS })
+
+    const summaryPersonaSelect = summaryDialog.getByRole('combobox')
+    await summaryPersonaSelect.click()
+    const escapedPersona = journeyPersonaName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    await page
+      .getByRole('option')
+      .filter({ hasText: new RegExp(`^${escapedPersona} \\(`) })
+      .first()
+      .click()
 
     // STEP 6: From the same dialog's Claims tab, run Extract Claims
     // and wait for >=1 claim to land.

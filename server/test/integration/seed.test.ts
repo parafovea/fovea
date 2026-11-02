@@ -2,12 +2,15 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest'
 import { PrismaClient } from '@prisma/client'
 import bcrypt from 'bcrypt'
 import { seedDatabase } from '../../prisma/seed'
+import { readOntologyAggregate } from '../../src/services/layers-bridge/ontology-bridge.js'
 
 /**
  * Integration tests for database seeding script.
  * Validates that the seed script properly creates admin users with ADMIN_PASSWORD.
  */
-describe('Database Seed Integration', () => {
+// Each seedDatabase call hashes two bcrypt(12) passwords and writes the layers
+// ontology, about 2-4s on CI; the re-seed test runs two of them.
+describe('Database Seed Integration', { timeout: 20_000 }, () => {
   let prisma: PrismaClient
 
   beforeAll(() => {
@@ -21,9 +24,7 @@ describe('Database Seed Integration', () => {
   beforeEach(async () => {
     // Clean database before each test
     await prisma.session.deleteMany()
-    await prisma.annotation.deleteMany()
     await prisma.videoSummary.deleteMany()
-    await prisma.ontology.deleteMany()
     await prisma.persona.deleteMany()
     await prisma.user.deleteMany()
   })
@@ -235,14 +236,11 @@ describe('Database Seed Integration', () => {
         where: { name: 'Automated' }
       })
 
-      const ontology = await prisma.ontology.findUnique({
-        where: { personaId: automatedPersona!.id }
-      })
+      const ontology = await readOntologyAggregate(prisma, automatedPersona!.id)
 
-      expect(ontology).toBeDefined()
-      expect(ontology!.entityTypes).toBeDefined()
-      // @ts-expect-error - entityTypes is JSON
-      expect(ontology!.entityTypes.length).toBeGreaterThan(0)
+      expect(ontology.exists).toBe(true)
+      expect(ontology.aggregate.entityTypes).toBeDefined()
+      expect(ontology.aggregate.entityTypes.length).toBeGreaterThan(0)
     })
   })
 })

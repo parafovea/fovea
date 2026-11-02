@@ -64,10 +64,11 @@ def test_health_endpoint(client):
     response = client.get("/health")
     assert response.status_code == 200
 
+
 def test_summarize_endpoint(client, mock_video_id, mock_persona_id):
-    response = client.post(f"/api/videos/{mock_video_id}/summarize", json={
-        "persona_id": mock_persona_id
-    })
+    response = client.post(
+        f"/api/videos/{mock_video_id}/summarize", json={"persona_id": mock_persona_id}
+    )
     assert response.status_code == 200
 ```
 
@@ -86,11 +87,11 @@ Factory functions for creating test data.
 ```python
 from test.fixtures import create_persona, create_ontology
 
+
 def test_ontology_augmentation():
     persona = create_persona({"name": "Baseball Scout"})
     ontology = create_ontology(
-        persona_id=persona["id"],
-        entity_types=[create_entity_type({"name": "Pitcher"})]
+        persona_id=persona["id"], entity_types=[create_entity_type({"name": "Pitcher"})]
     )
     # ... test code
 ```
@@ -111,6 +112,7 @@ def test_ontology_augmentation():
 import pytest
 from test.fixtures import create_persona
 
+
 class TestSummarizeEndpoint:
     """Tests for video summarization endpoint."""
 
@@ -119,8 +121,7 @@ class TestSummarizeEndpoint:
         persona = create_persona({"name": "Baseball Scout"})
 
         response = client.post(
-            f"/api/videos/{mock_video_id}/summarize",
-            json={"persona_id": persona["id"]}
+            f"/api/videos/{mock_video_id}/summarize", json={"persona_id": persona["id"]}
         )
 
         assert response.status_code == 200
@@ -131,8 +132,7 @@ class TestSummarizeEndpoint:
     def test_summarize_video_missing_persona(self, client, mock_video_id):
         """Test summarization with invalid persona ID."""
         response = client.post(
-            f"/api/videos/{mock_video_id}/summarize",
-            json={"persona_id": "invalid-id"}
+            f"/api/videos/{mock_video_id}/summarize", json={"persona_id": "invalid-id"}
         )
 
         assert response.status_code == 404
@@ -142,6 +142,7 @@ class TestSummarizeEndpoint:
 
 ```python
 import pytest
+
 
 @pytest.mark.asyncio
 async def test_async_operation(client):
@@ -158,7 +159,8 @@ For unit tests, mock model loading to avoid GPU/memory overhead:
 ```python
 from unittest.mock import patch, MagicMock
 
-@patch('src.vlm_loader.load_vlm_model')
+
+@patch("src.vlm_loader.load_vlm_model")
 def test_summarization_without_real_model(mock_load_model, client):
     """Test summarization logic without loading real model."""
     mock_model = MagicMock()
@@ -191,6 +193,7 @@ Custom markers can be added to `pytest.ini`:
 def test_expensive_operation():
     # Long-running test
     pass
+
 
 @pytest.mark.gpu
 def test_gpu_inference():

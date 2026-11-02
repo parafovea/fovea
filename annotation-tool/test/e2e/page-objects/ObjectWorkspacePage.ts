@@ -86,79 +86,28 @@ export class ObjectWorkspacePage extends BasePage {
     await this.clickDeleteButton(name)
   }
 
-  async linkEntityToType(entityName: string, typeName: string) {
+  /** Assigns the named type from the specified persona's ontology. */
+  async linkEntityToType(entityName: string, typeName: string, personaName: string): Promise<void> {
     await this.selectTab('entities')
     await this.clickEditButton(entityName)
-    await this.wait(500)
 
-    const dialog = this.page.locator('[role="dialog"]')
-    await dialog.waitFor({ state: 'visible', timeout: 5000 })
+    const dialog = this.page.getByRole('dialog')
+    await expect(dialog).toBeVisible()
 
-    // Scroll to type assignments section
-    const typeAssignmentsHeading = dialog.getByText(/type assignments by persona/i)
-    if (await typeAssignmentsHeading.isVisible({ timeout: 2000 }).catch(() => false)) {
-      await typeAssignmentsHeading.scrollIntoViewIfNeeded()
-      await this.wait(300)
-    }
-
-    // Scroll to Add Type Assignment section
-    const addTypeAssignmentBox = dialog.getByText('Add Type Assignment')
-    await addTypeAssignmentBox.scrollIntoViewIfNeeded()
-    await this.wait(500)
-
-    // Find the Persona select - MUI Select renders as combobox
+    // Admin sessions can see other workers' personas; select the fixture explicitly.
     const personaSelect = dialog.getByRole('combobox').first()
-    await personaSelect.waitFor({ state: 'visible', timeout: 5000 })
     await personaSelect.click()
-    await this.wait(500)
+    await this.page.getByRole('option', { name: personaName, exact: true }).click()
+    await expect(personaSelect).toContainText(personaName)
+    await expect(personaSelect).toHaveAttribute('aria-expanded', 'false')
 
-    // Wait for the listbox to appear - it renders as a portal outside the dialog
-    // Use a more specific selector to avoid conflicts with parallel tests
-    await this.wait(500)
-    const personaListbox = this.page.getByRole('listbox').first()
-    await personaListbox.waitFor({ state: 'visible', timeout: 5000 })
-    await this.wait(300)
-
-    // Wait for options to be available and click the first one
-    // Ensure we're clicking an option that's actually visible and in the correct listbox
-    const firstPersonaOption = personaListbox.getByRole('option').first()
-    await firstPersonaOption.waitFor({ state: 'visible', timeout: 5000 })
-    await firstPersonaOption.click({ timeout: 5000 })
-    await this.wait(1000)
-
-    // Wait for listbox to close
-    await personaListbox.waitFor({ state: 'hidden', timeout: 3000 }).catch(() => {})
-
-    // Click Entity Type select - it's the second combobox in the dialog
-    // (first is Persona, second is Entity Type)
     const entityTypeSelect = dialog.getByRole('combobox').nth(1)
-    await entityTypeSelect.scrollIntoViewIfNeeded()
-    await this.wait(500)
     await entityTypeSelect.click()
-    await this.wait(500)
+    await this.page.getByRole('option', { name: typeName, exact: true }).click()
+    await expect(entityTypeSelect).toContainText(typeName)
+    await expect(entityTypeSelect).toHaveAttribute('aria-expanded', 'false')
 
-    // Wait for type options listbox
-    await this.wait(500)
-    const typeListbox = this.page.getByRole('listbox').first()
-    await typeListbox.waitFor({ state: 'visible', timeout: 5000 })
-    await this.wait(300)
-
-    // Select the specified type
-    const typeOption = typeListbox.getByRole('option', { name: new RegExp(typeName, 'i') }).first()
-    await typeOption.waitFor({ state: 'visible', timeout: 5000 })
-    await typeOption.click({ timeout: 5000 })
-    await this.wait(500)
-
-    // Wait for listbox to close
-    await typeListbox.waitFor({ state: 'hidden', timeout: 3000 }).catch(() => {})
-
-    // Click "Add Assignment" button
-    const addButton = dialog.getByRole('button', { name: /add assignment/i })
-    await expect(addButton).toBeVisible({ timeout: 5000 })
-    await addButton.click()
-    await this.wait(500)
-
-    // Save the entity with new type assignment
+    await dialog.getByRole('button', { name: /add assignment/i }).click()
     await this.saveForm()
   }
 
@@ -204,7 +153,7 @@ export class ObjectWorkspacePage extends BasePage {
     await this.clickDeleteButton(name)
   }
 
-  async linkEventToType(eventName: string, typeName: string) {
+  async linkEventToType(eventName: string, typeName: string, personaName: string) {
     await this.selectTab('events')
     await this.clickEditButton(eventName)
     await this.wait(500)
@@ -232,15 +181,8 @@ export class ObjectWorkspacePage extends BasePage {
     const personaListbox = this.page.getByRole('listbox').first()
     await personaListbox.waitFor({ state: 'visible', timeout: 5000 })
 
-    // Skip the leading "_none" placeholder option ("Select Persona") so
-    // we actually select a real persona and the Event Type combobox
-    // renders (it is gated on selectedPersonaId being truthy).
-    const firstPersonaOption = personaListbox
-      .getByRole('option')
-      .filter({ hasNotText: /^Select Persona$/ })
-      .first()
-    await firstPersonaOption.waitFor({ state: 'visible', timeout: 5000 })
-    await firstPersonaOption.click({ timeout: 5000 })
+    const personaOption = personaListbox.getByRole('option', { name: personaName, exact: true })
+    await personaOption.click({ timeout: 5000 })
     await this.wait(500)
 
     // Wait for listbox to close

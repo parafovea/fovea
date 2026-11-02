@@ -97,6 +97,38 @@ network, not the public internet.
   currently-running detection or summarization job; the user
   retries from the UI.
 
+## Optional CPU dependency advisory
+
+The CPU image includes DiskCache through llama-cpp-python. DiskCache 5.6.3
+has an [unpatched deserialization advisory](https://github.com/advisories/GHSA-w8v5-vhqr-4h9v)
+that requires attacker write access to a cache directory subsequently read by
+the application. Fovea's llama.cpp loaders leave that disk cache disabled.
+Keep it disabled when extending these loaders, and restrict model-volume
+write access to the service and trusted operators. This advisory remains in
+scans that include the CPU extra; the base-dependency CI audit excludes that extra.
+
+## Documentation build dependency advisory
+
+The documentation build includes deepmerge 4.3.1 through SVGR. Its
+[low-severity prototype-poisoning advisory](https://github.com/advisories/GHSA-gcqx-w48m-w2h4)
+has no patched release. This package belongs to the documentation compiler;
+the deployed site serves static files. The installed SVGR plugin declares
+deepmerge as a dependency but does not import it in its compiled entry point.
+
+`make audit-docs-dependencies` permits this specific low-severity advisory
+and reports it explicitly. Other advisories, a severity increase, and scanner
+failures block CI. Review this exception when updating the documentation toolchain.
+
+The scanner also reports [GHSA-g3hv-75wg-m249](https://github.com/advisories/GHSA-g3hv-75wg-m249)
+against the documentation server's minimatch 3.1.5. The advisory describes
+`optimizationLevel >= 2` expanding patterns in `firstPhasePreProcess` before
+quadratic second-phase processing. Version 3.1.5 implements neither phase nor
+that option: it splits each brace-expanded pattern into one array of path parts.
+The dependency check classifies this specific advisory as not applicable only
+when every reported minimatch installation is locked to 3.1.5. Missing version
+evidence, different versions, and other advisories still block CI. This
+classification is separate from the accepted, unpatched deepmerge finding.
+
 ## What to plan for
 
 - [Backup and restore](backup-restore.md) for Postgres and the

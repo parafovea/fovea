@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { Annotation, InterpolationType } from '@models/types'
 import { InterpolationModeSelector, BezierControlPointSet } from './InterpolationModeSelector'
+import { useTourAnchor } from '@/tours/engine/anchorRegistry'
 
 /**
  * Props for QuickActionsPanel component.
@@ -52,6 +53,7 @@ export const QuickActionsPanel: React.FC<QuickActionsPanelProps> = ({
 }) => {
   const [position, setPosition] = useState({ top: 0, left: 0 })
   const [interpolationDialogOpen, setInterpolationDialogOpen] = useState(false)
+  const quickActionsAnchor = useTourAnchor('quick-actions-track')
 
   // Calculate position with edge detection
   useEffect(() => {
@@ -97,7 +99,7 @@ export const QuickActionsPanel: React.FC<QuickActionsPanelProps> = ({
 
   return createPortal(
     <div
-      data-tour-id="quick-actions-track"
+      ref={quickActionsAnchor}
       className="absolute grid grid-cols-2 gap-2 bg-card rounded-lg p-2 shadow-lg ring-1 ring-foreground/10 z-[1000] opacity-95 transition-all duration-200 ease-in-out"
       style={{
         top: position.top,

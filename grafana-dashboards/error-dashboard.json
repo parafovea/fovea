@@ -210,7 +210,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(rate(fovea_errors_api[5m])) / sum(rate(api_requests_total[5m])) * 100",
+          "expr": "sum(rate(fovea_errors_api_total[5m])) / sum(rate(api_requests_total[5m])) * 100",
           "legendFormat": "API Error Rate",
           "refId": "A"
         }
@@ -276,7 +276,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(increase(fovea_errors_frontend[5m]))",
+          "expr": "sum(increase(fovea_errors_frontend_total[5m]))",
           "legendFormat": "Frontend Errors",
           "refId": "A"
         }
@@ -578,7 +578,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "topk(10, sum by (component) (increase(fovea_errors_frontend[1h])))",
+          "expr": "topk(10, sum by (component) (increase(fovea_errors_frontend_total[1h])))",
           "legendFormat": "{{component}}",
           "refId": "A"
         }
@@ -640,7 +640,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (status_code) (increase(fovea_errors_api[1h]))",
+          "expr": "sum by (status_code) (increase(fovea_errors_api_total[1h]))",
           "legendFormat": "{{status_code}}",
           "refId": "A"
         }
@@ -702,7 +702,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (browser) (increase(fovea_errors_frontend[1h]))",
+          "expr": "sum by (browser) (increase(fovea_errors_frontend_total[1h]))",
           "legendFormat": "{{browser}}",
           "refId": "A"
         }

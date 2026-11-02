@@ -35,7 +35,7 @@ class Detection:
     attributes: dict[str, str | int | float | bool] = field(default_factory=dict)
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "Detection":
+    def from_dict(cls, data: dict[str, Any]) -> Detection:
         """Create detection from dictionary representation.
 
         Parameters
@@ -226,12 +226,15 @@ class TrackingMask:
         Mask prediction confidence.
     is_occluded : bool
         Whether object is occluded in this frame.
+    bounding_box : NormalizedBBox | None
+        Normalized extent of the mask, absent for an empty mask.
     """
 
     object_id: int
     mask_rle: dict[str, Any]
     confidence: ConfidenceScore
     is_occluded: bool = False
+    bounding_box: NormalizedBBox | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary representation.

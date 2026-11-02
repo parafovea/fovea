@@ -61,7 +61,7 @@ class OntologyType:
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "OntologyType":
+    def from_dict(cls, data: dict[str, Any]) -> OntologyType:
         """Create from dictionary representation.
 
         Parameters

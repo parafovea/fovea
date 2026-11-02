@@ -103,12 +103,7 @@ describe('cross-user import of a rich real-world export (regression for #100)', 
     await reseedOwnershipBaseline(prisma)
     await prisma.loginAttempt.deleteMany()
     await prisma.importHistory.deleteMany()
-    await prisma.claimRelation.deleteMany()
-    await prisma.claim.deleteMany()
-    await prisma.annotation.deleteMany()
     await prisma.videoSummary.deleteMany()
-    await prisma.ontology.deleteMany()
-    await prisma.worldState.deleteMany()
     await prisma.persona.deleteMany()
     await prisma.video.deleteMany()
     await prisma.session.deleteMany()
@@ -261,7 +256,7 @@ describe('cross-user import of a rich real-world export (regression for #100)', 
     for (const videoId of annotationVideoIds) {
       const res = await app.inject({
         method: 'GET',
-        url: `/api/annotations/${videoId}`,
+        url: `/api/layers/videos/${videoId}/annotations`,
         cookies: { session_token: A.sessionToken },
       })
       expect(res.statusCode).toBe(200)

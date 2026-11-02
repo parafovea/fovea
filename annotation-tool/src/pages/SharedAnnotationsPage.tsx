@@ -27,6 +27,7 @@ import {
   TableCell,
 } from '@/components/ui/table'
 import { useReceivedShares, useSentShares, useForkShare, useRevokeShare } from '@store/queries/useSharing'
+import { useTourAnchor } from '@/tours/engine/anchorRegistry'
 
 const RESOURCE_TYPE_LABELS: Record<string, string> = {
   annotation: 'Annotation',
@@ -78,6 +79,7 @@ export default function SharedAnnotationsPage(): JSX.Element {
   const { data: sent = [], isLoading: sentLoading, error: sentError } = useSentShares()
   const forkShare = useForkShare()
   const revokeShare = useRevokeShare()
+  const pageAnchor = useTourAnchor('shared-annotations-page')
 
   const [filter, setFilter] = useState<string>('all')
 
@@ -101,7 +103,7 @@ export default function SharedAnnotationsPage(): JSX.Element {
   }
 
   return (
-    <div className="mx-auto max-w-screen-lg px-4" data-tour-id="shared-annotations-page">
+    <div className="mx-auto max-w-screen-lg px-4" ref={pageAnchor}>
       <div className="py-6">
         <h1 className="mb-4 text-2xl font-bold">Shared With Me</h1>
 

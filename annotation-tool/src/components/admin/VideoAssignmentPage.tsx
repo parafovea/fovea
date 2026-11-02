@@ -39,18 +39,22 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { useTourAnchor } from '@/tours/engine/anchorRegistry'
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 import { ConfirmDialog } from '../shared/ConfirmDialog'
 
 interface AssignmentRule {
   id: string
   name: string
-  target: string
-  conditions: string
-  active: boolean
+  targetType: 'user' | 'project' | 'group'
+  targetId: string
+  conditions: Array<{ field: string; operator: string; value: string }>
+  isActive: boolean
   createdAt: string
 }
 
 interface RuleFormData {
+  targetType: 'user' | 'project' | 'group'
   name: string
   target: string
   conditions: string
@@ -59,8 +63,8 @@ interface RuleFormData {
 
 interface EvaluationResult {
   ruleId: string
-  matchedVideos: number
-  targetUsers: number
+  matchingVideoCount: number
+  matchingVideoIds: string[]
 }
 
 const assignmentKeys = {
@@ -87,6 +91,7 @@ async function fetchRules(): Promise<AssignmentRule[]> {
  * Provides three sections: manual assignment, assignment rules CRUD, and bulk operations.
  */
 export function VideoAssignmentPage(): JSX.Element {
+  const pageAnchor = useTourAnchor('project-video-assignment')
   const queryClient = useQueryClient()
   const { data: rules = [], isLoading, error } = useQuery({
     queryKey: assignmentKeys.ruleList(),
@@ -105,6 +110,7 @@ export function VideoAssignmentPage(): JSX.Element {
   const [ruleFormData, setRuleFormData] = useState<RuleFormData>({
     name: '',
     target: '',
+    targetType: 'project',
     conditions: '',
     active: true,
   })
@@ -120,11 +126,11 @@ export function VideoAssignmentPage(): JSX.Element {
 
   const manualAssign = useMutation({
     mutationFn: async ({ videoIds, target }: { videoIds: string[]; target: string }) => {
-      const response = await fetch('/api/admin/video-assignments', {
+      const response = await fetch('/api/admin/video-assignments/bulk', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ videoIds, target }),
+        body: JSON.stringify({ videoIds, projectId: target }),
       })
       if (!response.ok) {
         const err = await response.json()
@@ -133,7 +139,7 @@ export function VideoAssignmentPage(): JSX.Element {
       return response.json()
     },
     onSuccess: (data) => {
-      setAssignResult(`Assigned ${data.count ?? 0} video(s) successfully.`)
+      setAssignResult(`Assigned ${data.created ?? 0} video(s) successfully.`)
       setVideoIds('')
       setAssignTarget('')
     },
@@ -148,7 +154,7 @@ export function VideoAssignmentPage(): JSX.Element {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify(data),
+        body: JSON.stringify({ name: data.name, targetType: data.targetType, targetId: data.target, conditions: JSON.parse(data.conditions), isActive: data.active }),
       })
       if (!response.ok) {
         const err = await response.json()
@@ -168,7 +174,7 @@ export function VideoAssignmentPage(): JSX.Element {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify(data),
+        body: JSON.stringify({ name: data.name, targetType: data.targetType, targetId: data.target, conditions: JSON.parse(data.conditions), isActive: data.active }),
       })
       if (!response.ok) {
         const err = await response.json()
@@ -239,7 +245,7 @@ export function VideoAssignmentPage(): JSX.Element {
 
   const handleOpenCreateRule = () => {
     setEditingRule(null)
-    setRuleFormData({ name: '', target: '', conditions: '', active: true })
+    setRuleFormData({ name: '', target: '', targetType: 'project', conditions: '', active: true })
     setRuleDialogOpen(true)
   }
 
@@ -247,9 +253,10 @@ export function VideoAssignmentPage(): JSX.Element {
     setEditingRule(rule)
     setRuleFormData({
       name: rule.name,
-      target: rule.target,
-      conditions: rule.conditions,
-      active: rule.active,
+      target: rule.targetId,
+      targetType: rule.targetType,
+      conditions: JSON.stringify(rule.conditions, null, 2),
+      active: rule.isActive,
     })
     setRuleDialogOpen(true)
   }
@@ -257,7 +264,7 @@ export function VideoAssignmentPage(): JSX.Element {
   const handleCloseRuleDialog = () => {
     setRuleDialogOpen(false)
     setEditingRule(null)
-    setRuleFormData({ name: '', target: '', conditions: '', active: true })
+    setRuleFormData({ name: '', target: '', targetType: 'project', conditions: '', active: true })
   }
 
   const handleSubmitRule = () => {
@@ -285,7 +292,7 @@ export function VideoAssignmentPage(): JSX.Element {
 
   if (isLoading) {
     return (
-      <div className="flex justify-center p-8" data-tour-id="project-video-assignment">
+      <div className="flex justify-center p-8" ref={pageAnchor}>
         <Spinner />
       </div>
     )
@@ -293,7 +300,7 @@ export function VideoAssignmentPage(): JSX.Element {
 
   if (error) {
     return (
-      <div className="p-6" data-tour-id="project-video-assignment">
+      <div className="p-6" ref={pageAnchor}>
         <Alert variant="destructive">
           <AlertDescription>
             Failed to load assignment rules: {error instanceof Error ? error.message : 'Unknown error'}
@@ -304,14 +311,14 @@ export function VideoAssignmentPage(): JSX.Element {
   }
 
   return (
-    <div className="flex flex-col gap-8 p-6" data-tour-id="project-video-assignment">
+    <div className="flex flex-col gap-8 p-6" ref={pageAnchor}>
       {/* Section 1: Manual Assignment */}
       <div className="rounded-lg border bg-card p-6">
         <h3 className="text-lg font-semibold mb-1">
           Manual Assignment
         </h3>
         <p className="text-sm text-muted-foreground mb-4">
-          Assign specific videos to a project or user by ID.
+          Assign specific videos to a project by ID.
         </p>
         <div className="flex gap-4 items-start">
           <div className="flex-grow space-y-2">
@@ -325,7 +332,7 @@ export function VideoAssignmentPage(): JSX.Element {
             <p className="text-sm text-muted-foreground">Enter one or more video UUIDs separated by commas</p>
           </div>
           <div className="min-w-[260px] space-y-2">
-            <Label htmlFor="assign-target">Target (Project/User ID)</Label>
+            <Label htmlFor="assign-target">Target Project ID</Label>
             <Input
               id="assign-target"
               value={assignTarget}
@@ -383,16 +390,16 @@ export function VideoAssignmentPage(): JSX.Element {
                 <TableRow key={rule.id}>
                   <TableCell>{rule.name}</TableCell>
                   <TableCell>
-                    <Badge variant="outline">{rule.target}</Badge>
+                    <Badge variant="outline">{rule.targetType}: {rule.targetId}</Badge>
                   </TableCell>
                   <TableCell>
                     <span className="font-mono text-xs max-w-[300px] overflow-hidden text-ellipsis whitespace-nowrap block">
-                      {rule.conditions}
+                      {JSON.stringify(rule.conditions)}
                     </span>
                   </TableCell>
                   <TableCell>
-                    <Badge variant={rule.active ? 'secondary' : 'outline'}>
-                      {rule.active ? 'Active' : 'Inactive'}
+                    <Badge variant={rule.isActive ? 'secondary' : 'outline'}>
+                      {rule.isActive ? 'Active' : 'Inactive'}
                     </Badge>
                   </TableCell>
                   <TableCell>{formatDate(rule.createdAt)}</TableCell>
@@ -427,7 +434,7 @@ export function VideoAssignmentPage(): JSX.Element {
         {evaluationResult && (
           <Alert className="mt-4">
             <AlertDescription>
-              Evaluation result: {evaluationResult.matchedVideos} video(s) matched, {evaluationResult.targetUsers} target user(s).
+              Evaluation result: {evaluationResult.matchingVideoCount} video(s) matched.
             </AlertDescription>
           </Alert>
         )}
@@ -476,13 +483,24 @@ export function VideoAssignmentPage(): JSX.Element {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="rule-target">Target *</Label>
+              <Label>Target type</Label>
+              <Select value={ruleFormData.targetType} onValueChange={value => {
+                if (value === 'project' || value === 'user' || value === 'group') setRuleFormData({ ...ruleFormData, targetType: value })
+              }}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="project">Project</SelectItem>
+                  <SelectItem value="user">User</SelectItem>
+                  <SelectItem value="group">Group</SelectItem>
+                </SelectContent>
+              </Select>
+              <Label htmlFor="rule-target">Target ID *</Label>
               <Input
                 id="rule-target"
                 value={ruleFormData.target}
                 onChange={(e) => setRuleFormData({ ...ruleFormData, target: e.target.value })}
               />
-              <p className="text-sm text-muted-foreground">Project or user ID to assign matched videos to</p>
+              <p className="text-sm text-muted-foreground">UUID of the selected target</p>
             </div>
             <div className="space-y-2">
               <Label htmlFor="rule-conditions">Conditions *</Label>
@@ -492,11 +510,12 @@ export function VideoAssignmentPage(): JSX.Element {
                 onChange={(e) => setRuleFormData({ ...ruleFormData, conditions: e.target.value })}
                 rows={3}
               />
-              <p className="text-sm text-muted-foreground">JSON condition expression for matching videos</p>
+              <p className="text-sm text-muted-foreground">JSON array of conditions, e.g. {'[{"field":"title","operator":"contains","value":"match"}]'}</p>
             </div>
             <div className="flex items-center gap-2">
               <Switch
                 id="rule-active"
+                disabled={!editingRule}
                 checked={ruleFormData.active}
                 onCheckedChange={(checked) => setRuleFormData({ ...ruleFormData, active: checked })}
               />

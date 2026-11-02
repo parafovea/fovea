@@ -20,13 +20,16 @@ import { test, expect, type Page } from '@playwright/test'
 const SPOTLIGHT_SELECTOR = '[data-fovea-tour-spotlight]'
 const STEP_CARD_SELECTOR = '[data-fovea-tour-step-card]'
 const RESUME_PILL_SELECTOR = '[data-fovea-tour-resume-pill]'
-const PAUSE_BUTTON_SELECTOR = '[data-fovea-tour-pause]'
 const CATALOGUE_GRID_TEST_ID = 'tour-catalogue-grid'
 const CATALOGUE_PATH = '/'
 
 async function readStepIndex(page: Page): Promise<number | null> {
   return page.evaluate(() => {
-    const span = document.querySelector('[aria-label^="Step "]') as HTMLElement | null
+    // Scope to the tour card: the video player's frame-step buttons also carry
+    // "Step …" aria-labels.
+    const span = document.querySelector(
+      '[data-fovea-tour-step-card] [aria-label^="Step "]',
+    ) as HTMLElement | null
     const m = (span?.getAttribute('aria-label') ?? '').match(/Step (\d+) of (\d+)/)
     return m ? parseInt(m[1]!, 10) : null
   })
@@ -67,9 +70,9 @@ test.describe('Every-feature live walkthrough', () => {
     // redirect bounce back to /. A regression of the axios
     // interceptor session-expiry logic could land the visitor
     // on /login?redirect=/login or loop the redirect.
-    await expect(
-      page.getByRole('heading', { name: /sign in|log in/i }),
-    ).toBeVisible({ timeout: 5_000 })
+    await expect(page.getByRole('textbox', { name: 'Username' })).toBeVisible()
+    await expect(page.getByLabel('Password', { exact: true })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Login', exact: true })).toBeVisible()
   })
 
   test('catalogue: all twelve tour tiles render with Start CTAs', async ({
@@ -146,7 +149,7 @@ test.describe('Every-feature live walkthrough', () => {
     const paused = await readStepIndex(page)
     expect(paused, 'must have advanced at least one step before pause').toBeGreaterThan(1)
 
-    await page.locator(PAUSE_BUTTON_SELECTOR).click()
+    await page.getByRole('button', { name: 'Pause tour', exact: true }).click()
     await expect(page.locator(STEP_CARD_SELECTOR)).toHaveCount(0, {
       timeout: 5_000,
     })
@@ -171,7 +174,7 @@ test.describe('Every-feature live walkthrough', () => {
     await page.keyboard.press('ArrowRight')
     const before = await readStepIndex(page)
     expect(before).not.toBeNull()
-    await page.locator(PAUSE_BUTTON_SELECTOR).click()
+    await page.getByRole('button', { name: 'Pause tour', exact: true }).click()
     await expect(page.locator(RESUME_PILL_SELECTOR)).toBeVisible({
       timeout: 5_000,
     })
@@ -216,12 +219,11 @@ test.describe('Every-feature live walkthrough', () => {
     page,
   }) => {
     await startTourFromCatalogue(page, 'first-annotation')
-    // Advance to step 2 (anchor: video-browser-card-first) — the
-    // first step where the anchor is a SPECIFIC element rather than
-    // the whole-app shell, so the spotlight outline has a tight
-    // rect we can compare against the anchor's bounding rect.
+    // The player scrubber at step 3 is small enough to receive an outlined
+    // spotlight; the preceding workspace anchors use a full-page backdrop.
     await page.keyboard.press('ArrowRight')
-    await page.waitForTimeout(500)
+    await page.keyboard.press('ArrowRight')
+    await expect(page.locator('[data-fovea-tour-spotlight] rect[stroke-dasharray]')).toBeVisible()
     const result = await page.evaluate(() => {
       const svg = document.querySelector(
         '[data-fovea-tour-spotlight]',
@@ -236,7 +238,7 @@ test.describe('Every-feature live walkthrough', () => {
       const ow = Number(outline.getAttribute('width') ?? '0')
       const oh = Number(outline.getAttribute('height') ?? '0')
       const anchor = document.querySelector(
-        '[data-tour-id="video-browser-card-first"]',
+        '[data-tour-anchor="video-player-scrubber"]',
       ) as HTMLElement | null
       if (!anchor) return { reason: 'no-anchor' }
       const r = anchor.getBoundingClientRect()

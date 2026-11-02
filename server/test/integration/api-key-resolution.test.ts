@@ -23,9 +23,7 @@ describe('API Key Resolution Integration', () => {
     // Clean database
     await prisma.apiKey.deleteMany()
     await prisma.session.deleteMany()
-    await prisma.annotation.deleteMany()
     await prisma.videoSummary.deleteMany()
-    await prisma.ontology.deleteMany()
     await prisma.persona.deleteMany()
     await prisma.user.deleteMany()
 

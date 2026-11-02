@@ -178,7 +178,7 @@ class ExtractedClaim:
     char_start: int | None = None
     char_end: int | None = None
     claim_type: str | None = None
-    subclaims: list["ExtractedClaim"] = field(default_factory=list)
+    subclaims: list[ExtractedClaim] = field(default_factory=list)
 
     @property
     def has_subclaims(self) -> bool:

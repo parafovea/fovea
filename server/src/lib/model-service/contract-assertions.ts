@@ -233,6 +233,34 @@ interface ClaimExtractionWireRequest {
   min_confidence: number
 }
 
+/** Snake_case request body the server POSTs to `/api/tokenize`. `language` is
+ * an optional override that skips language identification. */
+interface TokenizeWireRequest {
+  text: string
+  language: string | null
+}
+
+/**
+ * Snake_case tokenize response the server reads before camelcasing. Byte
+ * offsets are authoritative UTF-8; character offsets are UTF-16 code units.
+ * Only the fields the server consumes are asserted required (`tokens` and their
+ * offsets, plus `language`); the remaining metadata is carried for parity.
+ */
+interface TokenizeWireResponse {
+  tokens: Array<{
+    token_index: number
+    text: string
+    byte_start: number
+    byte_end: number
+    char_start: number
+    char_end: number
+  }>
+  language: string
+  language_confidence: number
+  tokenization_kind: string
+  model_used: string
+}
+
 /* -------------------------------------------------------------------------- */
 /* Response assertions: generated producer type satisfies the server's        */
 /* consumer expectation.                                                      */
@@ -256,6 +284,10 @@ const _synthesisResponse = assertCompatible<
 
 const _summarizeResponse = assertCompatible<
   AssertSatisfies<Schemas['SummarizeResponse'], ModelSummarizeResponse>
+>()
+
+const _tokenizeResponse = assertCompatible<
+  AssertSatisfies<Schemas['TokenizeResponse'], TokenizeWireResponse>
 >()
 
 /* -------------------------------------------------------------------------- */
@@ -284,6 +316,10 @@ const _summarizeRequest = assertCompatible<
   AssertSatisfies<ModelSummarizeRequest, Schemas['SummarizeRequest']>
 >()
 
+const _tokenizeRequest = assertCompatible<
+  AssertSatisfies<TokenizeWireRequest, Schemas['TokenizeRequest']>
+>()
+
 /* The bindings above exist only to force the compiler to evaluate each
  * assertion. Re-export them as a tuple so `noUnusedLocals` does not flag them
  * and so importers can `import './contract-assertions.js'` for the side-effect
@@ -294,9 +330,11 @@ export const modelServiceContractAssertions = [
   _claimExtractionResponse,
   _synthesisResponse,
   _summarizeResponse,
+  _tokenizeResponse,
   _detectionRequest,
   _ontologyAugmentRequest,
   _claimExtractionRequest,
   _synthesisRequest,
   _summarizeRequest,
+  _tokenizeRequest,
 ] as const

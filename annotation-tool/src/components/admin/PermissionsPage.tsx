@@ -17,6 +17,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { useTourAnchor } from '@/tours/engine/anchorRegistry'
 
 interface RolePermission {
   role: string
@@ -46,7 +47,16 @@ async function fetchPermissions(): Promise<PermissionMatrix> {
     const error = await response.json()
     throw new Error(error.message || 'Failed to fetch permissions')
   }
-  return response.json()
+  const rows: Array<{ scope: string; role: string; resourceType: string; action: string; ownOnly: boolean }> = await response.json()
+  const permissions: RolePermission[] = []
+  for (const row of rows) {
+    const role = `${row.scope}: ${row.role}`
+    let permission = permissions.find(p => p.role === role && p.resource === row.resourceType)
+    if (!permission) { permission = { role, resource: row.resourceType, actions: [] }; permissions.push(permission) }
+    permission.actions.push(`${row.action}${row.ownOnly ? ' (own)' : ''}`)
+  }
+  return { roles: [...new Set(permissions.map(p => p.role))],
+    resources: [...new Set(permissions.map(p => p.resource))], permissions }
 }
 
 /**
@@ -90,6 +100,7 @@ function actionVariant(action: string): 'default' | 'secondary' | 'destructive' 
  * Currently read-only; editing support can be added later.
  */
 export function PermissionsPage(): JSX.Element {
+  const pageAnchor = useTourAnchor('permissions-page')
   const { data, isLoading, error } = useQuery({
     queryKey: permissionKeys.matrix(),
     queryFn: fetchPermissions,
@@ -98,7 +109,7 @@ export function PermissionsPage(): JSX.Element {
 
   if (isLoading) {
     return (
-      <div className="flex justify-center p-8" data-tour-id="permissions-page">
+      <div className="flex justify-center p-8" ref={pageAnchor}>
         <Spinner />
       </div>
     )
@@ -106,7 +117,7 @@ export function PermissionsPage(): JSX.Element {
 
   if (error) {
     return (
-      <div className="p-6" data-tour-id="permissions-page">
+      <div className="p-6" ref={pageAnchor}>
         <Alert variant="destructive">
           <AlertDescription>
             Failed to load permissions: {error instanceof Error ? error.message : 'Unknown error'}
@@ -118,7 +129,7 @@ export function PermissionsPage(): JSX.Element {
 
   if (!data || data.roles.length === 0) {
     return (
-      <div className="p-6" data-tour-id="permissions-page">
+      <div className="p-6" ref={pageAnchor}>
         <Alert>
           <AlertDescription>No permission data available.</AlertDescription>
         </Alert>
@@ -127,7 +138,7 @@ export function PermissionsPage(): JSX.Element {
   }
 
   return (
-    <div className="p-6" data-tour-id="permissions-page">
+    <div className="p-6" ref={pageAnchor}>
       <div className="mb-6">
         <p className="text-sm text-muted-foreground">
           Read-only view of the role-permission matrix. Each cell shows the actions a role can perform on a resource type.

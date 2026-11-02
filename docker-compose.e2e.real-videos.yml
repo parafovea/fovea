@@ -1,0 +1,21 @@
+# E2E override: serve the real H.264 MP4 corpus (<repo>/videos) instead of
+# the royalty-free webm test fixtures, so the real-video-corpus tour
+# walkthroughs under test/e2e/regression/tours/*.spec.ts can navigate to
+# /annotate/<md5(filename)[0:16]> for the MP4 clips their content bundle
+# pins. Layer on top of docker-compose.e2e.yml:
+#
+#   docker compose -f docker-compose.e2e.yml -f docker-compose.e2e.real-videos.yml up -d --build
+#
+# The backend's auto-sync (NODE_ENV=test) then derives the md5 ids from the
+# MP4s and GET /api/videos lists .mp4 files. These tours also require a
+# H.264-capable browser (Playwright channel: 'chrome').
+name: fovea-e2e
+
+services:
+  backend:
+    volumes:
+      - ./videos:/test-videos:rw
+
+  mock-model-service:
+    volumes:
+      - ./videos:/test-videos:rw

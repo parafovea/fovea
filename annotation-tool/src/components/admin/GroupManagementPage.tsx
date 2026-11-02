@@ -5,7 +5,7 @@
  * @module
  */
 
-import { useState } from 'react'
+import { Fragment, useState } from 'react'
 import {
   Plus,
   Pencil,
@@ -44,6 +44,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { useUsers } from '@store/queries/admin/useUsers'
+import { useTourAnchor } from '@/tours/engine/anchorRegistry'
 import { ConfirmDialog } from '../shared/ConfirmDialog'
 
 interface GroupMember {
@@ -84,7 +85,9 @@ async function fetchGroups(): Promise<Group[]> {
     const error = await response.json()
     throw new Error(error.message || 'Failed to fetch groups')
   }
-  return response.json()
+  const groups: Array<Omit<Group, 'members'> & { members: Array<{ userId: string; role: string; user: { username: string; displayName: string } }> }> = await response.json()
+  return groups.map(group => ({ ...group, createdByUsername: group.createdBy,
+    members: group.members.map(member => ({ ...member, ...member.user })) }))
 }
 
 /**
@@ -93,6 +96,7 @@ async function fetchGroups(): Promise<Group[]> {
  * as well as managing group membership.
  */
 export function GroupManagementPage(): JSX.Element {
+  const pageAnchor = useTourAnchor('group-management-page')
   const queryClient = useQueryClient()
   const { data: groups = [], isLoading, error } = useQuery({
     queryKey: groupKeys.list(),
@@ -112,7 +116,7 @@ export function GroupManagementPage(): JSX.Element {
   const [addMemberOpen, setAddMemberOpen] = useState(false)
   const [addMemberGroupId, setAddMemberGroupId] = useState<string | null>(null)
   const [newMemberUserId, setNewMemberUserId] = useState('')
-  const [newMemberRole, setNewMemberRole] = useState('member')
+  const [newMemberRole, setNewMemberRole] = useState('group_member')
 
   const createGroup = useMutation({
     mutationFn: async (data: GroupFormData) => {
@@ -249,7 +253,7 @@ export function GroupManagementPage(): JSX.Element {
   }
 
   return (
-    <div className="p-6" data-tour-id="group-management-page">
+    <div className="p-6" ref={pageAnchor}>
       <div className="flex gap-4 mb-6 justify-end">
         <Button onClick={handleOpenCreate}>
           <Plus className="mr-2 h-4 w-4" />
@@ -278,8 +282,8 @@ export function GroupManagementPage(): JSX.Element {
             </TableRow>
           ) : (
             groups.map((group) => (
-              <>
-                <TableRow key={group.id}>
+              <Fragment key={group.id}>
+                <TableRow>
                   <TableCell>
                     <Button
                       variant="ghost"
@@ -343,7 +347,7 @@ export function GroupManagementPage(): JSX.Element {
                                   <TableCell>{member.username}</TableCell>
                                   <TableCell>{member.displayName}</TableCell>
                                   <TableCell>
-                                    <Badge variant={member.role === 'admin' ? 'default' : 'secondary'}>
+                                    <Badge variant={member.role === 'group_admin' ? 'default' : 'secondary'}>
                                       {member.role}
                                     </Badge>
                                   </TableCell>
@@ -356,7 +360,7 @@ export function GroupManagementPage(): JSX.Element {
                     </TableCell>
                   </TableRow>
                 )}
-              </>
+              </Fragment>
             ))
           )}
         </TableBody>
@@ -439,8 +443,8 @@ export function GroupManagementPage(): JSX.Element {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="member">Member</SelectItem>
-                  <SelectItem value="admin">Admin</SelectItem>
+                  <SelectItem value="group_member">Member</SelectItem>
+                  <SelectItem value="group_admin">Admin</SelectItem>
                 </SelectContent>
               </Select>
             </div>

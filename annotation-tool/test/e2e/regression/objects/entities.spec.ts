@@ -144,8 +144,19 @@ test.describe('Entity Management', () => {
   }) => {
     await objectWorkspace.navigateTo()
     await objectWorkspace.createEntity('Test Building', 'A test building')
-    await objectWorkspace.linkEntityToType('Test Building', testEntityType.name)
+    await objectWorkspace.linkEntityToType('Test Building', testEntityType.name, testPersona.name)
     await objectWorkspace.expectEntityExists('Test Building')
+    await expect.poll(async () => {
+      const response = await page.request.get('/api/world')
+      expect(response.ok()).toBe(true)
+      return (await response.json()).entities
+    }).toContainEqual(expect.objectContaining({
+      name: 'Test Building',
+      typeAssignments: expect.arrayContaining([expect.objectContaining({
+        personaId: testPersona.id,
+        entityTypeId: testEntityType.id,
+      })]),
+    }))
   })
 
   test('displays entity count in tab', async ({

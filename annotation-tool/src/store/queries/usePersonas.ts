@@ -403,45 +403,6 @@ export function usePersonaDeletionPreview(personaId: string | null | undefined, 
 }
 
 // ============================================================
-// Ontology Mutations
-// ============================================================
-
-/**
- * Hook to save a persona's entire ontology.
- */
-export function useSavePersonaOntology() {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: async ({ personaId, ontology }: { personaId: string; ontology: PersonaOntology }) => {
-      const response = await fetch(`/api/personas/${personaId}/ontology`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          entities: ontology.entities,
-          roles: ontology.roles,
-          events: ontology.events,
-          relationTypes: ontology.relationTypes,
-          relations: ontology.relations,
-        }),
-      })
-      if (!response.ok) {
-        const error = await response.json()
-        throw new Error(error.error || 'Failed to save persona ontology')
-      }
-      const savedOntology = await response.json()
-      return { personaId, ontology: { personaId, ...savedOntology } as PersonaOntology }
-    },
-    onSuccess: ({ personaId, ontology }) => {
-      queryClient.setQueryData(personaKeys.ontology(personaId), ontology)
-      // Invalidate all-ontologies query so header Save button gets fresh data
-      queryClient.invalidateQueries({ queryKey: personaKeys.allOntologies() })
-    },
-  })
-}
-
-// ============================================================
 // Entity Type Mutations
 // ============================================================
 

@@ -44,6 +44,7 @@ import { TypeObjectBadge } from '../shared/TypeObjectToggle'
 import WikidataImportFlow from '../shared/WikidataImportFlow'
 import MapLocationPicker from './MapLocationPicker'
 import { useUnsavedChangesPrompt } from '../../hooks/data'
+import { useTourAnchor } from '@/tours/engine/anchorRegistry'
 
 interface LocationEditorProps {
   open: boolean
@@ -71,6 +72,8 @@ export default function LocationEditor({ open, onClose, location }: LocationEdit
 
   const { mutateAsync: addEntity } = useAddEntity()
   const { mutateAsync: updateEntity } = useUpdateEntity()
+  const mapPickerRef = useTourAnchor('location-map-picker')
+  const nameInputRef = useTourAnchor('location-name-input')
 
   const [importMode, setImportMode] = useState<'manual' | 'wikidata'>('manual')
   const [name, setName] = useState('')
@@ -341,7 +344,7 @@ export default function LocationEditor({ open, onClose, location }: LocationEdit
   return (
     <>
     <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) handleCancel() }}>
-      <DialogContent data-tour-id="location-map-picker" className="sm:max-w-3xl max-h-[90vh] !grid-rows-[auto_1fr_auto] !p-0 !gap-0">
+      <DialogContent ref={mapPickerRef} className="sm:max-w-3xl max-h-[90vh] !grid-rows-[auto_1fr_auto] !p-0 !gap-0">
         <DialogHeader className="px-6 pt-6 pb-4 border-b">
           <DialogTitle className="flex items-center gap-2">
             <MapPin className="size-5 text-secondary" />
@@ -421,8 +424,8 @@ export default function LocationEditor({ open, onClose, location }: LocationEdit
           <div className="space-y-1">
             <Label htmlFor="location-name">Location Name *</Label>
             <Input
+              ref={nameInputRef}
               id="location-name"
-              data-tour-id="location-name-input"
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Location name"

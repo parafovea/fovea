@@ -35,6 +35,7 @@
  *   POST   /summarize
  *   POST   /extract-claims
  *   POST   /synthesize-summary
+ *   POST   /tokenize
  *   POST   /admin/reconfigure
  *   POST   /tracking/track
  *   GET    /health
@@ -290,6 +291,46 @@ function synthesizeSummaryResponse(body) {
 }
 
 // ---------------------------------------------------------------------------
+// /api/tokenize — TokenizeResponse.
+//
+// The backend POSTs { text, language } and reads token spans back to build the
+// canonical tokenization. Byte offsets are authoritative UTF-8; character
+// offsets are UTF-16 code units. JavaScript string indices and RegExp `.index`
+// are already UTF-16 code units, so `text.slice(0, i).length` yields the char
+// offset directly and `Buffer.byteLength(text.slice(0, i), 'utf8')` the byte
+// offset — both correct for emoji/flags/astral text. A supplied `language`
+// override is echoed back (langid skipped); otherwise the mock reports 'en'.
+// ---------------------------------------------------------------------------
+
+function tokenizeResponse(body) {
+  const text = body && typeof body.text === 'string' ? body.text : ''
+  const language = body && typeof body.language === 'string' && body.language ? body.language : 'en'
+  const tokens = []
+  const re = /\S+/gu
+  let match
+  let index = 0
+  while ((match = re.exec(text)) !== null) {
+    const charStart = match.index
+    const charEnd = match.index + match[0].length
+    tokens.push({
+      token_index: index++,
+      text: match[0],
+      byte_start: Buffer.byteLength(text.slice(0, charStart), 'utf8'),
+      byte_end: Buffer.byteLength(text.slice(0, charEnd), 'utf8'),
+      char_start: charStart,
+      char_end: charEnd,
+    })
+  }
+  return {
+    tokens,
+    language,
+    language_confidence: 1.0,
+    tokenization_kind: 'custom',
+    model_used: `spacy/blank:${language}`,
+  }
+}
+
+// ---------------------------------------------------------------------------
 // /api/tracking/track — TrackingResponse (tracking.py:90)
 // ---------------------------------------------------------------------------
 
@@ -351,6 +392,7 @@ const server = http.createServer(async (req, res) => {
     if (pathname === '/api/summarize') return send(res, 200, summarizeResponse(body))
     if (pathname === '/api/extract-claims') return send(res, 200, extractClaimsResponse(body))
     if (pathname === '/api/synthesize-summary') return send(res, 200, synthesizeSummaryResponse(body))
+    if (pathname === '/api/tokenize') return send(res, 200, tokenizeResponse(body))
     if (pathname === '/api/admin/reconfigure') return send(res, 200, { status: 'reconfigured' })
     if (pathname === '/api/tracking/track') return send(res, 200, trackingResponse(body))
     return send(res, 404, { detail: `Not found: ${method} ${pathname}` })

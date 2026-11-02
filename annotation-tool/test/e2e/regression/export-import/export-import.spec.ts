@@ -1,248 +1,92 @@
 import { test, expect } from '../../fixtures/test-context.js'
+import { openDataDialog, parseDataRecords, readExportDownload, uploadJsonl } from '../../utils/data-dialogs.js'
 
-/**
- * E2E visual regression tests for export/import dialogs.
- * Uses Playwright's toHaveScreenshot() to detect unintended visual changes.
- * Tests cover export dialog, import dialog, and progress indicators.
- */
-
-test.describe('Export/Import Visual Regression', () => {
-  test.describe('Export Dialog', () => {
-    test('export dialog renders correctly', async ({ page }) => {
-      await page.goto('/')
-
-      // Open export dialog via menu
-      const menuButton = page.getByRole('button', { name: /menu|settings/i })
-      if (await menuButton.isVisible()) {
-        await menuButton.click()
-      }
-
-      const exportButton = page.getByRole('button', { name: /export/i }).or(
-        page.getByRole('menuitem', { name: /export/i })
-      )
-
-      if (await exportButton.isVisible()) {
-        await exportButton.click()
-
-        const dialog = page.getByRole('dialog', { name: /export/i })
-        if (await dialog.isVisible({ timeout: 2000 })) {
-          await expect(dialog).toHaveScreenshot('export-dialog.png', {
-            threshold: 0.2,
-            maxDiffPixels: 100
-          })
-        }
-      }
-    })
-
-    test('export stats display correctly', async ({ page, testPersona, testUser, db }) => {
-      // Create some data so stats show non-zero values
-      await db.createEntityType(testPersona.id, {
-        name: 'Visual Test Entity',
-        definition: 'Entity for visual testing'
-      })
-
-      await page.goto('/')
-
-      // Open export dialog
-      const menuButton = page.getByRole('button', { name: /menu|settings/i })
-      if (await menuButton.isVisible()) {
-        await menuButton.click()
-      }
-
-      const exportButton = page.getByRole('button', { name: /export/i }).or(
-        page.getByRole('menuitem', { name: /export/i })
-      )
-
-      if (await exportButton.isVisible()) {
-        await exportButton.click()
-
-        const dialog = page.getByRole('dialog', { name: /export/i })
-        if (await dialog.isVisible({ timeout: 2000 })) {
-          // Wait for stats to load
-          await page.waitForTimeout(500)
-
-          await expect(dialog).toHaveScreenshot('export-dialog-with-stats.png', {
-            threshold: 0.2,
-            maxDiffPixels: 150
-          })
-        }
-      }
-    })
-
-    test('export type selector renders correctly', async ({ page }) => {
-      await page.goto('/')
-
-      // Open export dialog
-      const menuButton = page.getByRole('button', { name: /menu|settings/i })
-      if (await menuButton.isVisible()) {
-        await menuButton.click()
-      }
-
-      const exportButton = page.getByRole('button', { name: /export/i }).or(
-        page.getByRole('menuitem', { name: /export/i })
-      )
-
-      if (await exportButton.isVisible()) {
-        await exportButton.click()
-
-        const dialog = page.getByRole('dialog', { name: /export/i })
-        if (await dialog.isVisible({ timeout: 2000 })) {
-          // Look for type selector (personas, world, summaries, all)
-          const typeSelector = dialog.getByRole('radiogroup').or(
-            dialog.getByRole('combobox')
-          ).or(
-            dialog.locator('[data-testid="export-type-selector"]')
-          )
-
-          if (await typeSelector.isVisible()) {
-            await expect(typeSelector).toHaveScreenshot('export-type-selector.png', {
-              threshold: 0.2,
-              maxDiffPixels: 100
-            })
-          }
-        }
-      }
-    })
+/** Requires the data dialogs and checks their controls without platform-specific screenshots. */
+test.describe('Export/Import Dialog Regression', () => {
+  test('defaults to keyframe-only exports', async ({ page, testUser }) => {
+    void testUser
+    const dialog = await openDataDialog(page, 'Export')
+    await expect(dialog.getByText('Export keyframes only (recommended)', { exact: true })).toBeVisible()
+    const modes = dialog.locator('[data-slot="checkbox"]')
+    await expect(modes.nth(0)).toBeChecked()
+    await expect(modes.nth(1)).not.toBeChecked()
+    await dialog.getByRole('button', { name: 'Cancel', exact: true }).click()
+    await expect(dialog).toBeHidden()
   })
 
-  test.describe('Import Dialog', () => {
-    test('import dialog renders correctly', async ({ page }) => {
-      await page.goto('/')
-
-      // Open import dialog via menu
-      const menuButton = page.getByRole('button', { name: /menu|settings/i })
-      if (await menuButton.isVisible()) {
-        await menuButton.click()
-      }
-
-      const importButton = page.getByRole('button', { name: /import/i }).or(
-        page.getByRole('menuitem', { name: /import/i })
-      )
-
-      if (await importButton.isVisible()) {
-        await importButton.click()
-
-        const dialog = page.getByRole('dialog', { name: /import/i })
-        if (await dialog.isVisible({ timeout: 2000 })) {
-          await expect(dialog).toHaveScreenshot('import-dialog.png', {
-            threshold: 0.2,
-            maxDiffPixels: 100
-          })
-        }
-      }
-    })
-
-    test('import file dropzone renders correctly', async ({ page }) => {
-      await page.goto('/')
-
-      // Open import dialog
-      const menuButton = page.getByRole('button', { name: /menu|settings/i })
-      if (await menuButton.isVisible()) {
-        await menuButton.click()
-      }
-
-      const importButton = page.getByRole('button', { name: /import/i }).or(
-        page.getByRole('menuitem', { name: /import/i })
-      )
-
-      if (await importButton.isVisible()) {
-        await importButton.click()
-
-        const dialog = page.getByRole('dialog', { name: /import/i })
-        if (await dialog.isVisible({ timeout: 2000 })) {
-          // Look for dropzone area
-          const dropzone = dialog.locator('[data-testid="import-dropzone"]').or(
-            dialog.locator('.dropzone')
-          ).or(
-            dialog.getByText(/drag.*drop|drop.*file/i).locator('..')
-          )
-
-          if (await dropzone.isVisible()) {
-            await expect(dropzone).toHaveScreenshot('import-dropzone.png', {
-              threshold: 0.2,
-              maxDiffPixels: 100
-            })
-          }
-        }
-      }
-    })
-
-    test('import conflict options render correctly', async ({ page }) => {
-      await page.goto('/')
-
-      // Open import dialog
-      const menuButton = page.getByRole('button', { name: /menu|settings/i })
-      if (await menuButton.isVisible()) {
-        await menuButton.click()
-      }
-
-      const importButton = page.getByRole('button', { name: /import/i }).or(
-        page.getByRole('menuitem', { name: /import/i })
-      )
-
-      if (await importButton.isVisible()) {
-        await importButton.click()
-
-        const dialog = page.getByRole('dialog', { name: /import/i })
-        if (await dialog.isVisible({ timeout: 2000 })) {
-          // Look for conflict resolution options
-          const optionsSection = dialog.getByText(/conflict|options|settings/i).locator('..')
-
-          if (await optionsSection.isVisible()) {
-            await expect(optionsSection).toHaveScreenshot('import-conflict-options.png', {
-              threshold: 0.2,
-              maxDiffPixels: 100
-            })
-          }
-        }
-      }
-    })
+  test('warns when interpolated frames are selected', async ({ page, testUser }) => {
+    void testUser
+    const dialog = await openDataDialog(page, 'Export')
+    await dialog.locator('[data-slot="checkbox"]').nth(1).check()
+    await expect(dialog.getByRole('alert').filter({ hasText: 'File size can be 100x larger' })).toBeVisible()
+    await expect(dialog.locator('[data-slot="checkbox"]').nth(0)).not.toBeChecked()
   })
 
-  test.describe('Progress Indicators', () => {
-    test('export progress indicator renders correctly', async ({ page, testPersona, testUser, db }) => {
-      // Create data for export
-      await db.createEntityType(testPersona.id, {
-        name: 'Progress Test Entity',
-        definition: 'Entity for progress testing'
-      })
-
-      await page.goto('/')
-
-      // Open export dialog
-      const menuButton = page.getByRole('button', { name: /menu|settings/i })
-      if (await menuButton.isVisible()) {
-        await menuButton.click()
-      }
-
-      const exportButton = page.getByRole('button', { name: /export/i }).or(
-        page.getByRole('menuitem', { name: /export/i })
-      )
-
-      if (await exportButton.isVisible()) {
-        await exportButton.click()
-
-        const dialog = page.getByRole('dialog', { name: /export/i })
-        if (await dialog.isVisible({ timeout: 2000 })) {
-          // Start export
-          const confirmButton = dialog.getByRole('button', { name: /download|export|confirm/i })
-          if (await confirmButton.isVisible()) {
-            await confirmButton.click()
-
-            // Look for progress indicator
-            const progress = dialog.getByRole('progressbar').or(
-              dialog.locator('[data-testid="export-progress"]')
-            )
-
-            if (await progress.isVisible({ timeout: 1000 })) {
-              await expect(progress).toHaveScreenshot('export-progress.png', {
-                threshold: 0.3,
-                maxDiffPixels: 200
-              })
-            }
-          }
-        }
-      }
+  test('sends the selected annotation type to the statistics endpoint', async ({ page, testUser }) => {
+    void testUser
+    const dialog = await openDataDialog(page, 'Export')
+    const statsPromise = page.waitForResponse(response => {
+      const url = new URL(response.url())
+      return url.pathname === '/api/export/stats' && url.searchParams.get('annotationTypes') === 'type'
     })
+    await dialog.getByRole('button', { name: 'Type Annotations', exact: true }).click()
+    expect((await statsPromise).ok()).toBe(true)
+  })
+
+  test('requires a file before import', async ({ page, testUser }) => {
+    void testUser
+    const dialog = await openDataDialog(page, 'Import')
+    await expect(dialog.getByText('Drag and drop a .jsonl file here', { exact: true })).toBeVisible()
+    await expect(dialog.getByRole('button', { name: 'Import', exact: true })).toBeDisabled()
+    await expect(dialog.getByRole('heading', { name: 'Preview', exact: true })).toHaveCount(0)
+  })
+
+  test('rejects a file with the wrong extension', async ({ page, testUser }) => {
+    void testUser
+    const dialog = await openDataDialog(page, 'Import')
+    await dialog.locator('input[type="file"]').setInputFiles({
+      name: 'unsupported.txt', mimeType: 'text/plain', buffer: Buffer.from('{}'),
+    })
+    await expect(dialog.getByRole('alert').filter({ hasText: 'Only .jsonl files are accepted' })).toBeVisible()
+    await expect(dialog.getByRole('button', { name: 'Import', exact: true })).toBeDisabled()
+  })
+
+  test('shows the available duplicate-persona resolutions', async ({ page, testPersona }) => {
+    const response = await page.request.get(`/api/export?personaIds=${testPersona.id}`)
+    expect(response.ok()).toBe(true)
+    const personaRecord = parseDataRecords(await response.text()).find(record =>
+      record.type === 'persona' && record.data.id === testPersona.id)
+    expect(personaRecord).toBeDefined()
+    const dialog = await openDataDialog(page, 'Import')
+    await uploadJsonl(dialog, [personaRecord!])
+    await expect(dialog.getByRole('button', { name: 'Duplicate Personas (1)', exact: true })).toBeVisible()
+    for (const label of ['Skip (keep existing)', 'Replace with imported', 'Merge fields', 'Create as new copy']) {
+      await expect(dialog.getByText(label, { exact: true })).toBeVisible()
+    }
+    await expect(dialog.getByRole('radiogroup').first().getByRole('radio').first()).toBeChecked()
+  })
+
+  test('shows progress and prevents duplicate exports while the response is pending', async ({ page, testPersona }) => {
+    void testPersona
+    const dialog = await openDataDialog(page, 'Export')
+    let releaseResponse: () => void = () => {}
+    const responseGate = new Promise<void>(resolve => { releaseResponse = resolve })
+    await page.route(url => url.pathname === '/api/export', async route => {
+      const response = await route.fetch()
+      await responseGate
+      await route.fulfill({ response })
+    })
+    try {
+      const downloadPromise = page.waitForEvent('download')
+      await dialog.getByRole('button', { name: 'Export', exact: true }).click()
+      await expect(dialog.getByText('Exporting data...', { exact: true })).toBeVisible()
+      await expect(dialog.getByRole('button', { name: 'Exporting...', exact: true })).toBeDisabled()
+      await expect(dialog.getByRole('button', { name: 'Cancel', exact: true })).toBeDisabled()
+      releaseResponse()
+      await readExportDownload(await downloadPromise)
+      await expect(dialog).toBeHidden()
+    } finally {
+      releaseResponse()
+    }
   })
 })

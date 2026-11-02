@@ -7,26 +7,24 @@ import { TourCataloguePage } from '@/pages/TourCataloguePage'
 import { config } from '@/config'
 
 /**
- * On demo.fovea.video the SPA is built with VITE_DEMO_PUBLIC=1. The
- * QR-code visitor lands on a public tour catalogue (no auth, no
- * server round-trips, fully MSW-mocked via VITE_TOUR_DEMO=1) and only
- * crosses into the authenticated app via the explicit "Sign in" link.
+ * Public-demo builds show anonymous visitors a tour catalogue at the root.
+ * Tours use the authenticated workspace under /app; signed-in users use the
+ * workspace at either root route.
  *
- * Route components are imported eagerly (no React.lazy). An earlier
- * lazy-load split shrank the catalogue's first paint, but the
- * Suspense fallback for the workspace + ontology + admin chunks
- * also unmounted the data-tour-id anchors the tour engine polls
- * for, which made step 1 of every annotation-workspace-bound tour
- * race a fresh chunk download against the engine's waitForAnchor
- * window and intermittently strand visitors on the missing-anchor
- * banner. Eager imports keep the data-tour-ids in the DOM from
- * first paint; the perf cost of the larger initial download is
- * the right trade-off for the demo's reliability.
+ * Route components are imported eagerly (no React.lazy). A Suspense
+ * fallback for the workspace, ontology, and admin chunks unmounts the
+ * tour anchors the engine resolves a step against, so step 1 of every
+ * annotation-workspace-bound tour would race a fresh chunk download
+ * against the engine's bounded anchor wait and intermittently strand
+ * visitors on the missing-anchor banner. Eager imports keep those
+ * anchors mounted from first paint; the perf cost of the larger initial
+ * download is the right trade-off for the demo's reliability.
  */
 const DEMO_PUBLIC = config.deploymentMode.publicBooth
 import AnnotationWorkspace from '@components/annotation/AnnotationWorkspace'
 import OntologyWorkspace from './components/workspaces/OntologyWorkspace'
 import ObjectWorkspace from './components/workspaces/ObjectWorkspace'
+import { DocumentWorkspace } from './components/document'
 import Settings from './pages/Settings'
 import GroupsPage from './pages/GroupsPage'
 import GroupDetailPage from './pages/GroupDetailPage'
@@ -82,20 +80,8 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
     return <LoadingScreen />
   }
 
-  // VITE_DEMO_PUBLIC builds (demo.fovea.video) are public-by-design: the
-  // catalogue lives at `/`, and clicking any tour navigates the visitor
-  // to `/app/*` so the runner's anchors — sidebar, workspaces, video
-  // browser — resolve inside the real Layout. The visitor is never
-  // logged in, so a real auth check here would bounce every tour to
-  // /login the moment the catalogue dispatches the navigation, and the
-  // user would see the orange "Couldn't find this UI element" banner
-  // (the engine briefly rendered against /login before the redirect
-  // landed). Demo builds ship the MSW tour-demo worker (VITE_TOUR_DEMO=1)
-  // which stubs every model-service round-trip the tours actually
-  // exercise; data-shaped endpoints that the Layout idly hits without
-  // visible UI consequence (auth/me, personas, videos) simply 401 and
-  // the corresponding panes render their empty states — which is the
-  // expected booth experience.
+  // Public-demo visitors enter workspaces through the anonymous session
+  // established during bootstrap. The backend still enforces API permissions.
   if (DEMO_PUBLIC) {
     return <>{children}</>
   }
@@ -129,6 +115,8 @@ function App() {
   const ability = useAbilityStore(state => state.ability)
   const isAuthenticated = useAuthStore(state => state.isAuthenticated)
   const currentUser = useAuthStore(state => state.currentUser)
+  const showTourCatalogue = DEMO_PUBLIC &&
+    !(currentUser?.username && !currentUser.username.startsWith('demo-anonymous-'))
   useAbilities(isAuthenticated)
 
   // Fetch personas via TanStack Query - this triggers initial data loading
@@ -215,46 +203,13 @@ function App() {
           {/* Public routes */}
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
-          {/* Tour catalogue mounts at `/` ONLY for the public-demo
-              build AND ONLY while the visitor is an anonymous demo
-              session (username starts with 'demo-anonymous-'). A real
-              authenticated user — admin or otherwise, on demo OR on a
-              self-hosted Fovea — falls through to the protected routes
-              below where `/` renders the VideoBrowser exactly as on
-              stock builds. Without this gate the same Layout sidebar
-              link that opens the Video Browser on a self-hosted
-              instance bounces a logged-in user on demo.fovea.video
-              back to the tour catalogue, which is what the user
-              reported: 'When I log in (even as admin) ... If I try to
-              click any other workspace in the left panel, I am taken
-              to a blank screen.' DEMO_PUBLIC is a build-time flag, so
-              self-hosted production deployments (which do NOT set
-              VITE_DEMO_PUBLIC=1) never reach this branch and behave
-              exactly as before. */}
-          {/* Show the catalogue at `/` UNLESS the visitor is a real
-              authenticated non-anonymous user. The previous pair of
-              conditions ('demo-anonymous- prefix' OR '!isAuthenticated')
-              both failed during the race window after main.tsx
-              bootstraps an anonymous-session: useSession() flips
-              isAuthenticated=true the moment /api/auth/me resolves but
-              currentUser stays null for another tick, so neither
-              branch matched and the protected route mounted with the
-              VideoBrowser instead of the catalogue. Replace with the
-              inverse check — only HIDE the catalogue when the visitor
-              is definitively a real signed-in non-anon user — so
-              loading state, unauthenticated, AND anonymous-demo all
-              land on the catalogue. */}
-          {DEMO_PUBLIC && !(currentUser?.username && !currentUser.username.startsWith('demo-anonymous-')) && (
+          {/* Anonymous public-demo visitors use the catalogue at the root.
+              Omit the workspace index in this state: index routes rank above
+              a sibling path="/" route regardless of declaration order. */}
+          {showTourCatalogue && (
             <Route path="/" element={<TourCataloguePage />} />
           )}
 
-          {/* Protected routes mount at the top level on every build.
-              The tour catalogue route above (when active) is matched
-              FIRST by React Router because it appears earlier in the
-              <Routes> list, so an anonymous demo visitor sees the
-              catalogue and a real signed-in user sees the workspace —
-              no /app prefix, no per-build path divergence, no broken
-              sidebar links. */}
           <Route
             path="/"
             element={
@@ -263,7 +218,7 @@ function App() {
               </ProtectedRoute>
             }
           >
-            <Route index element={<VideoBrowser />} />
+            {!showTourCatalogue && <Route index element={<VideoBrowser />} />}
             <Route
               path="annotate/:videoId"
               element={
@@ -285,6 +240,22 @@ function App() {
               element={
                 <ErrorBoundary context={{ route: 'ObjectWorkspace' }}>
                   <ObjectWorkspace />
+                </ErrorBoundary>
+              }
+            />
+            <Route
+              path="documents"
+              element={
+                <ErrorBoundary context={{ route: 'DocumentWorkspace' }}>
+                  <DocumentWorkspace />
+                </ErrorBoundary>
+              }
+            />
+            <Route
+              path="documents/:documentId"
+              element={
+                <ErrorBoundary context={{ route: 'DocumentWorkspace' }}>
+                  <DocumentWorkspace />
                 </ErrorBoundary>
               }
             />
@@ -379,6 +350,22 @@ function App() {
               element={
                 <ErrorBoundary context={{ route: 'ObjectWorkspace' }}>
                   <ObjectWorkspace />
+                </ErrorBoundary>
+              }
+            />
+            <Route
+              path="documents"
+              element={
+                <ErrorBoundary context={{ route: 'DocumentWorkspace' }}>
+                  <DocumentWorkspace />
+                </ErrorBoundary>
+              }
+            />
+            <Route
+              path="documents/:documentId"
+              element={
+                <ErrorBoundary context={{ route: 'DocumentWorkspace' }}>
+                  <DocumentWorkspace />
                 </ErrorBoundary>
               }
             />

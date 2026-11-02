@@ -17,6 +17,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { buildApp } from '../src/app.js'
 import { prisma } from '../src/lib/prisma.js'
+import { readOntologyAggregate } from '../src/services/layers-bridge/ontology-bridge.js'
 
 const VALID_TOKEN = 'this-token-is-exactly-thirty-two-chars-plus-some'
 
@@ -192,11 +193,9 @@ describe('demo fixture seeder', () => {
     expect(personasAfter1[0].name).toBe('Happy Researcher')
     expect(personasAfter1[0].role).toBe('analyst')
 
-    const ontoAfter1 = await prisma.ontology.findUnique({
-      where: { personaId: personasAfter1[0].id },
-    })
-    expect(ontoAfter1).not.toBeNull()
-    const entityTypes1 = (ontoAfter1!.entityTypes as Array<{ name: string }>) ?? []
+    const ontoAfter1 = await readOntologyAggregate(prisma, personasAfter1[0].id)
+    expect(ontoAfter1.exists).toBe(true)
+    const entityTypes1 = ontoAfter1.aggregate.entityTypes as Array<{ name: string }>
     expect(entityTypes1).toHaveLength(1)
     expect(entityTypes1[0].name).toBe('Person')
 

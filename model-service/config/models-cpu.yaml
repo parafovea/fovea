@@ -561,6 +561,36 @@ models:
         speed: "real_time"
         description: "Silero VAD v5, CPU-native, lightweight speech detection"
 
+  # Text tokenization. py3langid identifies the language, then whitespace-
+  # delimited scripts tokenize with a per-language spaCy blank pipeline and
+  # the no-whitespace scripts (zh, ja, th) with Stanza. The option keys equal
+  # their engine names; the factory key is the TaskType `text_tokenization`.
+  text_tokenization:
+    selected: "spacy"
+    options:
+      spacy:
+        model_id: "spacy/blank:multi"
+        framework: "spacy"
+        architecture:
+          kind: "spacy-tokenizer"
+          languages: ["en", "ar", "es", "fr", "de", "pt", "it", "nl", "ru", "tr", "fa", "hi", "ko"]
+        vram_gb: 0
+        cpu_memory_gb: 0.5
+        cpu_compatible: true
+        speed: "real_time"
+        description: "spaCy blank tokenizers + py3langid, Stanza for zh/ja/th, xx fallback"
+      stanza:
+        model_id: "stanza:multi"
+        framework: "stanza"
+        architecture:
+          kind: "stanza-tokenizer"
+          languages: ["zh", "ja", "th"]
+        vram_gb: 0
+        cpu_memory_gb: 1
+        cpu_compatible: true
+        speed: "fast"
+        description: "Stanza tokenize pipelines for no-whitespace scripts, xx fallback otherwise"
+
 inference:
   max_memory_per_model: "auto"
   offload_threshold: 0.85

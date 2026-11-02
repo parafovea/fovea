@@ -4,10 +4,11 @@ Configures OTLP exporters for traces and metrics, with automatic instrumentation
 for FastAPI and Redis clients.
 """
 
-import asyncio
+from __future__ import annotations
+
 import functools
+import inspect
 import time
-from collections.abc import Callable, Generator, Mapping
 from contextlib import contextmanager
 from typing import TYPE_CHECKING, ParamSpec, TypeVar
 
@@ -22,9 +23,12 @@ from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 
+from src import __version__
 from src.infrastructure.config.settings import get_settings
 
 if TYPE_CHECKING:
+    from collections.abc import Callable, Generator, Mapping
+
     from fastapi import FastAPI
 
 
@@ -39,7 +43,7 @@ def configure_observability() -> None:
     resource = Resource.create(
         {
             "service.name": "fovea-model-service",
-            "service.version": "0.1.0",
+            "service.version": __version__,
         }
     )
 
@@ -57,7 +61,7 @@ def configure_observability() -> None:
     metrics.set_meter_provider(metric_provider)
 
 
-def instrument_app(app: "FastAPI") -> None:
+def instrument_app(app: FastAPI) -> None:
     """Instrument FastAPI application with OpenTelemetry tracing.
 
     Adds automatic tracing for HTTP requests and Redis operations.
@@ -85,7 +89,7 @@ model_inference_duration = meter.create_histogram(
 @contextmanager
 def record_inference(
     *, task: str, model_id: str, extra: Mapping[str, str] | None = None
-) -> Generator[None, None, None]:
+) -> Generator[None]:
     """Record a single inference call as a counter and duration histogram.
 
     Parameters
@@ -159,7 +163,7 @@ def instrument_method(
                     return "unknown"
             return str(current)
 
-        if asyncio.iscoroutinefunction(func):
+        if inspect.iscoroutinefunction(func):
 
             @functools.wraps(func)
             async def async_wrapper(*args: P.args, **kwargs: P.kwargs) -> R:

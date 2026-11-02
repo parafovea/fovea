@@ -136,6 +136,9 @@ const MODEL_SERVICE_TIMEOUT_DEFAULTS = {
   extractClaims: { env: 'MODEL_SERVICE_TIMEOUT_EXTRACT_CLAIMS_MS', ms: 300_000 },
   synthesize: { env: 'MODEL_SERVICE_TIMEOUT_SYNTHESIZE_MS', ms: 300_000 },
   transcribe: { env: 'MODEL_SERVICE_TIMEOUT_TRANSCRIBE_MS', ms: 300_000 },
+  tokenize: { env: 'MODEL_SERVICE_TIMEOUT_TOKENIZE_MS', ms: 60_000 },
+  layersImport: { env: 'MODEL_SERVICE_TIMEOUT_LAYERS_IMPORT_MS', ms: 300_000 },
+  layersExport: { env: 'MODEL_SERVICE_TIMEOUT_LAYERS_EXPORT_MS', ms: 300_000 },
 } as const
 
 /** Names of the per-endpoint model-service timeouts. */
@@ -310,18 +313,17 @@ const config = Object.freeze({
     /**
      * Value passed to Fastify's `trustProxy`. Controls whether `X-Forwarded-For`
      * is trusted for `request.ip` (which keys per-IP rate limiting and login
-     * throttling). `true` trusts ALL upstreams, making the header — and thus the
-     * rate-limit key — attacker-spoofable; default to trusting a single proxy
-     * hop instead. Set `TRUST_PROXY` to a hop count, a comma-separated list of
-     * trusted proxy IPs/CIDRs, or `true`/`false` to match the deployment.
+     * throttling). Defaults to false. Set `TRUST_PROXY` to a comma-separated
+     * list of trusted proxy IPs/CIDRs to enable forwarding headers. Legacy
+     * hop counts fail closed, matching Fastify's security policy. `true`
+     * trusts every peer and requires the deployment to prevent direct access.
      */
-    get trustProxy(): boolean | number | string {
-      const raw = process.env.TRUST_PROXY
-      if (raw === undefined || raw === '') return 1
+    get trustProxy(): boolean | string {
+      const raw = process.env.TRUST_PROXY?.trim()
+      if (raw === undefined || raw === '') return false
       if (raw === 'true') return true
       if (raw === 'false') return false
-      const n = Number.parseInt(raw, 10)
-      if (Number.isFinite(n) && String(n) === raw.trim()) return n
+      if (/^-?\d+$/.test(raw)) return false
       return raw
     },
   }),

@@ -354,14 +354,10 @@ class TestExtractAudio:
             mock_process.returncode = 0
             mock_exec.return_value = mock_process
 
-            # Mock exists to return True for video path, False for output path
-            def mock_exists(path: str) -> bool:
-                return path == test_video_path
-
-            with (
-                patch("os.path.exists", side_effect=mock_exists),
-                pytest.raises(VideoProcessingError, match="Output audio file not created"),
-            ):
+            # The input video exists (the fixture writes it under the
+            # autouse-configured root); the mocked ffmpeg writes no output,
+            # so the real output-existence check drives the error path.
+            with pytest.raises(VideoProcessingError, match="Output audio file not created"):
                 await extract_audio(test_video_path, str(output_path))
 
 

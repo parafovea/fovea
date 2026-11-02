@@ -30,43 +30,50 @@ test.describe('Summary project scope', () => {
     expect(projectRes.status()).toBe(201)
     const projectId = (await projectRes.json()).id
 
-    const personaRes = await api.post('/api/personas', {
-      data: {
-        name: `Project persona ${slug}`,
-        role: 'Analyst',
-        informationNeed: 'Project-scoped authoring',
-        projectId,
-      },
-    })
-    expect(personaRes.status()).toBe(201)
-    const personaId = (await personaRes.json()).id
+    try {
+      const personaRes = await api.post('/api/personas', {
+        data: {
+          name: `Project persona ${slug}`,
+          role: 'Analyst',
+          informationNeed: 'Project-scoped authoring',
+          projectId,
+        },
+      })
+      expect(personaRes.status()).toBe(201)
+      const personaId = (await personaRes.json()).id
 
-    // Create a summary under the project persona.
-    const summaryRes = await api.post('/api/summaries', {
-      data: {
-        videoId: testVideo.id,
-        personaId,
-        summary: [{ type: 'text', content: 'A red car drives through the intersection.' }],
-      },
-    })
-    expect(summaryRes.status()).toBe(201)
-    const summaryId = (await summaryRes.json()).id
+      // Create a summary under the project persona.
+      const summaryRes = await api.post('/api/summaries', {
+        data: {
+          videoId: testVideo.id,
+          personaId,
+          summary: [{ type: 'text', content: 'A red car drives through the intersection.' }],
+        },
+      })
+      expect(summaryRes.status()).toBe(201)
+      const summaryId = (await summaryRes.json()).id
 
-    // The persisted summary carries the persona's project, not NULL.
-    const readRes = await api.get(`/api/videos/${testVideo.id}/summaries/${personaId}`)
-    expect(readRes.status()).toBe(200)
-    expect((await readRes.json()).projectId).toBe(projectId)
+      // The persisted summary carries the persona's project, not NULL.
+      const readRes = await api.get(`/api/videos/${testVideo.id}/summaries/${personaId}`)
+      expect(readRes.status()).toBe(200)
+      expect((await readRes.json()).projectId).toBe(projectId)
 
-    // A claim created under it inherits the same project scope.
-    const claimRes = await api.post(`/api/summaries/${summaryId}/claims`, {
-      data: { summaryType: 'video', text: 'The car is red.', audio: ['speech'] },
-    })
-    expect(claimRes.status()).toBe(201)
+      // A claim created under it inherits the same project scope.
+      const claimRes = await api.post(`/api/summaries/${summaryId}/claims`, {
+        data: { summaryType: 'video', text: 'The car is red.', audio: ['speech'] },
+      })
+      expect(claimRes.status()).toBe(201)
 
-    const claimsRes = await api.get(`/api/summaries/${summaryId}/claims`)
-    expect(claimsRes.status()).toBe(200)
-    const claims = await claimsRes.json()
-    expect(claims.length).toBeGreaterThan(0)
-    expect(claims[0].projectId).toBe(projectId)
+      const claimsRes = await api.get(`/api/summaries/${summaryId}/claims`)
+      expect(claimsRes.status()).toBe(200)
+      const claims = await claimsRes.json()
+      expect(claims.length).toBeGreaterThan(0)
+      expect(claims[0].projectId).toBe(projectId)
+    } finally {
+      // The worker user is reused by later tests. A retained project changes
+      // its default project scope and prevents teardown from deleting it.
+      const deleted = await api.delete(`/api/projects/${projectId}`)
+      expect(deleted.ok()).toBe(true)
+    }
   })
 })

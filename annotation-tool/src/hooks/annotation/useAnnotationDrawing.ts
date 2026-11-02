@@ -299,6 +299,8 @@ export function useAnnotationDrawing({
           objectAnnotation.linkedEntityId = linkTargetId ?? undefined
         } else if (linkTargetType === 'event') {
           objectAnnotation.linkedEventId = linkTargetId ?? undefined
+        } else if (linkTargetType === 'time') {
+          objectAnnotation.linkedTimeId = linkTargetId ?? undefined
         } else if (linkTargetType === 'location') {
           objectAnnotation.linkedLocationId = linkTargetId ?? undefined
         } else if (linkTargetType?.includes('collection')) {

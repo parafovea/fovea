@@ -164,25 +164,13 @@ test.describe('Screen Reader - ARIA Live Regions', () => {
   test('successful save operation triggers announcement', async ({ page, annotationWorkspace, testVideo, testPersona, testEntityType }) => {
     await annotationWorkspace.navigateTo(testVideo.id)
     await annotationWorkspace.drawSimpleBoundingBox()
-    await page.waitForTimeout(500)
-
-    // Look for any Alert or toast notification that might appear (sonner toasts use [data-sonner-toast])
-    const alerts = page.locator('[role="alert"], [role="status"], [data-slot="alert"], [data-sonner-toast]')
-
-    // Try to save
+    // Save notifications are announced by Sonner's containing live region.
+    // Individual toast list items do not need a redundant alert/status role.
     const modifier = process.platform === 'darwin' ? 'Meta' : 'Control'
     await page.keyboard.press(`${modifier}+s`)
-    await page.waitForTimeout(1000)
-
-    // Check if any alert appeared (success or error)
-    const alertCount = await alerts.count()
-
-    // If an alert appeared, verify it has proper ARIA
-    if (alertCount > 0) {
-      const firstAlert = alerts.first()
-      const role = await firstAlert.getAttribute('role')
-      expect(role).toMatch(/alert|status/)
-    }
+    const announcement = page.locator('[aria-live="polite"] [data-sonner-toast]').first()
+    await expect(announcement).toBeVisible()
+    await expect(announcement).toContainText(/sav/i)
   })
 
   test('form validation errors are announced', async ({ page, ontologyWorkspace, testPersona }) => {

@@ -32,6 +32,7 @@ import {
 } from '@/components/ui/select'
 import { useMyProjects, useCreateProject, type ProjectSummary } from '@store/queries/useProjects'
 import { useMyGroups } from '@store/queries/useGroups'
+import { useTourAnchor } from '@/tours/engine/anchorRegistry'
 
 function slugify(value: string): string {
   return value
@@ -45,6 +46,10 @@ export default function ProjectsPage(): JSX.Element {
   const { data: projects, isLoading, error } = useMyProjects('all')
   const { data: groups } = useMyGroups()
   const createProject = useCreateProject()
+
+  const pageAnchor = useTourAnchor('projects-page')
+  const createButtonAnchor = useTourAnchor('projects-create-button')
+  const nameInputAnchor = useTourAnchor('project-name-input')
 
   const [dialogOpen, setDialogOpen] = useState(false)
   const [name, setName] = useState('')
@@ -99,10 +104,10 @@ export default function ProjectsPage(): JSX.Element {
   }
 
   return (
-    <div className="mx-auto max-w-screen-lg px-4" data-tour-id="projects-page">
+    <div className="mx-auto max-w-screen-lg px-4" ref={pageAnchor}>
       <div className="flex items-center justify-between py-6">
         <h1 className="text-2xl font-bold">My Projects</h1>
-        <Button data-tour-id="projects-create-button" onClick={() => setDialogOpen(true)}>
+        <Button ref={createButtonAnchor} onClick={() => setDialogOpen(true)}>
           <Plus className="size-4" />
           Create Project
         </Button>
@@ -155,7 +160,7 @@ export default function ProjectsPage(): JSX.Element {
               <Label htmlFor="project-name">Name</Label>
               <Input
                 id="project-name"
-                data-tour-id="project-name-input"
+                ref={nameInputAnchor}
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 autoFocus

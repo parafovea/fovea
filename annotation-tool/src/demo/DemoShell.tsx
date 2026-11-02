@@ -5,7 +5,7 @@
  * Demo builds (VITE_FOVEA_DEMO_MODE=true) mount <DemoShell /> which
  * provides the demo-specific landing page + recap, and switches the
  * `/` route over to the stock <App /> once a tour is active so the
- * runner's spotlight can find the data-tour-id anchors that live
+ * runner's spotlight can find the registered anchors that live
  * inside the App's Layout component.
  *
  * Robust session handling for the booth case (plan §9 risk 4): the
@@ -38,7 +38,7 @@ import { createAnonymousSession, seedFixture } from './api'
 import { isPresenterMode } from './mode-flags'
 import { loadTourContentBundle } from '@/tours/content/loader'
 import { saveWorldState, worldKeys } from '@store/queries/useWorld'
-import { queryClient } from '@/main'
+import { queryClient } from '@/queryClient'
 
 export function DemoShell() {
   const [error, setError] = useState<string | null>(null)
@@ -46,8 +46,6 @@ export function DemoShell() {
   return (
     <TourProvider
       onBeforeLaunch={async (tour) => {
-        if (!tour.fixtureBundle) return
-
         // Mint a fresh session per launch. Stale sessionStorage state
         // from a prior swept user can't break this flow because we
         // never read it.
@@ -63,7 +61,7 @@ export function DemoShell() {
 
         try {
           await seedFixture({
-            tourId: tour.fixtureBundle,
+            tourId: tour.id,
             sessionUserId: userId,
           })
         } catch (err) {
@@ -164,10 +162,10 @@ export function DemoShell() {
           console.warn('[demo] world seed failed (continuing):', err)
         }
       }}
-      onTelemetry={(e) => {
+      onEvent={(event) => {
         // Presenter mode (?presenter=1) routes to a no-op so screen-
         // capture / projector sessions don't pollute the booth's
-        // real abandon-rate analytics (plan §9 risk 8).
+        // real abandon-rate analytics.
         if (isPresenterMode()) return
         // Demo telemetry hits the regular /api/telemetry endpoint with
         // a demo.* event prefix; the backend's existing telemetry
@@ -177,7 +175,7 @@ export function DemoShell() {
           method: 'POST',
           credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ event: `demo.tour.${e.kind}`, payload: e }),
+          body: JSON.stringify({ event: `demo.tour.${event.type}`, payload: event }),
         }).catch(() => undefined)
       }}
     >

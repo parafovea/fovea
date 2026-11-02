@@ -94,6 +94,7 @@ services:
       # "Video file not found" even when the file is right there.
       VIDEO_DATA_ROOT: /test-videos
       STORAGE_PATH: /test-videos
+      THUMBNAIL_OUTPUT_ROOT: /test-videos/thumbnails
       # Force PyTorch to ignore CUDA even when CUDA-flavored wheels
       # land in the venv (`pyannote.audio` and the Silero VAD weights
       # transitively pull torch with CUDA runtime bindings). Without
@@ -120,6 +121,8 @@ services:
       # read-only because integration tests should never write to the
       # shared fixture directory.
       - ./test-videos:/test-videos:ro
+      # Share only generated thumbnails for writes; source videos stay read-only.
+      - ./test-videos/thumbnails:/test-videos/thumbnails:rw
     # Wait longer at startup for the CPU-mode model load to complete
     # before the backend's depends_on health gate releases. The base
     # file allots a 20 s start_period; CPU-mode models (Qwen2.5-VL 3B

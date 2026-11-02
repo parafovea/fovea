@@ -14,7 +14,7 @@ import torch
 
 if TYPE_CHECKING:
     from src.application.services.model_management import ModelConfig, TaskModelFactory
-    from src.domain.entities.architectures import AudioArchitecture
+    from src.domain.entities.architectures import AudioArchitecture, TokenizerArchitecture
 
 logger = logging.getLogger(__name__)
 
@@ -96,6 +96,37 @@ def _vad_factory(model_config: ModelConfig) -> Any:
     loader = SileroVADLoader(vad_config)
     loader.load()
     logger.info(f"VAD model loaded: {model_config.model_id}")
+    return loader
+
+
+def _text_tokenization_factory(model_config: ModelConfig) -> Any:
+    """Build a tokenizer loader from the architecture-keyed tokenizer registry.
+
+    The loader class is resolved by the architecture's concrete Pydantic
+    subclass on ``model_config.architecture`` (SpacyTokenizer or
+    StanzaTokenizer); no code inspects ``model_id`` strings. The loader owns
+    language identification and engine selection.
+    """
+    from src.infrastructure.adapters.outbound.models.text.loader import (  # noqa: PLC0415
+        TokenizerConfig,
+        create_tokenizer_loader,
+    )
+
+    if model_config.architecture is None:
+        raise ValueError(
+            f"text_tokenization model {model_config.model_id!r} has no architecture set; "
+            "every text_tokenization YAML option must carry an "
+            "`architecture: {kind: ...}` block (spacy-tokenizer or stanza-tokenizer) "
+            "so the registry can dispatch to the correct loader without "
+            "substring-matching on model_id."
+        )
+
+    config = TokenizerConfig(model_id=model_config.model_id, device=_device())
+    loader = create_tokenizer_loader(
+        cast("TokenizerArchitecture", model_config.architecture), config
+    )
+    loader.load()
+    logger.info(f"Text tokenizer loaded: {model_config.model_id}")
     return loader
 
 
@@ -220,6 +251,7 @@ def build_default_task_factories() -> dict[str, TaskModelFactory]:
         "audio_transcription": _audio_transcription_factory,
         "speaker_diarization": _speaker_diarization_factory,
         "voice_activity_detection": _vad_factory,
+        "text_tokenization": _text_tokenization_factory,
         "object_detection": _object_detection_factory,
         "object_tracking": _object_tracking_factory,
     }

@@ -85,7 +85,7 @@ test.describe('Claim card selection', () => {
     // claims viewer stays visible, the Claims tab stays active, and the
     // Summary tab's highlight view never takes over.
     await expect(card).toHaveAttribute('data-selected', 'true')
-    await expect(dialog.locator('[data-tour-id="claims-viewer"]')).toBeVisible()
+    await expect(dialog.locator('[data-tour-anchor="claims-viewer"]')).toBeVisible()
     await expect(claimsTab).toHaveAttribute('aria-selected', 'true')
     await expect(summaryTab).toHaveAttribute('aria-selected', 'false')
     await expect(

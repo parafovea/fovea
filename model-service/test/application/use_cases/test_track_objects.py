@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
+import threading
+
 import numpy as np
 import pytest
 
@@ -147,3 +150,33 @@ async def test_track_computes_fps() -> None:
     response = await use_case.execute(input)
     assert response.fps >= 0.0
     assert response.total_frames == 1
+
+
+@pytest.mark.asyncio
+async def test_tracking_does_not_block_other_requests(monkeypatch: pytest.MonkeyPatch) -> None:
+    loop = asyncio.get_running_loop()
+    started = asyncio.Event()
+    release = threading.Event()
+    model = FakeTrackingModel()
+
+    def blocking_load() -> None:
+        loop.call_soon_threadsafe(started.set)
+        assert release.wait(5), "The event loop could not service another request"
+
+    monkeypatch.setattr(model, "load", blocking_load)
+    task = asyncio.create_task(
+        TrackObjectsUseCase(model).execute(
+            TrackObjectsExecutionInput(
+                request=_make_request(object_ids=[1]),
+                frames=[_frame()],
+                frame_numbers=[0],
+                timestamps=[0.0],
+                initial_masks=[_mask()],
+            )
+        )
+    )
+    try:
+        await asyncio.wait_for(started.wait(), 5)
+    finally:
+        release.set()
+    await task

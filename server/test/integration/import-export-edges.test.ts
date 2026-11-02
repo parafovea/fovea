@@ -15,6 +15,7 @@ import { buildApp } from '../../src/app.js'
 import { hashPassword } from '../../src/lib/password.js'
 import { FastifyInstance } from 'fastify'
 import { PrismaClient } from '@prisma/client'
+import { seedOntology, seedWorldState, seedClaim } from '../helpers/seed-layers.js'
 
 interface User {
   userId: string
@@ -38,12 +39,27 @@ describe('Import/export edge cases', () => {
     await reseedOwnershipBaseline(prisma)
     await prisma.loginAttempt.deleteMany()
     await prisma.importHistory.deleteMany()
-    await prisma.claimRelation.deleteMany()
-    await prisma.claim.deleteMany()
-    await prisma.annotation.deleteMany()
+    // Layers store (reverse-FK order): seeds and imports materialize into
+    // these tables, so clear them before the videos / personas / users they
+    // reference are deleted.
+    await prisma.textAnnotationRelation.deleteMany()
+    await prisma.layersAnnotation.deleteMany()
+    await prisma.annotationLayer.deleteMany()
+    await prisma.tokenization.deleteMany()
+    await prisma.segmentation.deleteMany()
+    await prisma.corpusMembership.deleteMany()
+    await prisma.corpus.deleteMany()
+    await prisma.clusterSet.deleteMany()
+    await prisma.catalogMembership.deleteMany()
+    await prisma.catalogCollection.deleteMany()
+    await prisma.alignment.deleteMany()
+    await prisma.graphEdge.deleteMany()
+    await prisma.graphNode.deleteMany()
+    await prisma.typeDef.deleteMany()
+    await prisma.layersOntology.deleteMany()
+    await prisma.expression.deleteMany()
+    await prisma.media.deleteMany()
     await prisma.videoSummary.deleteMany()
-    await prisma.ontology.deleteMany()
-    await prisma.worldState.deleteMany()
     await prisma.persona.deleteMany()
     await prisma.video.deleteMany()
     await prisma.session.deleteMany()
@@ -83,6 +99,22 @@ describe('Import/export edge cases', () => {
       payload,
     })
   }
+
+  it('keeps missing-video skips after cross-user id regeneration', async () => {
+    const user = await registerAndLogin('skip-user', 'password123')
+    const lines = [
+      { type: 'metadata', data: { exporterUserId: 'foreign-user' } },
+      { type: 'entity', data: { id: 'entity-imported', name: 'Imported entity', typeAssignments: [] } },
+      { type: 'annotation', data: { id: 'missing-video-annotation', videoId: 'absent-video', annotationType: 'object', linkedEntityId: 'entity-imported',
+        boundingBoxSequence: { boxes: [{ x: 0, y: 0, width: 10, height: 10, frameNumber: 0, isKeyframe: true }],
+          interpolationSegments: [], visibilityRanges: [{ startFrame: 0, endFrame: 0, visible: true }], totalFrames: 1, keyframeCount: 1, interpolatedFrameCount: 0 } } },
+    ]
+    const response = await importAs(user, lines.map(line => JSON.stringify(line)).join('\n'))
+    expect(response.statusCode).toBe(200)
+    expect(response.json().success).toBe(true)
+    expect(response.json().summary.skippedItems.annotations).toBe(1)
+    expect(await prisma.graphNode.count({ where: { createdByUserId: user.userId, label: 'Imported entity' } })).toBe(1)
+  })
 
   // --- Empty / minimal-content inputs ---------------------------------------
 
@@ -196,7 +228,9 @@ describe('Import/export edge cases', () => {
       expect(orphanConflict!.details).toContain('99999999-9999-9999-9999-999999999999')
 
       // The DB must not contain the skipped annotation.
-      const annCount = await prisma.annotation.count({ where: { videoId: 'v-edge-1' } })
+      const annCount = await prisma.layersAnnotation.count({
+        where: { layer: { expression: { videoId: 'v-edge-1' } } },
+      })
       expect(annCount).toBe(0)
     })
   })
@@ -212,14 +246,14 @@ describe('Import/export edge cases', () => {
       const persona = await prisma.persona.create({
         data: { userId: A.userId, name: 'P', role: 'r', informationNeed: 'i' },
       })
-      await prisma.ontology.create({
+      await seedOntology(prisma, {
         data: {
           personaId: persona.id,
           entityTypes: [{ id: 'et-1', name: 'Type1', gloss: [] }],
           eventTypes: [], roleTypes: [], relationTypes: [],
         },
       })
-      await prisma.worldState.create({
+      await seedWorldState(prisma, {
         data: {
           userId: A.userId,
           entities: [{ id: 'e-1', name: 'E1' }],
@@ -230,7 +264,7 @@ describe('Import/export edge cases', () => {
       const summary = await prisma.videoSummary.create({
         data: { videoId: 'v-edge-2', personaId: persona.id, summary: [{ type: 'text', content: 's' }] },
       })
-      await prisma.claim.create({
+      await seedClaim(prisma, {
         data: { summaryId: summary.id, summaryType: 'video', text: 'c', gloss: [{ type: 'text', content: 'c' }] },
       })
 
@@ -268,14 +302,14 @@ describe('Import/export edge cases', () => {
       const persona = await prisma.persona.create({
         data: { userId: A.userId, name: 'AP', role: 'r', informationNeed: 'i' },
       })
-      await prisma.ontology.create({
+      await seedOntology(prisma, {
         data: {
           personaId: persona.id,
           entityTypes: [{ id: 'et-x', name: 'X', gloss: [] }],
           eventTypes: [], roleTypes: [], relationTypes: [],
         },
       })
-      await prisma.worldState.create({
+      await seedWorldState(prisma, {
         data: {
           userId: A.userId,
           entities: [{ id: 'a-e-1', name: 'AEntity' }],
@@ -362,14 +396,14 @@ describe('Import/export edge cases', () => {
       expect(history!.filename).not.toContain('/')
     })
 
-    it('filename with embedded newline does not break the ImportHistory write', async () => {
+    it('rejects a raw newline in a filename header without writing import data', async () => {
       const A = await registerAndLogin('userA', 'passA12345')
       const jsonl = JSON.stringify({ type: 'persona', data: { id: '44444444-4444-4444-4444-444444444444', userId: A.userId, name: 'Edge', role: 'r', informationNeed: 'i' } })
-      const odd = 'line1\nline2.jsonl'
-      const res = await importAs(A, jsonl, odd)
-      expect(res.statusCode).toBe(200)
+      const res = await importAs(A, jsonl, 'line1\nline2.jsonl')
+      expect(res.statusCode).toBe(400)
       const history = await prisma.importHistory.findFirst({ where: { importedBy: A.userId } })
-      expect(history?.filename).toBeDefined()
+      expect(history).toBeNull()
+      expect(await prisma.persona.count({ where: { userId: A.userId } })).toBe(0)
     })
   })
 

@@ -7,6 +7,8 @@
 
 import { metrics } from '@opentelemetry/api'
 
+import { boundedLabel, clientRouteLabel } from './metric-labels.js'
+
 const meter = metrics.getMeter('fovea-backend')
 
 /**
@@ -123,23 +125,29 @@ export function recordError(options: RecordErrorOptions): void {
     jobType,
   } = options
 
-  // Always record to total errors counter
+  // Every label value here can come from a request body (the telemetry
+  // endpoint takes them from the browser), so each is admitted through a
+  // bounded set to keep the series count finite.
+  const errorTypeLabel = boundedLabel(`${source}:error_type`, errorType)
+  const errorCodeLabel = boundedLabel(`${source}:error_code`, errorCode)
+  const routeValue = boundedLabel(`${source}:error_route`, route)
+
   errorsTotalCounter.add(1, {
-    error_type: errorType,
-    error_code: errorCode,
+    error_type: errorTypeLabel,
+    error_code: errorCodeLabel,
     source,
     severity,
-    route,
+    route: routeValue,
   })
 
   // Record to source-specific counters
   switch (source) {
     case 'frontend':
       frontendErrorsCounter.add(1, {
-        error_type: errorType,
-        component: component || 'unknown',
-        route,
-        browser: browser || 'unknown',
+        error_type: errorTypeLabel,
+        component: boundedLabel('component', component || 'unknown'),
+        route: routeValue,
+        browser: boundedLabel('browser', browser || 'unknown'),
         severity,
       })
       break
@@ -147,19 +155,19 @@ export function recordError(options: RecordErrorOptions): void {
     case 'backend':
       if (method && statusCode) {
         apiErrorsCounter.add(1, {
-          method,
-          route,
+          method: boundedLabel('method', method),
+          route: routeValue,
           status_code: statusCode.toString(),
-          error_code: errorCode,
+          error_code: errorCodeLabel,
         })
       }
       break
 
     case 'queue':
       queueErrorsCounter.add(1, {
-        queue_name: queueName || 'unknown',
-        job_type: jobType || 'unknown',
-        error_code: errorCode,
+        queue_name: boundedLabel('queue_name', queueName || 'unknown'),
+        job_type: boundedLabel('job_type', jobType || 'unknown'),
+        error_code: errorCodeLabel,
       })
       break
 
@@ -206,7 +214,7 @@ export function recordFrontendError(
     errorType,
     source: 'frontend',
     severity,
-    route,
+    route: clientRouteLabel(route),
     component,
     browser,
   })

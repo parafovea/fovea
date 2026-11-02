@@ -1,20 +1,19 @@
 /**
- * Tour 0 - "Welcome to FOVEA".
+ * The "Welcome to FOVEA" splash tour.
  *
- * Splash-style intro tour. Two beats: what FOVEA is (the backronym
- * reading) and where the four-layer model lives in the UI (persona
- * ontology, world layer, annotations, claims). Designed as the
- * first tile a QR-code visitor on demo.fovea.video sees, so the
- * narration assumes zero prior context.
+ * Two beats: what FOVEA is (the backronym reading) and where the
+ * four-layer model lives in the UI (persona ontology, world layer,
+ * annotations, claims). The first tile a QR-code visitor on
+ * demo.fovea.video sees, so the narration assumes zero prior context.
  *
- * Content-neutral; no TourContentBundle slot needed. The narration
- * references the FOVEA brand directly, which is invariant across
- * admin tailoring.
+ * Content-neutral: the narration references the FOVEA brand directly,
+ * which is invariant across admin tailoring, so no content bundle slot
+ * is threaded through.
  */
 
-import type { TourScript } from '../engine/types'
+import type { Tour } from '../engine/tourSchema'
 
-export function buildWelcomeTour(): TourScript {
+export function buildWelcomeTour(): Tour {
   return {
     id: 'welcome',
     title: 'Welcome to FOVEA',
@@ -22,7 +21,6 @@ export function buildWelcomeTour(): TourScript {
       'Two-minute orientation. What FOVEA is, what the four-layer model gives you, and how the rest of the tours fit together.',
     durationMinutes: 2,
     tags: ['orientation', 'intro'],
-    fixtureBundle: 'welcome',
     recap:
       'FOVEA is a Flexible Ontology Visual Event Analyzer. Annotation is structured language tied to structured pixels.',
     followUpTourId: 'first-annotation',

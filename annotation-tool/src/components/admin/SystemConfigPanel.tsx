@@ -28,6 +28,7 @@ import {
   useSystemConfig,
   useUpdateSystemConfig,
 } from '@/store/queries/useSystemConfig'
+import { useTourAnchor } from '@/tours/engine/anchorRegistry'
 
 function findRow<K extends SystemConfigRow['key']>(
   rows: SystemConfigRowStored[],
@@ -534,6 +535,7 @@ function defaultEndpoint(provider: 'anthropic' | 'openai' | 'google'): string {
 }
 
 export function SystemConfigPanel() {
+  const panelAnchor = useTourAnchor('system-config-panel')
   const { data, isLoading, error } = useSystemConfig()
   const replay = useReplaySystemConfig({
     onSuccess: (result) => {
@@ -548,7 +550,7 @@ export function SystemConfigPanel() {
 
   if (isLoading) {
     return (
-      <div className="space-y-4" data-tour-id="system-config-panel">
+      <div className="space-y-4" ref={panelAnchor}>
         <Skeleton className="h-10 w-full" />
         <Skeleton className="h-40 w-full" />
       </div>
@@ -557,7 +559,7 @@ export function SystemConfigPanel() {
 
   if (error) {
     return (
-      <div data-tour-id="system-config-panel">
+      <div ref={panelAnchor}>
         <Alert variant="destructive">
           <AlertCircle className="size-4" />
           <AlertDescription>Failed to load system config: {error.message}</AlertDescription>
@@ -571,7 +573,7 @@ export function SystemConfigPanel() {
   const externals = findRow(rows, 'externalApis')
 
   return (
-    <div className="space-y-6" data-tour-id="system-config-panel">
+    <div className="space-y-6" ref={panelAnchor}>
       <div className="flex items-start justify-between gap-4">
         <div>
           <h2 className="text-lg font-semibold">System configuration</h2>

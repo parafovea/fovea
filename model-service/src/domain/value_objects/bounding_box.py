@@ -81,7 +81,7 @@ class NormalizedBBox:
         """Normalized area of the bounding box."""
         return self.width * self.height
 
-    def to_absolute(self, image_width: int, image_height: int) -> "AbsoluteBBox":
+    def to_absolute(self, image_width: int, image_height: int) -> AbsoluteBBox:
         """Convert to absolute pixel coordinates.
 
         Parameters

@@ -5,6 +5,8 @@ import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
 import { usePersonaOntology, useWorld, useAnnotations } from '@store/queries'
 import { GlossItem, TimeInstant, getAnnotationTimeBounds, Claim } from '@models/types'
+import { useTourAnchor } from '@/tours/engine/anchorRegistry'
+import { mergeRefs } from '@/lib/mergeRefs'
 import { config } from '@/config'
 
 interface GlossEditorProps {
@@ -72,6 +74,9 @@ export default function GlossEditor({
   const [autocompleteMode, setAutocompleteMode] = useState<'types' | 'objects' | 'annotations' | 'claims'>('types')
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const popperRef = useRef<HTMLDivElement>(null)
+  const glossEditorAnchor = useTourAnchor('gloss-editor')
+  const glossAutocompleteAnchor = useTourAnchor('gloss-autocomplete-popup')
+  const glossPreviewAnchor = useTourAnchor('gloss-preview')
   // Tracks the gloss we most recently emitted via onChange. When the
   // `gloss` prop re-arrives via the parent's React-Query auto-save
   // re-render and structurally matches what we just sent up, we suppress
@@ -709,7 +714,7 @@ export default function GlossEditor({
   }
 
   return (
-    <div data-tour-id="gloss-editor">
+    <div ref={glossEditorAnchor}>
       <Label className="mb-2">{label}</Label>
       <div className="relative">
         <Textarea
@@ -727,8 +732,7 @@ export default function GlossEditor({
 
         {showAutocomplete && (
           <div
-            ref={popperRef}
-            data-tour-id="gloss-autocomplete-popup"
+            ref={mergeRefs(popperRef, glossAutocompleteAnchor)}
             className="absolute z-50 max-h-72 overflow-auto min-w-[250px] rounded-lg border bg-popover text-popover-foreground shadow-md"
             style={{ top: '100%', left: 0 }}
           >
@@ -785,7 +789,7 @@ export default function GlossEditor({
         )}
       </div>
 
-      <div className="rounded-lg border p-4" data-tour-id="gloss-preview">
+      <div className="rounded-lg border p-4" ref={glossPreviewAnchor}>
         <p className="text-xs text-muted-foreground mb-1">
           Preview:
         </p>
