@@ -132,4 +132,24 @@ describe('Steps that need a model service', () => {
     renderTranscriptRunner(registry, onEvent, true)
     await waitFor(() => expect(onEvent).toHaveBeenCalledWith({ type: 'anchor_resolved', anchorId: 'transcript-dialog' }))
   })
+
+  it('waits for availability that is still loading before running openers', async () => {
+    const registry = new AnchorRegistry()
+    const opener = document.createElement('button')
+    const click = vi.spyOn(opener, 'click')
+    registry.register('transcribe-audio-button', opener)
+    const onEvent = vi.fn()
+    const view = renderTranscriptRunner(registry, onEvent, undefined)
+    await new Promise((resolve) => setTimeout(resolve, 300))
+    expect(click).not.toHaveBeenCalled()
+    view.rerender(
+      <MemoryRouter>
+        <AnchorRegistryContext.Provider value={registry}>
+          <TourRunner tour={transcriptTour} onEvent={onEvent} onClose={vi.fn()} modelServiceAvailable={false} />
+        </AnchorRegistryContext.Provider>
+      </MemoryRouter>,
+    )
+    await waitFor(() => expect(onEvent).toHaveBeenCalledWith({ type: 'anchor_missing', anchorId: 'transcript-dialog' }))
+    expect(click).not.toHaveBeenCalled()
+  })
 })

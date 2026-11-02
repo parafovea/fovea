@@ -187,7 +187,16 @@ export function TourRunner({
       // A step whose anchor only a model service can produce cannot complete
       // on a deployment without one; report it at once rather than running a
       // driver and waiting out the anchor timeout.
+      // Availability may still be loading when the step starts, so wait for
+      // the host to report it before deciding.
       const anchorMeta: AnchorMeta = anchorCatalog[step.anchor]
+      if (anchorMeta.requiresModelService) {
+        const deadline = Date.now() + ANCHOR_WAIT_MS
+        while (modelServiceAvailableRef.current === undefined && Date.now() < deadline) {
+          await sleep(100)
+          if (signal.aborted) return
+        }
+      }
       if (anchorMeta.requiresModelService && modelServiceAvailableRef.current === false) {
         setResolving(false)
         setUnavailableReason(MODEL_SERVICE_UNAVAILABLE)
