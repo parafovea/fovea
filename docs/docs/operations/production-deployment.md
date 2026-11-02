@@ -119,6 +119,16 @@ deepmerge as a dependency but does not import it in its compiled entry point.
 and reports it explicitly. Other advisories, a severity increase, and scanner
 failures block CI. Review this exception when updating the documentation toolchain.
 
+The scanner also reports [GHSA-g3hv-75wg-m249](https://github.com/advisories/GHSA-g3hv-75wg-m249)
+against the documentation server's minimatch 3.1.5. The advisory describes
+`optimizationLevel >= 2` expanding patterns in `firstPhasePreProcess` before
+quadratic second-phase processing. Version 3.1.5 implements neither phase nor
+that option: it splits each brace-expanded pattern into one array of path parts.
+The dependency check classifies this specific advisory as not applicable only
+when every reported minimatch installation is locked to 3.1.5. Missing version
+evidence, different versions, and other advisories still block CI. This
+classification is separate from the accepted, unpatched deepmerge finding.
+
 ## What to plan for
 
 - [Backup and restore](backup-restore.md) for Postgres and the
