@@ -3,6 +3,7 @@ import { videoSummarizationQueue } from '../../src/queues/setup.js'
 import { buildApp } from '../../src/app.js'
 import { hashPassword } from '../../src/lib/password.js'
 import { seedBaselinePermissions } from '../helpers/rbac-test-setup.js'
+import { seedPermissions } from '../../prisma/seed-permissions.js'
 import { FastifyInstance } from 'fastify'
 import { PrismaClient } from '@prisma/client'
 
@@ -230,6 +231,58 @@ describe('Video Summaries API', () => {
       expect(body.audioLanguage).toBe('es')
       expect(body.speakerCount).toBe(1)
       expect(body.audioModelUsed).toBe('faster-whisper-large-v3')
+    })
+  })
+
+  describe('POST /api/summaries persona authorization', () => {
+    /** Creates a persona owned by another user, system-seeded or private. */
+    async function otherUsersPersona(isSystemGenerated: boolean): Promise<string> {
+      const owner = await prisma.user.create({
+        data: { username: `owner-${isSystemGenerated}`, email: `owner-${isSystemGenerated}@example.com`, displayName: 'Owner', isAdmin: false },
+      })
+      const persona = await prisma.persona.create({
+        data: { name: 'Seeded', role: 'r', informationNeed: 'i', userId: owner.id, isSystemGenerated },
+      })
+      return persona.id
+    }
+
+    function postSummary(personaId: string) {
+      return app.inject({
+        method: 'POST',
+        url: '/api/summaries',
+        cookies: { session_token: testSessionToken },
+        payload: { videoId: testVideoId, personaId, summary: [{ type: 'text', content: 'Tour summary' }] },
+      })
+    }
+
+    // The shared helper grants broad read access; these cases need the
+    // production permission matrix, where reading a persona requires owning it
+    // or a project role in its project.
+    beforeEach(async () => {
+      await prisma.rolePermission.deleteMany()
+      await seedPermissions(prisma)
+    })
+
+    afterAll(() => {
+      delete process.env.FOVEA_DEMO_MODE
+    })
+
+    it('lets demo visitors summarize under a system-seeded persona', async () => {
+      process.env.FOVEA_DEMO_MODE = 'true'
+      const response = await postSummary(await otherUsersPersona(true))
+      expect(response.statusCode).toBe(201)
+    })
+
+    it('still refuses another user\'s private persona in demo mode', async () => {
+      process.env.FOVEA_DEMO_MODE = 'true'
+      const response = await postSummary(await otherUsersPersona(false))
+      expect(response.statusCode).toBe(403)
+    })
+
+    it('refuses another user\'s system persona when demo mode is off', async () => {
+      delete process.env.FOVEA_DEMO_MODE
+      const response = await postSummary(await otherUsersPersona(true))
+      expect(response.statusCode).toBe(403)
     })
   })
 

@@ -44,6 +44,7 @@ import {
 import { syncChildIds, deleteRelationSpans, dereferenceClaimProse } from './layers-bridge/claim-bridge.js'
 import { LayersOntologyRepository } from '../repositories/LayersOntologyRepository.js'
 import { WorldStateService, resolvePersonalUserId } from './world-state-service.js'
+import { demoPermitsSystemPersonaRead } from '../lib/demo-rbac.js'
 
 /**
  * Coerces a value to Prisma.InputJsonValue for an optional JSON column, omitting
@@ -1287,7 +1288,10 @@ export class ClaimService {
       throw new NotFoundError('Persona', personaId)
     }
 
-    if (!ability.can('read', subject('Persona', persona))) {
+    if (
+      !ability.can('read', subject('Persona', persona)) &&
+      !demoPermitsSystemPersonaRead(persona.isSystemGenerated)
+    ) {
       throw new ForbiddenError('Cannot create a claim under this Persona')
     }
 

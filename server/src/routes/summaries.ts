@@ -16,7 +16,11 @@ import { videoSummarizationQueue } from '../queues/setup.js'
 import { NotFoundError, ForbiddenError } from '../lib/errors.js'
 import { requireAuth } from '../middleware/auth.js'
 import { buildAbilities } from '../middleware/abilities.js'
-import { demoPermitsSummaryRead, demoPermitsSummaryReclaim } from '../lib/demo-rbac.js'
+import {
+  demoPermitsSummaryRead,
+  demoPermitsSummaryReclaim,
+  demoPermitsSystemPersonaRead,
+} from '../lib/demo-rbac.js'
 
 /**
  * Job data for video summarization queue.
@@ -358,7 +362,10 @@ const summariesRoute: FastifyPluginAsync = async (fastify) => {
         throw new NotFoundError('Persona', personaId)
       }
 
-      if (!request.ability.can('read', subject('Persona', persona))) {
+      if (
+        !request.ability.can('read', subject('Persona', persona)) &&
+        !demoPermitsSystemPersonaRead(persona.isSystemGenerated)
+      ) {
         throw new ForbiddenError('Cannot generate a summary under this Persona')
       }
 
@@ -620,7 +627,10 @@ const summariesRoute: FastifyPluginAsync = async (fastify) => {
       // private persona (the @@unique([videoId, personaId]) would then
       // wedge the real owner out of their own row). Mirrors the same
       // check the annotations POST route already runs.
-      if (!request.ability.can('read', subject('Persona', persona))) {
+      if (
+        !request.ability.can('read', subject('Persona', persona)) &&
+        !demoPermitsSystemPersonaRead(persona.isSystemGenerated)
+      ) {
         throw new ForbiddenError('Cannot create a summary under this Persona')
       }
 

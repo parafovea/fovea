@@ -3,6 +3,7 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vites
 import { buildApp } from '../../src/app.js'
 import { hashPassword } from '../../src/lib/password.js'
 import { seedBaselinePermissions } from '../helpers/rbac-test-setup.js'
+import { seedPermissions } from '../../prisma/seed-permissions.js'
 import { FastifyInstance } from 'fastify'
 import { PrismaClient } from '@prisma/client'
 import { claimExtractionQueue, claimSynthesisQueue } from '../../src/queues/setup.js'
@@ -224,6 +225,58 @@ describe('Claims API', () => {
       }
     })
     testSummaryId = summary.id
+  })
+
+  describe('POST /api/videos/:videoId/personas/:personaId/claims persona authorization', () => {
+    /** Creates a persona owned by another user, system-seeded or private. */
+    async function otherUsersPersona(isSystemGenerated: boolean): Promise<string> {
+      const owner = await prisma.user.create({
+        data: { username: `claim-owner-${isSystemGenerated}`, email: `claim-owner-${isSystemGenerated}@example.com`, displayName: 'Owner', isAdmin: false },
+      })
+      const persona = await prisma.persona.create({
+        data: { name: 'Seeded', role: 'r', informationNeed: 'i', userId: owner.id, isSystemGenerated },
+      })
+      return persona.id
+    }
+
+    function postClaim(personaId: string) {
+      return app.inject({
+        method: 'POST',
+        url: `/api/videos/${testVideoId}/personas/${personaId}/claims`,
+        cookies: { session_token: testSessionToken },
+        payload: { text: 'A tour claim' },
+      })
+    }
+
+    // The shared helper grants broad read access; these cases need the
+    // production permission matrix, where reading a persona requires owning it
+    // or a project role in its project.
+    beforeEach(async () => {
+      await prisma.rolePermission.deleteMany()
+      await seedPermissions(prisma)
+    })
+
+    afterAll(() => {
+      delete process.env.FOVEA_DEMO_MODE
+    })
+
+    it('lets demo visitors claim under a system-seeded persona', async () => {
+      process.env.FOVEA_DEMO_MODE = 'true'
+      const response = await postClaim(await otherUsersPersona(true))
+      expect(response.statusCode).toBeLessThan(300)
+    })
+
+    it('still refuses another user\'s private persona in demo mode', async () => {
+      process.env.FOVEA_DEMO_MODE = 'true'
+      const response = await postClaim(await otherUsersPersona(false))
+      expect(response.statusCode).toBe(403)
+    })
+
+    it('refuses another user\'s system persona when demo mode is off', async () => {
+      delete process.env.FOVEA_DEMO_MODE
+      const response = await postClaim(await otherUsersPersona(true))
+      expect(response.statusCode).toBe(403)
+    })
   })
 
   describe('GET /api/summaries/:summaryId/claims', () => {
