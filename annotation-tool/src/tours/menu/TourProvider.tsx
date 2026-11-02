@@ -45,6 +45,7 @@ import { TourContext, type TourContextValue } from './tour-context'
 import { TourTelemetry, type TourTelemetryEvent } from './tourTelemetry'
 import { config } from '@/config'
 import { useAuthStore } from '@store/zustand/authStore'
+import { useModelConfig } from '@store/queries/useModelConfig'
 import { v5 as uuidv5 } from 'uuid'
 
 /**
@@ -199,6 +200,16 @@ export function TourProvider({
 }: TourProviderProps) {
   const userId = useAuthStore(state => state.currentUser?.id)
   const [anonymousScope] = useState(() => crypto.randomUUID())
+  // Model availability, judged as the annotation workspace does: a failed
+  // config request (the backend answers 503 without a model service) or a
+  // config with neither CPU nor CUDA models means steps that need a model
+  // cannot complete. Unknown while the first request is in flight.
+  const modelConfig = useModelConfig({ retry: 1 })
+  const modelServiceAvailable = modelConfig.isError
+    ? false
+    : modelConfig.data
+      ? modelConfig.data.cudaAvailable || modelConfig.data.cpuModelsAvailable
+      : undefined
   const scopedContent = useMemo(() => ({
     ...contentBundle,
     documentAnnotation: { ...contentBundle.documentAnnotation,
@@ -616,6 +627,7 @@ export function TourProvider({
           startIndex={resumeIndex}
           onEvent={captureEvent}
           onPause={() => pause()}
+          modelServiceAvailable={modelServiceAvailable}
           onClose={() => {
             setActive(null)
             // VITE_DEMO_PUBLIC: when a tour finishes (or is abandoned)

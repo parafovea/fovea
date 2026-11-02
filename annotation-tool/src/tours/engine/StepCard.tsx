@@ -13,7 +13,8 @@
  *     the anchor is null. Repositions on resize and as the anchor moves, via the
  *     same requestAnimationFrame loop the spotlight uses.
  *   - When the anchor cannot be resolved, the card shows a "Couldn't find this
- *     UI element" note and a Skip button in place of Next.
+ *     UI element" note, or the engine's reason when the deployment cannot
+ *     produce the anchor, and a Skip button in place of Next.
  *   - A keyboard-hint footer lists the available shortcuts.
  */
 
@@ -39,6 +40,8 @@ interface StepCardProps {
   anchor: HTMLElement | null
   /** True while the engine is still resolving the anchor. */
   resolving: boolean
+  /** Why the step's anchor cannot appear on this deployment, when known. */
+  unavailableReason?: string | null
   onBack: () => void
   onNext: () => void
   onSkipStep: () => void
@@ -53,6 +56,7 @@ export function StepCard({
   index,
   anchor,
   resolving,
+  unavailableReason,
   onBack,
   onNext,
   onSkipStep,
@@ -119,7 +123,7 @@ export function StepCard({
           {step.body ? <p className="mt-2 text-muted-foreground text-xs">{step.body}</p> : null}
           {cannotResolve ? (
             <p className="mt-2 text-xs text-amber-600 dark:text-amber-400" role="status">
-              Couldn't find this UI element; skip to continue.
+              {unavailableReason ?? "Couldn't find this UI element; skip to continue."}
             </p>
           ) : null}
         </CardContent>

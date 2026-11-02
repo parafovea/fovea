@@ -31,6 +31,13 @@ export interface AnchorMeta {
    * open the dialog it lives in). Each must itself be a catalog id.
    */
   readonly reachedBy?: readonly string[]
+  /**
+   * True when only a running model service can produce the element (a
+   * transcript, detection candidates). On a deployment without one the step is
+   * reported as unavailable at once instead of waiting for an anchor that
+   * cannot appear.
+   */
+  readonly requiresModelService?: boolean
 }
 
 /**
@@ -59,9 +66,9 @@ export const anchorCatalog = {
   'save-indicator': { description: 'The auto-save status indicator.', surface: '/app/annotate/:videoId' },
   'annotation-list-first': { description: 'The first annotation in the annotation list.', surface: '/app/annotate/:videoId', conditional: true },
   'detect-objects-button': { description: 'The "Detect Objects" model-in-the-loop button.', surface: '/app/annotate/:videoId', conditional: true },
-  'annotation-candidates-list': { description: 'The list of model-proposed annotation candidates.', surface: '/app/annotate/:videoId', conditional: true, reachedBy: ['detect-objects-button'] },
+  'annotation-candidates-list': { description: 'The list of model-proposed annotation candidates.', surface: '/app/annotate/:videoId', conditional: true, reachedBy: ['detect-objects-button'], requiresModelService: true },
   'transcribe-audio-button': { description: 'The "Transcribe Audio" button.', surface: '/app/annotate/:videoId', conditional: true },
-  'transcript-dialog': { description: 'The transcript dialog.', surface: '/app/annotate/:videoId', conditional: true, reachedBy: ['transcribe-audio-button'] },
+  'transcript-dialog': { description: 'The transcript dialog.', surface: '/app/annotate/:videoId', conditional: true, reachedBy: ['transcribe-audio-button'], requiresModelService: true },
   'edit-summary-button': { description: 'The "Edit Summary" button.', surface: '/app/annotate/:videoId', conditional: true },
 
   // ---- Video summary + claims (dialogs off the annotation workspace) ----

@@ -56,7 +56,17 @@ interface TourRunnerProps {
   onClose: (reason: TourCloseReason) => void
   /** Pause the tour: snapshot the step and unmount the runner so it can resume. */
   onPause?: () => void
+  /**
+   * Whether the deployment runs a model service: false when it does not, so
+   * steps whose anchor only a model can produce are reported unavailable at
+   * once; undefined while unknown, which is treated as available.
+   */
+  modelServiceAvailable?: boolean
 }
+
+/** Shown on a step whose anchor needs a model service the deployment lacks. */
+const MODEL_SERVICE_UNAVAILABLE =
+  "This step needs the model service, which this deployment doesn't run; skip to continue."
 
 const sleep = (ms: number) => new Promise<void>((r) => window.setTimeout(r, ms))
 
@@ -77,7 +87,14 @@ function queryAnchorElement(anchor: AnchorId): HTMLElement | null {
   return document.querySelector<HTMLElement>(`[data-tour-anchor="${anchor}"]`)
 }
 
-export function TourRunner({ tour, startIndex = 0, onEvent, onClose, onPause }: TourRunnerProps) {
+export function TourRunner({
+  tour,
+  startIndex = 0,
+  onEvent,
+  onClose,
+  onPause,
+  modelServiceAvailable,
+}: TourRunnerProps) {
   const registry = useAnchorRegistry()
   const navigate = useNavigate()
   const location = useLocation()
@@ -86,6 +103,9 @@ export function TourRunner({ tour, startIndex = 0, onEvent, onClose, onPause }: 
   const [index, setIndex] = useState(clampedStart)
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null)
   const [resolving, setResolving] = useState(true)
+  const [unavailableReason, setUnavailableReason] = useState<string | null>(null)
+  const modelServiceAvailableRef = useRef(modelServiceAvailable)
+  modelServiceAvailableRef.current = modelServiceAvailable
 
   const step = tour.steps[index]
   const total = tour.steps.length
@@ -145,6 +165,7 @@ export function TourRunner({ tour, startIndex = 0, onEvent, onClose, onPause }: 
     const { signal } = ac
     setAnchorEl(null)
     setResolving(true)
+    setUnavailableReason(null)
 
     emit({
       type: 'step_entered',
@@ -162,6 +183,17 @@ export function TourRunner({ tour, startIndex = 0, onEvent, onClose, onPause }: 
         navigateRef.current(route)
       }
       if (signal.aborted) return
+
+      // A step whose anchor only a model service can produce cannot complete
+      // on a deployment without one; report it at once rather than running a
+      // driver and waiting out the anchor timeout.
+      const anchorMeta: AnchorMeta = anchorCatalog[step.anchor]
+      if (anchorMeta.requiresModelService && modelServiceAvailableRef.current === false) {
+        setResolving(false)
+        setUnavailableReason(MODEL_SERVICE_UNAVAILABLE)
+        emit({ type: 'anchor_missing', anchorId: step.anchor })
+        return
+      }
 
       // 2. Run the step's driver capability when one is registered.
       if (step.driver) {
@@ -286,6 +318,7 @@ export function TourRunner({ tour, startIndex = 0, onEvent, onClose, onPause }: 
         index={index}
         anchor={anchorEl}
         resolving={resolving}
+        unavailableReason={unavailableReason}
         onBack={() => advance(-1, 'back')}
         onNext={() => advance(+1, 'next')}
         onSkipStep={() => advance(+1, 'skip')}

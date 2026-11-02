@@ -94,3 +94,42 @@ describe('Collapsed anchors', () => {
     expect(click).not.toHaveBeenCalled()
   })
 })
+
+const transcriptTour: Tour = {
+  id: 'transcript', title: 'Transcript', description: 'Open the transcript',
+  durationMinutes: 1, tags: [],
+  steps: [{ anchor: 'transcript-dialog', narration: 'The transcript', expectAction: 'none' }],
+}
+
+function renderTranscriptRunner(registry: AnchorRegistry, onEvent: ReturnType<typeof vi.fn>, modelServiceAvailable?: boolean) {
+  return render(
+    <MemoryRouter>
+      <AnchorRegistryContext.Provider value={registry}>
+        <TourRunner tour={transcriptTour} onEvent={onEvent} onClose={vi.fn()} modelServiceAvailable={modelServiceAvailable} />
+      </AnchorRegistryContext.Provider>
+    </MemoryRouter>,
+  )
+}
+
+describe('Steps that need a model service', () => {
+  it('reports the anchor unavailable at once when the deployment has no model service', async () => {
+    const registry = new AnchorRegistry()
+    const opener = document.createElement('button')
+    const click = vi.spyOn(opener, 'click')
+    registry.register('transcribe-audio-button', opener)
+    const onEvent = vi.fn()
+    renderTranscriptRunner(registry, onEvent, false)
+    await waitFor(() => expect(onEvent).toHaveBeenCalledWith({ type: 'anchor_missing', anchorId: 'transcript-dialog' }))
+    expect(click).not.toHaveBeenCalled()
+  })
+
+  it('opens the anchor normally when a model service is available', async () => {
+    const registry = new AnchorRegistry()
+    const opener = document.createElement('button')
+    opener.onclick = () => registry.register('transcript-dialog', document.createElement('div'))
+    registry.register('transcribe-audio-button', opener)
+    const onEvent = vi.fn()
+    renderTranscriptRunner(registry, onEvent, true)
+    await waitFor(() => expect(onEvent).toHaveBeenCalledWith({ type: 'anchor_resolved', anchorId: 'transcript-dialog' }))
+  })
+})
