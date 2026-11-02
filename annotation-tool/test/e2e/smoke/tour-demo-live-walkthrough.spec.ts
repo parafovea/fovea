@@ -52,6 +52,20 @@ const CANNOT_RESOLVE_TEXT = "Couldn't find this UI element"
 const SPOTLIGHT_SELECTOR = '[data-fovea-tour-spotlight]'
 const STEP_CARD_SELECTOR = '[data-fovea-tour-step-card]'
 const CATALOGUE_PATH = '/'
+const MODEL_SERVICE_UNAVAILABLE_TEXT = 'needs the model service'
+
+/**
+ * Whether the deployment runs a model service, judged as the tour provider
+ * does: the config request succeeds and reports CPU or CUDA models.
+ */
+async function modelServiceAvailable(page: Page): Promise<boolean> {
+  return page.evaluate(async () => {
+    const response = await fetch('/api/models/config', { credentials: 'include' })
+    if (!response.ok) return false
+    const body = (await response.json()) as { cudaAvailable?: boolean; cpuModelsAvailable?: boolean }
+    return Boolean(body.cudaAvailable || body.cpuModelsAvailable)
+  })
+}
 
 interface BoundingRect {
   x: number
@@ -213,6 +227,11 @@ test.describe('demo.fovea.video live tour walkthrough', () => {
       const skipBtn = page.getByRole('button', { name: 'Skip', exact: true })
       const nextBtn = page.getByRole('button', { name: 'Next', exact: true })
       const finishBtn = page.getByRole('button', { name: 'Finish', exact: true })
+      const modelServiceNote = page
+        .locator(STEP_CARD_SELECTOR)
+        .getByRole('status')
+        .filter({ hasText: MODEL_SERVICE_UNAVAILABLE_TEXT })
+      const modelsAvailable = await modelServiceAvailable(page)
 
       let steps = 0
       for (let i = 0; i < MAX_STEPS; i++) {
@@ -222,13 +241,28 @@ test.describe('demo.fovea.video live tour walkthrough', () => {
         // runs against a remote origin).
         await expect
           .poll(
-            async () => (await nextBtn.count()) + (await finishBtn.count()),
+            async () =>
+              (await nextBtn.count()) +
+              (await finishBtn.count()) +
+              (await modelServiceNote.count()),
             {
               message: `${tourId} step ${i + 1} must surface a Next/Finish CTA within 8 s`,
               timeout: 8_000,
             },
           )
           .toBeGreaterThan(0)
+
+        // A step whose anchor only a model service produces is skipped, with
+        // the card saying why, on a deployment without one.
+        if ((await modelServiceNote.count()) > 0) {
+          expect(
+            modelsAvailable,
+            `${tourId} step ${i + 1} reports the model service missing, but the deployment has one`,
+          ).toBe(false)
+          await skipBtn.click()
+          await page.waitForTimeout(100)
+          continue
+        }
 
         await expect(
           banner,

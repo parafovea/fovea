@@ -38,7 +38,7 @@ async function isTourDemoActive(page: import('@playwright/test').Page): Promise<
   // bootstrap fires before React mounts.
   let saw = false
   const onConsole = (msg: import('@playwright/test').ConsoleMessage) => {
-    if (msg.type() === 'info' && msg.text().includes('[tour-demo]')) {
+    if (msg.type() === 'info' && msg.text().includes('[tour-demo] MSW worker active')) {
       saw = true
     }
   }
@@ -63,13 +63,13 @@ test.describe('Tour demo MSW worker', () => {
   })
 
   test('intercepts the six model-service routes the tours touch', async ({ page }) => {
-    await page.goto('/', { waitUntil: 'domcontentloaded' })
-    // Wait for the worker registration log so the next fetch is
-    // guaranteed to route through MSW.
-    await page.waitForEvent('console', {
+    // Subscribe before navigation because bootstrap can log before DOMContentLoaded.
+    const workerReady = page.waitForEvent('console', {
       predicate: (msg) => msg.text().includes('[tour-demo] MSW worker active'),
       timeout: 5_000,
     })
+    await page.goto('/', { waitUntil: 'domcontentloaded' })
+    await workerReady
 
     // Hit each route in the browser so the Service Worker
     // interception layer is in play. page.request would BYPASS the
@@ -81,8 +81,8 @@ test.describe('Tour demo MSW worker', () => {
         '/api/videos/__demo__/detect',
         '/api/videos/__demo__/track',
         '/api/videos/__demo__/transcribe',
-        '/api/videos/__demo__/summarize',
-        '/api/claims/extract',
+        '/api/videos/summaries/generate',
+        '/api/summaries/__demo__/claims/generate',
       ] as const
       const results: { route: string; status: number; body: unknown }[] = []
       for (const route of routes) {
@@ -121,20 +121,28 @@ test.describe('Tour demo MSW worker', () => {
     expect(transcribe.speakers).toContain('SPEAKER_00')
     expect(transcribe.speakers).toContain('SPEAKER_01')
 
-    const claims = responses.find((r) => r.route === '/api/claims/extract')!.body as {
-      claims: Array<{ needsSplit: boolean; splitTargets: string[] }>
-    }
-    expect(claims.claims).toHaveLength(1)
-    expect(claims.claims[0].needsSplit).toBe(true)
-    expect(claims.claims[0].splitTargets).toHaveLength(3)
+    const summaryTicket = responses.find((r) => r.route === '/api/videos/summaries/generate')!.body as { jobId: string }
+    const claimsTicket = responses.find((r) => r.route === '/api/summaries/__demo__/claims/generate')!.body as { jobId: string }
+    expect(summaryTicket.jobId).toBeTruthy()
+    expect(claimsTicket.jobId).toBeTruthy()
+    const jobs = await page.evaluate(async ({ summaryId, claimsId }) => ({
+      summary: await fetch(`/api/jobs/${summaryId}`).then((r) => r.json()),
+      claims: await fetch(`/api/jobs/claims/${claimsId}`).then((r) => r.json()),
+    }), { summaryId: summaryTicket.jobId, claimsId: claimsTicket.jobId })
+    expect(jobs.summary.state).toBe('completed')
+    expect(jobs.summary.returnvalue.visualAnalysis).toBeTruthy()
+    expect(jobs.claims.status).toBe('completed')
+    expect(jobs.claims.result.claims).toHaveLength(1)
+    expect(jobs.claims.result.claims[0].subclaims).toHaveLength(3)
   })
 
   test('latency feels like real inference (between 600 and 2400 ms per call)', async ({ page }) => {
-    await page.goto('/', { waitUntil: 'domcontentloaded' })
-    await page.waitForEvent('console', {
+    const workerReady = page.waitForEvent('console', {
       predicate: (msg) => msg.text().includes('[tour-demo] MSW worker active'),
       timeout: 5_000,
     })
+    await page.goto('/', { waitUntil: 'domcontentloaded' })
+    await workerReady
     const elapsed = await page.evaluate(async () => {
       const t0 = performance.now()
       await fetch('/api/ontology/augment', { method: 'POST', body: '{}' })

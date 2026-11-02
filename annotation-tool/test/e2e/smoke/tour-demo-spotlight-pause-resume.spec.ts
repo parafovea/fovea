@@ -22,7 +22,6 @@ import { test, expect, Page } from '@playwright/test'
 
 const STEP_CARD = '[data-fovea-tour-step-card]'
 const SPOTLIGHT = '[data-fovea-tour-spotlight]'
-const PAUSE_BUTTON = '[data-fovea-tour-pause]'
 const RESUME_PILL = '[data-fovea-tour-resume-pill]'
 const RESUME_BUTTON = '[data-fovea-tour-resume]'
 
@@ -117,7 +116,7 @@ test.describe('Tour demo: spotlight + pause + resume', () => {
     )
     await page.waitForSelector(STEP_CARD, { timeout: 5_000 })
 
-    await page.click(PAUSE_BUTTON)
+    await page.getByRole('button', { name: 'Pause tour', exact: true }).click()
     await page.waitForSelector(STEP_CARD, { state: 'detached', timeout: 3_000 })
 
     await expect(page.locator(RESUME_PILL)).toHaveCount(1)
@@ -154,7 +153,7 @@ test.describe('Tour demo: spotlight + pause + resume', () => {
 
     // Pause from step 0 then resume; the resume path re-reads the
     // cursor and lands at the recorded step index.
-    await page.click(PAUSE_BUTTON)
+    await page.getByRole('button', { name: 'Pause tour', exact: true }).click()
     await page.waitForSelector(RESUME_PILL, { timeout: 3_000 })
 
     await page.click(RESUME_BUTTON)
@@ -178,7 +177,7 @@ test.describe('Tour demo: spotlight + pause + resume', () => {
       async () => (await window.__foveaTour!.launch('first-annotation')) ?? false,
     )
     await page.waitForSelector(STEP_CARD, { timeout: 5_000 })
-    await page.click(PAUSE_BUTTON)
+    await page.getByRole('button', { name: 'Pause tour', exact: true }).click()
     await page.waitForSelector(RESUME_PILL, { timeout: 3_000 })
 
     await page.reload({ waitUntil: 'domcontentloaded' })
